@@ -1,110 +1,90 @@
 'use client'
 
-import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
 import { ArrowRight, Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/cn'
 
 export function CTA() {
   return (
-    <section className="py-24 relative overflow-hidden">
-      {/* Background effects */}
+    <section className="relative py-32 overflow-hidden">
+
+      {/* Background */}
       <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-accent-cyan/20" />
-        <div className="absolute inset-0 grid-pattern opacity-10" />
+        <img
+          src="/images/backgrounds/diagonal-bg.jpg"
+          alt=""
+          className="w-full h-full object-cover opacity-40"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[rgb(10,10,15)] via-transparent to-[rgb(10,10,15)]" />
+        <div className="absolute inset-0 bg-[rgb(10,10,15)]/60" />
       </div>
 
-      <div className="container relative">
+      <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+
         <motion.div
-          className="max-w-4xl mx-auto text-center"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
         >
           {/* Icon */}
-          <motion.div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent-cyan mb-8"
-            initial={{ scale: 0 }}
-            whileInView={{ scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.1, type: 'spring' }}
-          >
-            <Sparkles className="w-8 h-8 text-white" />
-          </motion.div>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/20 mb-8">
+            <Sparkles className="w-8 h-8 text-primary" />
+          </div>
 
           {/* Headline */}
-          <motion.h2
-            className="text-4xl md:text-5xl font-bold mb-6"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.2 }}
-          >
-            Ready to Build Trust in
-            <br />
-            <span className="gradient-text">Your AI Agent?</span>
-          </motion.h2>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">
+            Ready to build trust?
+          </h2>
 
-          {/* Description */}
-          <motion.p
-            className="text-xl text-text-secondary max-w-2xl mx-auto mb-12"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.3 }}
-          >
-            Join thousands of developers and users creating a safer AI ecosystem
-            with decentralized trust verification on Intuition Protocol.
-          </motion.p>
+          <p className="mt-6 text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
+            Join the decentralized trust layer. Register your agent, stake on others,
+            earn rewards for quality attestations.
+          </p>
 
-          {/* Buttons */}
-          <motion.div
-            className="flex flex-col sm:flex-row gap-4 justify-center"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.4 }}
-          >
-            <Link href="/register">
-              <Button size="lg" className="glow-blue min-w-[200px]">
-                Register Agent Now
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
+          {/* CTA Buttons */}
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/register"
+              className={cn(
+                'group flex items-center gap-2 px-8 py-4 rounded-xl',
+                'bg-white text-black font-semibold',
+                'hover:bg-white/90 transition-all duration-300',
+                'shadow-lg shadow-white/10 hover:shadow-xl hover:shadow-white/20',
+                'hover:scale-105'
+              )}
+            >
+              Register Agent
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <Link href="/docs">
-              <Button size="lg" variant="outline" className="min-w-[200px]">
-                View Documentation
-              </Button>
-            </Link>
-          </motion.div>
 
-          {/* Trust badges */}
-          <motion.div
-            className="flex items-center justify-center gap-8 mt-16 flex-wrap"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.5 }}
-          >
-            <div className="flex items-center gap-2 text-text-muted">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" />
-              </svg>
-              <span className="text-sm">Fully Decentralized</span>
+            <Link
+              href="/agents"
+              className={cn(
+                'flex items-center gap-2 px-8 py-4 rounded-xl',
+                'bg-white/10 backdrop-blur-sm border border-white/20',
+                'hover:bg-white/15 font-semibold transition-all duration-300'
+              )}
+            >
+              Explore Platform
+            </Link>
+          </div>
+
+          {/* Trust indicators */}
+          <div className="mt-12 flex items-center justify-center gap-8 text-sm text-slate-400">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>770K+ Agents</span>
             </div>
-            <div className="flex items-center gap-2 text-text-muted">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
-              </svg>
-              <span className="text-sm">On-chain Attestations</span>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-primary" />
+              <span>$2.3M Staked</span>
             </div>
-            <div className="flex items-center gap-2 text-text-muted">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-              </svg>
-              <span className="text-sm">Economic Security</span>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-purple-500" />
+              <span>Powered by Intuition</span>
             </div>
-          </motion.div>
+          </div>
         </motion.div>
       </div>
     </section>
