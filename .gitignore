@@ -76,3 +76,18 @@ coverage/
 *.pem
 *.key
 .turbo
+
+# ═══════════════════════════════════════════
+# PRIVATE - Development prompts & instructions
+# ═══════════════════════════════════════════
+*PROMPT*.md
+*INSTRUCTIONS*.md
+*BRIEFING*.md
+OPUS_*.md
+V0_*.md
+PHASE*.md
+*.prompt
+*.instruction
+/prompts/
+/instructions/
+/private/
