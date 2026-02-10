@@ -91,3 +91,18 @@ PHASE*.md
 /prompts/
 /instructions/
 /private/
+
+# ═══════════════════════════════════════════
+# PRIVATE - Development files (keep local only)
+# ═══════════════════════════════════════════
+FAZA_*.md
+*_COMPLETE.md
+*_STATUS.md
+STATUS.md
+FILES_INDEX.md
+NEXT_FEATURES.md
+START_HERE.md
+PROJECT_COMPLETE.md
+FINAL_STATUS.md
+.claude/
+/docs/internal/
