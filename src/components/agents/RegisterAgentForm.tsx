@@ -315,9 +315,9 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
                 <span className="flex items-center justify-between">
                   <span className="flex items-center gap-3">
                     <Shield className="w-5 h-5 text-trust-good" />
-                    <span className="block">
-                      <span className="font-medium block">Sign Message</span>
-                      <span className="text-sm text-text-secondary block">Prove wallet ownership</span>
+                    <span className="flex flex-col">
+                      <span className="font-medium">Sign Message</span>
+                      <span className="text-sm text-text-secondary">Prove wallet ownership</span>
                     </span>
                   </span>
                   <ChevronRight className="w-5 h-5 text-text-muted" />
@@ -328,9 +328,9 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
                 <span className="flex items-center justify-between">
                   <span className="flex items-center gap-3">
                     <Check className="w-5 h-5 text-trust-excellent" />
-                    <span className="block">
-                      <span className="font-medium block">KYC Verification</span>
-                      <span className="text-sm text-text-secondary block">Coming soon</span>
+                    <span className="flex flex-col">
+                      <span className="font-medium">KYC Verification</span>
+                      <span className="text-sm text-text-secondary">Coming soon</span>
                     </span>
                   </span>
                   <Badge variant="outline" size="sm">Soon</Badge>

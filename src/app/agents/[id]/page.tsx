@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Share, Flag } from 'lucide-react'
+import { PageBackground } from '@/components/shared/PageBackground'
 import { AgentHeader } from '@/components/agents/AgentHeader'
 import { AgentStats } from '@/components/agents/AgentStats'
 import { AgentTabs } from '@/components/agents/AgentTabs'
@@ -60,32 +61,37 @@ export default function AgentDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen pt-24 pb-16">
-        <div className="container">
-          <PageHeaderSkeleton />
-          <div className="space-y-6 mt-8">
-            <LoadingSkeleton variant="rectangular" height={200} />
-            <LoadingSkeleton variant="rectangular" height={300} />
-            <LoadingSkeleton variant="rectangular" height={400} />
+      <PageBackground image="hero" opacity={0.35}>
+        <div className="pt-24 pb-16">
+          <div className="container">
+            <PageHeaderSkeleton />
+            <div className="space-y-6 mt-8">
+              <LoadingSkeleton variant="rectangular" height={200} />
+              <LoadingSkeleton variant="rectangular" height={300} />
+              <LoadingSkeleton variant="rectangular" height={400} />
+            </div>
           </div>
         </div>
-      </div>
+      </PageBackground>
     )
   }
 
   if (!agent) {
     return (
-      <div className="min-h-screen pt-24 pb-16">
-        <div className="container">
-          <p>Agent not found</p>
+      <PageBackground image="hero" opacity={0.35}>
+        <div className="pt-24 pb-16">
+          <div className="container">
+            <p>Agent not found</p>
+          </div>
         </div>
-      </div>
+      </PageBackground>
     )
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="container">
+    <PageBackground image="hero" opacity={0.35}>
+      <div className="pt-24 pb-16">
+        <div className="container">
         {/* Breadcrumb & Actions */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -152,7 +158,8 @@ export default function AgentDetailPage() {
             </div>
           </div>
         </motion.div>
+        </div>
       </div>
-    </div>
+    </PageBackground>
   )
 }

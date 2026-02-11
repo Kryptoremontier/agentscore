@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
+import { PageBackground } from '@/components/shared/PageBackground'
 import { AgentFilters } from '@/components/agents/AgentFilters'
 import { AgentGridOptimized } from '@/components/agents/AgentGridOptimized'
 import { Pagination } from '@/components/agents/Pagination'
@@ -154,8 +155,9 @@ export default function AgentsPage() {
     filters.verifiedOnly
 
   return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="container">
+    <PageBackground image="hero" opacity={0.4}>
+      <div className="pt-24 pb-16">
+        <div className="container">
         {/* Page Header */}
         {loading ? (
           <PageHeaderSkeleton />
@@ -246,7 +248,8 @@ export default function AgentsPage() {
             )}
           </>
         )}
+        </div>
       </div>
-    </div>
+    </PageBackground>
   )
 }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Sparkles, CheckCircle, ArrowRight, Shield, Users, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
+import { PageBackground } from '@/components/shared/PageBackground'
 import { RegisterAgentForm } from '@/components/agents/RegisterAgentForm'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/shared/GlassCard'
@@ -19,8 +20,9 @@ export default function RegisterPage() {
 
   if (success && agentId) {
     return (
-      <div className="min-h-screen pt-24 pb-16">
-        <div className="container">
+      <PageBackground image="diagonal" opacity={0.3}>
+        <div className="pt-24 pb-16">
+          <div className="container">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -112,17 +114,16 @@ export default function RegisterPage() {
               </div>
             </div>
           </motion.div>
+          </div>
         </div>
-      </div>
+      </PageBackground>
     )
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-16">
-      {/* Background decoration */}
-      <div className="absolute inset-0 mesh-gradient opacity-20 pointer-events-none" />
-
-      <div className="container relative">
+    <PageBackground image="diagonal" opacity={0.3}>
+      <div className="pt-24 pb-16">
+        <div className="container">
         {/* Page Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -204,7 +205,8 @@ export default function RegisterPage() {
             </Link>
           </p>
         </motion.div>
+        </div>
       </div>
-    </div>
+    </PageBackground>
   )
 }

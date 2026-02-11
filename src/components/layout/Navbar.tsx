@@ -113,14 +113,14 @@ export function Navbar() {
                 <span className="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
                   Search...
                 </span>
-                <div className="flex items-center gap-1">
+                <span className="flex items-center gap-1">
                   <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white/10 rounded border border-white/10">
                     <Command className="w-3 h-3 inline" />
                   </kbd>
                   <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white/10 rounded border border-white/10">
                     K
                   </kbd>
-                </div>
+                </span>
               </button>
 
               {/* Add Agent Button */}

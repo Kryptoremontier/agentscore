@@ -42,13 +42,9 @@ export default function RootLayout({
         <Providers>
           <ErrorBoundary>
             <div className="relative min-h-screen bg-[rgb(10,10,15)] text-white">
-              {/* Background layers */}
-              <div className="fixed inset-0 bg-mesh-gradient pointer-events-none" />
-              <div className="fixed inset-0 bg-grid-pattern opacity-30 pointer-events-none" />
-
               {/* Content */}
               <Navbar />
-              <main className="relative z-10">
+              <main className="relative">
                 {children}
               </main>
               <Footer />

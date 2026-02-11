@@ -181,9 +181,9 @@ export function AgentFilters({ filters, onChange, totalResults }: AgentFiltersPr
                     filters.verifiedOnly ? 'bg-primary' : 'bg-white/10'
                   )}
                 >
-                  <div
+                  <span
                     className={cn(
-                      'w-5 h-5 rounded-full bg-white transition-transform duration-200 absolute top-0.5',
+                      'w-5 h-5 rounded-full bg-white transition-transform duration-200 absolute top-0.5 block',
                       filters.verifiedOnly ? 'translate-x-6' : 'translate-x-0.5'
                     )}
                   />

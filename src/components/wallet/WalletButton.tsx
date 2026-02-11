@@ -65,26 +65,24 @@ export function WalletButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="glass">
-          <span className="flex items-center gap-2">
-            {/* Identicon */}
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-accent-cyan block" />
+        <button className="glass flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-200">
+          {/* Identicon */}
+          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-accent-cyan" />
 
-            {/* Address */}
-            <span className="font-mono">
-              {address?.slice(0, 6)}...{address?.slice(-4)}
-            </span>
-
-            {/* Balance */}
-            {balance && (
-              <span className="text-text-secondary text-sm">
-                {parseFloat(balance.formatted).toFixed(3)} {balance.symbol}
-              </span>
-            )}
-
-            <ChevronDown className="w-4 h-4" />
+          {/* Address */}
+          <span className="font-mono text-sm">
+            {address?.slice(0, 6)}...{address?.slice(-4)}
           </span>
-        </Button>
+
+          {/* Balance */}
+          {balance && (
+            <span className="text-text-secondary text-sm">
+              {parseFloat(balance.formatted).toFixed(3)} {balance.symbol}
+            </span>
+          )}
+
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        </button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="glass w-56">
@@ -150,17 +148,15 @@ function WalletModal({ connectors, onConnect, onClose }: WalletModalProps) {
             <button
               key={connector.id}
               onClick={() => onConnect(connector)}
-              className="w-full glass glass-hover rounded-lg p-4 text-left transition-all"
+              className="w-full glass glass-hover rounded-lg p-4 text-left transition-all flex items-center gap-3"
             >
-              <span className="flex items-center gap-3">
-                <span className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent-cyan flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-white" />
-                </span>
-                <span className="block">
-                  <span className="font-medium block">{connector.name}</span>
-                  <span className="text-sm text-text-secondary block">
-                    {connector.type === 'injected' ? 'Browser Wallet' : 'Mobile Wallet'}
-                  </span>
+              <span className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent-cyan flex items-center justify-center">
+                <Wallet className="w-5 h-5 text-white" />
+              </span>
+              <span className="flex flex-col">
+                <span className="font-medium">{connector.name}</span>
+                <span className="text-sm text-text-secondary">
+                  {connector.type === 'injected' ? 'Browser Wallet' : 'Mobile Wallet'}
                 </span>
               </span>
             </button>

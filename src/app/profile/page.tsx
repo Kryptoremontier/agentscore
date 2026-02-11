@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import {
   Settings, Shield, TrendingUp, Award
 } from 'lucide-react'
+import { PageBackground } from '@/components/shared/PageBackground'
 import { ProfileHeader } from '@/components/profile/ProfileHeader'
 import { ProfileStats } from '@/components/profile/ProfileStats'
 import { MyAgents } from '@/components/profile/MyAgents'
@@ -33,8 +34,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <PageBackground image="wave" opacity={0.25}>
+      <div className="pt-24 pb-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Profile Header */}
         <ProfileHeader profile={profile} onUpdate={handleProfileUpdate} />
@@ -79,15 +81,17 @@ export default function ProfilePage() {
             <ProfileSettings profile={profile} onUpdate={handleProfileUpdate} />
           </TabsContent>
         </Tabs>
+        </div>
       </div>
-    </div>
+    </PageBackground>
   )
 }
 
 function ProfileSkeleton() {
   return (
-    <div className="min-h-screen pt-24 pb-16">
-      <div className="max-w-6xl mx-auto px-4 animate-pulse">
+    <PageBackground image="wave" opacity={0.25}>
+      <div className="pt-24 pb-16">
+        <div className="max-w-6xl mx-auto px-4 animate-pulse">
         {/* Header skeleton */}
         <div className="glass-card p-8 mb-8">
           <div className="flex items-center gap-6">
@@ -104,7 +108,8 @@ function ProfileSkeleton() {
             <div key={i} className="glass-card p-6 h-24 bg-white/5" />
           ))}
         </div>
+        </div>
       </div>
-    </div>
+    </PageBackground>
   )
 }
