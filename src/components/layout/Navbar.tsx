@@ -8,7 +8,6 @@ import {
   Search,
   Menu,
   X,
-  Shield,
   Plus,
   Command
 } from 'lucide-react'
@@ -69,13 +68,39 @@ export function Navbar() {
           <div className="flex items-center justify-between h-16 lg:h-20">
 
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="relative">
-                <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full group-hover:bg-primary/30 transition-colors" />
-                <Shield className="relative w-8 h-8 text-primary" />
+            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              {/* Logo Icon - stylizowany checkmark */}
+              <div className="relative w-8 h-8">
+                <svg
+                  viewBox="0 0 32 32"
+                  className="w-full h-full"
+                  fill="none"
+                >
+                  {/* Gradient definition */}
+                  <defs>
+                    <linearGradient id="checkGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#F97316" />
+                      <stop offset="30%" stopColor="#EC4899" />
+                      <stop offset="60%" stopColor="#8B5CF6" />
+                      <stop offset="100%" stopColor="#00D4FF" />
+                    </linearGradient>
+                  </defs>
+                  {/* Checkmark path */}
+                  <path
+                    d="M6 16L12 22L26 8"
+                    stroke="url(#checkGradient)"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="drop-shadow-[0_0_8px_rgba(0,212,255,0.5)]"
+                  />
+                </svg>
               </div>
+
+              {/* Text */}
               <span className="text-xl font-bold tracking-tight">
-                Agent<span className="text-primary">Score</span>
+                <span className="text-white">Agent</span>
+                <span className="text-cyan-400">Score</span>
               </span>
             </Link>
 

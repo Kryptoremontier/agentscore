@@ -23,11 +23,44 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'AgentScore | Trust Layer for AI Agents',
   description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
-  keywords: ['AI agents', 'trust score', 'reputation', 'Intuition', 'Web3'],
+  keywords: ['AI agents', 'trust score', 'verification', 'Web3', 'Intuition Protocol', 'Base', 'blockchain'],
+  authors: [{ name: 'Kryptoremontier' }],
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
   openGraph: {
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'Verify AI agent reputation before interaction.',
+    description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
+    url: 'https://agentscore.vercel.app',
+    siteName: 'AgentScore',
+    images: [
+      {
+        url: '/images/brand/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'AgentScore - Trust Layer for AI Agents',
+      },
+    ],
     type: 'website',
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AgentScore | Trust Layer for AI Agents',
+    description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
+    images: ['/images/brand/og-image.png'],
+    creator: '@Kryptoremontier',
+    site: '@Kryptoremontier',
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 }
 
