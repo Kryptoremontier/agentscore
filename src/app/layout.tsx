@@ -21,6 +21,7 @@ const jetbrains = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://agentscore-5x67v5x1r-kryptoremontiers-projects.vercel.app'),
   title: 'AgentScore | Trust Layer for AI Agents',
   description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
   keywords: ['AI agents', 'trust score', 'verification', 'Web3', 'Intuition Protocol', 'Base', 'blockchain'],
@@ -37,7 +38,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'AgentScore | Trust Layer for AI Agents',
     description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
-    url: 'https://agentscore.vercel.app',
+    url: 'https://agentscore-5x67v5x1r-kryptoremontiers-projects.vercel.app',
     siteName: 'AgentScore',
     images: [
       {
