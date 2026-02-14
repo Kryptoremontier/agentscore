@@ -23,21 +23,15 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://agentscore-gilt.vercel.app'),
   title: 'AgentScore | Trust Layer for AI Agents',
-  description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
-  keywords: ['AI agents', 'trust score', 'verification', 'Web3', 'Intuition Protocol', 'Base', 'blockchain'],
-  authors: [{ name: 'Kryptoremontier' }],
+  description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol. 770K+ AI agents need trust verification.',
   icons: {
-    icon: [
-      { url: '/favicon.ico' },
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-    ],
+    icon: '/favicon.ico',
     apple: '/apple-touch-icon.png',
   },
   manifest: '/site.webmanifest',
   openGraph: {
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
+    description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol. 770K+ AI agents need trust verification.',
     url: 'https://agentscore-gilt.vercel.app',
     siteName: 'AgentScore',
     images: [
@@ -49,19 +43,13 @@ export const metadata: Metadata = {
       },
     ],
     type: 'website',
-    locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
+    description: 'Verify AI agent reputation before interaction. Decentralized trust verification.',
     images: ['https://agentscore-gilt.vercel.app/images/brand/og-image.png'],
     creator: '@Kryptoremontier',
-    site: '@Kryptoremontier',
-  },
-  robots: {
-    index: true,
-    follow: true,
   },
 }
 
