@@ -21,7 +21,7 @@ const jetbrains = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://agentscore-5x67v5x1r-kryptoremontiers-projects.vercel.app'),
+  metadataBase: new URL('https://agentscore-gilt.vercel.app'),
   title: 'AgentScore | Trust Layer for AI Agents',
   description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
   keywords: ['AI agents', 'trust score', 'verification', 'Web3', 'Intuition Protocol', 'Base', 'blockchain'],
@@ -38,11 +38,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'AgentScore | Trust Layer for AI Agents',
     description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
-    url: 'https://agentscore-5x67v5x1r-kryptoremontiers-projects.vercel.app',
+    url: 'https://agentscore-gilt.vercel.app',
     siteName: 'AgentScore',
     images: [
       {
-        url: '/images/brand/og-image.png',
+        url: 'https://agentscore-gilt.vercel.app/images/brand/og-image.png',
         width: 1200,
         height: 630,
         alt: 'AgentScore - Trust Layer for AI Agents',
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AgentScore | Trust Layer for AI Agents',
     description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol.',
-    images: ['/images/brand/og-image.png'],
+    images: ['https://agentscore-gilt.vercel.app/images/brand/og-image.png'],
     creator: '@Kryptoremontier',
     site: '@Kryptoremontier',
   },
