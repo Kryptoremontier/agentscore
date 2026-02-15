@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Kryptoremontier/agentscore/main/.github/assets/logo.png" alt="AgentScore Logo" width="120" height="120" />
+  <img src="https://agentscore-gilt.vercel.app/images/brand/og-image.png" alt="AgentScore - Trust Layer for AI Agents" width="600" />
 </p>
 
 <h1 align="center">AgentScore</h1>
@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://agentscore-gilt.vercel.app">
-    <img src="https://img.shields.io/badge/🚀%20LIVE%20DEMO-Visit%20Site-4F46E5?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Demo" />
+    <img src="https://img.shields.io/badge/🚀%20Live%20Demo-Visit%20Site-blue?style=for-the-badge" alt="Live Demo" />
   </a>
 </p>
 
@@ -32,8 +32,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-2.1.0-blue?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/built_on-Intuition_Protocol-purple?style=flat-square" alt="Intuition" />
-  <img src="https://img.shields.io/badge/network-Base_L3-0052FF?style=flat-square" alt="Base" />
+  <img src="https://img.shields.io/badge/built%20on-Intuition%20Protocol-purple?style=flat-square" alt="Built on Intuition" />
+  <img src="https://img.shields.io/badge/network-Base%20L3-blue?style=flat-square" alt="Network" />
   <img src="https://img.shields.io/badge/status-testnet-orange?style=flat-square" alt="Status" />
 </p>
 
@@ -400,13 +400,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <p align="center">
   <a href="https://agentscore-gilt.vercel.app">
-    <img src="https://img.shields.io/badge/🌐%20Website-agentscore--gilt.vercel.app-4F46E5?style=for-the-badge&logo=vercel&logoColor=white" alt="Website" />
+    <img src="https://img.shields.io/badge/Website-Visit%20Demo-blue?style=for-the-badge&logo=vercel" alt="Website" />
   </a>
+  &nbsp;
   <a href="https://twitter.com/Kryptoremontier">
     <img src="https://img.shields.io/badge/Twitter-@Kryptoremontier-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white" alt="Twitter" />
   </a>
-  <a href="https://warpcast.com/Kryptoremontier">
-    <img src="https://img.shields.io/badge/Farcaster-/Kryptoremontier-8A63D2?style=for-the-badge" alt="Farcaster" />
+  &nbsp;
+  <a href="https://warpcast.com/kryptoremontier">
+    <img src="https://img.shields.io/badge/Farcaster-kryptoremontier-8A63D2?style=for-the-badge" alt="Farcaster" />
   </a>
 </p>
 
