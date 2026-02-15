@@ -355,6 +355,21 @@ Early Supporter Advantage:
 
 ---
 
+## 📚 Documentation
+
+Explore our vision, roadmap, and technical documentation:
+
+| Document | Description |
+|----------|-------------|
+| [Vision & Mission](VISION.md) | Our long-term vision for AI agent trust infrastructure |
+| [Roadmap](ROADMAP.md) | Development phases and milestones |
+| [Architecture](ARCHITECTURE.md) | Technical architecture and design decisions |
+| [Why Trust Matters](docs/WHY_TRUST_MATTERS.md) | Philosophical foundation of the project |
+| [Intuition Integration](docs/INTUITION_INTEGRATION.md) | How we integrate with Intuition Protocol |
+| [Economic Model](docs/TOKENOMICS.md) | Incentive design and tokenomics |
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
