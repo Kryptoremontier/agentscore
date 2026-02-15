@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://agentscore-gilt.vercel.app">
-    <img src="https://img.shields.io/badge/🚀_Live_Demo-agentscore-gilt.vercel.app-blue?style=for-the-badge" alt="Live Demo" />
+    <img src="https://img.shields.io/badge/🚀%20LIVE%20DEMO-Visit%20Site-4F46E5?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Demo" />
   </a>
 </p>
 
@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.0-blue?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/version-2.1.0-blue?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/built_on-Intuition_Protocol-purple?style=flat-square" alt="Intuition" />
   <img src="https://img.shields.io/badge/network-Base_L3-0052FF?style=flat-square" alt="Base" />
@@ -400,7 +400,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <p align="center">
   <a href="https://agentscore-gilt.vercel.app">
-    <img src="https://img.shields.io/badge/🌐_Website-agentscore-gilt.vercel.app-blue?style=for-the-badge" alt="Website" />
+    <img src="https://img.shields.io/badge/🌐%20Website-agentscore--gilt.vercel.app-4F46E5?style=for-the-badge&logo=vercel&logoColor=white" alt="Website" />
   </a>
   <a href="https://twitter.com/Kryptoremontier">
     <img src="https://img.shields.io/badge/Twitter-@Kryptoremontier-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white" alt="Twitter" />
