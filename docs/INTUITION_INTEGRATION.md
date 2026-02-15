@@ -395,5 +395,5 @@ Together, we make decentralized AI trust **real and usable**.
 <p align="center">
   <a href="https://intuition.systems">Intuition Protocol</a> •
   <a href="https://docs.intuition.systems">Intuition Docs</a> •
-  <a href="https://agentscore.vercel.app">AgentScore Demo</a>
+  <a href="https://agentscore-gilt.vercel.app">AgentScore Demo</a>
 </p>

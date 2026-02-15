@@ -155,7 +155,7 @@ The infrastructure of the AI age should belong to everyone. Let's build it toget
 <p align="center">
   <strong>AgentScore</strong><br/>
   <em>Trust Layer for AI Agents</em><br/><br/>
-  <a href="https://agentscore.vercel.app">Live Demo</a> •
+  <a href="https://agentscore-gilt.vercel.app">Live Demo</a> •
   <a href="https://twitter.com/Kryptoremontier">Twitter</a> •
   <a href="https://github.com/Kryptoremontier/agentscore">GitHub</a>
 </p>

@@ -14,8 +14,8 @@
 </p>
 
 <p align="center">
-  <a href="https://agentscore.vercel.app">
-    <img src="https://img.shields.io/badge/🚀_Live_Demo-agentscore.vercel.app-blue?style=for-the-badge" alt="Live Demo" />
+  <a href="https://agentscore-gilt.vercel.app">
+    <img src="https://img.shields.io/badge/🚀_Live_Demo-agentscore-gilt.vercel.app-blue?style=for-the-badge" alt="Live Demo" />
   </a>
 </p>
 
@@ -384,8 +384,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🔗 Links
 
 <p align="center">
-  <a href="https://agentscore.vercel.app">
-    <img src="https://img.shields.io/badge/🌐_Website-agentscore.vercel.app-blue?style=for-the-badge" alt="Website" />
+  <a href="https://agentscore-gilt.vercel.app">
+    <img src="https://img.shields.io/badge/🌐_Website-agentscore-gilt.vercel.app-blue?style=for-the-badge" alt="Website" />
   </a>
   <a href="https://twitter.com/Kryptoremontier">
     <img src="https://img.shields.io/badge/Twitter-@Kryptoremontier-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white" alt="Twitter" />
