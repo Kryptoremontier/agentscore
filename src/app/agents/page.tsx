@@ -9,38 +9,16 @@ import { AgentGridOptimized } from '@/components/agents/AgentGridOptimized'
 import { Pagination } from '@/components/agents/Pagination'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeaderSkeleton } from '@/components/shared/LoadingSkeleton'
-import type { Agent, AgentFilters as AgentFiltersType, AgentCategory, AgentPlatform, VerificationLevel } from '@/types/agent'
-import type { ExpertLevel } from '@/types/user'
+import type { Agent, AgentFilters as AgentFiltersType } from '@/types/agent'
+import { createMockAtom, atomToAgent } from '@/lib/intuition-adapter'
 
-// Mock data - replace with real data fetching
-const generateMockAgents = (count: number): Agent[] => {
-  const platforms = ['moltbook', 'openclaw', 'farcaster', 'twitter', 'custom'] as const
-  const verificationLevels = ['none', 'wallet', 'social', 'kyc'] as const
-  const categories: AgentCategory[] = ['coding', 'writing', 'data', 'trading', 'social', 'gaming', 'defi', 'nft', 'research', 'customer_service', 'other']
-  const expertLevels = ['newcomer', 'contributor', 'expert', 'master', 'legend'] as const
-
-  return Array.from({ length: count }, (_, i) => ({
-    id: `agent-${i + 1}`,
-    atomId: BigInt(i + 1),
-    name: `Agent ${i + 1}`,
-    description: `AI agent specialized in ${categories[i % categories.length]}`,
-    platform: platforms[i % platforms.length] as AgentPlatform,
-    walletAddress: i % 3 === 0 ? null : `0x${i.toString(16).padStart(40, '0')}` as `0x${string}`,
-    createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-    verificationLevel: verificationLevels[i % verificationLevels.length] as VerificationLevel,
-    trustScore: Math.floor(Math.random() * 100),
-    positiveStake: BigInt(Math.floor(Math.random() * 1000000)),
-    negativeStake: BigInt(Math.floor(Math.random() * 100000)),
-    attestationCount: Math.floor(Math.random() * 500),
-    reportCount: Math.floor(Math.random() * 50),
-    stakerCount: Math.floor(Math.random() * 200),
-    category: categories[i % categories.length],
-    owner: {
-      address: `0x${(i + 1000).toString(16).padStart(40, '0')}` as `0x${string}`,
-      name: i % 2 === 0 ? `User ${i + 1}` : undefined,
-      expertLevel: expertLevels[i % expertLevels.length] as ExpertLevel,
-    },
-  }))
+// Temporary mock data using Intuition structure
+// TODO: Replace with real Intuition API calls
+const generateMockAgentsFromIntuition = (count: number): Agent[] => {
+  return Array.from({ length: count }, (_, i) => {
+    const mockAtom = createMockAtom(i + 1)
+    return atomToAgent(mockAtom)
+  })
 }
 
 const ITEMS_PER_PAGE = 12
@@ -57,8 +35,11 @@ export default function AgentsPage() {
   })
   const [currentPage, setCurrentPage] = useState(1)
 
-  // Mock data - reduced from 100 to 50 for better performance
-  const allAgents = useMemo(() => generateMockAgents(50), [])
+  // TODO: Replace with real Intuition data
+  // const { agents, isLoading: isLoadingAgents, error } = useAgents()
+
+  // Using mock data with Intuition structure for now
+  const allAgents = useMemo(() => generateMockAgentsFromIntuition(50), [])
 
   // Filter and sort agents
   const filteredAgents = useMemo(() => {

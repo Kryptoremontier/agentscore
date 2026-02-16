@@ -40,7 +40,12 @@ export function useAttestation(options: UseAttestationOptions = {}): UseAttestat
 
   const skip = (page - 1) * pageSize
   const queryClient = useQueryClient()
-  const { createTriple, isReady } = useIntuition()
+  // TODO: Integrate with new Intuition SDK
+  // const { createTriple, isReady } = useIntuition()
+  const isReady = false // Temporary stub
+  const createTriple = async (...args: any[]) => {
+    throw new Error('createTriple not yet implemented - use new Intuition SDK')
+  }
 
   // Query attestations
   const { data, isLoading, isError, error, refetch } = useQuery({

@@ -34,6 +34,10 @@ export function transformAtomToAgent(atom: GraphQLAtom): Agent {
     attestationCount: atom.subjectTriples?.length || 0,
     reportCount: countReports(atom),
     stakerCount: parseInt(atom.vault.positionCount || '0'),
+    owner: {
+      address: (atom.createdBy?.address || '0x0') as `0x${string}`,
+      expertLevel: 'contributor', // TODO: Calculate from user's history
+    },
   }
 }
 

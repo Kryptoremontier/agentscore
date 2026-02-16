@@ -87,8 +87,8 @@ function calculateTrustScoreBreakdown(atom: GraphQLAtom): TrustScoreBreakdown {
 
   // Calculate score
   const total = positiveStake + negativeStake
-  const score = total > 0n
-    ? Math.round(Number(positiveStake * 10BigInt(0) / total))
+  const score = total > BigInt(0)
+    ? Math.round(Number(positiveStake * BigInt(100) / total))
     : 50
 
   // Determine level

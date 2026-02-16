@@ -1,0 +1,111 @@
+/**
+ * Simplified Intuition Protocol Integration
+ *
+ * This is a minimal version focusing on core functionality.
+ * Full SDK integration requires deeper understanding of GraphQL API structure.
+ */
+
+import {
+  createAtomFromString,
+  createAtomFromThing,
+  deposit,
+  redeem,
+} from '@0xintuition/sdk'
+import { type PublicClient, type WalletClient } from 'viem'
+
+export interface SimpleAgentMetadata {
+  name: string
+  description: string
+  category: string
+}
+
+/**
+ * Create a simple text atom for an agent
+ */
+export async function createSimpleAgent(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  name: string
+) {
+  try {
+    const result = await createAtomFromString(publicClient, walletClient, name)
+    return result
+  } catch (error) {
+    console.error('Failed to create agent:', error)
+    throw error
+  }
+}
+
+/**
+ * Create structured agent with metadata
+ */
+export async function createAgentWithMetadata(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  metadata: SimpleAgentMetadata
+) {
+  try {
+    // Create Thing object for structured metadata
+    const agentThing = {
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: metadata.name,
+      description: metadata.description,
+      applicationCategory: metadata.category,
+    }
+
+    const result = await createAtomFromThing(publicClient, walletClient, agentThing)
+    return result
+  } catch (error) {
+    console.error('Failed to create agent with metadata:', error)
+    throw error
+  }
+}
+
+/**
+ * Stake on an atom (agent or triple)
+ */
+export async function stakeOnAtom(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  vaultId: bigint,
+  amount: bigint
+) {
+  try {
+    const result = await deposit(publicClient, walletClient, vaultId, amount)
+    return result
+  } catch (error) {
+    console.error('Failed to stake:', error)
+    throw error
+  }
+}
+
+/**
+ * Unstake from an atom
+ */
+export async function unstakeFromAtom(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  vaultId: bigint,
+  shares: bigint
+) {
+  try {
+    const result = await redeem(publicClient, walletClient, vaultId, shares)
+    return result
+  } catch (error) {
+    console.error('Failed to unstake:', error)
+    throw error
+  }
+}
+
+/**
+ * Constants
+ */
+export const INTUITION_TESTNET_CONFIG = {
+  chainId: 13579,
+  name: 'Intuition Testnet',
+  rpcUrl: process.env.NEXT_PUBLIC_INTUITION_RPC_URL || 'https://testnet.rpc.intuition.systems/http',
+  explorer: 'https://testnet.explorer.intuition.systems',
+  portal: 'https://testnet.portal.intuition.systems',
+  hub: 'https://testnet.hub.intuition.systems',
+}
