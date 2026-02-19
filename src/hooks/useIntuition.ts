@@ -231,6 +231,8 @@ export function useRedeem() {
  */
 export function useIntuition() {
   const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
   const createSimple = useCreateSimpleAtom()
   const createAccount = useCreateAccountAtom()
   const createAgent = useCreateAgent()
@@ -241,6 +243,8 @@ export function useIntuition() {
     // Connection state
     isConnected,
     address,
+    publicClient,
+    walletClient,
 
     // Create Atoms
     createSimpleAtom: createSimple.mutate,
@@ -289,13 +293,13 @@ export function useIntuition() {
 // ============================================================================
 
 /**
- * Quick stake hook with ETH amount parsing
+ * Quick stake hook with tTRUST amount parsing
  */
 export function useStake() {
   const { deposit, isDepositing, depositError } = useIntuition()
 
-  const stake = (vaultId: `0x${string}`, ethAmount: string) => {
-    const amount = parseStakeAmount(ethAmount)
+  const stake = (vaultId: `0x${string}`, trustAmount: string) => {
+    const amount = parseStakeAmount(trustAmount)
     if (amount === BigInt(0)) {
       throw new Error('Invalid amount')
     }
@@ -324,4 +328,35 @@ export function useUnstake() {
     isUnstaking: isRedeeming,
     unstakeError: redeemError,
   }
+}
+
+/**
+ * Get user's staking positions
+ */
+export function useUserPositions(address?: string) {
+  return useQuery({
+    queryKey: ['positions', address],
+    queryFn: async () => {
+      if (!address) return []
+      const { getUserPositions } = await import('@/lib/intuition')
+      return await getUserPositions(address)
+    },
+    enabled: !!address,
+    refetchInterval: 30000, // refetch every 30s
+  })
+}
+
+/**
+ * Get atoms created by user
+ */
+export function useCreatorAtoms(address?: string) {
+  return useQuery({
+    queryKey: ['creator-atoms', address],
+    queryFn: async () => {
+      if (!address) return []
+      const { getAtomsByCreator } = await import('@/lib/intuition')
+      return await getAtomsByCreator(address)
+    },
+    enabled: !!address,
+  })
 }

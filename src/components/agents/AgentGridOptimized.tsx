@@ -8,11 +8,12 @@ import type { Agent } from '@/types/agent'
 interface AgentGridOptimizedProps {
   agents: Agent[]
   loading?: boolean
+  onAgentClick?: (agent: Agent) => void
 }
 
 const BATCH_SIZE = 12 // Load 12 agents at a time
 
-export function AgentGridOptimized({ agents, loading = false }: AgentGridOptimizedProps) {
+export function AgentGridOptimized({ agents, loading = false, onAgentClick }: AgentGridOptimizedProps) {
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
@@ -57,7 +58,10 @@ export function AgentGridOptimized({ agents, loading = false }: AgentGridOptimiz
               duration: 0.3
             }}
           >
-            <AgentCard agent={agent} />
+            <AgentCard
+              agent={agent}
+              onClick={onAgentClick ? () => onAgentClick(agent) : undefined}
+            />
           </motion.div>
         ))}
       </div>

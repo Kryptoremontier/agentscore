@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import {
   FileText, Wallet, Shield, Info, Check, ChevronRight, Sparkles
 } from 'lucide-react'
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AgentAvatar } from '@/components/agents/AgentAvatar'
@@ -31,8 +32,15 @@ const steps = [
 ]
 
 export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
+  const { address, isConnected } = useAccount()
+  const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient()
+
   const [currentStep, setCurrentStep] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [atomId, setAtomId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -83,15 +91,37 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
 
   const handleSubmit = async () => {
     if (!validateStep()) return
+    if (!walletClient || !publicClient || !isConnected) {
+      setError('Please connect your wallet first')
+      return
+    }
 
     setLoading(true)
-    // TODO: Implement actual agent registration with Intuition SDK
-    await new Promise(resolve => setTimeout(resolve, 3000))
+    setError(null)
+    setTxHash(null)
 
-    // Mock success
-    const mockAgentId = 'agent-' + Math.random().toString(36).substr(2, 9)
-    setLoading(false)
-    onSuccess?.(mockAgentId)
+    try {
+      const { createWriteConfig, createAgentAtom } = await import('@/lib/intuition')
+      const config = createWriteConfig(walletClient, publicClient)
+
+      const result = await createAgentAtom(config, {
+        name: formData.name,
+        description: formData.description,
+        category: formData.platform || 'general',
+        website: formData.website || undefined,
+        tags: formData.tags,
+      })
+
+      setTxHash(result.transactionHash)
+      setAtomId(result.state.termId)
+
+      // Pass the atom ID (termId) to parent
+      onSuccess?.(result.state.termId)
+
+    } catch (e: any) {
+      setError(e.message || 'Failed to register agent')
+      setLoading(false)
+    }
   }
 
   const renderStepContent = () => {
@@ -411,7 +441,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
                     <p className="font-medium">Registration Fee</p>
                     <p className="text-sm text-text-muted">One-time Atom creation</p>
                   </div>
-                  <p className="text-2xl font-bold font-mono">0.01 ETH</p>
+                  <p className="text-2xl font-bold font-mono">0.01 tTRUST</p>
                 </div>
               </div>
 
@@ -477,6 +507,50 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
 
       {/* Form Content */}
       <div className="glass rounded-xl p-8">
+        {/* Wallet Connection Warning */}
+        {!isConnected && (
+          <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+            <p className="text-yellow-400 font-semibold">⚠️ Connect your wallet to register agents</p>
+            <p className="text-sm text-text-secondary mt-1">
+              Make sure you're on Intuition Testnet (Chain ID: 13579)
+            </p>
+          </div>
+        )}
+
+        {/* Success State */}
+        {txHash && (
+          <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+            <p className="text-green-400 font-bold">✅ Agent registered on-chain!</p>
+            <p className="text-sm text-text-secondary mt-1">Redirecting to explorer...</p>
+
+            {atomId && (
+              <div className="bg-[#111318] border border-[#1e2028] rounded-lg p-3 mt-3">
+                <p className="text-xs text-[#6b7280] mb-1">Atom ID</p>
+                <code className="text-[#10b981] text-xs font-mono break-all block leading-relaxed">
+                  {atomId}
+                </code>
+              </div>
+            )}
+
+            <a
+              href={`https://testnet.explorer.intuition.systems/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-accent-cyan hover:underline mt-2 block"
+            >
+              View transaction →
+            </a>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p className="text-red-400 font-bold">❌ Error:</p>
+            <p className="text-sm text-red-300">{error}</p>
+          </div>
+        )}
+
         {renderStepContent()}
 
         {/* Actions */}
@@ -501,18 +575,20 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={!isConnected || loading}
               className="flex-1 glow-blue"
             >
-              {loading ? (
+              {!isConnected ? (
+                '🔌 Connect Wallet First'
+              ) : loading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  Creating Agent...
+                  ⏳ Registering on-chain...
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 mr-2" />
-                  Register Agent
+                  🚀 Register Agent
                 </>
               )}
             </Button>

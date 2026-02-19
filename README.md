@@ -312,7 +312,7 @@ Early Supporter Advantage:
 
 | Action | Fee | Purpose |
 |--------|-----|---------|
-| Agent Registration | 0.01 ETH | Spam prevention |
+| Agent Registration | 0.01 tTRUST | Spam prevention |
 | Staking | 1% | Protocol treasury |
 | Unstaking | 1.5% | Discourage speculation |
 

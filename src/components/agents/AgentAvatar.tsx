@@ -63,6 +63,9 @@ export function AgentAvatar({
     return 'from-red-500 to-rose-500'
   }
 
+  // Check if avatar is an emoji (short string, not a URL)
+  const isEmoji = avatar && avatar.length <= 4 && !avatar.includes('http') && !avatar.includes('ipfs')
+
   return (
     <div className="relative group">
       {/* Avatar container */}
@@ -73,7 +76,9 @@ export function AgentAvatar({
           getTrustColor()
         )}
       >
-        {avatar ? (
+        {isEmoji ? (
+          <span className="text-3xl">{avatar}</span>
+        ) : avatar ? (
           <img src={avatar} alt={name} className="w-full h-full object-cover" />
         ) : (
           <Shield className="w-1/2 h-1/2 text-white" />
