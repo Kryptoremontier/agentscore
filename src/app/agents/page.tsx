@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther, getAddress } from 'viem'
+import Link from 'next/link'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
 // Categories unused — filter now uses trust levels directly
@@ -19,7 +20,7 @@ interface GraphQLAgent {
   type: string
   created_at: string
   emoji?: string
-  creator?: { label: string } | null
+  creator?: { label: string; id?: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
 }
 
@@ -140,7 +141,7 @@ function AgentsPageContent() {
                 type
                 emoji
                 created_at
-                creator { label }
+                creator { label id }
                 positions_aggregate {
                   aggregate {
                     count
@@ -1192,9 +1193,18 @@ function AgentsPageContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#8b949e]">
-                      <span className="bg-[#21262d] px-2 py-0.5 rounded text-xs">
-                        {selectedAgent.creator?.label?.replace('.eth','') || 'unknown'}
-                      </span>
+                      {selectedAgent.creator?.id ? (
+                        <Link
+                          href={`/profile/${selectedAgent.creator.id}`}
+                          className="bg-[#21262d] px-2 py-0.5 rounded text-xs hover:bg-[#30363d] hover:text-white transition-colors"
+                        >
+                          {selectedAgent.creator.label?.replace('.eth','') || selectedAgent.creator.id.slice(0, 10)}
+                        </Link>
+                      ) : (
+                        <span className="bg-[#21262d] px-2 py-0.5 rounded text-xs">
+                          {selectedAgent.creator?.label?.replace('.eth','') || 'unknown'}
+                        </span>
+                      )}
                       <span>·</span>
                       <span>Registered {new Date(selectedAgent.created_at).toLocaleDateString('pl-PL')}</span>
                     </div>
@@ -1222,9 +1232,18 @@ function AgentsPageContent() {
                 <div className="space-y-2 mb-5">
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-[#8b949e] w-16 flex-shrink-0">Wallet:</span>
-                    <code className="text-[#58a6ff] text-xs font-mono">
-                      {selectedAgent.creator?.label || '0x???'}
-                    </code>
+                    {selectedAgent.creator?.id ? (
+                      <Link
+                        href={`/profile/${selectedAgent.creator.id}`}
+                        className="text-[#58a6ff] text-xs font-mono hover:underline"
+                      >
+                        {selectedAgent.creator.label || selectedAgent.creator.id}
+                      </Link>
+                    ) : (
+                      <code className="text-[#58a6ff] text-xs font-mono">
+                        {selectedAgent.creator?.label || '0x???'}
+                      </code>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-[#8b949e] w-16 flex-shrink-0">Atom ID:</span>
@@ -1867,7 +1886,13 @@ function AgentsPageContent() {
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="text-[#f97316] text-[10px] font-bold uppercase">{predLabel}</span>
                                     <span className="text-[#30363d]">·</span>
-                                    <span className="text-[#8b949e] text-[10px]">by {displayReporter}</span>
+                                    {report.creator?.id ? (
+                                      <Link href={`/profile/${report.creator.id}`} className="text-[#58a6ff] text-[10px] hover:underline">
+                                        by {displayReporter}
+                                      </Link>
+                                    ) : (
+                                      <span className="text-[#8b949e] text-[10px]">by {displayReporter}</span>
+                                    )}
                                     <span className="text-[#30363d]">·</span>
                                     <span className="text-[#6b7280] text-[10px]">{date}</span>
                                   </div>
@@ -1886,8 +1911,17 @@ function AgentsPageContent() {
                     <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                       <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Details</p>
                       <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                        <div>
+                          <p className="text-[#6b7280] text-[10px] mb-0.5">Creator</p>
+                          {selectedAgent.creator?.id ? (
+                            <Link href={`/profile/${selectedAgent.creator.id}`} className="text-[#58a6ff] text-xs font-medium hover:underline">
+                              {selectedAgent.creator.label?.replace('.eth', '') || selectedAgent.creator.id.slice(0, 10)}
+                            </Link>
+                          ) : (
+                            <p className="text-white text-xs font-medium">{selectedAgent.creator?.label || 'unknown'}</p>
+                          )}
+                        </div>
                         {[
-                          { label: 'Creator', value: selectedAgent.creator?.label || 'unknown' },
                           { label: 'Agent Age', value: ageLabel },
                           { label: 'First Seen', value: new Date(selectedAgent.created_at).toLocaleDateString('pl-PL') },
                           { label: 'Stakers', value: String(selectedAgent.positions_aggregate?.aggregate?.count || 0) },
@@ -2003,9 +2037,10 @@ function AgentsPageContent() {
                           const lastDate = new Date(profile.lastSeen).toLocaleDateString('pl-PL')
 
                           return (
-                            <div
+                            <Link
                               key={profile.accountId}
-                              className="flex items-center justify-between p-3.5 bg-[#161b22] border border-[#21262d] rounded-xl hover:border-[#30363d] transition-colors"
+                              href={`/profile/${profile.accountId}`}
+                              className="flex items-center justify-between p-3.5 bg-[#161b22] border border-[#21262d] rounded-xl hover:border-[#30363d] transition-colors cursor-pointer"
                             >
                               <div className="flex items-center gap-3">
                                 <div
@@ -2024,7 +2059,7 @@ function AgentsPageContent() {
                                   </svg>
                                 </div>
                                 <div>
-                                  <p className="text-white text-sm font-medium">{displayName}</p>
+                                  <p className="text-white text-sm font-medium hover:text-[#58a6ff] transition-colors">{displayName}</p>
                                   <div className="flex items-center gap-2 mt-0.5">
                                     {profile.supportCount > 0 && (
                                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#2d7a5f20] text-[#34a872]">
@@ -2045,7 +2080,7 @@ function AgentsPageContent() {
                                 <p className="text-white text-sm font-bold">{profile.totalSignals}</p>
                                 <p className="text-[#6b7280] text-[10px]">attestation{profile.totalSignals !== 1 ? 's' : ''}</p>
                               </div>
-                            </div>
+                            </Link>
                           )
                         })}
                       </div>
@@ -2136,7 +2171,17 @@ function AgentsPageContent() {
                               <div className="pb-4">
                                 <p className="text-white text-sm font-medium">
                                   {actionLabel}
-                                  <span className="text-[#8b949e] font-normal ml-1.5">by {accountLabel}</span>
+                                  <span className="text-[#8b949e] font-normal ml-1.5">by </span>
+                                  {signal.account_id ? (
+                                    <Link
+                                      href={`/profile/${signal.account_id}`}
+                                      className="text-[#58a6ff] font-normal hover:underline"
+                                    >
+                                      {accountLabel}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-[#8b949e] font-normal">{accountLabel}</span>
+                                  )}
                                 </p>
                                 <p style={{ color: dotColor }} className="text-xs font-medium mt-0.5">
                                   {isDeposit ? '+' : '-'}{sharesDisplay} shares

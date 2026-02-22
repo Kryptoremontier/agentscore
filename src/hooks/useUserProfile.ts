@@ -7,6 +7,34 @@ import { getAddress } from 'viem'
 
 const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
 
+const PROFILE_STORAGE_KEY = 'agent_score_profiles'
+
+interface ProfileMeta {
+  name?: string
+  bio?: string
+  avatar?: string
+  website?: string
+  twitter?: string
+  farcaster?: string
+}
+
+function loadProfileMeta(address: string): ProfileMeta {
+  if (typeof window === 'undefined') return {}
+  try {
+    const all = JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) || '{}')
+    return all[address.toLowerCase()] || {}
+  } catch { return {} }
+}
+
+function saveProfileMeta(address: string, meta: ProfileMeta) {
+  if (typeof window === 'undefined') return
+  try {
+    const all = JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) || '{}')
+    all[address.toLowerCase()] = meta
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(all))
+  } catch { /* ignore */ }
+}
+
 async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
   const res = await fetch(GRAPHQL_URL, {
     method: 'POST',
@@ -225,8 +253,16 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     + Math.min(10, daysActive * 0.5)
   ))
 
+  const meta = loadProfileMeta(address)
+
   return {
     address,
+    name: meta.name,
+    bio: meta.bio,
+    avatar: meta.avatar,
+    website: meta.website,
+    twitter: meta.twitter,
+    farcaster: meta.farcaster,
     stats,
     badges,
     expertLevel,
@@ -273,7 +309,18 @@ export function useUserProfile(address?: `0x${string}`) {
 
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<UserProfile>) => {
-      return { ...(profile || emptyProfile(address!)), ...updates }
+      const merged = { ...(profile || emptyProfile(address!)), ...updates }
+      if (address) {
+        saveProfileMeta(address, {
+          name: merged.name,
+          bio: merged.bio,
+          avatar: merged.avatar,
+          website: merged.website,
+          twitter: merged.twitter,
+          farcaster: merged.farcaster,
+        })
+      }
+      return merged
     },
     onSuccess: (newProfile) => {
       queryClient.setQueryData(['userProfile', address], newProfile)
