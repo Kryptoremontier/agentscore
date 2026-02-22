@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  FileText, Wallet, Shield, Info, Check, ChevronRight, Sparkles
+  FileText, Wallet, Shield, Info, Check, ChevronRight, Sparkles, Loader2
 } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AgentAvatar } from '@/components/agents/AgentAvatar'
 import { cn } from '@/lib/cn'
+import { createWriteConfig, createAgentAtom } from '@/lib/intuition'
 import type { AgentPlatform, VerificationLevel } from '@/types/agent'
 
 interface RegisterAgentFormProps {
@@ -54,6 +55,9 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [walletSigning, setWalletSigning] = useState(false)
+  const [walletSigned, setWalletSigned] = useState(false)
+  const [signatureHash, setSignatureHash] = useState<string | null>(null)
 
   const validateStep = () => {
     const newErrors: Record<string, string> = {}
@@ -89,6 +93,42 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
     setCurrentStep(prev => Math.max(prev - 1, 0))
   }
 
+  const handleSignMessage = async () => {
+    if (!walletClient || !isConnected) {
+      setError('Connect your wallet first to sign a message')
+      return
+    }
+
+    const walletAddr = formData.walletAddress || address
+    if (!walletAddr) {
+      setError('Enter a wallet address first')
+      return
+    }
+
+    setWalletSigning(true)
+    setError(null)
+
+    try {
+      const message = `I verify ownership of wallet ${walletAddr} for AgentScore agent registration.\n\nTimestamp: ${new Date().toISOString()}`
+      const signature = await walletClient.signMessage({
+        message,
+        account: walletClient.account!,
+      })
+
+      setSignatureHash(signature)
+      setWalletSigned(true)
+      setFormData(prev => ({ ...prev, verificationLevel: 'signed' as VerificationLevel }))
+    } catch (e: any) {
+      if (e.message?.includes('rejected') || e.message?.includes('denied')) {
+        setError('Signing was cancelled')
+      } else {
+        setError(e.message || 'Failed to sign message')
+      }
+    } finally {
+      setWalletSigning(false)
+    }
+  }
+
   const handleSubmit = async () => {
     if (!validateStep()) return
     if (!walletClient || !publicClient || !isConnected) {
@@ -101,7 +141,6 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
     setTxHash(null)
 
     try {
-      const { createWriteConfig, createAgentAtom } = await import('@/lib/intuition')
       const config = createWriteConfig(walletClient, publicClient)
 
       const result = await createAgentAtom(config, {
@@ -115,7 +154,6 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
       setTxHash(result.transactionHash)
       setAtomId(result.state.termId)
 
-      // Pass the atom ID (termId) to parent
       onSuccess?.(result.state.termId)
 
     } catch (e: any) {
@@ -322,16 +360,27 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
               <label className="block text-sm font-medium">
                 Agent Wallet Address
               </label>
-              <input
-                type="text"
-                value={formData["walletAddress"]}
-                onChange={(e) => setFormData({ ...formData, walletAddress: e.target.value })}
-                placeholder="0x..."
-                className={cn(
-                  "w-full px-4 py-3 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none font-mono",
-                  errors["walletAddress"] && "ring-2 ring-trust-critical"
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData["walletAddress"]}
+                  onChange={(e) => { setFormData({ ...formData, walletAddress: e.target.value }); setWalletSigned(false); setSignatureHash(null) }}
+                  placeholder="0x..."
+                  className={cn(
+                    "w-full px-4 py-3 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none font-mono pr-28",
+                    errors["walletAddress"] && "ring-2 ring-trust-critical"
+                  )}
+                />
+                {isConnected && address && !formData["walletAddress"] && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, walletAddress: address })}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary hover:text-primary/80 bg-primary/10 px-2 py-1 rounded"
+                  >
+                    Use connected
+                  </button>
                 )}
-              />
+              </div>
               {errors["walletAddress"] && (
                 <p className="text-sm text-trust-critical">{errors["walletAddress"]}</p>
               )}
@@ -341,20 +390,47 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
             <div className="space-y-3">
               <p className="text-sm font-medium">Verification Options</p>
 
-              <button className="w-full glass rounded-lg p-4 text-left hover:bg-white/10 transition-all">
+              <button
+                onClick={handleSignMessage}
+                disabled={walletSigning || walletSigned || !isConnected}
+                className={cn(
+                  'w-full glass rounded-lg p-4 text-left transition-all',
+                  walletSigned
+                    ? 'ring-2 ring-trust-good/50 bg-trust-good/5'
+                    : !isConnected
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-white/10 hover:ring-1 hover:ring-primary/30'
+                )}
+              >
                 <span className="flex items-center justify-between">
                   <span className="flex items-center gap-3">
-                    <Shield className="w-5 h-5 text-trust-good" />
+                    {walletSigned ? (
+                      <Check className="w-5 h-5 text-trust-good" />
+                    ) : (
+                      <Shield className="w-5 h-5 text-trust-good" />
+                    )}
                     <span className="flex flex-col">
-                      <span className="font-medium">Sign Message</span>
-                      <span className="text-sm text-text-secondary">Prove wallet ownership</span>
+                      <span className="font-medium">
+                        {walletSigning ? 'Signing...' : walletSigned ? 'Wallet Verified' : 'Sign Message'}
+                      </span>
+                      <span className="text-sm text-text-secondary">
+                        {walletSigned
+                          ? `Signature: ${signatureHash?.slice(0, 10)}...${signatureHash?.slice(-6)}`
+                          : 'Prove wallet ownership'}
+                      </span>
                     </span>
                   </span>
-                  <ChevronRight className="w-5 h-5 text-text-muted" />
+                  {walletSigning ? (
+                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                  ) : walletSigned ? (
+                    <Badge variant="default" size="sm" className="bg-trust-good/20 text-trust-good border-0">Verified</Badge>
+                  ) : (
+                    <ChevronRight className="w-5 h-5 text-text-muted" />
+                  )}
                 </span>
               </button>
 
-              <button className="w-full glass rounded-lg p-4 text-left hover:bg-white/10 transition-all opacity-50 cursor-not-allowed">
+              <button className="w-full glass rounded-lg p-4 text-left transition-all opacity-50 cursor-not-allowed" disabled>
                 <span className="flex items-center justify-between">
                   <span className="flex items-center gap-3">
                     <Check className="w-5 h-5 text-trust-excellent" />
@@ -431,6 +507,12 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
                 <div className="glass rounded-lg p-4">
                   <h4 className="font-medium mb-3 text-text-secondary">Wallet</h4>
                   <p className="font-mono text-sm">{formData["walletAddress"]}</p>
+                  {walletSigned && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Check className="w-4 h-4 text-trust-good" />
+                      <span className="text-sm text-trust-good">Ownership verified via signature</span>
+                    </div>
+                  )}
                 </div>
               )}
 

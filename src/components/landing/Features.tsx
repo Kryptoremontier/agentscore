@@ -8,37 +8,37 @@ const features = [
   {
     icon: Shield,
     title: 'Verify Before Trust',
-    description: 'Check any AI agent\'s reputation score before interacting. Real data, real stakes.',
+    description: 'Check any AI agent\'s trust score before interacting. Scores are calculated from real on-chain stakes.',
     color: 'from-emerald-500 to-cyan-500',
   },
   {
     icon: TrendingUp,
-    title: 'Bonding Curves',
-    description: 'Early supporters earn more. Your conviction in good agents pays off.',
+    title: 'Bonding Curve Market',
+    description: 'Support or Oppose agents via bonding curves. Buy and sell positions as trust evolves.',
     color: 'from-blue-500 to-indigo-500',
   },
   {
     icon: Award,
-    title: 'Expert Badges',
-    description: 'Build reputation through quality attestations. Experts carry more weight.',
+    title: 'On-chain Attestations',
+    description: 'Every Support, Oppose and Report creates permanent, verifiable attestations on-chain.',
     color: 'from-purple-500 to-pink-500',
   },
   {
     icon: Users,
     title: 'Community Driven',
-    description: 'Trust scores from real users, not centralized authorities.',
+    description: 'Trust scores from real users with real stakes — no centralized authority.',
     color: 'from-orange-500 to-amber-500',
   },
   {
     icon: Zap,
-    title: 'Lightning Fast',
-    description: 'Built on Base L3. 10,000x cheaper than L1, instant finality.',
+    title: 'Intuition Protocol',
+    description: 'Built on Intuition\'s L3 with minimal gas fees and near-instant finality.',
     color: 'from-yellow-500 to-lime-500',
   },
   {
     icon: Lock,
     title: 'Fully On-Chain',
-    description: 'All attestations stored on Intuition Protocol. Permanent & verifiable.',
+    description: 'Agent identities, stakes, and trust scores — all stored permanently on-chain.',
     color: 'from-rose-500 to-red-500',
   },
 ]
@@ -47,15 +47,8 @@ export function Features() {
   return (
     <section className="relative py-32 overflow-hidden">
 
-      {/* Background Image */}
-      <div className="absolute inset-0">
-        <img
-          src="/images/backgrounds/symmetric-bg.jpg"
-          alt=""
-          className="w-full h-full object-cover opacity-30"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[rgb(10,10,15)] via-transparent to-[rgb(10,10,15)]" />
-      </div>
+      {/* Semi-transparent overlay — fixed bg shows through */}
+      <div className="absolute inset-0 bg-[rgb(10,10,15)]/75 backdrop-blur-[1px]" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 

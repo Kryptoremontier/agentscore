@@ -4,6 +4,7 @@
 
 import type { Agent, AgentCategory, AgentPlatform, VerificationLevel } from '@/types/agent'
 import type { ExpertLevel } from '@/types/user'
+import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
 
 // ============================================================================
 // Type Definitions (based on SDK - adjust after testing)
@@ -146,20 +147,8 @@ function parsePlatform(data?: IntuitionAtomDetails['data']): AgentPlatform {
  * TODO: Refine this based on actual trust calculation model
  */
 function calculateTrustScore(vault?: IntuitionAtomDetails['vault']): number {
-  if (!vault) return 0
-
-  const { totalAssets, positionCount, currentSharePrice } = vault
-
-  // Simple heuristic (to be refined):
-  // - Base score from TVL (0-70 points)
-  // - Bonus from number of stakers (0-20 points)
-  // - Bonus from share price (0-10 points)
-
-  const tvlScore = Math.min(70, Number(totalAssets) / 1e18 * 10)
-  const stakersScore = Math.min(20, positionCount * 2)
-  const priceScore = Math.min(10, Number(currentSharePrice) / 1e18 * 5)
-
-  return Math.round(tvlScore + stakersScore + priceScore)
+  if (!vault) return 50
+  return calculateTrustScoreFromStakes(vault.totalAssets, BigInt(0)).score
 }
 
 /**

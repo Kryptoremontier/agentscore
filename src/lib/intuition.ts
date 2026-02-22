@@ -212,7 +212,7 @@ export async function depositToVault(
     ],
     value: amount,  // THIS IS THE KEY - send tTRUST as transaction value
     account: config.walletClient.account!,
-    chain: config.walletClient.chain,
+    chain: config.walletClient.chain ?? intuitionTestnet,
   })
 
   // Wait for transaction receipt
@@ -256,7 +256,7 @@ export async function redeemFromVault(
       0n, // minAssets = 0 (accept any amount)
     ],
     account: config.walletClient.account!,
-    chain: config.walletClient.chain,
+    chain: config.walletClient.chain ?? intuitionTestnet,
   })
 
   const receipt = await config.publicClient.waitForTransactionReceipt({ hash })
@@ -494,3 +494,161 @@ export const DEFAULT_ATOM_DEPOSIT = parseEther('0.001')
  * Default stake amount (0.01 tTRUST)
  */
 export const DEFAULT_STAKE_AMOUNT = parseEther('0.01')
+
+// ============================================================================
+// Trust Triple — FOR/AGAINST Vault Setup
+// ============================================================================
+
+/**
+ * Canonical predicate/object atoms for AgentScore trust triples.
+ * These already exist on Intuition testnet — no need to create them.
+ *
+ * Triple structure: [Agent] [is trustworthy] [AI Agent]
+ *   - FOR vault  (term_id)         → Support/Trust signals
+ *   - AGAINST vault (counter_term_id) → Oppose/Distrust signals
+ */
+export const TRUST_PREDICATE_TERM_ID =
+  '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba' as const
+export const TRUST_OBJECT_TERM_ID =
+  '0x4990eef19ea1d9b893c1802af9e2ec37fbc1ae138868959ebc23c98b1fc9565e' as const
+
+/**
+ * Look up an existing trust triple for a given agent atom.
+ * Returns { termId, counterTermId } if found, null otherwise.
+ * Read-only — no wallet required.
+ */
+export async function findTrustTriple(agentTermId: string): Promise<{
+  termId: `0x${string}`
+  counterTermId: `0x${string}`
+} | null> {
+  const res = await fetch(INTUITION_GRAPHQL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `
+        query FindTrustTriple($subjectId: String!, $predicateId: String!) {
+          triples(
+            where: {
+              subject_id: { _eq: $subjectId }
+              predicate_id: { _eq: $predicateId }
+            }
+            limit: 1
+          ) {
+            term_id
+            counter_term_id
+          }
+        }
+      `,
+      variables: {
+        subjectId: agentTermId,
+        predicateId: TRUST_PREDICATE_TERM_ID,
+      },
+    }),
+  })
+  const data = await res.json()
+  if (data.errors) {
+    console.error('findTrustTriple error:', data.errors[0].message)
+    return null
+  }
+  const triple = data.data?.triples?.[0]
+  if (!triple) return null
+  return {
+    termId: triple.term_id as `0x${string}`,
+    counterTermId: triple.counter_term_id as `0x${string}`,
+  }
+}
+
+/**
+ * Create the trust triple for an agent: [Agent] [is trustworthy] [AI Agent]
+ * Requires wallet — one MetaMask confirmation.
+ * Predicate and object atoms already exist on testnet (hardcoded term_ids).
+ */
+export async function createTrustTriple(
+  agentTermId: `0x${string}`,
+  cfg: WriteConfig
+): Promise<{ termId: `0x${string}`; counterTermId: `0x${string}` }> {
+  // Create the triple — predicate and object atoms already exist
+  // Use 0.01 tTRUST: MultiVault requires minimum deposit above protocol fee threshold
+  const TRIPLE_DEPOSIT = parseEther('0.01')
+  await createTriple(
+    cfg,
+    agentTermId,
+    TRUST_PREDICATE_TERM_ID as `0x${string}`,
+    TRUST_OBJECT_TERM_ID as `0x${string}`,
+    TRIPLE_DEPOSIT
+  )
+
+  // Poll GraphQL until triple is indexed (typically 2–5s)
+  for (let i = 0; i < 12; i++) {
+    await new Promise(r => setTimeout(r, 2500))
+    const triple = await findTrustTriple(agentTermId)
+    if (triple) return triple
+  }
+  throw new Error('Triple created on-chain but not yet indexed — please refresh in a few seconds')
+}
+
+// ============================================================================
+// Reports
+// ============================================================================
+
+export type ReportCategory = 'scam' | 'spam' | 'prompt_injection' | 'impersonation'
+
+const REPORT_PREDICATE_LABELS: Record<ReportCategory, string> = {
+  scam: 'reported_for_scam',
+  spam: 'reported_for_spam',
+  prompt_injection: 'reported_for_injection',
+  impersonation: 'reported_for_impersonation',
+}
+
+/**
+ * Find or create an atom for a given text label.
+ * Returns the term_id.
+ */
+async function findOrCreateAtom(
+  cfg: WriteConfig,
+  label: string
+): Promise<`0x${string}`> {
+  const res = await fetch(INTUITION_GRAPHQL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `{ atoms(where: { label: { _eq: "${label}" } }, limit: 1) { term_id } }`,
+    }),
+  })
+  const data = await res.json()
+  const existing = data?.data?.atoms?.[0]?.term_id
+  if (existing) return existing as `0x${string}`
+
+  const atomResult = await createAtomFromString(cfg, label, parseEther('0.001'))
+  const termId = atomResult?.state?.termId
+  if (!termId) {
+    throw new Error(`Failed to create atom "${label}"`)
+  }
+  return termId as `0x${string}`
+}
+
+/**
+ * Submit a report: [Agent] [reported_for_X] [reason text]
+ * Creates predicate & object atoms if they don't exist, then the triple.
+ */
+export async function submitReport(
+  agentTermId: `0x${string}`,
+  category: ReportCategory,
+  reason: string,
+  cfg: WriteConfig
+): Promise<void> {
+  const predicateLabel = REPORT_PREDICATE_LABELS[category]
+  const objectLabel = reason.trim() || `${category} report`
+
+  const predicateTermId = await findOrCreateAtom(cfg, predicateLabel)
+
+  // Short delay so indexer catches up
+  await new Promise(r => setTimeout(r, 2000))
+
+  const objectTermId = await findOrCreateAtom(cfg, objectLabel)
+
+  await new Promise(r => setTimeout(r, 2000))
+
+  const REPORT_DEPOSIT = parseEther('0.01')
+  await createTriple(cfg, agentTermId, predicateTermId, objectTermId, REPORT_DEPOSIT)
+}

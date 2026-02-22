@@ -19,101 +19,91 @@ export default function RegisterPage() {
   }
 
   if (success && agentId) {
+    const shortId = `${agentId.slice(0, 10)}...${agentId.slice(-8)}`
+
     return (
       <PageBackground image="diagonal" opacity={0.3}>
-        <div className="pt-24 pb-16">
-          <div className="container">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="max-w-2xl mx-auto text-center"
-          >
-            {/* Success Animation */}
+        <div className="pt-28 pb-16">
+          <div className="container max-w-xl mx-auto">
             <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', delay: 0.2 }}
-              className="w-24 h-24 rounded-full bg-trust-good/20 flex items-center justify-center mx-auto mb-6"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center"
             >
-              <CheckCircle className="w-12 h-12 text-trust-good" />
-            </motion.div>
+              {/* Success Animation */}
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', delay: 0.2 }}
+                className="w-20 h-20 rounded-full bg-trust-good/20 flex items-center justify-center mx-auto mb-6"
+              >
+                <CheckCircle className="w-10 h-10 text-trust-good" />
+              </motion.div>
 
-            <h1 className="text-4xl font-bold mb-4">Agent Registered!</h1>
-            <p className="text-xl text-text-secondary mb-8">
-              Your agent has been successfully registered on the Intuition Protocol.
-            </p>
+              <h1 className="text-3xl font-bold mb-2">Agent Registered!</h1>
+              <p className="text-text-secondary mb-8">
+                Successfully created on the Intuition Protocol.
+              </p>
 
-            <GlassCard className="mb-8">
-              <dl className="space-y-3">
-                <div className="flex justify-between">
-                  <dt className="text-text-muted">Agent ID</dt>
-                  <dd className="font-mono font-medium">{agentId}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-text-muted">Status</dt>
-                  <dd className="text-trust-good">Active</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-text-muted">Initial Trust Score</dt>
-                  <dd className="font-mono font-medium">50</dd>
-                </div>
-              </dl>
-            </GlassCard>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href={`/agents/${agentId}`}>
-                <Button size="lg" className="glow-blue">
-                  View Agent Page
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-              <Link href="/agents">
-                <Button size="lg" variant="outline">
-                  Browse Agents
-                </Button>
-              </Link>
-            </div>
-
-            {/* Next Steps */}
-            <div className="mt-12 text-left">
-              <h2 className="text-2xl font-semibold mb-6">Next Steps</h2>
-              <div className="space-y-4">
-                <GlassCard className="p-4">
-                  <div className="flex gap-3">
-                    <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+              {/* Agent ID card */}
+              <div className="bg-[#0d1117] border border-[#21262d] rounded-xl p-5 mb-8 text-left">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs text-[#6b7280] mb-1.5">Atom ID</p>
+                    <p className="font-mono text-sm text-emerald-400 break-all leading-relaxed">{agentId}</p>
+                  </div>
+                  <div className="flex gap-8">
                     <div>
-                      <p className="font-medium">Build Trust</p>
-                      <p className="text-sm text-text-secondary">
-                        Encourage users to stake $TRUST on your agent
-                      </p>
+                      <p className="text-xs text-[#6b7280] mb-1">Status</p>
+                      <p className="text-sm font-medium text-trust-good">Active</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#6b7280] mb-1">Initial Score</p>
+                      <p className="text-sm font-mono font-medium">50</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#6b7280] mb-1">Network</p>
+                      <p className="text-sm font-medium text-primary">Testnet</p>
                     </div>
                   </div>
-                </GlassCard>
-                <GlassCard className="p-4">
-                  <div className="flex gap-3">
-                    <Users className="w-5 h-5 text-accent-cyan flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium">Engage Community</p>
-                      <p className="text-sm text-text-secondary">
-                        Respond to feedback and improve your agent
-                      </p>
-                    </div>
-                  </div>
-                </GlassCard>
-                <GlassCard className="p-4">
-                  <div className="flex gap-3">
-                    <TrendingUp className="w-5 h-5 text-trust-good flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium">Monitor Score</p>
-                      <p className="text-sm text-text-secondary">
-                        Track your trust score and attestations
-                      </p>
-                    </div>
-                  </div>
-                </GlassCard>
+                </div>
               </div>
-            </div>
-          </motion.div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3 justify-center mb-10">
+                <Link href={`/agents?open=${encodeURIComponent(agentId)}`}>
+                  <Button size="lg" className="glow-blue">
+                    View Agent
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
+                <Link href="/agents">
+                  <Button size="lg" variant="outline">
+                    Browse Agents
+                  </Button>
+                </Link>
+              </div>
+
+              {/* Next Steps */}
+              <div className="text-left">
+                <h2 className="text-lg font-semibold mb-4 text-[#8b949e]">Next Steps</h2>
+                <div className="space-y-3">
+                  {[
+                    { icon: Shield, color: 'text-primary', title: 'Build Trust', desc: 'Encourage users to Support your agent with tTRUST stakes' },
+                    { icon: Users, color: 'text-accent-cyan', title: 'Engage Community', desc: 'Grow your agent\'s reputation through attestations' },
+                    { icon: TrendingUp, color: 'text-trust-good', title: 'Monitor Score', desc: 'Track trust score, stakers and activity in Explorer' },
+                  ].map((step) => (
+                    <div key={step.title} className="flex items-center gap-3 bg-white/[0.03] rounded-lg px-4 py-3 border border-white/5">
+                      <step.icon className={`w-4 h-4 ${step.color} flex-shrink-0`} />
+                      <div className="min-w-0">
+                        <span className="font-medium text-sm">{step.title}</span>
+                        <span className="text-xs text-[#6b7280] ml-2">{step.desc}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
       </PageBackground>

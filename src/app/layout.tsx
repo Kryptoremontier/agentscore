@@ -60,10 +60,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jetbrains.variable} font-sans antialiased`} suppressHydrationWarning>
+      <body className={`${inter.variable} ${jetbrains.variable} font-sans antialiased bg-[rgb(10,10,15)]`} suppressHydrationWarning>
         <Providers>
           <ErrorBoundary>
-            <div className="relative min-h-screen bg-[rgb(10,10,15)] text-white">
+            <div className="relative min-h-screen text-white">
               {/* Content */}
               <Navbar />
               <main className="relative">

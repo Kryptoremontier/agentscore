@@ -1,6 +1,7 @@
 import type { Agent } from '@/types/agent'
 import type { Attestation, AttestationPredicate } from '@/types/attestation'
 import type { GraphQLAtom, GraphQLTriple } from './graphql'
+import { calculateAgentTrustScore, countReportedTriples } from './trust-score-engine'
 
 // Transform GraphQL atom to Agent type
 export function transformAtomToAgent(atom: GraphQLAtom): Agent {
@@ -13,8 +14,8 @@ export function transformAtomToAgent(atom: GraphQLAtom): Agent {
     parsedData = { description: atom.atomData }
   }
 
-  // Calculate trust score from attestations
-  const trustScore = calculateTrustScore(atom)
+  // Calculate trust score using shared scoring engine
+  const trust = calculateAgentTrustScore(atom)
 
   // Extract platform from atomData or default
   const platform = parsedData.platform || 'custom'
@@ -28,11 +29,11 @@ export function transformAtomToAgent(atom: GraphQLAtom): Agent {
     walletAddress: parsedData.walletAddress || atom.createdBy?.address || null,
     createdAt: new Date(atom.createdAt),
     verificationLevel: determineVerificationLevel(atom, parsedData),
-    trustScore,
-    positiveStake: calculatePositiveStake(atom),
-    negativeStake: calculateNegativeStake(atom),
+    trustScore: trust.score,
+    positiveStake: trust.supportStake,
+    negativeStake: trust.opposeStake,
     attestationCount: atom.subjectTriples?.length || 0,
-    reportCount: countReports(atom),
+    reportCount: countReportedTriples(atom.subjectTriples),
     stakerCount: parseInt(atom.vault.positionCount || '0'),
     owner: {
       address: (atom.createdBy?.address || '0x0') as `0x${string}`,
@@ -70,56 +71,6 @@ export function transformTripleToAttestation(triple: GraphQLTriple): Attestation
 
 // Helper functions
 
-function calculateTrustScore(atom: GraphQLAtom): number {
-  if (!atom.subjectTriples || atom.subjectTriples.length === 0) {
-    return 50 // Default score for new agents
-  }
-
-  let positiveWeight = 0
-  let negativeWeight = 0
-
-  atom.subjectTriples.forEach(triple => {
-    const stake = BigInt(triple.vault.totalShares || '0')
-    const weight = Number(stake) / 1e18
-
-    if (isPositivePredicate(triple.predicate.label)) {
-      positiveWeight += weight
-    } else if (isNegativePredicate(triple.predicate.label)) {
-      negativeWeight += weight
-    }
-  })
-
-  const total = positiveWeight + negativeWeight
-  if (total === 0) return 50
-
-  const score = (positiveWeight / total) * 100
-  return Math.round(Math.max(0, Math.min(100, score)))
-}
-
-function calculatePositiveStake(atom: GraphQLAtom): bigint {
-  if (!atom.subjectTriples) return BigInt(0)
-
-  return atom.subjectTriples
-    .filter(triple => isPositivePredicate(triple.predicate.label))
-    .reduce((sum, triple) => sum + BigInt(triple.vault.totalShares || '0'), BigInt(0))
-}
-
-function calculateNegativeStake(atom: GraphQLAtom): bigint {
-  if (!atom.subjectTriples) return BigInt(0)
-
-  return atom.subjectTriples
-    .filter(triple => isNegativePredicate(triple.predicate.label))
-    .reduce((sum, triple) => sum + BigInt(triple.vault.totalShares || '0'), BigInt(0))
-}
-
-function countReports(atom: GraphQLAtom): number {
-  if (!atom.subjectTriples) return 0
-
-  return atom.subjectTriples.filter(triple =>
-    triple.predicate.label.includes('reported')
-  ).length
-}
-
 function determineVerificationLevel(atom: GraphQLAtom, parsedData: any): 'none' | 'wallet' | 'social' | 'kyc' {
   // Check for verification attestations
   const hasWallet = !!parsedData.walletAddress || !!atom.createdBy?.address
@@ -130,14 +81,6 @@ function determineVerificationLevel(atom: GraphQLAtom, parsedData: any): 'none' 
   if (hasVerification) return 'kyc' // Simplified - would check actual verifier
   if (hasWallet) return 'wallet'
   return 'none'
-}
-
-function isPositivePredicate(label: string): boolean {
-  return ['trusts', 'verified_by', 'vouches_for'].includes(label)
-}
-
-function isNegativePredicate(label: string): boolean {
-  return ['distrusts', 'reported_for_scam', 'reported_for_spam', 'reported_for_injection'].includes(label)
 }
 
 function mapPredicateLabel(label: string): AttestationPredicate {

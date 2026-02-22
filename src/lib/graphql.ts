@@ -29,9 +29,26 @@ export const AGENT_QUERIES = {
         }
         createdBy {
           id
+          address
         }
         triples {
           id
+        }
+        subjectTriples {
+          id
+          predicate {
+            id
+            label
+          }
+          object {
+            id
+            label
+          }
+          vault {
+            totalShares
+            positionCount
+          }
+          createdAt
         }
       }
       atomsConnection(where: $where) {
@@ -165,7 +182,7 @@ export const AGENT_QUERIES = {
         # Get trust/distrust attestations
         subjectTriples(
           where: {
-            predicate_in: ["trusts", "distrusts", "reported_for_scam", "reported_for_spam", "reported_for_injection"]
+            predicate_in: ["trusts", "verified_by", "vouches_for", "distrusts", "reported_for_scam", "reported_for_spam", "reported_for_injection"]
           }
         ) {
           id

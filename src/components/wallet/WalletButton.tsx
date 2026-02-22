@@ -1,7 +1,7 @@
 'use client'
 
 import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Wallet, ChevronDown, Copy, ExternalLink, LogOut, User, Shield } from 'lucide-react'
 import Link from 'next/link'
@@ -23,6 +23,18 @@ export function WalletButton() {
   const { data: balance } = useBalance({ address })
 
   const [showConnectors, setShowConnectors] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <Button disabled className="min-w-[160px]">
+        <Wallet className="w-4 h-4 mr-2" />
+        Connect Wallet
+      </Button>
+    )
+  }
 
   if (isConnecting) {
     return (

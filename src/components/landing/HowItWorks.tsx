@@ -8,19 +8,19 @@ const steps = [
   {
     icon: UserPlus,
     title: 'Register Agent',
-    description: 'Create an on-chain identity for your AI agent as an Intuition Atom',
+    description: 'Create an on-chain identity for your AI agent as an Intuition Atom. Costs 0.01 tTRUST.',
     color: 'from-primary to-accent-cyan',
   },
   {
     icon: Shield,
-    title: 'Stake Trust',
-    description: 'Users stake $TRUST tokens to attest agent reliability and behavior',
+    title: 'Support or Oppose',
+    description: 'Stake tTRUST via bonding curves to signal trust (Support) or flag risks (Oppose).',
     color: 'from-accent-cyan to-trust-good',
   },
   {
     icon: CheckCircle,
     title: 'Verify & Interact',
-    description: 'Check trust scores before interactions to ensure agent safety',
+    description: 'Check real-time trust scores powered by on-chain stakes before interacting with any agent.',
     color: 'from-trust-good to-primary',
   },
 ]
@@ -28,7 +28,8 @@ const steps = [
 export function HowItWorks() {
   return (
     <section className="py-24 relative">
-      <div className="container">
+      <div className="absolute inset-0 bg-[rgb(10,10,15)]/80" />
+      <div className="container relative z-10">
         {/* Section Header */}
         <div className="text-center mb-16">
           <motion.h2

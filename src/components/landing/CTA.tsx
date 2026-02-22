@@ -1,24 +1,49 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
+const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+
 export function CTA() {
+  const [agentCount, setAgentCount] = useState(0)
+  const [stakerCount, setStakerCount] = useState(0)
+
+  useEffect(() => {
+    fetch(GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `{
+          agents: atoms(where: { label: { _ilike: "Agent:%" } }) {
+            positions_aggregate {
+              aggregate { count }
+            }
+          }
+        }`
+      })
+    })
+      .then(r => r.json())
+      .then(d => {
+        const agents = d.data?.agents || []
+        setAgentCount(agents.length)
+        let stakers = 0
+        for (const a of agents) {
+          stakers += a.positions_aggregate?.aggregate?.count || 0
+        }
+        setStakerCount(stakers)
+      })
+      .catch(() => {})
+  }, [])
+
   return (
     <section className="relative py-32 overflow-hidden">
 
-      {/* Background */}
-      <div className="absolute inset-0">
-        <img
-          src="/images/backgrounds/diagonal-bg.jpg"
-          alt=""
-          className="w-full h-full object-cover opacity-40"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-[rgb(10,10,15)] via-transparent to-[rgb(10,10,15)]" />
-        <div className="absolute inset-0 bg-[rgb(10,10,15)]/60" />
-      </div>
+      {/* Semi-transparent overlay — fixed bg shows through */}
+      <div className="absolute inset-0 bg-[rgb(10,10,15)]/70" />
 
       <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
 
@@ -39,7 +64,7 @@ export function CTA() {
 
           <p className="mt-6 text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
             Join the decentralized trust layer. Register your agent, stake on others,
-            earn rewards for quality attestations.
+            and help build the reputation graph for AI.
           </p>
 
           {/* CTA Buttons */}
@@ -70,15 +95,15 @@ export function CTA() {
             </Link>
           </div>
 
-          {/* Trust indicators */}
+          {/* Real indicators */}
           <div className="mt-12 flex items-center justify-center gap-8 text-sm text-slate-400">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>770K+ Agents</span>
+              <span>{agentCount} Agents Registered</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-primary" />
-              <span>$2.3M Staked</span>
+              <span>{stakerCount} Active Stakers</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-purple-500" />

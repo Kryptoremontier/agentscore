@@ -82,10 +82,7 @@ export function useSearchAtoms(query: string, enabled = true) {
     queryKey: ['atoms', 'search', query],
     queryFn: async () => {
       if (!config) return null
-      return await searchGraph(config, query, {
-        atomsLimit: 50,
-        triplesLimit: 0,
-      })
+      return await searchGraph(config, query)
     },
     enabled: enabled && !!query && !!config,
     staleTime: 30000, // Cache for 30s
