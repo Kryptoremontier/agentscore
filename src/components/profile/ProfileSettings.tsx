@@ -158,7 +158,7 @@ export function ProfileSettings({ profile, onUpdate }: ProfileSettingsProps) {
           </div>
           <div className="flex items-center justify-between py-2">
             <span className="text-sm text-slate-400">Network</span>
-            <span className="text-sm text-slate-300">Base Sepolia (Testnet)</span>
+            <span className="text-sm text-slate-300">Intuition Testnet</span>
           </div>
           <div className="flex items-center justify-between py-2">
             <span className="text-sm text-slate-400">Level</span>

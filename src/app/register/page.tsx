@@ -63,7 +63,7 @@ export default function RegisterPage() {
                     </div>
                     <div>
                       <p className="text-xs text-[#6b7280] mb-1">Network</p>
-                      <p className="text-sm font-medium text-primary">Testnet</p>
+                      <p className="text-sm font-medium text-primary">Intuition Testnet</p>
                     </div>
                   </div>
                 </div>

@@ -18,32 +18,47 @@ async function gql<T>(query: string, variables?: Record<string, unknown>): Promi
   return json.data as T
 }
 
+interface GqlAtom { term_id: string; label: string; emoji: string | null }
+
+interface GqlPosition {
+  term_id: string
+  shares: string
+  updated_at: string
+  vault: {
+    term_id: string
+    total_shares: string
+    term: {
+      id: string
+      type: string
+      atom: GqlAtom | null
+      triple: {
+        term_id: string
+        counter_term_id: string
+        subject: GqlAtom
+        predicate: { label: string }
+        object: { label: string }
+      } | null
+    }
+  }
+}
+
+interface GqlProfileData {
+  myAgents: Array<{
+    term_id: string
+    label: string
+    emoji: string | null
+    created_at: string
+    positions_aggregate: { aggregate: { count: number; sum: { shares: string } | null } }
+  }>
+  myPositions: GqlPosition[]
+  mySignals: { aggregate: { count: number } }
+  myReports: { aggregate: { count: number } }
+}
+
 async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   const checksummed = getAddress(address)
 
-  const data = await gql<{
-    myAgents: Array<{
-      term_id: string
-      label: string
-      emoji: string | null
-      created_at: string
-      positions_aggregate: { aggregate: { count: number; sum: { shares: string } | null } }
-    }>
-    myPositions: Array<{
-      shares: string
-      updated_at: string
-      account: { label: string } | null
-      atom: { term_id: string; label: string; emoji: string | null } | null
-      triple: {
-        term_id: string
-        vault: { atom: { term_id: string; label: string; emoji: string | null } | null } | null
-        counter_vault: { atom: { term_id: string } | null } | null
-        subject: { term_id: string; label: string; emoji: string | null }
-      } | null
-    }>
-    mySignals: { aggregate: { count: number } }
-    myReports: { aggregate: { count: number } }
-  }>(`
+  const data = await gql<GqlProfileData>(`
     query ProfileData($address: String!) {
       myAgents: atoms(
         where: {
@@ -71,23 +86,24 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
         }
         order_by: { updated_at: desc }
       ) {
+        term_id
         shares
         updated_at
-        account { label }
-        atom {
+        vault {
           term_id
-          label
-          emoji
-        }
-        triple {
-          term_id
-          vault {
+          total_shares
+          term {
+            id
+            type
             atom { term_id label emoji }
+            triple {
+              term_id
+              counter_term_id
+              subject { term_id label emoji }
+              predicate { label }
+              object { label }
+            }
           }
-          counter_vault {
-            atom { term_id }
-          }
-          subject { term_id label emoji }
         }
       }
 
@@ -119,7 +135,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   }))
 
   const agentPositions: AgentSupport[] = []
-  const supportedAgentIds = new Set<string>()
+  const seenKeys = new Set<string>()
   let totalStaked = BigInt(0)
 
   for (const pos of (data.myPositions || [])) {
@@ -127,14 +143,17 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     if (shares <= 0n) continue
     totalStaked += shares
 
-    if (pos.atom && pos.atom.label?.startsWith('Agent:')) {
-      const agentId = pos.atom.term_id
-      if (!supportedAgentIds.has(agentId)) {
-        supportedAgentIds.add(agentId)
+    const term = pos.vault?.term
+    if (!term) continue
+
+    if (term.atom && term.atom.label?.startsWith('Agent:')) {
+      const key = `atom-${term.atom.term_id}`
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key)
         agentPositions.push({
-          agentTermId: agentId,
-          agentLabel: pos.atom.label,
-          agentEmoji: pos.atom.emoji || undefined,
+          agentTermId: term.atom.term_id,
+          agentLabel: term.atom.label,
+          agentEmoji: term.atom.emoji || undefined,
           shares: pos.shares,
           side: 'for',
           updatedAt: pos.updated_at,
@@ -142,22 +161,18 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
       }
     }
 
-    if (pos.triple?.subject?.label?.startsWith('Agent:')) {
-      const subj = pos.triple.subject
-      const tripleId = pos.triple.term_id
-      const counterVaultAtomId = pos.triple.counter_vault?.atom?.term_id
-      const vaultAtomId = pos.triple.vault?.atom?.term_id
+    if (term.triple && term.triple.subject?.label?.startsWith('Agent:')) {
+      const t = term.triple
+      const isForVault = t.term_id === pos.vault.term_id
+      const side = isForVault ? 'for' : 'against'
+      const key = `triple-${t.subject.term_id}-${side}`
 
-      const isCounterVault = counterVaultAtomId && vaultAtomId !== counterVaultAtomId
-      const side = isCounterVault ? 'against' : 'for'
-      const key = `${subj.term_id}-${side}`
-
-      if (!supportedAgentIds.has(key)) {
-        supportedAgentIds.add(key)
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key)
         agentPositions.push({
-          agentTermId: subj.term_id,
-          agentLabel: subj.label,
-          agentEmoji: subj.emoji || undefined,
+          agentTermId: t.subject.term_id,
+          agentLabel: t.subject.label,
+          agentEmoji: t.subject.emoji || undefined,
           shares: pos.shares,
           side,
           updatedAt: pos.updated_at,
@@ -184,14 +199,13 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   const badges = autoBuildBadges(stats)
   const expertLevel = calculateExpertLevel(badges)
 
-  const reputation = Math.min(100, Math.round(
+  stats.reputation = Math.min(100, Math.round(
     50
     + (registeredAgents.length * 3)
     + (agentPositions.length * 2)
     + (totalSignals * 0.5)
     + (badges.length * 4)
   ))
-  stats.reputation = reputation
 
   return {
     address,
