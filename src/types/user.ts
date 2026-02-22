@@ -33,7 +33,10 @@ export interface UserStats {
   reputation: number
   totalSignals: number
   agentsSupported: number
+  totalPositions: number
   reportsSubmitted: number
+  daysActive: number
+  tTrustStakedNum: number
 }
 
 export interface AgentSupport {
@@ -52,22 +55,22 @@ export interface UserBadge {
   description: string
   icon: string
   earnedAt: Date
-  level?: number
+  tier: BadgeTier
 }
 
+export type BadgeTier = 1 | 2 | 3 | 4 | 5 | 6
+
 export type BadgeType =
-  | 'early_adopter'
-  | 'first_step'
-  | 'agent_creator'
-  | 'agent_builder'
-  | 'trust_staker'
-  | 'opposition_voice'
-  | 'active_supporter'
-  | 'signal_master'
-  | 'community_voice'
-  | 'trust_whale'
-  | 'report_guardian'
-  | 'verified_identity'
+  | 'newcomer'
+  | 'pioneer'
+  | 'first_stake'
+  | 'builder'
+  | 'supporter'
+  | 'networker'
+  | 'guardian'
+  | 'whale'
+  | 'veteran'
+  | 'legend'
 
 export type ExpertLevel =
   | 'newcomer'

@@ -1,10 +1,10 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Trophy, Lightbulb } from 'lucide-react'
-import { BadgeGrid } from './BadgeDisplay'
-import { BADGE_DEFINITIONS } from '@/lib/badges'
-import type { UserBadge, ExpertLevel, UserStats } from '@/types/user'
+import { Trophy, TrendingUp } from 'lucide-react'
+import { BadgeGrid, BadgeDisplay } from './BadgeDisplay'
+import { BADGE_DEFINITIONS, TIER_LABELS } from '@/lib/badges'
+import type { UserBadge, ExpertLevel, UserStats, BadgeTier } from '@/types/user'
 import { cn } from '@/lib/cn'
 
 interface MyBadgesProps {
@@ -16,155 +16,167 @@ interface MyBadgesProps {
 const expertLevelInfo: Record<ExpertLevel, {
   gradient: string
   ring: string
-  nextLevel?: string
-  required?: number
   label: string
 }> = {
   newcomer: {
     gradient: 'from-slate-400 to-slate-600',
     ring: 'ring-slate-500/30',
-    nextLevel: 'contributor',
-    required: 2,
     label: 'Just getting started',
   },
   contributor: {
     gradient: 'from-emerald-400 to-green-600',
     ring: 'ring-emerald-500/30',
-    nextLevel: 'expert',
-    required: 4,
     label: 'Active community member',
   },
   expert: {
     gradient: 'from-blue-400 to-cyan-600',
     ring: 'ring-blue-500/30',
-    nextLevel: 'master',
-    required: 7,
-    label: 'Experienced evaluator',
+    label: 'Established evaluator',
   },
   master: {
     gradient: 'from-purple-400 to-violet-600',
     ring: 'ring-purple-500/30',
-    nextLevel: 'legend',
-    required: 10,
     label: 'Top-tier contributor',
   },
   legend: {
     gradient: 'from-yellow-400 to-amber-600',
     ring: 'ring-yellow-500/30',
-    label: 'Maximum reputation reached',
+    label: 'Maximum reputation achieved',
   },
 }
 
 export function MyBadges({ badges, expertLevel, stats }: MyBadgesProps) {
   const levelInfo = expertLevelInfo[expertLevel]
-  const progress = levelInfo.required
-    ? Math.min(100, (badges.length / levelInfo.required) * 100)
-    : 100
+  const totalBadges = BADGE_DEFINITIONS.length
+  const highestTier = badges.length > 0
+    ? Math.max(...badges.map(b => b.tier))
+    : 0
 
   return (
     <div className="space-y-6">
-      {/* Expert Level Card */}
+      {/* Level + Summary */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className={cn('glass-card p-6 ring-1', levelInfo.ring)}
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/5">
-              <Trophy className="w-5 h-5 text-amber-400" />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-white/5">
+              <Trophy className="w-6 h-6 text-amber-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold">Reputation Level</h3>
-              <p className="text-xs text-slate-400">
-                {badges.length} of {BADGE_DEFINITIONS.length} badges earned
-              </p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold">Reputation Level</h3>
+                <div className={cn(
+                  'px-3 py-1 rounded-lg font-bold text-xs uppercase tracking-wider',
+                  'bg-gradient-to-r text-white shadow-lg',
+                  levelInfo.gradient
+                )}>
+                  {expertLevel}
+                </div>
+              </div>
+              <p className="text-sm text-slate-400 mt-0.5">{levelInfo.label}</p>
             </div>
           </div>
-          <div className={cn(
-            'px-4 py-2 rounded-xl font-bold text-sm uppercase tracking-wider',
-            'bg-gradient-to-r text-white shadow-lg',
-            levelInfo.gradient
-          )}>
-            {expertLevel}
-          </div>
+
+          {/* Earned badges mini-display */}
+          {badges.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              {badges.slice(0, 5).map(badge => (
+                <BadgeDisplay key={badge.id} badge={badge} size="sm" />
+              ))}
+              {badges.length > 5 && (
+                <span className="text-xs text-slate-500 ml-1">+{badges.length - 5}</span>
+              )}
+            </div>
+          )}
         </div>
 
-        <p className="text-sm text-slate-400 mb-4">{levelInfo.label}</p>
-
-        {/* Progress to Next Level */}
-        {levelInfo.nextLevel && (
-          <div>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-slate-500">
-                Progress to <span className="capitalize text-slate-300">{levelInfo.nextLevel}</span>
-              </span>
-              <span className="font-mono font-medium text-slate-300">
-                {badges.length} / {levelInfo.required}
-              </span>
+        {/* Stats overview */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-white/[0.06]">
+          <div className="text-center">
+            <div className="text-xl font-bold font-mono text-emerald-400">{badges.length}</div>
+            <div className="text-[10px] text-slate-500">of {totalBadges} earned</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xl font-bold font-mono">
+              {highestTier > 0 ? `T${highestTier}` : '–'}
             </div>
-            <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-                className="h-full bg-gradient-to-r from-primary to-accent-cyan rounded-full"
-              />
+            <div className="text-[10px] text-slate-500">
+              Highest tier{highestTier > 0 ? ` · ${TIER_LABELS[highestTier as BadgeTier].name}` : ''}
             </div>
           </div>
-        )}
+          <div className="text-center">
+            <div className="text-xl font-bold font-mono">{stats.daysActive}</div>
+            <div className="text-[10px] text-slate-500">days active</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xl font-bold font-mono">{stats.totalSignals}</div>
+            <div className="text-[10px] text-slate-500">on-chain signals</div>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Badges Grid */}
+      {/* Your Stats for Badges */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="glass-card p-5"
+      >
+        <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-primary" />
+          Your Stats
+        </h4>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-2 text-xs">
+          <div className="flex justify-between">
+            <span className="text-slate-500">Agents</span>
+            <span className="font-mono">{stats.totalAgentsRegistered}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Signals</span>
+            <span className="font-mono">{stats.totalSignals}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Positions</span>
+            <span className="font-mono">{stats.totalPositions}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Support</span>
+            <span className="font-mono">{stats.agentsSupported}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Staked</span>
+            <span className="font-mono">{stats.tTrustStakedNum >= 1 ? stats.tTrustStakedNum.toFixed(2) : stats.tTrustStakedNum.toFixed(4)} tTRUST</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Reports</span>
+            <span className="font-mono">{stats.reportsSubmitted}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Days active</span>
+            <span className="font-mono">{stats.daysActive}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Reputation</span>
+            <span className="font-mono">{stats.reputation}</span>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* All Badges */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="glass-card p-6"
       >
-        <h3 className="text-lg font-semibold mb-6">All Badges</h3>
+        <h3 className="text-lg font-semibold mb-5">All Badges</h3>
         <BadgeGrid
           earnedBadges={badges}
           showLocked={true}
           stats={stats}
         />
-      </motion.div>
-
-      {/* How to Earn */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="glass-card p-6"
-      >
-        <div className="flex items-start gap-4">
-          <div className="p-3 rounded-xl bg-primary/10 shrink-0">
-            <Lightbulb className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h4 className="font-semibold mb-3">How to Earn Badges</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {BADGE_DEFINITIONS.map(def => {
-                const earned = badges.find(b => b.type === def.id)
-                return (
-                  <div key={def.id} className={cn(
-                    'flex items-center gap-2 text-sm p-2 rounded-lg',
-                    earned ? 'text-slate-300 bg-white/[0.03]' : 'text-slate-500'
-                  )}>
-                    {earned
-                      ? <span className="text-emerald-400">✓</span>
-                      : <span className="text-slate-600">○</span>
-                    }
-                    <span className={earned ? 'line-through opacity-60' : ''}>{def.name}</span>
-                    <span className="text-xs text-slate-600 ml-auto hidden sm:block">
-                      {def.description.length > 30 ? def.description.slice(0, 30) + '...' : def.description}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
       </motion.div>
     </div>
   )

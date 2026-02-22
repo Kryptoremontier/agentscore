@@ -184,6 +184,20 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   const totalSignals = data.mySignals?.aggregate?.count || 0
   const totalAttestations = agentPositions.length
   const reportsSubmitted = data.myReports?.aggregate?.count || 0
+  const totalPositions = (data.myPositions || []).filter(p => BigInt(p.shares || '0') > 0n).length
+  const tTrustStakedNum = Number(totalStaked) / 1e18
+
+  const earliestDate = [
+    ...registeredAgents.map(a => a.createdAt),
+    ...agentPositions.map(p => p.updatedAt),
+  ]
+    .filter(Boolean)
+    .map(d => new Date(d).getTime())
+    .sort((a, b) => a - b)[0]
+
+  const daysActive = earliestDate
+    ? Math.max(1, Math.floor((Date.now() - earliestDate) / 86_400_000))
+    : 0
 
   const stats: UserStats = {
     totalAgentsRegistered: registeredAgents.length,
@@ -193,7 +207,10 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     reputation: 50,
     totalSignals,
     agentsSupported: agentPositions.filter(p => p.side === 'for').length,
+    totalPositions,
     reportsSubmitted,
+    daysActive,
+    tTrustStakedNum,
   }
 
   const badges = autoBuildBadges(stats)
@@ -201,10 +218,11 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
 
   stats.reputation = Math.min(100, Math.round(
     50
-    + (registeredAgents.length * 3)
-    + (agentPositions.length * 2)
-    + (totalSignals * 0.5)
-    + (badges.length * 4)
+    + (registeredAgents.length * 2)
+    + (agentPositions.length * 1.5)
+    + (totalSignals * 0.3)
+    + (badges.length * 5)
+    + Math.min(10, daysActive * 0.5)
   ))
 
   return {
@@ -214,9 +232,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     expertLevel,
     registeredAgents,
     supportedAgents: agentPositions,
-    joinedAt: registeredAgents.length > 0
-      ? new Date(registeredAgents[registeredAgents.length - 1].createdAt)
-      : new Date(),
+    joinedAt: earliestDate ? new Date(earliestDate) : new Date(),
     lastActiveAt: new Date(),
   }
 }
@@ -231,7 +247,10 @@ const emptyProfile = (address: `0x${string}`): UserProfile => ({
     reputation: 50,
     totalSignals: 0,
     agentsSupported: 0,
+    totalPositions: 0,
     reportsSubmitted: 0,
+    daysActive: 0,
+    tTrustStakedNum: 0,
   },
   badges: [],
   expertLevel: 'newcomer',
