@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
@@ -24,6 +24,30 @@ interface GraphQLAgent {
 }
 
 export default function AgentsPage() {
+  return (
+    <Suspense fallback={
+      <PageBackground image="wave" opacity={0.3}>
+        <div className="pt-24 pb-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="animate-pulse space-y-4">
+              <div className="h-10 w-64 bg-white/10 rounded-lg" />
+              <div className="h-12 bg-white/5 rounded-xl" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+                {[1,2,3,4,5,6].map(i => (
+                  <div key={i} className="glass-card h-48 bg-white/5" />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </PageBackground>
+    }>
+      <AgentsPageContent />
+    </Suspense>
+  )
+}
+
+function AgentsPageContent() {
   const searchParams = useSearchParams()
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()

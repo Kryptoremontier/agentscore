@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Camera, Edit, Check, X, Copy, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import type { UserProfile } from '@/types/user'
+import { BadgeDisplay } from './BadgeDisplay'
 
 interface ProfileHeaderProps {
   profile: UserProfile
@@ -19,6 +20,11 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
   const [copied, setCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    setName(profile.name || '')
+    setBio(profile.bio || '')
+  }, [profile.name, profile.bio])
+
   const handleCopyAddress = () => {
     navigator.clipboard.writeText(profile.address)
     setCopied(true)
@@ -28,12 +34,6 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    // TODO: Upload to IPFS
-    // const ipfsHash = await uploadToIPFS(file)
-    // await onUpdate({ avatar: ipfsHash })
-
-    // Tymczasowo: local preview
     const reader = new FileReader()
     reader.onload = (event) => {
       onUpdate({ avatar: event.target?.result as string })
@@ -56,6 +56,16 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
     }
   }
 
+  const formatStaked = (raw: bigint): string => {
+    const val = Number(raw) / 1e18
+    if (val >= 1000) return `${(val / 1000).toFixed(1)}K`
+    if (val >= 1) return val.toFixed(2)
+    if (val > 0) return val.toFixed(4)
+    return '0'
+  }
+
+  const topBadges = profile.badges.slice(0, 3)
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -66,7 +76,7 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
 
         {/* Avatar */}
         <div className="relative group">
-          <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-primary to-accent-cyan">
+          <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-primary to-accent-cyan ring-2 ring-white/10">
             {profile.avatar ? (
               <img
                 src={profile.avatar}
@@ -75,18 +85,16 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-3xl font-bold">
-                {profile.name?.[0] || profile.address.slice(2, 4).toUpperCase()}
+                {profile.name?.[0]?.toUpperCase() || profile.address.slice(2, 4).toUpperCase()}
               </div>
             )}
           </div>
 
-          {/* Avatar upload button */}
           <button
             onClick={() => fileInputRef.current?.click()}
             className={cn(
               'absolute inset-0 rounded-full flex items-center justify-center',
-              'bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity',
-              'cursor-pointer'
+              'bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer'
             )}
           >
             <Camera className="w-6 h-6" />
@@ -99,10 +107,9 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
             className="hidden"
           />
 
-          {/* Expert level badge */}
           <div className={cn(
-            'absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full text-xs font-bold',
-            'bg-gradient-to-r text-white capitalize',
+            'absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full text-[10px] font-bold',
+            'bg-gradient-to-r text-white capitalize shadow-lg',
             getExpertBadgeColor(profile.expertLevel)
           )}>
             {profile.expertLevel}
@@ -110,14 +117,14 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
         </div>
 
         {/* Info */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {isEditing ? (
             <div className="space-y-3">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
+                placeholder="Display name"
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-xl font-bold focus:outline-none focus:border-primary"
               />
               <textarea
@@ -139,19 +146,19 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
           ) : (
             <>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold">
+                <h1 className="text-2xl font-bold truncate">
                   {profile.name || 'Anonymous User'}
                 </h1>
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
+                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-slate-400 hover:text-white shrink-0"
                 >
                   <Edit className="w-4 h-4" />
                 </button>
               </div>
 
               {profile.bio && (
-                <p className="text-slate-400 mt-1">{profile.bio}</p>
+                <p className="text-slate-400 mt-1 text-sm">{profile.bio}</p>
               )}
 
               {/* Address */}
@@ -162,6 +169,7 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
                 <button
                   onClick={handleCopyAddress}
                   className="p-1 rounded hover:bg-white/10 transition-colors"
+                  title="Copy address"
                 >
                   {copied ? (
                     <Check className="w-4 h-4 text-emerald-400" />
@@ -170,35 +178,26 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
                   )}
                 </button>
                 <a
-                  href={`https://basescan.org/address/${profile.address}`}
+                  href={`https://base-sepolia.blockscout.com/address/${profile.address}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1 rounded hover:bg-white/10 transition-colors"
+                  title="View on explorer"
                 >
                   <ExternalLink className="w-4 h-4 text-slate-400" />
                 </a>
               </div>
 
-              {/* Social links */}
-              {(profile.twitter || profile.farcaster) && (
-                <div className="flex items-center gap-3 mt-3">
-                  {profile.twitter && (
-                    <a
-                      href={`https://twitter.com/${profile.twitter}`}
-                      target="_blank"
-                      className="text-sm text-slate-400 hover:text-white transition-colors"
-                    >
-                      @{profile.twitter}
-                    </a>
-                  )}
-                  {profile.farcaster && (
-                    <a
-                      href={`https://warpcast.com/${profile.farcaster}`}
-                      target="_blank"
-                      className="text-sm text-slate-400 hover:text-white transition-colors"
-                    >
-                      /{profile.farcaster}
-                    </a>
+              {/* Badge row */}
+              {topBadges.length > 0 && (
+                <div className="flex items-center gap-2 mt-3">
+                  {topBadges.map(badge => (
+                    <BadgeDisplay key={badge.id} badge={badge} size="sm" />
+                  ))}
+                  {profile.badges.length > 3 && (
+                    <span className="text-xs text-slate-500">
+                      +{profile.badges.length - 3} more
+                    </span>
                   )}
                 </div>
               )}
@@ -207,16 +206,16 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
         </div>
 
         {/* Quick Stats */}
-        <div className="flex gap-6 text-center">
+        <div className="flex gap-6 text-center shrink-0">
           <div>
             <div className="text-2xl font-bold font-mono">{profile.stats.totalAgentsRegistered}</div>
             <div className="text-xs text-slate-500">Agents</div>
           </div>
           <div>
             <div className="text-2xl font-bold font-mono text-emerald-400">
-              {(Number(profile.stats.totalTrustStaked) / 1e18).toFixed(1)}K
+              {formatStaked(profile.stats.totalTrustStaked)}
             </div>
-            <div className="text-xs text-slate-500">$TRUST Staked</div>
+            <div className="text-xs text-slate-500">tTRUST</div>
           </div>
           <div>
             <div className="text-2xl font-bold font-mono">{profile.badges.length}</div>

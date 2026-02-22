@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useAccount } from 'wagmi'
-import { redirect } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Settings, Shield, TrendingUp, Award
 } from 'lucide-react'
@@ -16,19 +17,42 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useUserProfile } from '@/hooks/useUserProfile'
 
 export default function ProfilePage() {
+  return (
+    <Suspense fallback={<ProfileSkeleton />}>
+      <ProfilePageContent />
+    </Suspense>
+  )
+}
+
+function ProfilePageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { address, isConnected } = useAccount()
   const { profile, isLoading, updateProfile } = useUserProfile(address)
+  const [mounted, setMounted] = useState(false)
 
-  // Redirect jeśli nie połączony
-  if (!isConnected) {
-    redirect('/')
-  }
+  const defaultTab = useMemo(() => {
+    const tab = searchParams.get('tab')
+    if (tab && ['agents', 'supporting', 'badges', 'settings'].includes(tab)) return tab
+    return 'agents'
+  }, [searchParams])
 
-  if (isLoading) {
+  useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    if (mounted && !isConnected) {
+      router.push('/')
+    }
+  }, [mounted, isConnected, router])
+
+  if (!mounted || isLoading) {
     return <ProfileSkeleton />
   }
 
-  // Wrapper dla updateProfile aby dopasować typ
+  if (!isConnected) {
+    return <ProfileSkeleton />
+  }
+
   const handleProfileUpdate = async (data: Partial<typeof profile>) => {
     await updateProfile(data)
   }
@@ -38,14 +62,10 @@ export default function ProfilePage() {
       <div className="pt-24 pb-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Profile Header */}
         <ProfileHeader profile={profile} onUpdate={handleProfileUpdate} />
-
-        {/* Stats Overview */}
         <ProfileStats stats={profile.stats} badges={profile.badges} />
 
-        {/* Tabs */}
-        <Tabs defaultValue="agents" className="mt-8">
+        <Tabs defaultValue={defaultTab} className="mt-8">
           <TabsList className="glass p-1 mb-6">
             <TabsTrigger value="agents" className="data-[state=active]:bg-white/10">
               <Shield className="w-4 h-4 mr-2" />
@@ -92,20 +112,18 @@ function ProfileSkeleton() {
     <PageBackground image="wave" opacity={0.25}>
       <div className="pt-24 pb-16">
         <div className="max-w-6xl mx-auto px-4 animate-pulse">
-        {/* Header skeleton */}
         <div className="glass-card p-8 mb-8">
           <div className="flex items-center gap-6">
             <div className="w-24 h-24 rounded-full bg-white/10" />
-            <div className="space-y-3">
+            <div className="space-y-3 flex-1">
               <div className="h-8 w-48 bg-white/10 rounded" />
               <div className="h-4 w-32 bg-white/10 rounded" />
             </div>
           </div>
         </div>
-        {/* Stats skeleton */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[1,2,3,4].map(i => (
-            <div key={i} className="glass-card p-6 h-24 bg-white/5" />
+            <div key={i} className="glass-card p-6 h-28 bg-white/5 rounded-xl" />
           ))}
         </div>
         </div>
