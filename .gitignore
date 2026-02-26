@@ -104,5 +104,14 @@ NEXT_FEATURES.md
 START_HERE.md
 PROJECT_COMPLETE.md
 FINAL_STATUS.md
+*_HANDOFF.md
+*HANDOFF*.md
 .claude/
 /docs/internal/
+
+# ═══════════════════════════════════════════
+# BACKUP FILES
+# ═══════════════════════════════════════════
+*.backup
+*.bak
+*.orig
