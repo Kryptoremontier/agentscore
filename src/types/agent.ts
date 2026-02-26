@@ -34,10 +34,17 @@ export interface Agent {
 }
 
 export type AgentPlatform =
-  | 'moltbook'
+  | 'mcp'
+  | 'openai-gpts'
   | 'openclaw'
+  | 'langchain'
+  | 'huggingface'
+  | 'eliza'
+  | 'virtuals'
   | 'farcaster'
   | 'twitter'
+  | 'telegram'
+  | 'discord'
   | 'custom'
 
 export type VerificationLevel =
@@ -106,4 +113,30 @@ export interface AgentFilters {
   verifiedOnly: boolean
   sortBy: 'trust' | 'staked' | 'newest' | 'attestations'
   sortOrder: 'asc' | 'desc'
+}
+
+// ─── Trust Tier Types ───
+
+export interface AgentTrustData {
+  stakers: number;
+  totalStake: number;
+  trustRatio: number;          // raw ratio 0-100
+  weightedTrustRatio: number;  // with decay 0-100
+  ageDays: number;
+  signals: number;
+  freshSignals: number;        // sygnały z ostatnich 7 dni
+}
+
+// ─── Position with metadata ───
+
+export interface EnrichedPosition {
+  wallet: string;
+  side: 'Support' | 'Oppose';
+  shares: number;
+  currentValue: number;
+  pctSupply: number;
+  isCreator: boolean;
+  isEarlySupporter: boolean;  // top 20% najwcześniejszych stakerów
+  stakedAt?: string;          // timestamp pierwszego stake
+  rank?: number;              // pozycja chronologiczna (1 = pierwszy)
 }

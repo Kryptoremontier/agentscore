@@ -62,18 +62,18 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${inter.variable} ${jetbrains.variable} font-sans antialiased bg-[rgb(10,10,15)]`} suppressHydrationWarning>
         <Providers>
-          <ErrorBoundary>
-            <div className="relative min-h-screen text-white">
-              {/* Content */}
-              <Navbar />
-              <main className="relative">
+          <div className="relative min-h-screen text-white">
+            {/* Navbar is outside ErrorBoundary — stays visible even if a page crashes */}
+            <Navbar />
+            <main className="relative">
+              <ErrorBoundary>
                 {children}
-              </main>
-              <Footer />
-              <MobileBottomNav />
-              <ScrollToTop />
-            </div>
-          </ErrorBoundary>
+              </ErrorBoundary>
+            </main>
+            <Footer />
+            <MobileBottomNav />
+            <ScrollToTop />
+          </div>
         </Providers>
       </body>
     </html>

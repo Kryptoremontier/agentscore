@@ -132,10 +132,17 @@ function parsePlatform(data?: IntuitionAtomDetails['data']): AgentPlatform {
   // Try to infer from URL or metadata
   const url = data?.url?.toLowerCase() || ''
 
-  if (url.includes('moltbook')) return 'moltbook'
+  if (url.includes('mcp') || url.includes('modelcontextprotocol')) return 'mcp'
+  if (url.includes('openai') || url.includes('gpt')) return 'openai-gpts'
   if (url.includes('openclaw')) return 'openclaw'
+  if (url.includes('langchain') || url.includes('langgraph')) return 'langchain'
+  if (url.includes('huggingface') || url.includes('hf.co')) return 'huggingface'
+  if (url.includes('eliza') || url.includes('ai16z')) return 'eliza'
+  if (url.includes('virtuals')) return 'virtuals'
   if (url.includes('farcaster') || url.includes('warpcast')) return 'farcaster'
   if (url.includes('twitter') || url.includes('x.com')) return 'twitter'
+  if (url.includes('telegram') || url.includes('t.me')) return 'telegram'
+  if (url.includes('discord')) return 'discord'
 
   return 'custom'
 }

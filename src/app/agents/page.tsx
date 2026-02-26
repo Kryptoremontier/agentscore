@@ -1,15 +1,21 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther, getAddress } from 'viem'
 import Link from 'next/link'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
 // Categories unused — filter now uses trust levels directly
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
+import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
+import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
+import { calculateWeightedTrust } from '@/lib/reputation-decay'
+import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
+import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 
 // Real agents loaded from Intuition testnet via GraphQL
 const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
@@ -106,6 +112,29 @@ function AgentsPageContent() {
   const [reportReason, setReportReason] = useState('')
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const isExecutingRef = useRef(false)
+  const [allPositions, setAllPositions] = useState<any[]>([])
+  const [combinedStakerCount, setCombinedStakerCount] = useState(0)
+  const [positionsLoading, setPositionsLoading] = useState(false)
+  const [supportSupply, setSupportSupply] = useState(0)
+  const [opposeSupply, setOpposeSupply] = useState(0)
+  const [pageError, setPageError] = useState<string | null>(null)
+
+  // Catch unhandled errors client-side and surface them visibly (dev only)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return
+    const onError = (e: ErrorEvent) => {
+      setPageError(`${e.message}\n${e.filename}:${e.lineno}\n${e.error?.stack || ''}`)
+    }
+    const onUnhandled = (e: PromiseRejectionEvent) => {
+      setPageError(`Unhandled rejection: ${e.reason?.message || e.reason}\n${e.reason?.stack || ''}`)
+    }
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onUnhandled)
+    return () => {
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onUnhandled)
+    }
+  }, [])
 
   const fetchAgents = async (search = '') => {
     setLoading(true)
@@ -185,17 +214,21 @@ function AgentsPageContent() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  // Fetch signals count when modal opens (for stats grid)
+  // Sync selectedAgent with latest agents data after refetch
   useEffect(() => {
     if (!selectedAgent) return
-    fetchAgentSignalsCount(selectedAgent.term_id, agentTriple.counterTermId)
-      .then(count => setAgentSignalsCount(count))
-  }, [selectedAgent?.term_id, agentTriple.counterTermId])
+    const updated = agents.find(a => a.term_id === selectedAgent.term_id)
+    if (!updated) return
+    const oldShares = selectedAgent.positions_aggregate?.aggregate?.sum?.shares || '0'
+    const newShares = updated.positions_aggregate?.aggregate?.sum?.shares || '0'
+    if (oldShares !== newShares) {
+      setSelectedAgent(updated)
+    }
+  }, [agents])
 
-  // Fetch full signals list when attestations or activity tab is selected
+  // Fetch full signals list when modal opens (needed for chart + attestations + activity)
   useEffect(() => {
     if (!selectedAgent) return
-    if (activeTab !== 'attestations' && activeTab !== 'activity') return
 
     setSignalsLoading(true)
     setAgentSignals([])
@@ -206,7 +239,7 @@ function AgentsPageContent() {
         setAgentSignalsCount(totalCount)
       })
       .finally(() => setSignalsLoading(false))
-  }, [selectedAgent?.term_id, activeTab, agentTriple.counterTermId])
+  }, [selectedAgent?.term_id, agentTriple.counterTermId])
 
   const fetchUserPosition = async (
     agentTermId: string,
@@ -299,6 +332,50 @@ function AgentsPageContent() {
     }
   }
 
+  // Fetch ALL positions from both Support + Oppose vaults
+  const fetchAllPositions = async (
+    termId: string,
+    counterTermId?: string | null
+  ): Promise<{ positions: any[]; uniqueCount: number }> => {
+    try {
+      const termIds = [termId]
+      if (counterTermId) termIds.push(counterTermId)
+
+      const response = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `
+            query GetAllPositions($termIds: [String!]!) {
+              positions(
+                where: { term_id: { _in: $termIds } }
+                order_by: { shares: desc }
+                limit: 100
+              ) {
+                account_id
+                account { label }
+                shares
+                term_id
+                updated_at
+              }
+            }
+          `,
+          variables: { termIds }
+        })
+      })
+      const data = await response.json()
+      const raw = data.data?.positions || []
+      // Only active holders (shares > 0)
+      const active = raw.filter((p: any) => p.shares && BigInt(p.shares) > 0n)
+      // Unique wallets
+      const wallets = new Set(active.map((p: any) => p.account_id))
+      return { positions: active, uniqueCount: wallets.size }
+    } catch (e) {
+      console.error('fetchAllPositions error:', e)
+      return { positions: [], uniqueCount: 0 }
+    }
+  }
+
   // Fetch trust triple for selected agent (read-only, no wallet needed)
   useEffect(() => {
     if (!selectedAgent) {
@@ -323,6 +400,88 @@ function AgentsPageContent() {
     fetchUserPosition(selectedAgent.term_id, address, agentTriple.counterTermId).then(setUserPosition)
   }, [selectedAgent?.term_id, address, agentTriple.counterTermId])
 
+  // Reusable: fetch positions + recompute supply in one shot
+  const refreshPositionsAndSupply = async (
+    termId: string,
+    counterTermId?: string | null,
+    showLoading = false
+  ) => {
+    if (showLoading) setPositionsLoading(true)
+    try {
+      // Fetch positions for the leaderboard table (runs in parallel with supply read)
+      const positionsPromise = fetchAllPositions(termId, counterTermId)
+
+      // PRIMARY: Read supply directly from contract — always up-to-date,
+      // bypasses indexer lag that causes stale price/value after other wallets trade.
+      if (publicClient) {
+        try {
+          const { getVaultSupply } = await import('@/lib/intuition')
+          const [supShares, oppShares] = await Promise.all([
+            getVaultSupply(publicClient, termId),
+            counterTermId ? getVaultSupply(publicClient, counterTermId) : Promise.resolve(0),
+          ])
+          setSupportSupply(supShares)
+          setOpposeSupply(oppShares)
+        } catch (e) {
+          console.warn('[supply] Contract read failed, falling back to indexer sum:', e)
+          // Fallback computed below after positions resolve
+        }
+      }
+
+      // Resolve positions for the leaderboard table
+      const { positions, uniqueCount } = await positionsPromise
+      setAllPositions(positions)
+      setCombinedStakerCount(uniqueCount)
+
+      // FALLBACK: compute supply from indexed positions when publicClient is unavailable
+      if (!publicClient) {
+        let supShares = 0
+        let oppShares = 0
+        for (const pos of positions) {
+          const shares = Number(pos.shares || '0') / 1e18
+          if (counterTermId && pos.term_id === counterTermId) {
+            oppShares += shares
+          } else {
+            supShares += shares
+          }
+        }
+        setSupportSupply(supShares)
+        setOpposeSupply(oppShares)
+      }
+    } finally {
+      if (showLoading) setPositionsLoading(false)
+    }
+  }
+
+  // Fetch all positions when modal opens + poll every 15s while open
+  useEffect(() => {
+    if (!selectedAgent) {
+      setAllPositions([])
+      setCombinedStakerCount(0)
+      setSupportSupply(0)
+      setOpposeSupply(0)
+      return
+    }
+
+    // Immediate fetch
+    refreshPositionsAndSupply(
+      selectedAgent.term_id,
+      agentTriple.counterTermId,
+      true // show loading spinner on first load
+    )
+
+    // Poll every 15s to catch other users' transactions
+    const interval = setInterval(() => {
+      refreshPositionsAndSupply(
+        selectedAgent.term_id,
+        agentTriple.counterTermId,
+        false // silent refresh, no loading spinner
+      )
+    }, 15000)
+
+    return () => clearInterval(interval)
+  }, [selectedAgent?.term_id, agentTriple.counterTermId])
+
   // Compute trust score from real on-chain data whenever agent or triple changes
   useEffect(() => {
     if (!selectedAgent) {
@@ -330,10 +489,11 @@ function AgentsPageContent() {
       return
     }
 
-    const supportWei = BigInt(selectedAgent.positions_aggregate?.aggregate?.sum?.shares || '0')
+    let supportWei = 0n
+    try { supportWei = BigInt(selectedAgent.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
 
     if (!agentTriple.counterTermId) {
-      setAgentTrust(calculateTrustScoreFromStakes(supportWei, BigInt(0)))
+      setAgentTrust(calculateTrustScoreFromStakes(supportWei, 0n))
       return
     }
 
@@ -357,11 +517,12 @@ function AgentsPageContent() {
     })
       .then(r => r.json())
       .then(data => {
-        const opposeWei = BigInt(data?.data?.positions_aggregate?.aggregate?.sum?.shares || '0')
+        let opposeWei = 0n
+        try { opposeWei = BigInt(data?.data?.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { opposeWei = 0n }
         setAgentTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
       })
       .catch(() => {
-        setAgentTrust(calculateTrustScoreFromStakes(supportWei, BigInt(0)))
+        setAgentTrust(calculateTrustScoreFromStakes(supportWei, 0n))
       })
   }, [selectedAgent?.term_id, selectedAgent?.positions_aggregate?.aggregate?.sum?.shares, agentTriple.counterTermId])
 
@@ -516,7 +677,22 @@ function AgentsPageContent() {
       }
 
       setVoteStatus(prev => { const n = { ...prev }; delete n[agent.term_id]; return n })
-      setTimeout(() => fetchAgents(searchTerm), 2000)
+
+      // Refetch after 2s (indexer lag) + again at 5s (backup)
+      const refetchAll = () => {
+        fetchAgents(searchTerm)
+        fetchAgentSignals(agent.term_id, pendingVote.counterTermId)
+          .then(({ signals, totalCount }) => {
+            setAgentSignals(signals)
+            setAgentSignalsCount(totalCount)
+          })
+        if (address) {
+          fetchUserPosition(agent.term_id, address, pendingVote.counterTermId).then(setUserPosition)
+        }
+        refreshPositionsAndSupply(agent.term_id, pendingVote.counterTermId)
+      }
+      setTimeout(refetchAll, 2000)
+      setTimeout(refetchAll, 5000)
 
     } catch (e: any) {
       console.error('❌ executeVote error:', e?.message, e)
@@ -811,8 +987,105 @@ function AgentsPageContent() {
     return name.trim()
   }
 
+  // Build trust ratio chart data from signals
+  const buildTrustChartData = (signals: any[], counterTermId: string | null) => {
+    if (signals.length < 2) return []
+    const sorted = [...signals].sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+    let supportTotal = 0
+    let opposeTotal = 0
+    return sorted.map(signal => {
+      const delta = Math.abs(Number(signal.delta || 0)) / 1e18
+      const isDeposit = !!signal.deposit_id
+      const isAgainst = counterTermId ? signal.term_id === counterTermId : false
+      const change = isDeposit ? delta : -delta
+
+      if (isAgainst) opposeTotal += change
+      else supportTotal += change
+
+      // Clamp to 0
+      if (supportTotal < 0) supportTotal = 0
+      if (opposeTotal < 0) opposeTotal = 0
+
+      const total = supportTotal + opposeTotal
+      const trustRatio = total > 0 ? Math.round((supportTotal / total) * 100) : 50
+
+      return {
+        date: new Date(signal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        trustRatio,
+      }
+    })
+  }
+
+  // ─── Trust Tier dla wybranego agenta ───
+  const agentTrustTier = useMemo(() => {
+    try {
+      if (!selectedAgent) return null
+      const stakers = combinedStakerCount
+      const supportWei = agentTrust?.supportStake ?? 0n
+      const opposeWei = agentTrust?.opposeStake ?? 0n
+      const totalWei = supportWei + opposeWei
+      const totalStake = Number(totalWei) / 1e18
+      const trustRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
+      const ageDays = selectedAgent.created_at ? getAgentAgeDays(selectedAgent.created_at) : 0
+      const tier = calculateTier(stakers, totalStake, trustRatio, ageDays)
+      const progress = calculateTierProgress(stakers, totalStake, trustRatio, ageDays)
+      return { tier, progress }
+    } catch (e) {
+      console.error('[agentTrustTier]', e)
+      return null
+    }
+  }, [selectedAgent, combinedStakerCount, agentTrust])
+
+  // ─── Weighted trust z decay dla wybranego agenta ───
+  const weightedTrust = useMemo(() => {
+    try {
+      if (!agentSignals || agentSignals.length === 0) return null
+      const mappedSignals = agentSignals.map((sig: any) => ({
+        timestamp: sig.created_at,
+        side: (agentTriple.counterTermId && sig.term_id === agentTriple.counterTermId)
+          ? 'oppose' as const
+          : 'support' as const,
+        amount: Math.abs(Number(sig.delta || 0)) / 1e18,
+      }))
+      return calculateWeightedTrust(mappedSignals)
+    } catch (e) {
+      console.error('[weightedTrust]', e)
+      return null
+    }
+  }, [agentSignals, agentTriple.counterTermId])
+
+  // ─── Pozycje posortowane chronologicznie z rank ───
+  const enrichedPositions = useMemo(() => {
+    try {
+      if (!allPositions || allPositions.length === 0) return []
+      const sorted = [...allPositions].sort((a, b) => {
+        const dateA = new Date(a.updated_at || 0).getTime()
+        const dateB = new Date(b.updated_at || 0).getTime()
+        return isNaN(dateA) || isNaN(dateB) ? 0 : dateA - dateB
+      })
+      return sorted.map((pos, index) => ({
+        ...pos,
+        rank: index + 1,
+        isEarlySupporter: index < Math.max(1, Math.ceil(sorted.length * 0.2)),
+      }))
+    } catch (e) {
+      console.error('[enrichedPositions]', e)
+      return []
+    }
+  }, [allPositions])
+
   return (
     <PageBackground image="hero" opacity={0.4}>
+      {/* Dev error overlay — shows JS errors that would otherwise require DevTools */}
+      {pageError && process.env.NODE_ENV === 'development' && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: '#1a0000', border: '2px solid #ef4444', padding: '12px 16px', fontSize: 12, fontFamily: 'monospace', color: '#fca5a5', maxHeight: '40vh', overflow: 'auto' }}>
+          <strong style={{ color: '#ef4444' }}>🐛 JS Error caught:</strong>
+          <pre style={{ marginTop: 6, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{pageError}</pre>
+          <button onClick={() => setPageError(null)} style={{ marginTop: 8, padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>Dismiss</button>
+        </div>
+      )}
       <div className="pt-24 pb-16">
         <div className="container">
           {/* Page Header */}
@@ -994,7 +1267,8 @@ function AgentsPageContent() {
           {/* Agents Grid */}
           {!loading && agents.length > 0 && (() => {
             const enriched = agents.map(agent => {
-              const supportWei = BigInt(agent.positions_aggregate?.aggregate?.sum?.shares || '0')
+              let supportWei = 0n
+              try { supportWei = BigInt(agent.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
               const cardTrust = calculateTrustScoreFromStakes(supportWei, BigInt(0))
               return { agent, trust: cardTrust }
             })
@@ -1093,18 +1367,15 @@ function AgentsPageContent() {
                                 />
                               </svg>
                             </div>
-                            {/* Verified badge */}
-                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#10b981] rounded-full flex items-center justify-center border-2 border-[#111318]">
-                              <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                                <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
                             </div>
-                          </div>
 
                           {/* Name + creator */}
                           <div>
-                            <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
-                            <span className="text-xs text-[#6b7280] bg-[#1e2028] px-2 py-0.5 rounded mt-1 inline-block">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
+                              {(() => { try { return <TrustTierBadge tier={calculateTier(stakers, Number(agent.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18, 50, agent.created_at ? getAgentAgeDays(agent.created_at) : 0)} size="sm" /> } catch { return null } })()}
+                            </div>
+                            <span className="text-xs text-[#6b7280] bg-[#1e2028] px-2 py-0.5 rounded inline-block">
                               {creator.replace('.eth', '')}
                             </span>
                           </div>
@@ -1131,7 +1402,7 @@ function AgentsPageContent() {
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
-                          <span>Attestations: <span className="text-white font-medium">{stakers}</span></span>
+                          <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
                         </div>
                       </div>
 
@@ -1185,12 +1456,12 @@ function AgentsPageContent() {
                       <h2 className="text-xl font-bold text-white">
                         {getAgentName(selectedAgent.label)}
                       </h2>
-                      <div className="flex items-center gap-1 px-2 py-0.5 bg-[#10b98115] border border-[#10b98130] rounded-full">
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none">
-                          <path d="M20 6L9 17l-5-5" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        <span className="text-[#10b981] text-xs font-medium">Verified</span>
-                      </div>
+                      {agentTrustTier && (
+                        <TrustTierBadgeWithProgress
+                          tier={agentTrustTier.tier}
+                          progress={agentTrustTier.progress}
+                        />
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#8b949e]">
                       {selectedAgent.creator?.id ? (
@@ -1265,8 +1536,8 @@ function AgentsPageContent() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { value: agentSignalsCount || selectedAgent.positions_aggregate?.aggregate?.count || 0, label: 'Signals' },
-                    { value: selectedAgent.positions_aggregate?.aggregate?.count || 0, label: 'Stakers' },
+                    { value: agentSignalsCount, label: 'Signals' },
+                    { value: combinedStakerCount, label: 'Stakers' },
                     { value: formatStakes(selectedAgent.positions_aggregate?.aggregate?.sum?.shares), label: 'Total Stake' },
                     { value: reportCount, label: 'Reports' },
                   ].map((s, i) => (
@@ -1371,8 +1642,10 @@ function AgentsPageContent() {
                     {/* Curve info */}
                     <div className="flex items-center justify-between mb-3 px-1">
                       <div>
-                        <p className="text-white text-xs font-semibold">Exponential Curve</p>
-                        <p className="text-[#8b949e] text-xs">Shared liquidity logic for both sides</p>
+                        <p className="text-white text-xs font-semibold">Bonding Curve</p>
+                        <p className="text-[#8b949e] text-xs">
+                          Current price: {getCurrentPrice(signalSide === 'support' ? supportSupply : opposeSupply).toFixed(4)} tTRUST/share
+                        </p>
                       </div>
                       <span className="text-[10px] px-2 py-1 rounded-full border border-[#30363d] text-[#8b949e]">
                         Active
@@ -1393,61 +1666,208 @@ function AgentsPageContent() {
                       </div>
                     )}
 
+                    {/* Your shares info — visible in Sell mode */}
+                    {tradeAction === 'sell' && (() => {
+                      const ownedShares = signalSide === 'support'
+                        ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                        : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                      const currentSupply = signalSide === 'support' ? supportSupply : opposeSupply
+                      return ownedShares > 0 ? (
+                        <div className="mb-3 p-3 rounded-xl bg-[#161b22] border border-[#21262d]">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[#8b949e] text-xs">Your shares</span>
+                            <span className="text-white text-sm font-bold font-mono">
+                              {ownedShares.toFixed(4)} shares
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-[#6b7280] text-[10px]">Current value</span>
+                            <span className="text-[#6b7280] text-[10px] font-mono">
+                              {getSellProceeds(ownedShares, currentSupply).toFixed(6)} tTRUST
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mb-3 p-3 rounded-xl bg-[#161b22] border border-[#21262d] text-center">
+                          <p className="text-[#6b7280] text-xs">No {signalSide} shares to sell</p>
+                        </div>
+                      )
+                    })()}
+
                     {/* Amount input */}
                     <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 mb-3">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[#8b949e] text-xs">Amount</span>
                         <span className="text-[#8b949e] text-xs">
-                          Balance: {tTrustBalance || '—'} tTRUST
+                          {tradeAction === 'buy' ? 'Amount in tTRUST' : 'Shares to sell'}
                         </span>
+                        {tradeAction === 'buy' && (
+                          <span className="text-[#8b949e] text-xs">
+                            Balance: {tTrustBalance || '—'} tTRUST
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={
-                            tradeAction === 'buy'
-                              ? (signalSide === 'support' ? voteAmount : untrustAmount)
-                              : redeemShares
-                          }
-                          onChange={(e) => {
-                            if (tradeAction === 'buy') {
+                        {tradeAction === 'buy' ? (
+                          <input
+                            type="number"
+                            value={signalSide === 'support' ? voteAmount : untrustAmount}
+                            onChange={(e) => {
                               if (signalSide === 'support') setVoteAmount(e.target.value)
                               else setUntrustAmount(e.target.value)
-                            } else {
-                              setRedeemShares(e.target.value)
-                            }
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          min="0.001"
-                          step="0.001"
-                          className="flex-1 bg-transparent text-white text-lg font-bold outline-none"
-                          placeholder="0.1"
-                        />
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            min="0.001"
+                            step="0.001"
+                            className="flex-1 bg-transparent text-white text-lg font-bold outline-none"
+                            placeholder="0.05"
+                          />
+                        ) : (
+                          <input
+                            type="number"
+                            value={redeemShares}
+                            onChange={(e) => {
+                              const maxShares = signalSide === 'support'
+                                ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                                : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                              const val = parseFloat(e.target.value)
+                              if (!isNaN(val) && val > maxShares) {
+                                setRedeemShares(maxShares.toFixed(6))
+                              } else {
+                                setRedeemShares(e.target.value)
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            min="0"
+                            step="0.0001"
+                            className="flex-1 bg-transparent text-white text-lg font-bold outline-none"
+                            placeholder="0.00"
+                          />
+                        )}
                         <span className="text-[#8b949e] text-sm font-semibold">
                           {tradeAction === 'buy' ? 'tTRUST' : 'shares'}
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (tradeAction === 'sell') {
+                        {tradeAction === 'sell' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
                               const max = signalSide === 'support'
                                 ? userPosition.forShares
                                 : userPosition.againstShares
                               if (max) setRedeemShares((Number(max) / 1e18).toFixed(6))
-                            }
-                          }}
-                          className="text-xs text-[#34a872] hover:text-white transition-colors"
-                        >
-                          {tradeAction === 'sell' ? 'Max' : 'Min'}
-                        </button>
+                            }}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f6feb20] text-[#58a6ff] hover:bg-[#1f6feb30] transition-colors font-bold"
+                          >
+                            MAX
+                          </button>
+                        )}
                       </div>
+                      {/* Percentage slider — sell mode only */}
+                      {tradeAction === 'sell' && (() => {
+                        const maxShares = signalSide === 'support'
+                          ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                          : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                        if (maxShares <= 0) return null
+                        return (
+                          <div className="mt-2">
+                            <input
+                              type="range"
+                              min="0"
+                              max={maxShares}
+                              step={maxShares / 100 || 0.0001}
+                              value={parseFloat(redeemShares) || 0}
+                              onChange={(e) => setRedeemShares(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full h-1 bg-[#21262d] rounded-full appearance-none cursor-pointer
+                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+                                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#58a6ff]"
+                            />
+                            <div className="flex justify-between text-[10px] text-[#6b7280] mt-1">
+                              <span>0</span>
+                              <button onClick={(e) => { e.stopPropagation(); setRedeemShares((maxShares * 0.25).toFixed(4)) }} className="hover:text-white transition-colors">25%</button>
+                              <button onClick={(e) => { e.stopPropagation(); setRedeemShares((maxShares * 0.5).toFixed(4)) }} className="hover:text-white transition-colors">50%</button>
+                              <button onClick={(e) => { e.stopPropagation(); setRedeemShares((maxShares * 0.75).toFixed(4)) }} className="hover:text-white transition-colors">75%</button>
+                              <button onClick={(e) => { e.stopPropagation(); setRedeemShares(maxShares.toFixed(6)) }} className="hover:text-white transition-colors">MAX</button>
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
 
-                    {/* You receive row */}
-                    <div className="flex items-center justify-between mb-3 px-1">
-                      <span className="text-[#8b949e] text-xs">You receive</span>
-                      <span className="text-[#8b949e] text-xs">—</span>
-                    </div>
+                    {/* Buy/Sell preview */}
+                    {(() => {
+                      const currentSupply = signalSide === 'support' ? supportSupply : opposeSupply
+                      if (tradeAction === 'buy') {
+                        const inputAmt = Number(signalSide === 'support' ? voteAmount : untrustAmount) || 0
+                        const preview = calculateBuy(inputAmt, currentSupply)
+                        return (
+                          <div className="space-y-1 mb-3 px-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[#8b949e] text-xs">You receive</span>
+                              <span className="text-white text-xs font-semibold">
+                                {inputAmt > 0 ? `${preview.sharesReceived.toFixed(4)} shares` : '—'}
+                              </span>
+                            </div>
+                            {inputAmt > 0 && (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#6b7280] text-[10px]">Fee (5%)</span>
+                                  <span className="text-[#6b7280] text-[10px]">{preview.fee.toFixed(4)} tTRUST</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#6b7280] text-[10px]">Avg price</span>
+                                  <span className="text-[#6b7280] text-[10px]">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#6b7280] text-[10px]">Price after</span>
+                                  <span className="text-[#6b7280] text-[10px]">{preview.newPrice.toFixed(4)} tTRUST/share</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )
+                      } else {
+                        const inputShares = Number(redeemShares) || 0
+                        const maxOwned = signalSide === 'support'
+                          ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                          : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                        const validShares = inputShares > 0 && inputShares <= maxOwned
+                        const preview = calculateSell(inputShares, currentSupply)
+                        return (
+                          <div className="space-y-1 mb-3 px-1">
+                            {inputShares > maxOwned && maxOwned > 0 && (
+                              <p className="text-[#f85149] text-[10px] mb-1">Exceeds owned shares ({maxOwned.toFixed(4)})</p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-[#8b949e] text-xs">Gross proceeds</span>
+                              <span className="text-[#8b949e] text-xs font-mono">
+                                {validShares ? `${preview.grossProceeds.toFixed(6)} tTRUST` : '—'}
+                              </span>
+                            </div>
+                            {validShares && (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#6b7280] text-[10px]">Fee (5%)</span>
+                                  <span className="text-[#f85149] text-[10px] font-mono">-{preview.fee.toFixed(6)} tTRUST</span>
+                                </div>
+                                <div className="h-px bg-[#21262d] my-1" />
+                                <div className="flex items-center justify-between">
+                                  <span className="text-white text-xs font-medium">You receive</span>
+                                  <span className="text-white text-xs font-bold font-mono">{preview.netProceeds.toFixed(6)} tTRUST</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#6b7280] text-[10px]">Price per share</span>
+                                  <span className="text-[#6b7280] text-[10px] font-mono">{(preview.grossProceeds / inputShares).toFixed(6)} tTRUST</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#6b7280] text-[10px]">Price after sell</span>
+                                  <span className="text-[#f85149] text-[10px] font-mono">{preview.newPrice.toFixed(6)} tTRUST/share</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )
+                      }
+                    })()}
 
                     {/* Action button */}
                     <button
@@ -1486,11 +1906,13 @@ function AgentsPageContent() {
                         (tradeAction === 'buy' && (
                           Number(signalSide === 'support' ? voteAmount : untrustAmount) <= 0
                         )) || (
-                          tradeAction === 'sell' && (
-                            signalSide === 'support'
-                              ? (!userPosition.forShares || userPosition.forShares === '0')
-                              : (!userPosition.againstShares || userPosition.againstShares === '0')
-                          )
+                          tradeAction === 'sell' && (() => {
+                            const shares = Number(redeemShares) || 0
+                            const maxOwned = signalSide === 'support'
+                              ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                              : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                            return shares <= 0 || shares > maxOwned || maxOwned <= 0
+                          })()
                         )
                       }
                       className={`w-full py-3 rounded-xl text-sm font-bold text-white transition-colors
@@ -1502,7 +1924,7 @@ function AgentsPageContent() {
                     >
                       {tradeAction === 'buy'
                         ? `${signalSide === 'support' ? 'Support' : 'Oppose'} → Get Shares`
-                        : 'Sell Shares → tTRUST'
+                        : `Sell ${Number(redeemShares) > 0 ? Number(redeemShares).toFixed(4) : '0'} shares → tTRUST`
                       }
                     </button>
                       </>
@@ -1765,6 +2187,53 @@ function AgentsPageContent() {
                       </div>
                     </div>
 
+                    {/* Weighted Trust (time-decayed) */}
+                    {weightedTrust && (
+                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">
+                            Trust Score (time-weighted)
+                          </p>
+                          <span
+                            className="text-base font-bold"
+                            style={{
+                              color: weightedTrust.weightedRatio >= 60 ? '#22c55e'
+                                   : weightedTrust.weightedRatio >= 40 ? '#eab308'
+                                   : '#ef4444',
+                            }}
+                          >
+                            {weightedTrust.weightedRatio.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-[#21262d] rounded-full overflow-hidden mb-2">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${weightedTrust.weightedRatio}%`,
+                              background: weightedTrust.weightedRatio >= 60
+                                ? 'linear-gradient(90deg, #22c55e, #4ade80)'
+                                : weightedTrust.weightedRatio >= 40
+                                  ? 'linear-gradient(90deg, #eab308, #facc15)'
+                                  : 'linear-gradient(90deg, #ef4444, #f87171)',
+                            }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-[#6b7280]">
+                            Raw: {weightedTrust.rawRatio.toFixed(1)}%
+                            {weightedTrust.decayImpact !== 0 && (
+                              <span style={{ color: weightedTrust.decayImpact > 0 ? '#22c55e' : '#ef4444', marginLeft: '4px' }}>
+                                ({weightedTrust.decayImpact > 0 ? '+' : ''}{weightedTrust.decayImpact.toFixed(1)}% freshness)
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-[#6b7280]">
+                            {weightedTrust.freshSignalsCount} fresh / {weightedTrust.totalSignalsCount} signals
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Support vs Oppose breakdown */}
                     <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                       <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Community Sentiment</p>
@@ -1810,34 +2279,258 @@ function AgentsPageContent() {
                       </div>
                     </div>
 
+                    {/* Bonding Curve Charts */}
+                    <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                      <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Bonding Curves</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Support curve */}
+                        {(() => {
+                          const data = generateCurveData(supportSupply)
+                          const currentPrice = getCurrentPrice(supportSupply)
+                          return (
+                            <div>
+                              <p className="text-[#34a872] text-[10px] font-bold mb-2 uppercase">Support</p>
+                              <div className="h-32">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <AreaChart data={data}>
+                                    <defs>
+                                      <linearGradient id="supportCurveGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#34a872" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#34a872" stopOpacity={0}/>
+                                      </linearGradient>
+                                    </defs>
+                                    <XAxis dataKey="supply" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} />
+                                    <YAxis tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} width={40} />
+                                    <Tooltip
+                                      contentStyle={{ backgroundColor: '#161b22', border: '1px solid #21262d', borderRadius: 8, fontSize: 11 }}
+                                      labelStyle={{ color: '#8b949e' }}
+                                      formatter={(value: any) => [`${Number(value).toFixed(4)} tTRUST`, 'Price']}
+                                      labelFormatter={(label: any) => `Supply: ${label}`}
+                                    />
+                                    <Area type="monotone" dataKey="price" stroke="#34a872" fillOpacity={1} fill="url(#supportCurveGrad)" strokeWidth={2} />
+                                    {supportSupply > 0 && (
+                                      <ReferenceDot x={parseFloat(supportSupply.toFixed(4))} y={parseFloat(currentPrice.toFixed(6))} r={5} fill="#34a872" stroke="#fff" strokeWidth={2} />
+                                    )}
+                                  </AreaChart>
+                                </ResponsiveContainer>
+                              </div>
+                              <p className="text-[#6b7280] text-[10px] mt-1">Supply: {supportSupply.toFixed(2)} · Price: {currentPrice.toFixed(4)}</p>
+                            </div>
+                          )
+                        })()}
+                        {/* Oppose curve */}
+                        {(() => {
+                          const data = generateCurveData(opposeSupply)
+                          const currentPrice = getCurrentPrice(opposeSupply)
+                          return (
+                            <div>
+                              <p className="text-[#c45454] text-[10px] font-bold mb-2 uppercase">Oppose</p>
+                              <div className="h-32">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <AreaChart data={data}>
+                                    <defs>
+                                      <linearGradient id="opposeCurveGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#c45454" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#c45454" stopOpacity={0}/>
+                                      </linearGradient>
+                                    </defs>
+                                    <XAxis dataKey="supply" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} />
+                                    <YAxis tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} width={40} />
+                                    <Tooltip
+                                      contentStyle={{ backgroundColor: '#161b22', border: '1px solid #21262d', borderRadius: 8, fontSize: 11 }}
+                                      labelStyle={{ color: '#8b949e' }}
+                                      formatter={(value: any) => [`${Number(value).toFixed(4)} tTRUST`, 'Price']}
+                                      labelFormatter={(label: any) => `Supply: ${label}`}
+                                    />
+                                    <Area type="monotone" dataKey="price" stroke="#c45454" fillOpacity={1} fill="url(#opposeCurveGrad)" strokeWidth={2} />
+                                    {opposeSupply > 0 && (
+                                      <ReferenceDot x={parseFloat(opposeSupply.toFixed(4))} y={parseFloat(currentPrice.toFixed(6))} r={5} fill="#c45454" stroke="#fff" strokeWidth={2} />
+                                    )}
+                                  </AreaChart>
+                                </ResponsiveContainer>
+                              </div>
+                              <p className="text-[#6b7280] text-[10px] mt-1">Supply: {opposeSupply.toFixed(2)} · Price: {currentPrice.toFixed(4)}</p>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Trust History Chart */}
+                    {(() => {
+                      const chartData = buildTrustChartData(agentSignals, agentTriple.counterTermId)
+                      if (chartData.length < 2) return null
+                      return (
+                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Trust History</p>
+                          <div className="h-40">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={chartData}>
+                                <defs>
+                                  <linearGradient id="trustGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#34a872" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#34a872" stopOpacity={0}/>
+                                  </linearGradient>
+                                </defs>
+                                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                <YAxis domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: '#161b22', border: '1px solid #21262d', borderRadius: 8, fontSize: 12 }}
+                                  labelStyle={{ color: '#8b949e' }}
+                                  formatter={(value: any) => [`${value}%`, 'Trust Ratio']}
+                                />
+                                <ReferenceLine y={50} stroke="#21262d" strokeDasharray="3 3" />
+                                <Area type="monotone" dataKey="trustRatio" stroke="#34a872" fillOpacity={1} fill="url(#trustGrad)" strokeWidth={2} />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-[#6b7280] mt-1">
+                            <span>0% = All Oppose</span>
+                            <span>50% = Balanced</span>
+                            <span>100% = All Support</span>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Positions Table */}
+                    {(() => {
+                      if (positionsLoading) return (
+                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                          <div className="h-16 animate-pulse bg-[#21262d] rounded-lg" />
+                        </div>
+                      )
+                      if (allPositions.length === 0) return null
+
+                      // Compute total shares for % supply
+                      let totalShares = 0n
+                      try { totalShares = allPositions.reduce((acc: bigint, p: any) => { try { return acc + BigInt(p.shares || '0') } catch { return acc } }, 0n) } catch { totalShares = 0n }
+
+                      return (
+                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">
+                            Positions ({combinedStakerCount} staker{combinedStakerCount !== 1 ? 's' : ''})
+                          </p>
+                          <div className="max-h-64 overflow-y-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-[#6b7280] border-b border-[#21262d]">
+                                  <th className="text-left py-2 font-medium">Wallet</th>
+                                  <th className="text-left py-2 font-medium">Side</th>
+                                  <th className="text-right py-2 font-medium">Shares</th>
+                                  <th className="text-right py-2 font-medium">Value</th>
+                                  <th className="text-right py-2 font-medium">% Supply</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {enrichedPositions.map((pos: any, i: number) => {
+                                  const isOppose = agentTriple.counterTermId && pos.term_id === agentTriple.counterTermId
+                                  let shares = 0n; try { shares = BigInt(pos.shares || '0') } catch { shares = 0n }
+                                  const pct = totalShares > 0n ? Number((shares * 10000n) / totalShares) / 100 : 0
+                                  const walletLabel = pos.account?.label || pos.account_id
+                                  const isENS = walletLabel?.includes('.eth')
+                                  const displayWallet = isENS
+                                    ? walletLabel
+                                    : walletLabel?.length > 14
+                                      ? walletLabel.slice(0, 8) + '...' + walletLabel.slice(-4)
+                                      : walletLabel
+                                  const isCreator = selectedAgent.creator?.id &&
+                                    pos.account_id?.toLowerCase() === selectedAgent.creator.id.toLowerCase()
+
+                                  return (
+                                    <tr key={`${pos.account_id}-${pos.term_id}-${i}`} className="border-b border-[#21262d]/50 hover:bg-[#0d1117]">
+                                      <td className="py-2">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <Link href={`/profile/${pos.account_id}`} className="text-[#58a6ff] hover:underline">
+                                            {displayWallet}
+                                          </Link>
+                                          <EarlySupporterBadge rank={pos.rank} />
+                                          {isCreator && (
+                                            <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-[#1f6feb20] text-[#58a6ff] border border-[#1f6feb30]">
+                                              CREATOR
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="py-2">
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                          isOppose
+                                            ? 'bg-[#8b3a3a20] text-[#c45454]'
+                                            : 'bg-[#2d7a5f20] text-[#34a872]'
+                                        }`}>
+                                          {isOppose ? 'Oppose' : 'Support'}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 text-right text-white font-medium">
+                                        {(Number(shares) / 1e18).toFixed(4)}
+                                      </td>
+                                      <td className="py-2 text-right text-[#8b949e]">
+                                        {getSellProceeds(
+                                          Number(shares) / 1e18,
+                                          isOppose ? opposeSupply : supportSupply
+                                        ).toFixed(4)}
+                                      </td>
+                                      <td className="py-2 text-right text-[#8b949e]">
+                                        {pct.toFixed(1)}%
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
                     {/* Your Position */}
                     {isConnected && (
                       <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                         <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Your Position</p>
                         {(userPosition.forShares || userPosition.againstShares) ? (
                           <div className="space-y-2">
-                            {userPosition.forShares && Number(userPosition.forShares) > 0 && (
-                              <div className="flex items-center justify-between bg-[#2d7a5f15] border border-[#2d7a5f30] rounded-lg px-3 py-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full bg-[#34a872]" />
-                                  <span className="text-[#34a872] text-xs font-medium">Support</span>
+                            {userPosition.forShares && Number(userPosition.forShares) > 0 && (() => {
+                              const sharesFloat = Number(userPosition.forShares) / 1e18
+                              const value = getSellProceeds(sharesFloat, supportSupply)
+                              return (
+                              <div className="bg-[#2d7a5f15] border border-[#2d7a5f30] rounded-lg px-3 py-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-[#34a872]" />
+                                    <span className="text-[#34a872] text-xs font-medium">Support</span>
+                                  </div>
+                                  <span className="text-white text-xs font-bold">
+                                    {sharesFloat.toFixed(4)} shares
+                                  </span>
                                 </div>
-                                <span className="text-white text-xs font-bold">
-                                  {(Number(userPosition.forShares) / 1e18).toFixed(4)} shares
-                                </span>
-                              </div>
-                            )}
-                            {userPosition.againstShares && Number(userPosition.againstShares) > 0 && (
-                              <div className="flex items-center justify-between bg-[#8b3a3a15] border border-[#8b3a3a30] rounded-lg px-3 py-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full bg-[#c45454]" />
-                                  <span className="text-[#c45454] text-xs font-medium">Oppose</span>
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-[#6b7280] text-[10px]">Current Value</span>
+                                  <span className="text-[#34a872] text-[10px] font-semibold">{value.toFixed(4)} tTRUST</span>
                                 </div>
-                                <span className="text-white text-xs font-bold">
-                                  {(Number(userPosition.againstShares) / 1e18).toFixed(4)} shares
-                                </span>
                               </div>
-                            )}
+                              )
+                            })()}
+                            {userPosition.againstShares && Number(userPosition.againstShares) > 0 && (() => {
+                              const sharesFloat = Number(userPosition.againstShares) / 1e18
+                              const value = getSellProceeds(sharesFloat, opposeSupply)
+                              return (
+                              <div className="bg-[#8b3a3a15] border border-[#8b3a3a30] rounded-lg px-3 py-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-[#c45454]" />
+                                    <span className="text-[#c45454] text-xs font-medium">Oppose</span>
+                                  </div>
+                                  <span className="text-white text-xs font-bold">
+                                    {sharesFloat.toFixed(4)} shares
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-[#6b7280] text-[10px]">Current Value</span>
+                                  <span className="text-[#c45454] text-[10px] font-semibold">{value.toFixed(4)} tTRUST</span>
+                                </div>
+                              </div>
+                              )
+                            })()}
                           </div>
                         ) : (
                           <div className="text-center py-3 bg-[#0d1117] rounded-lg">
@@ -1924,7 +2617,7 @@ function AgentsPageContent() {
                         {[
                           { label: 'Agent Age', value: ageLabel },
                           { label: 'First Seen', value: new Date(selectedAgent.created_at).toLocaleDateString('pl-PL') },
-                          { label: 'Stakers', value: String(selectedAgent.positions_aggregate?.aggregate?.count || 0) },
+                          { label: 'Stakers', value: String(combinedStakerCount) },
                         ].map((item, i) => (
                           <div key={i}>
                             <p className="text-[#6b7280] text-[10px] mb-0.5">{item.label}</p>

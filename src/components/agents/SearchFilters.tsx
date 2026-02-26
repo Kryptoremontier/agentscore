@@ -22,11 +22,18 @@ export interface FilterState {
 }
 
 const platformOptions: { value: AgentPlatform; label: string }[] = [
-  { value: 'moltbook', label: 'Moltbook' },
+  { value: 'mcp', label: 'MCP Server' },
+  { value: 'openai-gpts', label: 'OpenAI GPTs' },
   { value: 'openclaw', label: 'OpenClaw' },
+  { value: 'langchain', label: 'LangGraph Cloud' },
+  { value: 'huggingface', label: 'Hugging Face' },
+  { value: 'eliza', label: 'ElizaOS' },
+  { value: 'virtuals', label: 'Virtuals Protocol' },
   { value: 'farcaster', label: 'Farcaster' },
-  { value: 'twitter', label: 'Twitter' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'twitter', label: 'X / Twitter' },
+  { value: 'telegram', label: 'Telegram Bot' },
+  { value: 'discord', label: 'Discord' },
+  { value: 'custom', label: 'Self-hosted/Custom' },
 ]
 
 const trustLevelOptions: { value: TrustLevel; label: string; color: string }[] = [

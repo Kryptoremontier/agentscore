@@ -1,9 +1,11 @@
 'use client'
 
-import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi'
+import { useAccount, useConnect, useDisconnect, useBalance, useSwitchChain } from 'wagmi'
+import { intuitionTestnet } from '@0xintuition/protocol'
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Wallet, ChevronDown, Copy, ExternalLink, LogOut, User, Shield } from 'lucide-react'
+import { Wallet, ChevronDown, Copy, ExternalLink, LogOut, User, Shield, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
@@ -17,15 +19,29 @@ import {
 import { cn } from '@/lib/cn'
 
 export function WalletButton() {
-  const { address, isConnected, isConnecting } = useAccount()
+  const { address, isConnected, isConnecting, chain } = useAccount()
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
   const { data: balance } = useBalance({ address })
+  const { switchChain, isPending: isSwitching } = useSwitchChain()
 
   const [showConnectors, setShowConnectors] = useState(false)
   const [mounted, setMounted] = useState(false)
 
+  const isWrongChain = isConnected && chain?.id !== intuitionTestnet.id
+
   useEffect(() => { setMounted(true) }, [])
+
+  // Auto-switch to Intuition Testnet right after connecting on wrong chain
+  useEffect(() => {
+    if (mounted && isConnected && chain && chain.id !== intuitionTestnet.id) {
+      try {
+        switchChain({ chainId: intuitionTestnet.id })
+      } catch {
+        // User rejected or wallet doesn't support — they'll see the warning button
+      }
+    }
+  }, [mounted, isConnected, chain?.id])
 
   if (!mounted) {
     return (
@@ -73,7 +89,30 @@ export function WalletButton() {
     )
   }
 
-  // Connected state
+  // Connected but wrong chain — show switch button
+  if (isWrongChain) {
+    return (
+      <Button
+        onClick={() => switchChain({ chainId: intuitionTestnet.id })}
+        disabled={isSwitching}
+        className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/30"
+      >
+        {isSwitching ? (
+          <>
+            <Loader className="w-4 h-4 mr-2 animate-spin" />
+            Switching...
+          </>
+        ) : (
+          <>
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Switch to Intuition Testnet
+          </>
+        )}
+      </Button>
+    )
+  }
+
+  // Connected on correct chain
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -116,7 +155,7 @@ export function WalletButton() {
           Copy Address
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <a href={`https://basescan.org/address/${address}`} target="_blank">
+          <a href={`https://testnet.explorer.intuition.systems/address/${address}`} target="_blank">
             <ExternalLink className="w-4 h-4 mr-2" />
             View on Explorer
           </a>
@@ -139,19 +178,25 @@ interface WalletModalProps {
 }
 
 function WalletModal({ connectors, onConnect, onClose }: WalletModalProps) {
-  return (
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
+  // Portal to document.body to escape navbar's backdrop-blur containing block
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm overflow-y-auto"
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className="glass rounded-xl p-6 w-full max-w-md"
+        className="glass rounded-xl p-6 w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold mb-4">Connect Wallet</h2>
@@ -175,6 +220,7 @@ function WalletModal({ connectors, onConnect, onClose }: WalletModalProps) {
           ))}
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   )
 }

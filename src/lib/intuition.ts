@@ -425,6 +425,35 @@ export async function getUserPositions(address: string) {
 }
 
 // ============================================================================
+// Vault State (on-chain reads — bypasses indexer lag)
+// ============================================================================
+
+/**
+ * Read total shares from MultiVault contract directly.
+ *
+ * getVault(termId, curveId) returns (totalAssets_wei, totalShares_wei).
+ * totalShares is always the larger value (shares >> assets in wei for this
+ * bonding curve which starts at 0.001 ETH/share).
+ *
+ * Returns shares in human-readable float (not wei).
+ */
+export async function getVaultSupply(
+  publicClient: PublicClient,
+  termId: string,
+): Promise<number> {
+  const address = getMultiVaultAddress(publicClient.chain?.id)
+  const result = await publicClient.readContract({
+    address,
+    abi: MultiVaultAbi,
+    functionName: 'getVault',
+    args: [termId as `0x${string}`, 1n],
+  }) as readonly [bigint, bigint]
+  // Pick the larger value — that's totalShares (in wei)
+  const totalSharesWei = result[0] > result[1] ? result[0] : result[1]
+  return Number(totalSharesWei) / 1e18
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 

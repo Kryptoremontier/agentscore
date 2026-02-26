@@ -54,16 +54,13 @@ export class ErrorBoundary extends Component<Props, State> {
             </p>
 
             {this.state.error && process.env.NODE_ENV === 'development' && (
-              <details className="mb-6 text-left">
-                <summary className="cursor-pointer text-sm text-text-muted hover:text-text-secondary">
-                  Error details
-                </summary>
-                <pre className="mt-2 p-3 bg-black/20 rounded text-xs overflow-auto">
-                  {this.state.error.message}
-                  {'\n'}
+              <div className="mb-6 text-left w-full">
+                <div className="p-3 bg-red-950/40 border border-red-800/50 rounded text-xs font-mono text-red-300 overflow-auto max-h-48 whitespace-pre-wrap break-all">
+                  <strong className="text-red-400">{this.state.error.message}</strong>
+                  {'\n\n'}
                   {this.state.error.stack}
-                </pre>
-              </details>
+                </div>
+              </div>
             )}
 
             <div className="flex gap-3 justify-center">

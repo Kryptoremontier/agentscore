@@ -21,7 +21,7 @@ const getMockAgent = (id: string): Agent => ({
   atomId: agentIdToAtomId(id), // Use consistent hash function
   name: `CodeHelper AI ${id}`,
   description: 'An advanced AI assistant specialized in helping developers write better code, debug issues, and learn new programming concepts. Supports multiple programming languages and frameworks.',
-  platform: 'moltbook',
+  platform: 'mcp',
   walletAddress: '0x1234567890123456789012345678901234567890',
   createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
   verificationLevel: 'wallet',

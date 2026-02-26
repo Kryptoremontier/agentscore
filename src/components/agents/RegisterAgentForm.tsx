@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   FileText, Wallet, Shield, Info, Check, ChevronRight, Sparkles, Loader2
 } from 'lucide-react'
-import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
+import { useAccount, useWalletClient, usePublicClient, useSwitchChain } from 'wagmi'
+import { intuitionTestnet } from '@0xintuition/protocol'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AgentAvatar } from '@/components/agents/AgentAvatar'
+import { PlatformIcon } from '@/components/agents/PlatformIcon'
 import { cn } from '@/lib/cn'
 import { createWriteConfig, createAgentAtom } from '@/lib/intuition'
 import type { AgentPlatform, VerificationLevel } from '@/types/agent'
@@ -17,12 +19,37 @@ interface RegisterAgentFormProps {
   onSuccess?: (agentId: string) => void
 }
 
-const platforms: { value: AgentPlatform; label: string; description: string }[] = [
-  { value: 'moltbook', label: 'Moltbook', description: 'AI agent marketplace' },
-  { value: 'openclaw', label: 'OpenClaw', description: 'Open source AI agents' },
-  { value: 'farcaster', label: 'Farcaster', description: 'Decentralized social' },
-  { value: 'twitter', label: 'Twitter', description: 'X platform bots' },
-  { value: 'custom', label: 'Custom', description: 'Self-hosted or other' },
+type PlatformCategory = 'all' | 'trending' | 'web3' | 'social'
+
+interface PlatformDef {
+  value: AgentPlatform
+  label: string
+  description: string
+  tag?: string
+  tagColor?: string
+  category: PlatformCategory[]
+}
+
+const PLATFORMS: PlatformDef[] = [
+  { value: 'mcp', label: 'MCP Server', description: 'Model Context Protocol', tag: 'trending', tagColor: '#00ff88', category: ['trending'] },
+  { value: 'openai-gpts', label: 'OpenAI GPTs', description: 'GPT Store & Actions', category: [] },
+  { value: 'openclaw', label: 'OpenClaw', description: 'Open source AI agents', tag: 'trending', tagColor: '#00ff88', category: ['trending'] },
+  { value: 'langchain', label: 'LangGraph Cloud', description: 'LangChain deployments', category: [] },
+  { value: 'huggingface', label: 'Hugging Face', description: 'Spaces & Inference API', category: [] },
+  { value: 'eliza', label: 'ElizaOS', description: 'ai16z agent framework', tag: 'web3', tagColor: '#a78bfa', category: ['web3'] },
+  { value: 'virtuals', label: 'Virtuals Protocol', description: 'On-chain AI agents', tag: 'web3', tagColor: '#a78bfa', category: ['web3'] },
+  { value: 'farcaster', label: 'Farcaster', description: 'Decentralized social', tag: 'social', tagColor: '#60a5fa', category: ['social'] },
+  { value: 'twitter', label: 'X / Twitter', description: 'Platform bots & agents', tag: 'social', tagColor: '#60a5fa', category: ['social'] },
+  { value: 'telegram', label: 'Telegram Bot', description: 'Telegram Bot API', tag: 'social', tagColor: '#60a5fa', category: ['social'] },
+  { value: 'discord', label: 'Discord', description: 'Discord bot integration', tag: 'social', tagColor: '#60a5fa', category: ['social'] },
+  { value: 'custom', label: 'Self-hosted/Custom', description: 'Own infrastructure', category: [] },
+]
+
+const CATEGORY_FILTERS: { value: PlatformCategory; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'trending', label: 'Trending' },
+  { value: 'web3', label: 'Web3' },
+  { value: 'social', label: 'Social' },
 ]
 
 const steps = [
@@ -33,9 +60,20 @@ const steps = [
 ]
 
 export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, chain } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const { switchChain } = useSwitchChain()
+
+  const isWrongChain = isConnected && chain?.id !== intuitionTestnet.id
+
+  const promptSwitchChain = () => {
+    try {
+      switchChain({ chainId: intuitionTestnet.id })
+    } catch {
+      setError('Failed to switch network. Please switch manually to Intuition Testnet (Chain ID: 13579).')
+    }
+  }
 
   const [currentStep, setCurrentStep] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -46,7 +84,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
     name: '',
     description: '',
     avatar: '',
-    platform: '' as AgentPlatform,
+    platforms: [] as AgentPlatform[],
     walletAddress: '',
     verificationLevel: 'none' as VerificationLevel,
     tags: [] as string[],
@@ -55,6 +93,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [platformFilter, setPlatformFilter] = useState<PlatformCategory>('all')
   const [walletSigning, setWalletSigning] = useState(false)
   const [walletSigned, setWalletSigned] = useState(false)
   const [signatureHash, setSignatureHash] = useState<string | null>(null)
@@ -70,7 +109,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
         if (formData["description"] && formData["description"].length < 20) newErrors["description"] = 'Description must be at least 20 characters'
         break
       case 1: // Platform
-        if (!formData["platform"]) newErrors["platform"] = 'Please select a platform'
+        if (formData["platforms"].length === 0) newErrors["platform"] = 'Please select at least one platform'
         break
       case 2: // Wallet
         if (formData["walletAddress"] && !formData["walletAddress"].match(/^0x[a-fA-F0-9]{40}$/)) {
@@ -94,8 +133,16 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
   }
 
   const handleSignMessage = async () => {
-    if (!walletClient || !isConnected) {
+    if (!isConnected) {
       setError('Connect your wallet first to sign a message')
+      return
+    }
+    if (isWrongChain) {
+      await promptSwitchChain()
+      return
+    }
+    if (!walletClient) {
+      promptSwitchChain()
       return
     }
 
@@ -131,8 +178,16 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
 
   const handleSubmit = async () => {
     if (!validateStep()) return
-    if (!walletClient || !publicClient || !isConnected) {
+    if (!isConnected) {
       setError('Please connect your wallet first')
+      return
+    }
+    if (isWrongChain) {
+      await promptSwitchChain()
+      return
+    }
+    if (!walletClient || !publicClient) {
+      promptSwitchChain()
       return
     }
 
@@ -146,7 +201,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
       const result = await createAgentAtom(config, {
         name: formData.name,
         description: formData.description,
-        category: formData.platform || 'general',
+        category: formData.platforms[0] || 'general',
         website: formData.website || undefined,
         tags: formData.tags,
       })
@@ -269,70 +324,149 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
         )
 
       case 1: // Platform
-        return (
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            <h3 className="text-xl font-semibold mb-4">Where is your agent hosted?</h3>
+        {
+          const togglePlatform = (value: AgentPlatform) => {
+            const current = formData.platforms
+            const updated = current.includes(value)
+              ? current.filter(p => p !== value)
+              : [...current, value]
+            setFormData({ ...formData, platforms: updated })
+          }
 
-            <div className="grid gap-3">
-              {platforms.map(platform => (
-                <button
-                  key={platform.value}
-                  onClick={() => setFormData({ ...formData, platform: platform.value })}
-                  className={cn(
-                    'glass rounded-lg p-4 text-left transition-all',
-                    formData["platform"] === platform.value ? 'ring-2 ring-primary' : 'hover:bg-white/10'
-                  )}
-                >
-                  <span className="flex items-center justify-between">
-                    <span className="block">
-                      <span className="font-medium block">{platform.label}</span>
-                      <span className="text-sm text-text-secondary block">{platform.description}</span>
-                    </span>
-                    {formData["platform"] === platform.value && (
-                      <Check className="w-5 h-5 text-primary" />
+          const filtered = platformFilter === 'all'
+            ? PLATFORMS
+            : PLATFORMS.filter(p => p.category.includes(platformFilter))
+
+          return (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-6"
+            >
+              <h3 className="text-xl font-semibold mb-1">Where is your agent hosted?</h3>
+              <p className="text-sm text-text-muted">Select one or more platforms</p>
+
+              {/* Category Filters */}
+              <div className="flex gap-2">
+                {CATEGORY_FILTERS.map(cat => (
+                  <button
+                    key={cat.value}
+                    onClick={() => setPlatformFilter(cat.value)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-sm transition-colors',
+                      platformFilter === cat.value
+                        ? 'bg-primary text-white'
+                        : 'glass hover:bg-white/10'
                     )}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {errors["platform"] && (
-              <p className="text-sm text-trust-critical">{errors["platform"]}</p>
-            )}
-
-            {/* Additional Links */}
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">
-                  Website / Landing Page (optional)
-                </label>
-                <input
-                  type="url"
-                  value={formData["website"]}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                  placeholder="https://your-agent-website.com"
-                  className="w-full px-4 py-3 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none"
-                />
+                  >
+                    {cat.label}
+                  </button>
+                ))}
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">
-                  Documentation (optional)
-                </label>
-                <input
-                  type="url"
-                  value={formData["documentation"]}
-                  onChange={(e) => setFormData({ ...formData, documentation: e.target.value })}
-                  placeholder="https://docs.your-agent.com"
-                  className="w-full px-4 py-3 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none"
-                />
+              {/* Platform Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {filtered.map(platform => {
+                  const isSelected = formData.platforms.includes(platform.value)
+                  return (
+                    <button
+                      key={platform.value}
+                      onClick={() => togglePlatform(platform.value)}
+                      className={cn(
+                        'glass rounded-lg p-4 text-left transition-all relative',
+                        isSelected ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-white/10'
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          <PlatformIcon id={platform.value} size={28} active={isSelected} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm truncate">{platform.label}</span>
+                            {platform.tag && (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded-full font-medium uppercase tracking-wider"
+                                style={{
+                                  color: platform.tagColor,
+                                  backgroundColor: `${platform.tagColor}15`,
+                                  border: `1px solid ${platform.tagColor}30`,
+                                }}
+                              >
+                                {platform.tag}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-text-muted block mt-0.5">{platform.description}</span>
+                        </div>
+                        {isSelected && (
+                          <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
-            </div>
-          </motion.div>
-        )
+
+              {/* Selected Summary Bar */}
+              {formData.platforms.length > 0 && (
+                <div className="glass rounded-lg px-4 py-3 flex items-center gap-3">
+                  <span className="text-xs text-text-muted flex-shrink-0">Selected:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.platforms.map(id => {
+                      const p = PLATFORMS.find(pl => pl.value === id)
+                      return (
+                        <span key={id} className="flex items-center gap-1.5 glass px-2 py-1 rounded-md text-xs">
+                          <PlatformIcon id={id} size={16} active />
+                          {p?.label}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); togglePlatform(id) }}
+                            className="text-text-muted hover:text-text-primary ml-0.5"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {errors["platform"] && (
+                <p className="text-sm text-trust-critical">{errors["platform"]}</p>
+              )}
+
+              {/* Additional Links */}
+              <div className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">
+                    Website / Landing Page (optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={formData["website"]}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    placeholder="https://your-agent-website.com"
+                    className="w-full px-4 py-3 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">
+                    Documentation (optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={formData["documentation"]}
+                    onChange={(e) => setFormData({ ...formData, documentation: e.target.value })}
+                    placeholder="https://docs.your-agent.com"
+                    className="w-full px-4 py-3 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )
+        }
 
       case 2: // Wallet
         return (
@@ -479,9 +613,19 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
                     <dt className="text-sm text-text-muted">Name</dt>
                     <dd className="font-medium">{formData["name"]}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-text-muted">Platform</dt>
-                    <dd className="font-medium">{formData["platform"]}</dd>
+                  <div className="flex justify-between items-center">
+                    <dt className="text-sm text-text-muted">Platforms</dt>
+                    <dd className="flex flex-wrap gap-1.5 justify-end">
+                      {formData.platforms.map(id => {
+                        const p = PLATFORMS.find(pl => pl.value === id)
+                        return (
+                          <span key={id} className="flex items-center gap-1 glass px-2 py-0.5 rounded text-xs">
+                            <PlatformIcon id={id} size={14} active />
+                            {p?.label}
+                          </span>
+                        )
+                      })}
+                    </dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-sm text-text-muted">Tags</dt>
@@ -592,10 +736,26 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
         {/* Wallet Connection Warning */}
         {!isConnected && (
           <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-            <p className="text-yellow-400 font-semibold">⚠️ Connect your wallet to register agents</p>
+            <p className="text-yellow-400 font-semibold">Connect your wallet to register agents</p>
             <p className="text-sm text-text-secondary mt-1">
               Make sure you're on Intuition Testnet (Chain ID: 13579)
             </p>
+          </div>
+        )}
+
+        {/* Wrong Chain Warning */}
+        {isWrongChain && (
+          <div className="mb-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+            <p className="text-orange-400 font-semibold">Wrong network detected</p>
+            <p className="text-sm text-text-secondary mt-1">
+              You're connected but not on Intuition Testnet (Chain ID: 13579).
+            </p>
+            <button
+              onClick={promptSwitchChain}
+              className="mt-3 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 rounded-lg text-sm font-medium transition-colors"
+            >
+              Switch to Intuition Testnet
+            </button>
           </div>
         )}
 
