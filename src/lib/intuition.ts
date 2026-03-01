@@ -150,6 +150,21 @@ export async function createAgentAtom(
   */
 }
 
+/**
+ * Create Skill Atom
+ *
+ * Creates an on-chain Atom representing a reusable AI skill/capability.
+ * Label format: "Skill: Name - description" (matches ILIKE 'Skill:%' filter)
+ */
+export async function createSkillAtom(
+  config: WriteConfig,
+  metadata: { name: string; description: string; category: string; compatibilities: string[] },
+  initialDeposit?: bigint
+) {
+  const atomText = `Skill: ${metadata.name} - ${metadata.description}`
+  return await createAtomFromString(config, atomText, initialDeposit)
+}
+
 // ============================================================================
 // Triple Creation (Attestations)
 // ============================================================================

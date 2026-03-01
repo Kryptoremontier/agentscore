@@ -97,6 +97,9 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
   const [walletSigning, setWalletSigning] = useState(false)
   const [walletSigned, setWalletSigned] = useState(false)
   const [signatureHash, setSignatureHash] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
 
   const validateStep = () => {
     const newErrors: Record<string, string> = {}
@@ -734,7 +737,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
       {/* Form Content */}
       <div className="glass rounded-xl p-8">
         {/* Wallet Connection Warning */}
-        {!isConnected && (
+        {mounted && !isConnected && (
           <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
             <p className="text-yellow-400 font-semibold">Connect your wallet to register agents</p>
             <p className="text-sm text-text-secondary mt-1">
@@ -744,7 +747,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
         )}
 
         {/* Wrong Chain Warning */}
-        {isWrongChain && (
+        {mounted && isWrongChain && (
           <div className="mb-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
             <p className="text-orange-400 font-semibold">Wrong network detected</p>
             <p className="text-sm text-text-secondary mt-1">
@@ -817,10 +820,10 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={!isConnected || loading}
+              disabled={(mounted && !isConnected) || loading}
               className="flex-1 glow-blue"
             >
-              {!isConnected ? (
+              {mounted && !isConnected ? (
                 '🔌 Connect Wallet First'
               ) : loading ? (
                 <>

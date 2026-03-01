@@ -159,3 +159,18 @@ export function getAgentAgeDays(createdAt: string | number | Date): number {
   const diffMs = now.getTime() - created.getTime();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
+
+// ─── Composite-aware Tier Calculation ───
+
+/**
+ * Calculate tier using a composite score (from composite-trust.ts) in place of raw trust ratio.
+ * Composite score is more resilient to whale exits and short-term fluctuations.
+ */
+export function calculateTierFromComposite(
+  compositeScore: number,
+  stakers: number,
+  totalStake: number,
+  ageDays: number
+): TierConfig {
+  return calculateTier(stakers, totalStake, compositeScore, ageDays)
+}

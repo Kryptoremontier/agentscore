@@ -6,12 +6,17 @@ import { Sparkles, CheckCircle, ArrowRight, Shield, Users, TrendingUp } from 'lu
 import Link from 'next/link'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { RegisterAgentForm } from '@/components/agents/RegisterAgentForm'
+import { RegisterSkillForm } from '@/components/skills/RegisterSkillForm'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/shared/GlassCard'
+import { cn } from '@/lib/cn'
+
+type RegisterTab = 'agent' | 'skill'
 
 export default function RegisterPage() {
   const [success, setSuccess] = useState(false)
   const [agentId, setAgentId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<RegisterTab>('agent')
 
   const handleSuccess = (id: string) => {
     setAgentId(id)
@@ -20,6 +25,7 @@ export default function RegisterPage() {
 
   if (success && agentId) {
     const shortId = `${agentId.slice(0, 10)}...${agentId.slice(-8)}`
+    const isSkill = activeTab === 'skill'
 
     return (
       <PageBackground image="diagonal" opacity={0.3}>
@@ -40,12 +46,12 @@ export default function RegisterPage() {
                 <CheckCircle className="w-10 h-10 text-trust-good" />
               </motion.div>
 
-              <h1 className="text-3xl font-bold mb-2">Agent Registered!</h1>
+              <h1 className="text-3xl font-bold mb-2">{isSkill ? 'Skill Registered!' : 'Agent Registered!'}</h1>
               <p className="text-text-secondary mb-8">
                 Successfully created on the Intuition Protocol.
               </p>
 
-              {/* Agent ID card */}
+              {/* ID card */}
               <div className="bg-[#0d1117] border border-[#21262d] rounded-xl p-5 mb-8 text-left">
                 <div className="space-y-4">
                   <div>
@@ -71,15 +77,15 @@ export default function RegisterPage() {
 
               {/* Action buttons */}
               <div className="flex gap-3 justify-center mb-10">
-                <Link href={`/agents?open=${encodeURIComponent(agentId)}`}>
+                <Link href={isSkill ? `/skills?open=${encodeURIComponent(agentId)}` : `/agents?open=${encodeURIComponent(agentId)}`}>
                   <Button size="lg" className="glow-blue">
-                    View Agent
+                    {isSkill ? 'View Skill' : 'View Agent'}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </Link>
-                <Link href="/agents">
+                <Link href={isSkill ? '/skills' : '/agents'}>
                   <Button size="lg" variant="outline">
-                    Browse Agents
+                    {isSkill ? 'Browse Skills' : 'Browse Agents'}
                   </Button>
                 </Link>
               </div>
@@ -89,8 +95,8 @@ export default function RegisterPage() {
                 <h2 className="text-lg font-semibold mb-4 text-[#8b949e]">Next Steps</h2>
                 <div className="space-y-3">
                   {[
-                    { icon: Shield, color: 'text-primary', title: 'Build Trust', desc: 'Encourage users to Support your agent with tTRUST stakes' },
-                    { icon: Users, color: 'text-accent-cyan', title: 'Engage Community', desc: 'Grow your agent\'s reputation through attestations' },
+                    { icon: Shield, color: 'text-primary', title: 'Build Trust', desc: `Encourage users to Support your ${isSkill ? 'skill' : 'agent'} with tTRUST stakes` },
+                    { icon: Users, color: 'text-accent-cyan', title: 'Engage Community', desc: 'Grow your reputation through attestations' },
                     { icon: TrendingUp, color: 'text-trust-good', title: 'Monitor Score', desc: 'Track trust score, stakers and activity in Explorer' },
                   ].map((step) => (
                     <div key={step.title} className="flex items-center gap-3 bg-white/[0.03] rounded-lg px-4 py-3 border border-white/5">
@@ -118,16 +124,49 @@ export default function RegisterPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="text-center mb-10"
         >
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent-cyan mb-6">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold mb-4">Register Your AI Agent</h1>
+          <h1 className="text-4xl font-bold mb-4">Register on AgentScore</h1>
           <p className="text-xl text-text-secondary max-w-2xl mx-auto">
-            Create an on-chain identity for your agent and join the trust network.
+            Create an on-chain identity and join the trust network.
             Build reputation through community attestations.
           </p>
+        </motion.div>
+
+        {/* Tab Switcher */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="flex justify-center mb-10"
+        >
+          <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
+            <button
+              onClick={() => setActiveTab('agent')}
+              className={cn(
+                'flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all',
+                activeTab === 'agent'
+                  ? 'bg-white/15 text-white shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              )}
+            >
+              🤖 Agent
+            </button>
+            <button
+              onClick={() => setActiveTab('skill')}
+              className={cn(
+                'flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all',
+                activeTab === 'skill'
+                  ? 'bg-white/15 text-white shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              )}
+            >
+              ⚡ Skill
+            </button>
+          </div>
         </motion.div>
 
         {/* Benefits */}
@@ -153,7 +192,9 @@ export default function RegisterPage() {
             </div>
             <h3 className="font-semibold mb-2">Get Discovered</h3>
             <p className="text-sm text-text-secondary">
-              Appear in agent explorer and reach more users
+              {activeTab === 'agent'
+                ? 'Appear in agent explorer and reach more users'
+                : 'Appear in skills registry and reach developers'}
             </p>
           </GlassCard>
 
@@ -174,7 +215,11 @@ export default function RegisterPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <RegisterAgentForm onSuccess={handleSuccess} />
+          {activeTab === 'agent' ? (
+            <RegisterAgentForm onSuccess={handleSuccess} />
+          ) : (
+            <RegisterSkillForm onSuccess={handleSuccess} />
+          )}
         </motion.div>
 
         {/* FAQ */}
@@ -189,9 +234,13 @@ export default function RegisterPage() {
             <Link href="/docs" className="text-primary hover:text-primary-hover">
               Check our documentation
             </Link>
-            {' '}or{' '}
+            {' '}or browse{' '}
             <Link href="/agents" className="text-primary hover:text-primary-hover">
-              browse existing agents
+              agents
+            </Link>
+            {' '}and{' '}
+            <Link href="/skills" className="text-primary hover:text-primary-hover">
+              skills
             </Link>
           </p>
         </motion.div>

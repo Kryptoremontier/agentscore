@@ -9,7 +9,6 @@ import Link from 'next/link'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
-// Categories unused — filter now uses trust levels directly
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
@@ -23,10 +22,9 @@ import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
 import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 
-// Real agents loaded from Intuition testnet via GraphQL
 const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
 
-interface GraphQLAgent {
+interface GraphQLSkill {
   term_id: string
   label: string
   type: string
@@ -36,7 +34,7 @@ interface GraphQLAgent {
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
 }
 
-export default function AgentsPage() {
+export default function SkillsPage() {
   return (
     <Suspense fallback={
       <PageBackground image="wave" opacity={0.3}>
@@ -55,44 +53,44 @@ export default function AgentsPage() {
         </div>
       </PageBackground>
     }>
-      <AgentsPageContent />
+      <SkillsPageContent />
     </Suspense>
   )
 }
 
-function AgentsPageContent() {
+function SkillsPageContent() {
   const searchParams = useSearchParams()
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
   const { connector } = useAccount()
 
-  const [agents, setAgents] = useState<GraphQLAgent[]>([])
+  const [skills, setSkills] = useState<GraphQLSkill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState<'newest' | 'score_desc' | 'score_asc' | 'stakers' | 'stake'>('newest')
-  const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
+  const [selectedSkill, setSelectedSkill] = useState<GraphQLSkill | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity'>('overview')
   const [trustAmount, setTrustAmount] = useState('0.05')
   const [untrustAmount, setUntrustAmount] = useState('0.05')
   const [claims, setClaims] = useState<any[]>([])
   const [claimsLoading, setClaimsLoading] = useState(false)
-  const [agentSignals, setAgentSignals] = useState<any[]>([])
-  const [agentSignalsCount, setAgentSignalsCount] = useState(0)
+  const [skillSignals, setSkillSignals] = useState<any[]>([])
+  const [skillSignalsCount, setSkillSignalsCount] = useState(0)
   const [signalsLoading, setSignalsLoading] = useState(false)
   const [voteStatus, setVoteStatus] = useState<Record<string, string>>({})
   const [showClaimSelect, setShowClaimSelect] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [pendingVote, setPendingVote] = useState<{
     type: 'trust' | 'distrust' | 'redeem_trust' | 'redeem_distrust'
-    agent: GraphQLAgent
+    agent: GraphQLSkill
     amount: string
     claim: string
     claimAtomId: string | null
-    counterTermId?: string | null  // triple AGAINST vault — captured at click time
-    tripleTermId?: string | null   // triple FOR vault — needed to seed before AGAINST deposit
+    counterTermId?: string | null
+    tripleTermId?: string | null
   } | null>(null)
   const [userPosition, setUserPosition] = useState<{
     forShares: string | null
@@ -100,14 +98,14 @@ function AgentsPageContent() {
     rawPositions: any[]
     againstRawPositions: any[]
   }>({ forShares: null, againstShares: null, rawPositions: [], againstRawPositions: [] })
-  const [agentTriple, setAgentTriple] = useState<{
+  const [skillTriple, setSkillTriple] = useState<{
     termId: string | null
     counterTermId: string | null
     loading: boolean
   }>({ termId: null, counterTermId: null, loading: false })
   const [creatingTriple, setCreatingTriple] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
-  const [agentTrust, setAgentTrust] = useState<TrustScoreResult | null>(null)
+  const [skillTrust, setSkillTrust] = useState<TrustScoreResult | null>(null)
   const [signalSide, setSignalSide] = useState<'support' | 'oppose'>('support')
   const [tradeAction, setTradeAction] = useState<'buy' | 'sell'>('buy')
   const [voteAmount, setVoteAmount] = useState('0.05')
@@ -126,7 +124,6 @@ function AgentsPageContent() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [sellReason, setSellReason] = useState<SellReason | null>(null)
 
-  // Catch unhandled errors client-side and surface them visibly (dev only)
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return
     const onError = (e: ErrorEvent) => {
@@ -143,20 +140,16 @@ function AgentsPageContent() {
     }
   }, [])
 
-  const fetchAgents = async (search = '') => {
+  const fetchSkills = async (search = '') => {
     setLoading(true)
     setError(null)
     try {
-      // Build where clause: always filter by "Agent:" prefix
       const whereConditions = [
-        `{ label: { _ilike: "Agent:%"} }`
+        `{ label: { _ilike: "Skill:%"} }`
       ]
-
-      // Add search filter if provided
       if (search) {
         whereConditions.push(`{ label: { _ilike: "%${search}%" } }`)
       }
-
       const whereClause = whereConditions.length > 0
         ? `where: { _and: [${whereConditions.join(', ')}] }`
         : ''
@@ -191,9 +184,7 @@ function AgentsPageContent() {
       })
       const data = await response.json()
       if (data.errors) throw new Error(data.errors[0].message)
-
-      // All atoms already filtered by "Agent:" prefix in GraphQL
-      setAgents(data.data.atoms || [])
+      setSkills(data.data.atoms || [])
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -202,63 +193,56 @@ function AgentsPageContent() {
   }
 
   useEffect(() => {
-    fetchAgents()
+    fetchSkills()
   }, [])
 
-  // Auto-open agent modal when ?open=TERM_ID is in URL
   useEffect(() => {
     const openId = searchParams.get('open')
-    if (openId && agents.length > 0 && !selectedAgent) {
-      const match = agents.find(a => a.term_id === openId)
+    if (openId && skills.length > 0 && !selectedSkill) {
+      const match = skills.find(s => s.term_id === openId)
       if (match) {
-        setSelectedAgent(match)
+        setSelectedSkill(match)
       }
     }
-  }, [agents, searchParams])
+  }, [skills, searchParams])
 
   useEffect(() => {
-    const timer = setTimeout(() => fetchAgents(searchTerm), 500)
+    const timer = setTimeout(() => fetchSkills(searchTerm), 500)
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  // Sync selectedAgent with latest agents data after refetch
   useEffect(() => {
-    if (!selectedAgent) return
-    const updated = agents.find(a => a.term_id === selectedAgent.term_id)
+    if (!selectedSkill) return
+    const updated = skills.find(s => s.term_id === selectedSkill.term_id)
     if (!updated) return
-    const oldShares = selectedAgent.positions_aggregate?.aggregate?.sum?.shares || '0'
+    const oldShares = selectedSkill.positions_aggregate?.aggregate?.sum?.shares || '0'
     const newShares = updated.positions_aggregate?.aggregate?.sum?.shares || '0'
     if (oldShares !== newShares) {
-      setSelectedAgent(updated)
+      setSelectedSkill(updated)
     }
-  }, [agents])
+  }, [skills])
 
-  // Fetch full signals list when modal opens (needed for chart + attestations + activity)
   useEffect(() => {
-    if (!selectedAgent) return
-
+    if (!selectedSkill) return
     setSignalsLoading(true)
-    setAgentSignals([])
-
-    fetchAgentSignals(selectedAgent.term_id, agentTriple.counterTermId)
+    setSkillSignals([])
+    fetchSkillSignals(selectedSkill.term_id, skillTriple.counterTermId)
       .then(({ signals, totalCount }) => {
-        setAgentSignals(signals)
-        setAgentSignalsCount(totalCount)
+        setSkillSignals(signals)
+        setSkillSignalsCount(totalCount)
       })
       .finally(() => setSignalsLoading(false))
-  }, [selectedAgent?.term_id, agentTriple.counterTermId])
+  }, [selectedSkill?.term_id, skillTriple.counterTermId])
 
   const fetchUserPosition = async (
-    agentTermId: string,
+    skillTermId: string,
     userAddress: string,
     counterTermId?: string | null
   ) => {
     try {
       const checksummedAddress = userAddress ? getAddress(userAddress) : ''
-      // Intuition indexer stores addresses lowercase — use lowercase for GraphQL queries
       const queryAddress = checksummedAddress.toLowerCase()
 
-      // Query FOR position (atom's own vault)
       const forRes = await fetch(GRAPHQL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -271,7 +255,7 @@ function AgentsPageContent() {
               ) { shares curve_id updated_at }
             }
           `,
-          variables: { termId: agentTermId, address: queryAddress },
+          variables: { termId: skillTermId, address: queryAddress },
         }),
       })
       const forData = await forRes.json()
@@ -281,7 +265,6 @@ function AgentsPageContent() {
       try { forBigInt = BigInt(forSharesRaw ?? '0') } catch { forBigInt = 0n }
       const forShares = (forSharesRaw && forBigInt > 0n) ? forSharesRaw : null
 
-      // Query AGAINST position (triple counter vault) if counterTermId is known
       let againstShares: string | null = null
       let againstRawPositions: any[] = []
       if (counterTermId) {
@@ -308,7 +291,7 @@ function AgentsPageContent() {
         againstShares = (agSharesRaw && agBigInt > 0n) ? agSharesRaw : null
       }
 
-      console.log('fetchUserPosition:', { termId: agentTermId, counterTermId, forShares, againstShares })
+      console.log('fetchUserPosition:', { termId: skillTermId, counterTermId, forShares, againstShares })
       return { forShares, againstShares, rawPositions: forPos, againstRawPositions }
     } catch (e) {
       console.error('fetchUserPosition error:', e)
@@ -347,7 +330,6 @@ function AgentsPageContent() {
     }
   }
 
-  // Fetch ALL positions from both Support + Oppose vaults
   const fetchAllPositions = async (
     termId: string,
     counterTermId?: string | null
@@ -380,9 +362,7 @@ function AgentsPageContent() {
       })
       const data = await response.json()
       const raw = data.data?.positions || []
-      // Only active holders (shares > 0)
       const active = raw.filter((p: any) => p.shares && BigInt(p.shares) > 0n)
-      // Unique wallets
       const wallets = new Set(active.map((p: any) => p.account_id))
       return { positions: active, uniqueCount: wallets.size }
     } catch (e) {
@@ -391,31 +371,28 @@ function AgentsPageContent() {
     }
   }
 
-  // Fetch trust triple for selected agent (read-only, no wallet needed)
   useEffect(() => {
-    if (!selectedAgent) {
-      setAgentTriple({ termId: null, counterTermId: null, loading: false })
+    if (!selectedSkill) {
+      setSkillTriple({ termId: null, counterTermId: null, loading: false })
       return
     }
-    setAgentTriple({ termId: null, counterTermId: null, loading: true })
+    setSkillTriple({ termId: null, counterTermId: null, loading: true })
     import('@/lib/intuition').then(({ findTrustTriple }) => {
-      findTrustTriple(selectedAgent.term_id)
-        .then(triple => setAgentTriple({
+      findTrustTriple(selectedSkill.term_id)
+        .then(triple => setSkillTriple({
           termId: triple?.termId ?? null,
           counterTermId: triple?.counterTermId ?? null,
           loading: false,
         }))
-        .catch(() => setAgentTriple({ termId: null, counterTermId: null, loading: false }))
+        .catch(() => setSkillTriple({ termId: null, counterTermId: null, loading: false }))
     })
-  }, [selectedAgent?.term_id])
+  }, [selectedSkill?.term_id])
 
-  // Fetch user positions — re-fetches when triple counterTermId becomes available
   useEffect(() => {
-    if (!selectedAgent || !address) return
-    fetchUserPosition(selectedAgent.term_id, address, agentTriple.counterTermId).then(setUserPosition)
-  }, [selectedAgent?.term_id, address, agentTriple.counterTermId])
+    if (!selectedSkill || !address) return
+    fetchUserPosition(selectedSkill.term_id, address, skillTriple.counterTermId).then(setUserPosition)
+  }, [selectedSkill?.term_id, address, skillTriple.counterTermId])
 
-  // Reusable: fetch positions + recompute supply in one shot
   const refreshPositionsAndSupply = async (
     termId: string,
     counterTermId?: string | null,
@@ -423,11 +400,8 @@ function AgentsPageContent() {
   ) => {
     if (showLoading) setPositionsLoading(true)
     try {
-      // Fetch positions for the leaderboard table (runs in parallel with supply read)
       const positionsPromise = fetchAllPositions(termId, counterTermId)
 
-      // PRIMARY: Read supply directly from contract — always up-to-date,
-      // bypasses indexer lag that causes stale price/value after other wallets trade.
       if (publicClient) {
         try {
           const { getVaultSupply } = await import('@/lib/intuition')
@@ -439,16 +413,13 @@ function AgentsPageContent() {
           setOpposeSupply(oppShares)
         } catch (e) {
           console.warn('[supply] Contract read failed, falling back to indexer sum:', e)
-          // Fallback computed below after positions resolve
         }
       }
 
-      // Resolve positions for the leaderboard table
       const { positions, uniqueCount } = await positionsPromise
       setAllPositions(positions)
       setCombinedStakerCount(uniqueCount)
 
-      // FALLBACK: compute supply from indexed positions when publicClient is unavailable
       if (!publicClient) {
         let supShares = 0
         let oppShares = 0
@@ -468,9 +439,8 @@ function AgentsPageContent() {
     }
   }
 
-  // Fetch all positions when modal opens + poll every 15s while open
   useEffect(() => {
-    if (!selectedAgent) {
+    if (!selectedSkill) {
       setAllPositions([])
       setCombinedStakerCount(0)
       setSupportSupply(0)
@@ -478,41 +448,29 @@ function AgentsPageContent() {
       return
     }
 
-    // Immediate fetch
-    refreshPositionsAndSupply(
-      selectedAgent.term_id,
-      agentTriple.counterTermId,
-      true // show loading spinner on first load
-    )
+    refreshPositionsAndSupply(selectedSkill.term_id, skillTriple.counterTermId, true)
 
-    // Poll every 15s to catch other users' transactions
     const interval = setInterval(() => {
-      refreshPositionsAndSupply(
-        selectedAgent.term_id,
-        agentTriple.counterTermId,
-        false // silent refresh, no loading spinner
-      )
+      refreshPositionsAndSupply(selectedSkill.term_id, skillTriple.counterTermId, false)
     }, 15000)
 
     return () => clearInterval(interval)
-  }, [selectedAgent?.term_id, agentTriple.counterTermId])
+  }, [selectedSkill?.term_id, skillTriple.counterTermId])
 
-  // Compute trust score from real on-chain data whenever agent or triple changes
   useEffect(() => {
-    if (!selectedAgent) {
-      setAgentTrust(null)
+    if (!selectedSkill) {
+      setSkillTrust(null)
       return
     }
 
     let supportWei = 0n
-    try { supportWei = BigInt(selectedAgent.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
+    try { supportWei = BigInt(selectedSkill.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
 
-    if (!agentTriple.counterTermId) {
-      setAgentTrust(calculateTrustScoreFromStakes(supportWei, 0n))
+    if (!skillTriple.counterTermId) {
+      setSkillTrust(calculateTrustScoreFromStakes(supportWei, 0n))
       return
     }
 
-    // Fetch oppose vault total shares from GraphQL
     fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -527,21 +485,20 @@ function AgentsPageContent() {
             }
           }
         `,
-        variables: { termId: agentTriple.counterTermId },
+        variables: { termId: skillTriple.counterTermId },
       }),
     })
       .then(r => r.json())
       .then(data => {
         let opposeWei = 0n
         try { opposeWei = BigInt(data?.data?.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { opposeWei = 0n }
-        setAgentTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
+        setSkillTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
       })
       .catch(() => {
-        setAgentTrust(calculateTrustScoreFromStakes(supportWei, 0n))
+        setSkillTrust(calculateTrustScoreFromStakes(supportWei, 0n))
       })
-  }, [selectedAgent?.term_id, selectedAgent?.positions_aggregate?.aggregate?.sum?.shares, agentTriple.counterTermId])
+  }, [selectedSkill?.term_id, selectedSkill?.positions_aggregate?.aggregate?.sum?.shares, skillTriple.counterTermId])
 
-  // Reset redeem input when switching signal side to avoid stale values
   useEffect(() => {
     setRedeemShares('0')
   }, [signalSide])
@@ -580,8 +537,6 @@ function AgentsPageContent() {
     const { createWriteConfig, depositToVault, redeemFromVault } = intuitionLib
 
     try {
-      // Get walletClient fresh at call time — useWalletClient hook can be null
-      // even when wallet is connected (hydration timing issue in Next.js App Router)
       const { getWalletClient } = await import('@wagmi/core')
       const { config: wagmiConfig } = await import('@/lib/wagmi')
       const freshWalletClient = walletClient ?? await getWalletClient(wagmiConfig)
@@ -604,12 +559,10 @@ function AgentsPageContent() {
         let redeemVaultId: `0x${string}`
 
         if (pendingVote.type === 'redeem_trust') {
-          // FOR vault = atom's own term_id
           redeemVaultId = agent.term_id as `0x${string}`
           const freshPos2 = await fetchUserPosition(agent.term_id, address!)
           freshSharesRaw = freshPos2.rawPositions[0]?.shares ?? '0'
         } else {
-          // AGAINST vault — use counterTermId captured at click time (agentTriple is reset by now)
           const counterTermId = pendingVote.counterTermId
           if (!counterTermId) {
             alert('Oppose vault not set up — please activate it first via the Oppose tab')
@@ -638,34 +591,26 @@ function AgentsPageContent() {
         )
         console.log('✅ Redeem TX:', tx)
 
-        // Refresh position after redeem — use pendingVote.counterTermId (agentTriple is reset by now)
         const updated = await fetchUserPosition(agent.term_id, address!, pendingVote.counterTermId)
         setUserPosition(updated)
         setToast(`Redeemed ${(Number(freshSharesRaw) / 1e18).toFixed(4)} shares!`)
         setTimeout(() => setToast(null), 4000)
 
       } else if (pendingVote.type === 'trust') {
-        // Support → deposit into agent's atom vault (FOR)
         await depositToVault(cfg, agent.term_id as `0x${string}`, parseEther(pendingVote.amount))
       } else if (pendingVote.type === 'distrust') {
-        // Oppose → deposit into triple's AGAINST vault (counter_term_id)
-        // counterTermId and tripleTermId were captured at click time — agentTriple may be null now
         const { counterTermId, tripleTermId } = pendingVote
         if (!counterTermId) {
           alert('Oppose vault not set up — please activate it first via the Oppose tab')
           return
         }
         if (!tripleTermId) {
-          alert('Oppose vault is not fully initialized. Please reopen the agent modal and try again.')
+          alert('Oppose vault is not fully initialized. Please reopen the skill modal and try again.')
           return
         }
         console.log('distrust counterTermId:', counterTermId)
         console.log('distrust tripleTermId:', tripleTermId)
 
-        // MultiVault enforces: user CANNOT hold shares in both FOR and AGAINST
-        // vaults of the same triple simultaneously (HasCounterStake error).
-        // Triple creation deposits into FOR on behalf of the creator, so we
-        // must redeem any existing FOR shares before depositing into AGAINST.
         const existingForShares = address
           ? await fetchVaultSharesForUser(tripleTermId, address)
           : 0n
@@ -688,19 +633,17 @@ function AgentsPageContent() {
           }
         }
 
-        // Deposit into AGAINST vault
         await depositToVault(cfg, counterTermId as `0x${string}`, parseEther(pendingVote.amount))
       }
 
       setVoteStatus(prev => { const n = { ...prev }; delete n[agent.term_id]; return n })
 
-      // Refetch after 2s (indexer lag) + again at 5s (backup)
       const refetchAll = () => {
-        fetchAgents(searchTerm)
-        fetchAgentSignals(agent.term_id, pendingVote.counterTermId)
+        fetchSkills(searchTerm)
+        fetchSkillSignals(agent.term_id, pendingVote.counterTermId)
           .then(({ signals, totalCount }) => {
-            setAgentSignals(signals)
-            setAgentSignalsCount(totalCount)
+            setSkillSignals(signals)
+            setSkillSignalsCount(totalCount)
           })
         if (address) {
           fetchUserPosition(agent.term_id, address, pendingVote.counterTermId).then(setUserPosition)
@@ -720,9 +663,8 @@ function AgentsPageContent() {
     }
   }
 
-  // Create the trust triple for the selected agent (1 MetaMask confirmation)
   const handleCreateTrustTriple = async () => {
-    if (!selectedAgent || creatingTriple) return
+    if (!selectedSkill || creatingTriple) return
     setCreatingTriple(true)
     try {
       const { getWalletClient } = await import('@wagmi/core')
@@ -733,9 +675,9 @@ function AgentsPageContent() {
       const { createWriteConfig, createTrustTriple } = await import('@/lib/intuition')
       const cfg = createWriteConfig(freshWalletClient, publicClient)
 
-      const triple = await createTrustTriple(selectedAgent.term_id as `0x${string}`, cfg)
-      setAgentTriple({ termId: triple.termId, counterTermId: triple.counterTermId, loading: false })
-      setToast('Oppose vault created! You can now stake AGAINST this agent.')
+      const triple = await createTrustTriple(selectedSkill.term_id as `0x${string}`, cfg)
+      setSkillTriple({ termId: triple.termId, counterTermId: triple.counterTermId, loading: false })
+      setToast('Oppose vault created! You can now stake AGAINST this skill.')
       setTimeout(() => setToast(null), 5000)
     } catch (e: any) {
       console.error('handleCreateTrustTriple error:', e)
@@ -749,15 +691,13 @@ function AgentsPageContent() {
     }
   }
 
-  // Helper: get color based on trust state (3 levels)
   const getTrustStateColor = (shares: string | null | undefined): string => {
     const score = Math.round(Number(shares || 0) / 1e15)
-    if (score >= 40) return '#2d7a5f'   // muted green  - trusted
-    if (score >= 10) return '#c47c2a'   // muted orange - neutral
-    return '#8b3a3a'                    // muted red    - untrusted
+    if (score >= 40) return '#2d7a5f'
+    if (score >= 10) return '#c47c2a'
+    return '#8b3a3a'
   }
 
-  // Fetch real claims from Intuition GraphQL
   const fetchClaims = async (type: 'trust' | 'distrust') => {
     setClaimsLoading(true)
     try {
@@ -790,7 +730,6 @@ function AgentsPageContent() {
       const data = await response.json()
       const fetchedClaims = data.data?.atoms || []
 
-      // Fall back to defaults if no claims on graph yet
       if (fetchedClaims.length === 0) {
         const defaults = type === 'trust'
           ? [
@@ -817,13 +756,12 @@ function AgentsPageContent() {
     }
   }
 
-  // Fetch individual signals (deposit/redeem events) for an agent
-  const fetchAgentSignals = async (
-    agentTermId: string,
+  const fetchSkillSignals = async (
+    skillTermId: string,
     counterTermId?: string | null
   ): Promise<{ signals: any[]; totalCount: number }> => {
     try {
-      const termIds = [agentTermId]
+      const termIds = [skillTermId]
       if (counterTermId) termIds.push(counterTermId)
 
       const response = await fetch(GRAPHQL_URL, {
@@ -868,13 +806,12 @@ function AgentsPageContent() {
     }
   }
 
-  // Lightweight count-only query for stats grid
-  const fetchAgentSignalsCount = async (
-    agentTermId: string,
+  const fetchSkillSignalsCount = async (
+    skillTermId: string,
     counterTermId?: string | null
   ): Promise<number> => {
     try {
-      const termIds = [agentTermId]
+      const termIds = [skillTermId]
       if (counterTermId) termIds.push(counterTermId)
 
       const response = await fetch(GRAPHQL_URL, {
@@ -898,11 +835,10 @@ function AgentsPageContent() {
     }
   }
 
-  // Fetch reports for agent (count + details)
   const [reportCount, setReportCount] = useState(0)
-  const [agentReports, setAgentReports] = useState<any[]>([])
+  const [skillReports, setSkillReports] = useState<any[]>([])
   useEffect(() => {
-    if (!selectedAgent) { setReportCount(0); setAgentReports([]); return }
+    if (!selectedSkill) { setReportCount(0); setSkillReports([]); return }
     fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -931,20 +867,19 @@ function AgentsPageContent() {
             }
           }
         `,
-        variables: { termId: selectedAgent.term_id }
+        variables: { termId: selectedSkill.term_id }
       })
     })
       .then(r => r.json())
       .then(d => {
         setReportCount(d?.data?.triples_aggregate?.aggregate?.count || 0)
-        setAgentReports(d?.data?.triples || [])
+        setSkillReports(d?.data?.triples || [])
       })
-      .catch(() => { setReportCount(0); setAgentReports([]) })
-  }, [selectedAgent?.term_id])
+      .catch(() => { setReportCount(0); setSkillReports([]) })
+  }, [selectedSkill?.term_id])
 
-  // Submit a report on-chain
   const handleSubmitReport = async () => {
-    if (!selectedAgent || reportSubmitting) return
+    if (!selectedSkill || reportSubmitting) return
     setReportSubmitting(true)
     try {
       const { getWalletClient } = await import('@wagmi/core')
@@ -956,7 +891,7 @@ function AgentsPageContent() {
       const cfg = createWriteConfig(freshWalletClient, publicClient)
 
       await submitReport(
-        selectedAgent.term_id as `0x${string}`,
+        selectedSkill.term_id as `0x${string}`,
         reportCategory,
         reportReason,
         cfg
@@ -979,7 +914,6 @@ function AgentsPageContent() {
     }
   }
 
-  // Helper: format stakes
   const formatStakes = (shares: string | null | undefined): string => {
     if (!shares) return '$0'
     const num = Number(shares) / 1e18
@@ -989,21 +923,18 @@ function AgentsPageContent() {
     return `$${num.toFixed(4)}`
   }
 
-  // Helper: trust score color (3 states matching shield colors)
   const getTrustColor = (score: number): string => {
-    if (score >= 40) return '#34a872'   // green
-    if (score >= 10) return '#c49a2a'   // orange
-    return '#cd5c5c'                    // red
+    if (score >= 40) return '#34a872'
+    if (score >= 10) return '#c49a2a'
+    return '#cd5c5c'
   }
 
-  // Helper: clean agent name (remove "Agent: " prefix and description)
-  const getAgentName = (label: string): string => {
-    let name = label.replace(/^Agent:\s*/i, '')
+  const getSkillName = (label: string): string => {
+    let name = label.replace(/^Skill:\s*/i, '')
     if (name.includes(' - ')) name = name.split(' - ')[0]
     return name.trim()
   }
 
-  // Build trust ratio chart data from signals
   const buildTrustChartData = (signals: any[], counterTermId: string | null) => {
     if (signals.length < 2) return []
     const sorted = [...signals].sort((a, b) =>
@@ -1020,7 +951,6 @@ function AgentsPageContent() {
       if (isAgainst) opposeTotal += change
       else supportTotal += change
 
-      // Clamp to 0
       if (supportTotal < 0) supportTotal = 0
       if (opposeTotal < 0) opposeTotal = 0
 
@@ -1034,13 +964,12 @@ function AgentsPageContent() {
     })
   }
 
-  // ─── Weighted trust z decay dla wybranego agenta ───
   const weightedTrust = useMemo(() => {
     try {
-      if (!agentSignals || agentSignals.length === 0) return null
-      const mappedSignals = agentSignals.map((sig: any) => ({
+      if (!skillSignals || skillSignals.length === 0) return null
+      const mappedSignals = skillSignals.map((sig: any) => ({
         timestamp: sig.created_at,
-        side: (agentTriple.counterTermId && sig.term_id === agentTriple.counterTermId)
+        side: (skillTriple.counterTermId && sig.term_id === skillTriple.counterTermId)
           ? 'oppose' as const
           : 'support' as const,
         amount: Math.abs(Number(sig.delta || 0)) / 1e18,
@@ -1050,9 +979,8 @@ function AgentsPageContent() {
       console.error('[weightedTrust]', e)
       return null
     }
-  }, [agentSignals, agentTriple.counterTermId])
+  }, [skillSignals, skillTriple.counterTermId])
 
-  // ─── Exit limit for whale-exit protection ───
   const exitLimit = useMemo(() => {
     try {
       if (!userPosition || !signalSide) return null
@@ -1067,14 +995,13 @@ function AgentsPageContent() {
     }
   }, [userPosition, signalSide, supportSupply, opposeSupply])
 
-  // ─── Composite trust score (whale-exit resistant) ───
   const compositeTrust = useMemo((): CompositeResult | null => {
     try {
-      if (!agentSignals || agentSignals.length === 0) return null
+      if (!skillSignals || skillSignals.length === 0) return null
       if (!weightedTrust) return null
-      const mappedSignals = agentSignals.map((sig: any) => ({
+      const mappedSignals = skillSignals.map((sig: any) => ({
         timestamp: sig.created_at,
-        side: (agentTriple.counterTermId && sig.term_id === agentTriple.counterTermId)
+        side: (skillTriple.counterTermId && sig.term_id === skillTriple.counterTermId)
           ? 'oppose' as const : 'support' as const,
         amount: Math.abs(Number(sig.delta || 0)) / 1e18,
         shares: Math.abs(Number(sig.shares_delta || sig.shares || 0)) / 1e18,
@@ -1098,30 +1025,28 @@ function AgentsPageContent() {
       console.error('[compositeTrust]', e)
       return null
     }
-  }, [agentSignals, weightedTrust, supportSupply, combinedStakerCount, agentTriple.counterTermId])
+  }, [skillSignals, weightedTrust, supportSupply, combinedStakerCount, skillTriple.counterTermId])
 
-  // ─── Trust Tier dla wybranego agenta ───
-  const agentTrustTier = useMemo(() => {
+  const skillTrustTier = useMemo(() => {
     try {
-      if (!selectedAgent) return null
+      if (!selectedSkill) return null
       const stakers = combinedStakerCount
-      const supportWei = agentTrust?.supportStake ?? 0n
-      const opposeWei = agentTrust?.opposeStake ?? 0n
+      const supportWei = skillTrust?.supportStake ?? 0n
+      const opposeWei = skillTrust?.opposeStake ?? 0n
       const totalWei = supportWei + opposeWei
       const totalStake = Number(totalWei) / 1e18
       const rawTrustRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
       const trustRatio = compositeTrust?.score ?? rawTrustRatio
-      const ageDays = selectedAgent.created_at ? getAgentAgeDays(selectedAgent.created_at) : 0
+      const ageDays = selectedSkill.created_at ? getAgentAgeDays(selectedSkill.created_at) : 0
       const tier = calculateTier(stakers, totalStake, trustRatio, ageDays)
       const progress = calculateTierProgress(stakers, totalStake, trustRatio, ageDays)
       return { tier, progress }
     } catch (e) {
-      console.error('[agentTrustTier]', e)
+      console.error('[skillTrustTier]', e)
       return null
     }
-  }, [selectedAgent, combinedStakerCount, agentTrust, compositeTrust])
+  }, [selectedSkill, combinedStakerCount, skillTrust, compositeTrust])
 
-  // ─── Pozycje posortowane chronologicznie z rank ───
   const enrichedPositions = useMemo(() => {
     try {
       if (!allPositions || allPositions.length === 0) return []
@@ -1143,7 +1068,6 @@ function AgentsPageContent() {
 
   return (
     <PageBackground image="hero" opacity={0.4}>
-      {/* Dev error overlay — shows JS errors that would otherwise require DevTools */}
       {pageError && process.env.NODE_ENV === 'development' && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: '#1a0000', border: '2px solid #ef4444', padding: '12px 16px', fontSize: 12, fontFamily: 'monospace', color: '#fca5a5', maxHeight: '40vh', overflow: 'auto' }}>
           <strong style={{ color: '#ef4444' }}>🐛 JS Error caught:</strong>
@@ -1153,13 +1077,11 @@ function AgentsPageContent() {
       )}
       <div className="pt-24 pb-16">
         <div className="container">
-          {/* Page Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-10"
           >
-            {/* Label */}
             <div className="flex items-center gap-2 mb-4">
               <div className="w-1 h-5 bg-[#10b981] rounded-full" />
               <span className="text-xs font-semibold text-[#10b981] uppercase tracking-widest">
@@ -1167,38 +1089,33 @@ function AgentsPageContent() {
               </span>
             </div>
 
-            {/* Title */}
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-3 leading-tight">
-              AI Agent
+              Agent Skills
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#10b981] to-[#06b6d4]">
-                {" "}Intelligence Registry
+                {" "}Registry
               </span>
             </h1>
 
-            {/* Description */}
             <p className="text-[#6b7280] text-lg max-w-2xl leading-relaxed">
-              Decentralized trust verification for AI agents.
+              Decentralized trust verification for AI skills.
               Stake <span className="text-[#9ca3af] font-medium">tTRUST</span> to signal
               confidence — every vote is transparent, on-chain, and permanent.
             </p>
 
-            {/* Live indicator */}
             <div className="flex items-center gap-2 mt-4">
               <div className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
               <span className="text-xs text-[#6b7280]">
-                {agents.length} agents indexed · GraphQL live feed
+                {skills.length} skills indexed · GraphQL live feed
               </span>
             </div>
           </motion.div>
 
-          {/* Search + Filter Bar */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="mb-8"
           >
-            {/* Search Input */}
             <div className="relative mb-4">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280]">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -1210,7 +1127,7 @@ function AgentsPageContent() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search agents, platforms, addresses..."
+                placeholder="Search skills, categories, addresses..."
                 className="w-full pl-11 pr-10 py-3 bg-[#0d1117] border border-[#21262d] rounded-xl text-white text-sm placeholder:text-[#6b7280] focus:border-[#2d7a5f] focus:ring-1 focus:ring-[#2d7a5f40] outline-none transition-all"
               />
               {searchTerm && (
@@ -1225,9 +1142,7 @@ function AgentsPageContent() {
               )}
             </div>
 
-            {/* Filter + Sort Row */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Trust Level filter */}
               {([
                 { id: 'all', label: 'All', color: '' },
                 { id: 'excellent', label: 'Excellent', color: '#06B6D4' },
@@ -1252,10 +1167,8 @@ function AgentsPageContent() {
                 </button>
               ))}
 
-              {/* Spacer */}
               <div className="flex-1" />
 
-              {/* Sort dropdown */}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
@@ -1270,52 +1183,48 @@ function AgentsPageContent() {
             </div>
           </motion.div>
 
-          {/* Loading */}
           {loading && (
             <div className="flex items-center justify-center py-20">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mr-3" />
-              <span className="text-text-secondary">Loading agents from Intuition testnet...</span>
+              <span className="text-text-secondary">Loading skills from Intuition testnet...</span>
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg mb-6">
               <p className="text-red-400">Error: {error}</p>
-              <button onClick={() => fetchAgents(searchTerm)} className="mt-2 text-sm text-accent-cyan hover:underline">
+              <button onClick={() => fetchSkills(searchTerm)} className="mt-2 text-sm text-accent-cyan hover:underline">
                 Try again →
               </button>
             </div>
           )}
 
-          {/* Empty State - No agents registered */}
-          {!loading && !error && agents.length === 0 && !searchTerm && (
+          {!loading && !error && skills.length === 0 && !searchTerm && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="text-center py-20"
             >
               <div className="glass rounded-2xl p-12 max-w-2xl mx-auto">
-                <p className="text-6xl mb-6">🤖</p>
-                <h3 className="text-3xl font-bold mb-4">No agents registered yet</h3>
+                <p className="text-6xl mb-6">⚡</p>
+                <h3 className="text-3xl font-bold mb-4">No skills registered yet</h3>
                 <p className="text-xl text-text-secondary mb-6">
-                  Be the first to register AI agents on AgentScore!
+                  Be the first to register AI skills on AgentScore!
                 </p>
                 <p className="text-sm text-text-muted mb-8">
-                  Agents are loaded from Intuition testnet via GraphQL.
-                  Register some real AI agents to get started.
+                  Skills are loaded from Intuition testnet via GraphQL.
+                  Register some AI skills to get started.
                 </p>
                 <Button size="lg" asChild>
-                  <a href="/test-intuition">
-                    Register Agents →
+                  <a href="/register">
+                    Register Skills →
                   </a>
                 </Button>
               </div>
             </motion.div>
           )}
 
-          {/* Empty Search Results */}
-          {!loading && !error && agents.length === 0 && searchTerm && (
+          {!loading && !error && skills.length === 0 && searchTerm && (
             <div className="text-center py-20">
               <p className="text-6xl mb-4">🔍</p>
               <h3 className="text-xl font-bold mb-2">No results for &quot;{searchTerm}&quot;</h3>
@@ -1329,13 +1238,12 @@ function AgentsPageContent() {
             </div>
           )}
 
-          {/* Agents Grid */}
-          {!loading && agents.length > 0 && (() => {
-            const enriched = agents.map(agent => {
+          {!loading && skills.length > 0 && (() => {
+            const enriched = skills.map(skill => {
               let supportWei = 0n
-              try { supportWei = BigInt(agent.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
+              try { supportWei = BigInt(skill.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
               const cardTrust = calculateTrustScoreFromStakes(supportWei, BigInt(0))
-              return { agent, trust: cardTrust }
+              return { skill, trust: cardTrust }
             })
 
             const filtered = selectedCategory === 'all'
@@ -1347,11 +1255,11 @@ function AgentsPageContent() {
                 case 'score_desc': return b.trust.score - a.trust.score
                 case 'score_asc': return a.trust.score - b.trust.score
                 case 'stakers':
-                  return (b.agent.positions_aggregate?.aggregate?.count || 0)
-                       - (a.agent.positions_aggregate?.aggregate?.count || 0)
+                  return (b.skill.positions_aggregate?.aggregate?.count || 0)
+                       - (a.skill.positions_aggregate?.aggregate?.count || 0)
                 case 'stake':
-                  return Number(BigInt(b.agent.positions_aggregate?.aggregate?.sum?.shares || '0')
-                       - BigInt(a.agent.positions_aggregate?.aggregate?.sum?.shares || '0'))
+                  return Number(BigInt(b.skill.positions_aggregate?.aggregate?.sum?.shares || '0')
+                       - BigInt(a.skill.positions_aggregate?.aggregate?.sum?.shares || '0'))
                 default: return 0
               }
             })
@@ -1365,7 +1273,7 @@ function AgentsPageContent() {
               <div className="mb-6 flex items-center justify-between">
                 <div className="text-sm text-text-muted">
                   <span className="font-semibold text-text-primary">{sorted.length}</span>
-                  {sorted.length !== agents.length && ` of ${agents.length}`} agents
+                  {sorted.length !== skills.length && ` of ${skills.length}`} skills
                   {selectedCategory !== 'all' && (
                     <span className="text-[#8b949e]"> · filtered by <span className="text-white font-medium">{selectedCategory}</span></span>
                   )}
@@ -1374,36 +1282,36 @@ function AgentsPageContent() {
 
               {sorted.length === 0 ? (
                 <div className="text-center py-16">
-                  <p className="text-[#6b7280] text-sm">No agents match this filter</p>
+                  <p className="text-[#6b7280] text-sm">No skills match this filter</p>
                   <button
                     onClick={() => setSelectedCategory('all')}
                     className="mt-2 text-xs text-[#58a6ff] hover:underline"
                   >
-                    Show all agents
+                    Show all skills
                   </button>
                 </div>
               ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {sorted.map(({ agent, trust: cardTrust }) => {
+                {sorted.map(({ skill, trust: cardTrust }) => {
                   const trustScore = cardTrust.score
                   const color = cardTrust.level === 'excellent' ? '#06B6D4'
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316'
                     : '#EF4444'
-                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
-                  const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
-                  const name = getAgentName(agent.label)
-                  const creator = agent.creator?.label || 'unknown'
-                  const status = voteStatus[agent.term_id]
+                  const stakers = skill.positions_aggregate?.aggregate?.count || 0
+                  const stakes = formatStakes(skill.positions_aggregate?.aggregate?.sum?.shares)
+                  const name = getSkillName(skill.label)
+                  const creator = skill.creator?.label || 'unknown'
+                  const status = voteStatus[skill.term_id]
 
                   return (
                     <motion.div
-                      key={agent.term_id}
+                      key={skill.term_id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.05 }}
-                      onClick={() => setSelectedAgent(agent)}
+                      onClick={() => setSelectedSkill(skill)}
                       className="bg-[#111318] border border-[#1e2028] rounded-2xl p-5
                                  cursor-pointer
                                  transition-all duration-300 ease-out
@@ -1412,10 +1320,8 @@ function AgentsPageContent() {
                                  hover:bg-[#111d18]
                                  hover:shadow-[0_8px_30px_rgba(45,122,95,0.12)]"
                     >
-                      {/* Header Row */}
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          {/* Icon */}
                           <div className="relative">
                             <div
                               className="w-12 h-12 rounded-xl flex items-center justify-center"
@@ -1423,7 +1329,7 @@ function AgentsPageContent() {
                             >
                               <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                                 <path
-                                  d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+                                  d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
                                   stroke={color}
                                   strokeWidth="2"
                                   strokeLinecap="round"
@@ -1432,13 +1338,12 @@ function AgentsPageContent() {
                                 />
                               </svg>
                             </div>
-                            </div>
+                          </div>
 
-                          {/* Name + creator */}
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
                               <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
-                              {(() => { try { return <TrustTierBadge tier={calculateTier(stakers, Number(agent.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18, 50, agent.created_at ? getAgentAgeDays(agent.created_at) : 0)} size="sm" /> } catch { return null } })()}
+                              {(() => { try { return <TrustTierBadge tier={calculateTier(stakers, Number(skill.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18, 50, skill.created_at ? getAgentAgeDays(skill.created_at) : 0)} size="sm" /> } catch { return null } })()}
                             </div>
                             <span className="text-xs text-[#6b7280] bg-[#1e2028] px-2 py-0.5 rounded inline-block">
                               {creator.replace('.eth', '')}
@@ -1446,7 +1351,6 @@ function AgentsPageContent() {
                           </div>
                         </div>
 
-                        {/* Trust Score */}
                         <div className="text-right">
                           <p className="text-2xl font-bold leading-none" style={{ color: getTrustColor(trustScore) }}>
                             {trustScore}
@@ -1455,7 +1359,6 @@ function AgentsPageContent() {
                         </div>
                       </div>
 
-                      {/* Stats Row */}
                       <div className="flex items-center gap-4 text-sm text-[#9ca3af] mb-4">
                         <div className="flex items-center gap-1.5">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -1471,7 +1374,6 @@ function AgentsPageContent() {
                         </div>
                       </div>
 
-                      {/* Score bar */}
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-500"
@@ -1489,28 +1391,29 @@ function AgentsPageContent() {
         </div>
       </div>
 
-      {/* Agent Detail Modal */}
-      {selectedAgent && (
+
+      {/* Skill Detail Modal */}
+      {selectedSkill && (
         <div className="fixed inset-0 top-[64px] bg-black/80 backdrop-blur-sm z-40 overflow-y-auto">
           <div className="min-h-full p-4 flex items-start justify-center">
             <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
 
-              {/* === TOP CARD: Agent Header === */}
+              {/* === TOP CARD: Skill Header === */}
               <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 mb-3">
                 <div className="flex items-start gap-4 mb-4">
                   {/* Icon */}
                   <div
                     className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
                     style={{
-                      backgroundColor: getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares) + '20',
-                      border: `2px solid ${getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares)}50`
+                      backgroundColor: getTrustStateColor(selectedSkill.positions_aggregate?.aggregate?.sum?.shares) + '20',
+                      border: `2px solid ${getTrustStateColor(selectedSkill.positions_aggregate?.aggregate?.sum?.shares)}50`
                     }}
                   >
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
-                        stroke={getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares)}
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
+                        stroke={getTrustStateColor(selectedSkill.positions_aggregate?.aggregate?.sum?.shares)}
                         strokeWidth="2"
-                        fill={getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares) + '30'}
+                        fill={getTrustStateColor(selectedSkill.positions_aggregate?.aggregate?.sum?.shares) + '30'}
                       />
                     </svg>
                   </div>
@@ -1519,36 +1422,36 @@ function AgentsPageContent() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h2 className="text-xl font-bold text-white">
-                        {getAgentName(selectedAgent.label)}
+                        {getSkillName(selectedSkill.label)}
                       </h2>
-                      {agentTrustTier && (
+                      {skillTrustTier && (
                         <TrustTierBadgeWithProgress
-                          tier={agentTrustTier.tier}
-                          progress={agentTrustTier.progress}
+                          tier={skillTrustTier.tier}
+                          progress={skillTrustTier.progress}
                         />
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#8b949e]">
-                      {selectedAgent.creator?.id ? (
+                      {selectedSkill.creator?.id ? (
                         <Link
-                          href={`/profile/${selectedAgent.creator.id}`}
+                          href={`/profile/${selectedSkill.creator.id}`}
                           className="bg-[#21262d] px-2 py-0.5 rounded text-xs hover:bg-[#30363d] hover:text-white transition-colors"
                         >
-                          {selectedAgent.creator.label?.replace('.eth','') || selectedAgent.creator.id.slice(0, 10)}
+                          {selectedSkill.creator.label?.replace('.eth','') || selectedSkill.creator.id.slice(0, 10)}
                         </Link>
                       ) : (
                         <span className="bg-[#21262d] px-2 py-0.5 rounded text-xs">
-                          {selectedAgent.creator?.label?.replace('.eth','') || 'unknown'}
+                          {selectedSkill.creator?.label?.replace('.eth','') || 'unknown'}
                         </span>
                       )}
                       <span>·</span>
-                      <span>Registered {new Date(selectedAgent.created_at).toLocaleDateString('pl-PL')}</span>
+                      <span>Registered {new Date(selectedSkill.created_at).toLocaleDateString('pl-PL')}</span>
                     </div>
                   </div>
 
                   {/* Close */}
                   <button
-                    onClick={() => setSelectedAgent(null)}
+                    onClick={() => setSelectedSkill(null)}
                     className="w-8 h-8 rounded-lg bg-[#21262d] hover:bg-[#30363d] flex items-center justify-center transition-colors flex-shrink-0"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
@@ -1559,35 +1462,35 @@ function AgentsPageContent() {
 
                 {/* Description */}
                 <p className="text-[#8b949e] text-sm leading-relaxed mb-5">
-                  {selectedAgent.label.includes(' - ')
-                    ? selectedAgent.label.split(' - ').slice(1).join(' - ')
-                    : 'AI Agent registered on Intuition Protocol.'}
+                  {selectedSkill.label.includes(' - ')
+                    ? selectedSkill.label.split(' - ').slice(1).join(' - ')
+                    : 'AI Skill registered on Intuition Protocol.'}
                 </p>
 
                 {/* Wallet + Atom ID */}
                 <div className="space-y-2 mb-5">
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-[#8b949e] w-16 flex-shrink-0">Wallet:</span>
-                    {selectedAgent.creator?.id ? (
+                    {selectedSkill.creator?.id ? (
                       <Link
-                        href={`/profile/${selectedAgent.creator.id}`}
+                        href={`/profile/${selectedSkill.creator.id}`}
                         className="text-[#58a6ff] text-xs font-mono hover:underline"
                       >
-                        {selectedAgent.creator.label || selectedAgent.creator.id}
+                        {selectedSkill.creator.label || selectedSkill.creator.id}
                       </Link>
                     ) : (
                       <code className="text-[#58a6ff] text-xs font-mono">
-                        {selectedAgent.creator?.label || '0x???'}
+                        {selectedSkill.creator?.label || '0x???'}
                       </code>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-[#8b949e] w-16 flex-shrink-0">Atom ID:</span>
                     <code className="text-[#8b949e] text-xs font-mono">
-                      {selectedAgent.term_id.slice(0, 14)}...{selectedAgent.term_id.slice(-8)}
+                      {selectedSkill.term_id.slice(0, 14)}...{selectedSkill.term_id.slice(-8)}
                     </code>
                     <button
-                      onClick={() => navigator.clipboard.writeText(selectedAgent.term_id)}
+                      onClick={() => navigator.clipboard.writeText(selectedSkill.term_id)}
                       className="text-[#8b949e] hover:text-white transition-colors"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
@@ -1601,9 +1504,9 @@ function AgentsPageContent() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { value: agentSignalsCount, label: 'Signals' },
+                    { value: skillSignalsCount, label: 'Signals' },
                     { value: combinedStakerCount, label: 'Stakers' },
-                    { value: formatStakes(selectedAgent.positions_aggregate?.aggregate?.sum?.shares), label: 'Total Stake' },
+                    { value: formatStakes(selectedSkill.positions_aggregate?.aggregate?.sum?.shares), label: 'Total Stake' },
                     { value: reportCount, label: 'Reports' },
                   ].map((s, i) => (
                     <div key={i} className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 text-center">
@@ -1648,7 +1551,7 @@ function AgentsPageContent() {
                     </div>
 
                     {/* Oppose tab: show "Create Vault" panel if no triple exists yet */}
-                    {signalSide === 'oppose' && !agentTriple.loading && !agentTriple.counterTermId ? (
+                    {signalSide === 'oppose' && !skillTriple.loading && !skillTriple.counterTermId ? (
                       <div className="bg-[#1a1018] border border-[#8b3a3a40] rounded-xl p-4 text-center">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="mx-auto mb-2 opacity-60">
                           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
@@ -1658,7 +1561,7 @@ function AgentsPageContent() {
                         <p className="text-[#c45454] text-xs font-semibold mb-1">Oppose Vault Not Set Up</p>
                         <p className="text-[#8b949e] text-xs mb-3 leading-relaxed">
                           Opposing requires a Trust Triple on-chain.<br/>
-                          One transaction to activate Oppose for this agent.
+                          One transaction to activate Oppose for this skill.
                         </p>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleCreateTrustTriple() }}
@@ -1673,7 +1576,7 @@ function AgentsPageContent() {
                           ) : 'Activate Oppose Vault →'}
                         </button>
                       </div>
-                    ) : agentTriple.loading && signalSide === 'oppose' ? (
+                    ) : skillTriple.loading && signalSide === 'oppose' ? (
                       <div className="flex items-center justify-center gap-2 py-6 text-[#8b949e] text-xs">
                         <span className="w-3 h-3 border border-[#8b949e] border-t-transparent rounded-full animate-spin" />
                         Checking Oppose vault...
@@ -1718,7 +1621,7 @@ function AgentsPageContent() {
                     </div>
 
                     {/* First Oppose Buy hint */}
-                    {signalSide === 'oppose' && tradeAction === 'buy' && agentTriple.counterTermId && (
+                    {signalSide === 'oppose' && tradeAction === 'buy' && skillTriple.counterTermId && (
                       <div className="flex items-start gap-2 p-2.5 mb-3 bg-[#b8860b10] border border-[#b8860b20] rounded-lg">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
                           <circle cx="12" cy="12" r="9" stroke="#b8860b" strokeWidth="2"/>
@@ -2008,31 +1911,29 @@ function AgentsPageContent() {
                       onClick={(e) => {
                         e.stopPropagation()
                         if (tradeAction === 'buy') {
-                          // Unified bonding-curve flow:
-                          // Buy Support / Buy Oppose both go directly to one confirmation step.
                           const isSupportBuy = signalSide === 'support'
                           setPendingVote({
                             type: isSupportBuy ? 'trust' : 'distrust',
-                            agent: selectedAgent,
+                            agent: selectedSkill,
                             amount: isSupportBuy ? voteAmount : untrustAmount,
                             claim: '',
                             claimAtomId: null,
-                            counterTermId: agentTriple.counterTermId,
-                            tripleTermId: agentTriple.termId,
+                            counterTermId: skillTriple.counterTermId,
+                            tripleTermId: skillTriple.termId,
                           })
-                          setSelectedAgent(null)
+                          setSelectedSkill(null)
                           setShowConfirm(true)
                         } else {
                           const type = signalSide === 'support' ? 'redeem_trust' : 'redeem_distrust'
                           setPendingVote({
                             type,
-                            agent: selectedAgent,
+                            agent: selectedSkill,
                             amount: redeemShares,
                             claim: '',
                             claimAtomId: null,
-                            counterTermId: agentTriple.counterTermId,  // captured before modal closes
+                            counterTermId: skillTriple.counterTermId,
                           })
-                          setSelectedAgent(null)
+                          setSelectedSkill(null)
                           setShowConfirm(true)
                         }
                       }}
@@ -2093,9 +1994,10 @@ function AgentsPageContent() {
                 )}
               </div>
 
+
               {/* === TRUST SCORE + STAKE BREAKDOWN === */}
               {(() => {
-                const t = agentTrust
+                const t = skillTrust
                 const score = t?.score ?? 50
                 const level = t?.level ?? 'moderate'
                 const confidence = t?.confidence ?? 0
@@ -2130,8 +2032,6 @@ function AgentsPageContent() {
                 return (
                   <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 mb-3">
                     <div className="grid grid-cols-2 gap-6">
-
-                      {/* LEFT: Trust Score */}
                       <div>
                         <h3 className="text-white font-bold mb-4">Trust Score</h3>
                         <div className="flex items-center gap-4 mb-4">
@@ -2144,9 +2044,7 @@ function AgentsPageContent() {
                               />
                             </svg>
                             <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="font-bold text-lg" style={{ color: scoreColor }}>
-                                {score}
-                              </span>
+                              <span className="font-bold text-lg" style={{ color: scoreColor }}>{score}</span>
                             </div>
                           </div>
                           <div>
@@ -2163,9 +2061,7 @@ function AgentsPageContent() {
                               )}
                               <span className={`text-sm font-medium ${
                                 momDir === 'up' ? 'text-[#10b981]' : momDir === 'down' ? 'text-[#f85149]' : 'text-[#8b949e]'
-                              }`}>
-                                {momText}
-                              </span>
+                              }`}>{momText}</span>
                             </div>
                             <p className="text-[#8b949e] text-xs">Trust Level</p>
                             <p className="text-white text-sm font-semibold capitalize">{level}</p>
@@ -2174,11 +2070,8 @@ function AgentsPageContent() {
                           </div>
                         </div>
                       </div>
-
-                      {/* RIGHT: Stake Breakdown */}
                       <div>
                         <h3 className="text-white font-bold mb-4">Stake Breakdown</h3>
-
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-[#10b981]">Support ({supportPct.toFixed(1)}%)</span>
                           <span className="text-[#f85149]">Oppose ({(100 - supportPct).toFixed(1)}%)</span>
@@ -2189,7 +2082,6 @@ function AgentsPageContent() {
                             style={{ width: `${supportPct}%` }}
                           />
                         </div>
-
                         <div className="space-y-2">
                           <div className="bg-[#161b22] border border-[#21262d] rounded-lg p-3">
                             <p className="text-xs text-[#8b949e] mb-0.5">Support Stake</p>
@@ -2222,7 +2114,7 @@ function AgentsPageContent() {
                   <div>
                     <p className="text-[#58a6ff] text-sm font-semibold mb-1">Bonding Curve Economics</p>
                     <p className="text-[#8b949e] text-xs leading-relaxed">
-                      Early stakers get more shares per tTRUST. As more people trust this agent,
+                      Early stakers get more shares per tTRUST. As more people trust this skill,
                       your shares increase in value. Redeem anytime to realize gains.
                     </p>
                   </div>
@@ -2254,12 +2146,12 @@ function AgentsPageContent() {
 
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (() => {
-                  const score = agentTrust?.score ?? 50
-                  const level = agentTrust?.level ?? 'moderate'
-                  const confidence = agentTrust?.confidence ?? 0
-                  const momentum = agentTrust?.momentum ?? 0
-                  const supportWei = agentTrust?.supportStake ?? BigInt(0)
-                  const opposeWei = agentTrust?.opposeStake ?? BigInt(0)
+                  const score = skillTrust?.score ?? 50
+                  const level = skillTrust?.level ?? 'moderate'
+                  const confidence = skillTrust?.confidence ?? 0
+                  const momentum = skillTrust?.momentum ?? 0
+                  const supportWei = skillTrust?.supportStake ?? BigInt(0)
+                  const opposeWei = skillTrust?.opposeStake ?? BigInt(0)
                   const totalWei = supportWei + opposeWei
                   const supportPct = totalWei > BigInt(0) ? Number((supportWei * BigInt(100)) / totalWei) : 50
                   const opsPct = 100 - supportPct
@@ -2274,7 +2166,7 @@ function AgentsPageContent() {
                   }
                   const lc = levelColors[level] || levelColors.moderate
 
-                  const ageDays = Math.floor((Date.now() - new Date(selectedAgent.created_at).getTime()) / 86400000)
+                  const ageDays = Math.floor((Date.now() - new Date(selectedSkill.created_at).getTime()) / 86400000)
                   const ageLabel = ageDays === 0 ? 'today' : ageDays === 1 ? '1 day' : `${ageDays} days`
 
                   return (
@@ -2290,8 +2182,6 @@ function AgentsPageContent() {
                           {level}
                         </span>
                       </div>
-
-                      {/* Score gauge */}
                       <div className="flex items-end gap-4 mb-3">
                         <p className="text-4xl font-bold text-white leading-none">{score}</p>
                         <p className="text-[#8b949e] text-xs pb-1">/100</p>
@@ -2301,8 +2191,6 @@ function AgentsPageContent() {
                           </span>
                         )}
                       </div>
-
-                      {/* Score bar */}
                       <div className="w-full h-2 bg-[#21262d] rounded-full overflow-hidden mb-2">
                         <div
                           className="h-full rounded-full transition-all duration-700"
@@ -2434,8 +2322,6 @@ function AgentsPageContent() {
                     {/* Support vs Oppose breakdown */}
                     <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                       <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Community Sentiment</p>
-
-                      {/* Stacked bar */}
                       <div className="w-full h-3 bg-[#21262d] rounded-full overflow-hidden flex mb-2">
                         {supportPct > 0 && (
                           <div className="h-full bg-[#34a872] transition-all duration-500" style={{ width: `${supportPct}%` }} />
@@ -2444,7 +2330,6 @@ function AgentsPageContent() {
                           <div className="h-full bg-[#c45454] transition-all duration-500" style={{ width: `${opsPct}%` }} />
                         )}
                       </div>
-
                       <div className="flex justify-between mb-3">
                         <div className="flex items-center gap-1.5">
                           <div className="w-2.5 h-2.5 rounded-full bg-[#34a872]" />
@@ -2457,7 +2342,6 @@ function AgentsPageContent() {
                           <div className="w-2.5 h-2.5 rounded-full bg-[#c45454]" />
                         </div>
                       </div>
-
                       <div className="grid grid-cols-3 gap-2">
                         <div className="bg-[#0d1117] rounded-lg p-2.5 text-center">
                           <p className="text-white text-sm font-bold">{(Number(totalWei) / 1e18).toFixed(4)}</p>
@@ -2480,7 +2364,6 @@ function AgentsPageContent() {
                     <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                       <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Bonding Curves</p>
                       <div className="grid grid-cols-2 gap-4">
-                        {/* Support curve */}
                         {(() => {
                           const data = generateCurveData(supportSupply)
                           const currentPrice = getCurrentPrice(supportSupply)
@@ -2491,7 +2374,7 @@ function AgentsPageContent() {
                                 <ResponsiveContainer width="100%" height="100%">
                                   <AreaChart data={data}>
                                     <defs>
-                                      <linearGradient id="supportCurveGrad" x1="0" y1="0" x2="0" y2="1">
+                                      <linearGradient id="supportCurveGradSkill" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#34a872" stopOpacity={0.3}/>
                                         <stop offset="95%" stopColor="#34a872" stopOpacity={0}/>
                                       </linearGradient>
@@ -2504,7 +2387,7 @@ function AgentsPageContent() {
                                       formatter={(value: any) => [`${Number(value).toFixed(4)} tTRUST`, 'Price']}
                                       labelFormatter={(label: any) => `Supply: ${label}`}
                                     />
-                                    <Area type="monotone" dataKey="price" stroke="#34a872" fillOpacity={1} fill="url(#supportCurveGrad)" strokeWidth={2} />
+                                    <Area type="monotone" dataKey="price" stroke="#34a872" fillOpacity={1} fill="url(#supportCurveGradSkill)" strokeWidth={2} />
                                     {supportSupply > 0 && (
                                       <ReferenceDot x={parseFloat(supportSupply.toFixed(4))} y={parseFloat(currentPrice.toFixed(6))} r={5} fill="#34a872" stroke="#fff" strokeWidth={2} />
                                     )}
@@ -2515,7 +2398,6 @@ function AgentsPageContent() {
                             </div>
                           )
                         })()}
-                        {/* Oppose curve */}
                         {(() => {
                           const data = generateCurveData(opposeSupply)
                           const currentPrice = getCurrentPrice(opposeSupply)
@@ -2526,7 +2408,7 @@ function AgentsPageContent() {
                                 <ResponsiveContainer width="100%" height="100%">
                                   <AreaChart data={data}>
                                     <defs>
-                                      <linearGradient id="opposeCurveGrad" x1="0" y1="0" x2="0" y2="1">
+                                      <linearGradient id="opposeCurveGradSkill" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#c45454" stopOpacity={0.3}/>
                                         <stop offset="95%" stopColor="#c45454" stopOpacity={0}/>
                                       </linearGradient>
@@ -2539,7 +2421,7 @@ function AgentsPageContent() {
                                       formatter={(value: any) => [`${Number(value).toFixed(4)} tTRUST`, 'Price']}
                                       labelFormatter={(label: any) => `Supply: ${label}`}
                                     />
-                                    <Area type="monotone" dataKey="price" stroke="#c45454" fillOpacity={1} fill="url(#opposeCurveGrad)" strokeWidth={2} />
+                                    <Area type="monotone" dataKey="price" stroke="#c45454" fillOpacity={1} fill="url(#opposeCurveGradSkill)" strokeWidth={2} />
                                     {opposeSupply > 0 && (
                                       <ReferenceDot x={parseFloat(opposeSupply.toFixed(4))} y={parseFloat(currentPrice.toFixed(6))} r={5} fill="#c45454" stroke="#fff" strokeWidth={2} />
                                     )}
@@ -2555,7 +2437,7 @@ function AgentsPageContent() {
 
                     {/* Trust History Chart */}
                     {(() => {
-                      const chartData = buildTrustChartData(agentSignals, agentTriple.counterTermId)
+                      const chartData = buildTrustChartData(skillSignals, skillTriple.counterTermId)
                       if (chartData.length < 2) return null
                       return (
                         <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
@@ -2564,7 +2446,7 @@ function AgentsPageContent() {
                             <ResponsiveContainer width="100%" height="100%">
                               <AreaChart data={chartData}>
                                 <defs>
-                                  <linearGradient id="trustGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <linearGradient id="trustGradSkill" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#34a872" stopOpacity={0.3}/>
                                     <stop offset="95%" stopColor="#34a872" stopOpacity={0}/>
                                   </linearGradient>
@@ -2577,7 +2459,7 @@ function AgentsPageContent() {
                                   formatter={(value: any) => [`${value}%`, 'Trust Ratio']}
                                 />
                                 <ReferenceLine y={50} stroke="#21262d" strokeDasharray="3 3" />
-                                <Area type="monotone" dataKey="trustRatio" stroke="#34a872" fillOpacity={1} fill="url(#trustGrad)" strokeWidth={2} />
+                                <Area type="monotone" dataKey="trustRatio" stroke="#34a872" fillOpacity={1} fill="url(#trustGradSkill)" strokeWidth={2} />
                               </AreaChart>
                             </ResponsiveContainer>
                           </div>
@@ -2598,11 +2480,8 @@ function AgentsPageContent() {
                         </div>
                       )
                       if (allPositions.length === 0) return null
-
-                      // Compute total shares for % supply
                       let totalShares = 0n
                       try { totalShares = allPositions.reduce((acc: bigint, p: any) => { try { return acc + BigInt(p.shares || '0') } catch { return acc } }, 0n) } catch { totalShares = 0n }
-
                       return (
                         <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                           <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">
@@ -2621,7 +2500,7 @@ function AgentsPageContent() {
                               </thead>
                               <tbody>
                                 {enrichedPositions.map((pos: any, i: number) => {
-                                  const isOppose = agentTriple.counterTermId && pos.term_id === agentTriple.counterTermId
+                                  const isOppose = skillTriple.counterTermId && pos.term_id === skillTriple.counterTermId
                                   let shares = 0n; try { shares = BigInt(pos.shares || '0') } catch { shares = 0n }
                                   const pct = totalShares > 0n ? Number((shares * 10000n) / totalShares) / 100 : 0
                                   const walletLabel = pos.account?.label || pos.account_id
@@ -2631,9 +2510,8 @@ function AgentsPageContent() {
                                     : walletLabel?.length > 14
                                       ? walletLabel.slice(0, 8) + '...' + walletLabel.slice(-4)
                                       : walletLabel
-                                  const isCreator = selectedAgent.creator?.id &&
-                                    pos.account_id?.toLowerCase() === selectedAgent.creator.id.toLowerCase()
-
+                                  const isCreator = selectedSkill.creator?.id &&
+                                    pos.account_id?.toLowerCase() === selectedSkill.creator.id.toLowerCase()
                                   return (
                                     <tr key={`${pos.account_id}-${pos.term_id}-${i}`} className="border-b border-[#21262d]/50 hover:bg-[#0d1117]">
                                       <td className="py-2">
@@ -2714,9 +2592,7 @@ function AgentsPageContent() {
                                     <div className="w-2 h-2 rounded-full bg-[#34a872]" />
                                     <span className="text-[#34a872] text-xs font-medium">Support</span>
                                   </div>
-                                  <span className="text-white text-xs font-bold">
-                                    {sharesFloat.toFixed(4)} shares
-                                  </span>
+                                  <span className="text-white text-xs font-bold">{sharesFloat.toFixed(4)} shares</span>
                                 </div>
                                 <div className="flex items-center justify-between mt-1">
                                   <span className="text-[#6b7280] text-[10px]">Current Value</span>
@@ -2735,9 +2611,7 @@ function AgentsPageContent() {
                                     <div className="w-2 h-2 rounded-full bg-[#c45454]" />
                                     <span className="text-[#c45454] text-xs font-medium">Oppose</span>
                                   </div>
-                                  <span className="text-white text-xs font-bold">
-                                    {sharesFloat.toFixed(4)} shares
-                                  </span>
+                                  <span className="text-white text-xs font-bold">{sharesFloat.toFixed(4)} shares</span>
                                 </div>
                                 <div className="flex items-center justify-between mt-1">
                                   <span className="text-[#6b7280] text-[10px]">Current Value</span>
@@ -2749,7 +2623,7 @@ function AgentsPageContent() {
                           </div>
                         ) : (
                           <div className="text-center py-3 bg-[#0d1117] rounded-lg">
-                            <p className="text-[#6b7280] text-xs">You haven't staked on this agent yet</p>
+                            <p className="text-[#6b7280] text-xs">You haven&apos;t staked on this skill yet</p>
                             <p className="text-[#8b949e] text-[10px] mt-0.5">Use the Bonding Curve Market above to take a position</p>
                           </div>
                         )}
@@ -2770,7 +2644,7 @@ function AgentsPageContent() {
                           </p>
                         </div>
                         <div className="space-y-2">
-                          {agentReports.map((report, i) => {
+                          {skillReports.map((report, i) => {
                             const predLabel = (report.predicate?.label || '').replace('reported_for_', '').replace(/_/g, ' ')
                             const reason = report.object?.label || ''
                             const reporter = report.creator?.label || report.creator?.id?.slice(0, 10) || '?'
@@ -2781,12 +2655,10 @@ function AgentsPageContent() {
                                 ? reporter.slice(0, 8) + '...' + reporter.slice(-4)
                                 : reporter
                             const date = new Date(report.created_at).toLocaleDateString('pl-PL')
-
                             const categoryIcons: Record<string, string> = {
                               scam: '🚨', spam: '📢', injection: '💉', impersonation: '🎭',
                             }
                             const icon = categoryIcons[predLabel] || '⚠️'
-
                             return (
                               <div key={report.id || i} className="flex items-start gap-2.5 bg-[#0d1117] rounded-lg px-3 py-2">
                                 <span className="text-sm flex-shrink-0 mt-0.5">{icon}</span>
@@ -2815,23 +2687,23 @@ function AgentsPageContent() {
                       </div>
                     )}
 
-                    {/* Agent Details */}
+                    {/* Skill Details */}
                     <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
                       <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Details</p>
                       <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                         <div>
                           <p className="text-[#6b7280] text-[10px] mb-0.5">Creator</p>
-                          {selectedAgent.creator?.id ? (
-                            <Link href={`/profile/${selectedAgent.creator.id}`} className="text-[#58a6ff] text-xs font-medium hover:underline">
-                              {selectedAgent.creator.label?.replace('.eth', '') || selectedAgent.creator.id.slice(0, 10)}
+                          {selectedSkill.creator?.id ? (
+                            <Link href={`/profile/${selectedSkill.creator.id}`} className="text-[#58a6ff] text-xs font-medium hover:underline">
+                              {selectedSkill.creator.label?.replace('.eth', '') || selectedSkill.creator.id.slice(0, 10)}
                             </Link>
                           ) : (
-                            <p className="text-white text-xs font-medium">{selectedAgent.creator?.label || 'unknown'}</p>
+                            <p className="text-white text-xs font-medium">{selectedSkill.creator?.label || 'unknown'}</p>
                           )}
                         </div>
                         {[
-                          { label: 'Agent Age', value: ageLabel },
-                          { label: 'First Seen', value: new Date(selectedAgent.created_at).toLocaleDateString('pl-PL') },
+                          { label: 'Skill Age', value: ageLabel },
+                          { label: 'First Seen', value: new Date(selectedSkill.created_at).toLocaleDateString('pl-PL') },
                           { label: 'Stakers', value: String(combinedStakerCount) },
                         ].map((item, i) => (
                           <div key={i}>
@@ -2840,10 +2712,9 @@ function AgentsPageContent() {
                           </div>
                         ))}
                       </div>
-
                       <div className="mt-3 pt-3 border-t border-[#21262d]">
                         <div className="flex gap-2 flex-wrap">
-                          {['AI Agent', selectedAgent.type || 'General'].map((tag, i) => (
+                          {['AI Skill', selectedSkill.type || 'General'].map((tag, i) => (
                             <span key={i} className="px-2.5 py-0.5 bg-[#1f6feb15] border border-[#1f6feb30] rounded-full text-[#58a6ff] text-[10px] font-medium">
                               {tag}
                             </span>
@@ -2855,7 +2726,8 @@ function AgentsPageContent() {
                   )
                 })()}
 
-                {/* Attestations Tab — aggregated per profile */}
+
+                {/* Attestations Tab */}
                 {activeTab === 'attestations' && (() => {
                   const profileMap = new Map<string, {
                     label: string
@@ -2867,13 +2739,13 @@ function AgentsPageContent() {
                     lastSeen: string
                   }>()
 
-                  for (const signal of agentSignals) {
+                  for (const signal of skillSignals) {
                     const key = signal.account_id || 'unknown'
                     const existing = profileMap.get(key)
                     const delta = Number(signal.delta || 0) / 1e18
                     const isDeposit = !!signal.deposit_id
-                    const isAgainst = agentTriple.counterTermId
-                      ? signal.term_id === agentTriple.counterTermId
+                    const isAgainst = skillTriple.counterTermId
+                      ? signal.term_id === skillTriple.counterTermId
                       : false
                     const signed = isDeposit ? delta : -delta
 
@@ -2898,7 +2770,6 @@ function AgentsPageContent() {
 
                   const profiles = Array.from(profileMap.values())
                     .sort((a, b) => b.totalSignals - a.totalSignals)
-
                   const uniqueStakers = profiles.length
 
                   return (
@@ -2912,7 +2783,7 @@ function AgentsPageContent() {
                         </div>
                       </div>
                       <span className="text-xs text-[#8b949e] bg-[#21262d] px-2 py-1 rounded-full">
-                        {uniqueStakers} profile{uniqueStakers !== 1 ? 's' : ''} · {agentSignalsCount} signal{agentSignalsCount !== 1 ? 's' : ''}
+                        {uniqueStakers} profile{uniqueStakers !== 1 ? 's' : ''} · {skillSignalsCount} signal{skillSignalsCount !== 1 ? 's' : ''}
                       </span>
                     </div>
 
@@ -2926,11 +2797,11 @@ function AgentsPageContent() {
                       <div className="text-center py-10">
                         <div className="w-12 h-12 rounded-full bg-[#21262d] flex items-center justify-center mx-auto mb-3">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#8b949e" strokeWidth="2"/>
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#8b949e" strokeWidth="2"/>
                           </svg>
                         </div>
                         <p className="text-[#8b949e] text-sm">No attestors yet</p>
-                        <p className="text-[#6b7280] text-xs mt-1">Be the first to stake on this agent</p>
+                        <p className="text-[#6b7280] text-xs mt-1">Be the first to stake on this skill</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -2943,7 +2814,6 @@ function AgentsPageContent() {
                               : profile.label
                           const netPositive = profile.netShares >= 0
                           const lastDate = new Date(profile.lastSeen).toLocaleDateString('pl-PL')
-
                           return (
                             <Link
                               key={profile.accountId}
@@ -2983,7 +2853,6 @@ function AgentsPageContent() {
                                   </div>
                                 </div>
                               </div>
-
                               <div className="text-right">
                                 <p className="text-white text-sm font-bold">{profile.totalSignals}</p>
                                 <p className="text-[#6b7280] text-[10px]">attestation{profile.totalSignals !== 1 ? 's' : ''}</p>
@@ -3003,30 +2872,27 @@ function AgentsPageContent() {
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-white font-semibold">Activity</h4>
                       <span className="text-xs text-[#8b949e] bg-[#21262d] px-2 py-1 rounded-full">
-                        {agentSignalsCount + 1} event{agentSignalsCount !== 0 ? 's' : ''}
+                        {skillSignalsCount + 1} event{skillSignalsCount !== 0 ? 's' : ''}
                       </span>
                     </div>
                     <div className="space-y-0">
-                      {/* Registration event - always first */}
+                      {/* Registration event */}
                       <div className="flex gap-3">
                         <div className="flex flex-col items-center">
                           <div className="w-8 h-8 rounded-full bg-[#1f6feb20] border border-[#1f6feb40] flex items-center justify-center flex-shrink-0">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                              <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
-                                stroke="#58a6ff" strokeWidth="2"/>
+                              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#58a6ff" strokeWidth="2"/>
                             </svg>
                           </div>
-                          {agentSignals.length > 0 && (
+                          {skillSignals.length > 0 && (
                             <div className="w-px flex-1 bg-[#21262d] my-1" />
                           )}
                         </div>
                         <div className="pb-4">
-                          <p className="text-white text-sm font-medium">Agent Registered</p>
-                          <p className="text-[#8b949e] text-xs mt-0.5">
-                            Registered on Intuition Protocol
-                          </p>
+                          <p className="text-white text-sm font-medium">Skill Registered</p>
+                          <p className="text-[#8b949e] text-xs mt-0.5">Registered on Intuition Protocol</p>
                           <p className="text-[#8b949e] text-xs mt-1">
-                            {new Date(selectedAgent.created_at).toLocaleDateString('pl-PL', {
+                            {new Date(selectedSkill.created_at).toLocaleDateString('pl-PL', {
                               day: 'numeric', month: 'long', year: 'numeric'
                             })}
                           </p>
@@ -3040,15 +2906,15 @@ function AgentsPageContent() {
                           ))}
                         </div>
                       ) : (
-                        [...agentSignals].reverse().map((signal, i) => {
+                        [...skillSignals].reverse().map((signal, i) => {
                           const isDeposit = !!signal.deposit_id
-                          const isAgainst = agentTriple.counterTermId
-                            ? signal.term_id === agentTriple.counterTermId
+                          const isAgainst = skillTriple.counterTermId
+                            ? signal.term_id === skillTriple.counterTermId
                             : false
                           const delta = Number(signal.delta || 0)
                           const sharesDisplay = (delta / 1e18).toFixed(4)
                           const accountLabel = signal.account?.label || signal.account_id?.slice(0, 10) || '?'
-                          const isLast = i === agentSignals.length - 1
+                          const isLast = i === skillSignals.length - 1
 
                           const actionLabel = !isDeposit
                             ? (isAgainst ? 'Sell Oppose' : 'Sell Support')
@@ -3081,10 +2947,7 @@ function AgentsPageContent() {
                                   {actionLabel}
                                   <span className="text-[#8b949e] font-normal ml-1.5">by </span>
                                   {signal.account_id ? (
-                                    <Link
-                                      href={`/profile/${signal.account_id}`}
-                                      className="text-[#58a6ff] font-normal hover:underline"
-                                    >
+                                    <Link href={`/profile/${signal.account_id}`} className="text-[#58a6ff] font-normal hover:underline">
                                       {accountLabel}
                                     </Link>
                                   ) : (
@@ -3106,7 +2969,7 @@ function AgentsPageContent() {
                         })
                       )}
 
-                      {!signalsLoading && agentSignals.length === 0 && (
+                      {!signalsLoading && skillSignals.length === 0 && (
                         <div className="text-center py-4">
                           <p className="text-[#8b949e] text-sm">No staking activity yet</p>
                         </div>
@@ -3123,7 +2986,7 @@ function AgentsPageContent() {
                     <div>
                       <h4 className="text-white font-semibold text-sm">Something wrong?</h4>
                       <p className="text-[#6b7280] text-xs mt-0.5">
-                        Report this agent if you believe it's malicious or misleading.
+                        Report this skill if you believe it&apos;s malicious or misleading.
                         {reportCount > 0 && (
                           <span className="text-[#f97316] ml-1">{reportCount} report{reportCount !== 1 ? 's' : ''} filed</span>
                         )}
@@ -3138,7 +3001,7 @@ function AgentsPageContent() {
                         <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                         <line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                       </svg>
-                      Report Agent
+                      Report Skill
                     </button>
                   </div>
                 </div>
@@ -3148,12 +3011,13 @@ function AgentsPageContent() {
           </div>
 
           {/* Backdrop click to close */}
-          <div className="fixed inset-0 top-[64px] -z-10" onClick={() => setSelectedAgent(null)} />
+          <div className="fixed inset-0 top-[64px] -z-10" onClick={() => setSelectedSkill(null)} />
         </div>
       )}
 
+
       {/* Report Modal */}
-      {showReportModal && selectedAgent && (
+      {showReportModal && selectedSkill && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 max-w-lg w-full shadow-2xl">
             <div className="flex items-start justify-between mb-5">
@@ -3164,10 +3028,10 @@ function AgentsPageContent() {
                     <line x1="12" y1="9" x2="12" y2="13" stroke="#f97316" strokeWidth="2" strokeLinecap="round"/>
                     <line x1="12" y1="17" x2="12.01" y2="17" stroke="#f97316" strokeWidth="2" strokeLinecap="round"/>
                   </svg>
-                  Report Agent
+                  Report Skill
                 </h2>
                 <p className="text-[#8b949e] text-sm">
-                  Report <span className="text-white font-medium">{getAgentName(selectedAgent.label)}</span>
+                  Report <span className="text-white font-medium">{getSkillName(selectedSkill.label)}</span>
                 </p>
               </div>
               <button
@@ -3188,7 +3052,7 @@ function AgentsPageContent() {
                   { id: 'scam' as const, label: 'Scam / Fraud', icon: '🚨', desc: 'Deceptive or fraudulent behavior' },
                   { id: 'spam' as const, label: 'Spam', icon: '📢', desc: 'Unwanted or repetitive content' },
                   { id: 'prompt_injection' as const, label: 'Prompt Injection', icon: '💉', desc: 'Manipulates other AI systems' },
-                  { id: 'impersonation' as const, label: 'Impersonation', icon: '🎭', desc: 'Pretends to be another agent' },
+                  { id: 'impersonation' as const, label: 'Impersonation', icon: '🎭', desc: 'Pretends to be another skill' },
                 ]).map(cat => (
                   <button
                     key={cat.id}
@@ -3217,7 +3081,7 @@ function AgentsPageContent() {
               <textarea
                 value={reportReason}
                 onChange={e => setReportReason(e.target.value)}
-                placeholder="Describe what happened or why you're reporting this agent..."
+                placeholder="Describe what happened or why you're reporting this skill..."
                 rows={3}
                 maxLength={200}
                 className="w-full bg-[#161b22] border border-[#21262d] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#6b7280] focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f9731640] resize-none"
@@ -3264,21 +3128,14 @@ function AgentsPageContent() {
       {showClaimSelect && pendingVote && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 max-w-lg w-full shadow-2xl">
-
-            {/* Header */}
             <div className="mb-5">
-              <h2 className="text-xl font-bold text-white mb-1">
-                Select a Claim
-              </h2>
+              <h2 className="text-xl font-bold text-white mb-1">Select a Claim</h2>
               <p className="text-[#8b949e] text-sm">
                 Choose what you want to attest about{' '}
-                <span className="text-white font-medium">
-                  {getAgentName(pendingVote.agent.label)}
-                </span>
+                <span className="text-white font-medium">{getSkillName(pendingVote.agent.label)}</span>
               </p>
             </div>
 
-            {/* Loading State */}
             {claimsLoading && (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#34a872] border-t-transparent mr-3" />
@@ -3286,10 +3143,9 @@ function AgentsPageContent() {
               </div>
             )}
 
-            {/* Claims List */}
             {!claimsLoading && claims.length > 0 && (
               <div className="space-y-2 mb-5 max-h-[400px] overflow-y-auto">
-                {claims.map((claim, idx) => (
+                {claims.map((claim) => (
                   <button
                     key={claim.term_id || claim.label}
                     onClick={() => {
@@ -3311,9 +3167,7 @@ function AgentsPageContent() {
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-white font-semibold">
-                          {claim.label}
-                        </span>
+                        <span className="text-white font-semibold">{claim.label}</span>
                         {claim.term_id && (
                           <span className="px-2 py-0.5 bg-[#10b98115] border border-[#10b98130] rounded-full text-[#10b981] text-xs font-medium">
                             On-chain
@@ -3341,7 +3195,6 @@ function AgentsPageContent() {
               </div>
             )}
 
-            {/* Empty State */}
             {!claimsLoading && claims.length === 0 && (
               <div className="text-center py-12">
                 <div className="w-12 h-12 rounded-full bg-[#21262d] flex items-center justify-center mx-auto mb-3">
@@ -3355,13 +3208,9 @@ function AgentsPageContent() {
               </div>
             )}
 
-            {/* Action Buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => {
-                  setShowClaimSelect(false)
-                  setPendingVote(null)
-                }}
+                onClick={() => { setShowClaimSelect(false); setPendingVote(null) }}
                 className="flex-1 py-3 bg-[#21262d] hover:bg-[#30363d] rounded-xl text-[#8b949e] hover:text-white font-semibold text-sm transition-colors"
               >
                 Cancel
@@ -3385,7 +3234,6 @@ function AgentsPageContent() {
                 Continue
               </button>
             </div>
-
           </div>
         </div>
       )}
@@ -3394,8 +3242,6 @@ function AgentsPageContent() {
       {showConfirm && pendingVote && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-
-            {/* Icon */}
             <div className="flex justify-center mb-5">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center"
@@ -3412,31 +3258,26 @@ function AgentsPageContent() {
                     fill={pendingVote.type === 'trust' ? '#34a87220' : '#cd5c5c20'}
                   />
                   {pendingVote.type !== 'trust' && (
-                    <path d="M15 9l-6 6M9 9l6 6"
-                      stroke="#cd5c5c" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M15 9l-6 6M9 9l6 6" stroke="#cd5c5c" strokeWidth="1.5" strokeLinecap="round"/>
                   )}
                 </svg>
               </div>
             </div>
 
-            {/* Title */}
             <h2 className="text-xl font-bold text-white text-center mb-1">
               {pendingVote.type === 'trust' ? 'Confirm Trust (FOR)'
                 : pendingVote.type === 'distrust' ? 'Confirm Untrust (AGAINST)'
                 : pendingVote.type === 'redeem_trust' ? 'Redeem FOR Shares'
                 : 'Redeem AGAINST Shares'}
             </h2>
-            <p className="text-[#8b949e] text-sm text-center mb-6">
-              Review your signal before confirming
-            </p>
+            <p className="text-[#8b949e] text-sm text-center mb-6">Review your signal before confirming</p>
 
-            {/* Details */}
             <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden mb-5">
               <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
-                <span className="text-[#8b949e] text-sm">Agent</span>
+                <span className="text-[#8b949e] text-sm">Skill</span>
                 <span className="text-white text-sm font-semibold text-right max-w-[180px] truncate">
                   {pendingVote.agent.label
-                    .replace(/^Agent:\s*/i, '')
+                    .replace(/^Skill:\s*/i, '')
                     .split(' - ')[0]
                     .replace(/\s*from\s+Kryptoremont.*/i, '')
                     .trim()
@@ -3448,9 +3289,7 @@ function AgentsPageContent() {
                 <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
                   <span className="text-[#8b949e] text-sm">Claim</span>
                   <div className="text-right flex items-center gap-2">
-                    <span className="text-white text-sm font-semibold">
-                      {pendingVote.claim}
-                    </span>
+                    <span className="text-white text-sm font-semibold">{pendingVote.claim}</span>
                     {pendingVote.claimAtomId && (
                       <span className="px-2 py-0.5 bg-[#10b98115] border border-[#10b98130] rounded-full text-[#10b981] text-xs font-medium">
                         On-chain
@@ -3487,7 +3326,6 @@ function AgentsPageContent() {
               </div>
             </div>
 
-            {/* Warning */}
             <div className="flex items-start gap-2 p-3 bg-[#b8860b15] border border-[#b8860b25] rounded-lg mb-3">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
@@ -3500,7 +3338,6 @@ function AgentsPageContent() {
               </p>
             </div>
 
-            {/* Oppose first-time 2-tx notice */}
             {pendingVote.type === 'distrust' && pendingVote.tripleTermId && (
               <div className="flex items-start gap-2 p-3 bg-[#58a6ff10] border border-[#58a6ff20] rounded-lg mb-5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
@@ -3513,7 +3350,6 @@ function AgentsPageContent() {
               </div>
             )}
 
-            {/* Buttons */}
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowConfirm(false); setPendingVote(null); setSellReason(null) }}
@@ -3524,9 +3360,7 @@ function AgentsPageContent() {
               <button
                 onClick={executeVote}
                 className="flex-1 py-3 rounded-xl font-bold text-white text-sm transition-all"
-                style={{
-                  backgroundColor: pendingVote.type === 'trust' ? '#1a7f54' : '#8b3a3a',
-                }}
+                style={{ backgroundColor: pendingVote.type === 'trust' ? '#1a7f54' : '#8b3a3a' }}
                 onMouseEnter={e => (e.currentTarget.style.backgroundColor = pendingVote.type === 'trust' ? '#166a45' : '#c45454')}
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = pendingVote.type === 'trust' ? '#1a7f54' : '#8b3a3a')}
               >
@@ -3536,10 +3370,10 @@ function AgentsPageContent() {
                   : 'Confirm Redeem AGAINST'}
               </button>
             </div>
-
           </div>
         </div>
       )}
+
       {/* Toast notification */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100]">

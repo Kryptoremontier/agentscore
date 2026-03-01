@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -9,17 +9,107 @@ import {
   Menu,
   X,
   Plus,
-  Command
+  Command,
+  ChevronDown
 } from 'lucide-react'
 import { WalletButton } from '@/components/wallet/WalletButton'
 import { SearchModal } from '@/components/shared/SearchModal'
 import { cn } from '@/lib/cn'
 
 const navLinks = [
-  { href: '/agents', label: 'Explore' },
   { href: '/register', label: 'Register' },
   { href: '/docs', label: 'Docs' },
 ]
+
+function ExploreDropdown() {
+  const pathname = usePathname()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const isActive = pathname?.startsWith('/agents') || pathname?.startsWith('/skills')
+
+  // Click outside to close
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={cn(
+          'flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+          isActive
+            ? 'text-white bg-white/10'
+            : 'text-slate-400 hover:text-white hover:bg-white/5'
+        )}
+      >
+        Explore
+        <ChevronDown
+          className={cn('w-3.5 h-3.5 transition-transform duration-200', open && 'rotate-180')}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full left-0 mt-1 w-56 z-50"
+          >
+            <div className="bg-[rgb(10,10,15)] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden p-1.5">
+              <Link
+                href="/agents"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
+                  pathname?.startsWith('/agents')
+                    ? 'bg-white/10 text-white'
+                    : 'hover:bg-white/5 text-slate-300 hover:text-white'
+                )}
+              >
+                <span className="text-lg mt-0.5">🤖</span>
+                <div>
+                  <p className="font-medium text-sm">Agents</p>
+                  <p className="text-xs text-slate-500 group-hover:text-slate-400">Browse AI agents & trust scores</p>
+                </div>
+              </Link>
+
+              <Link
+                href="/skills"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
+                  pathname?.startsWith('/skills')
+                    ? 'bg-white/10 text-white'
+                    : 'hover:bg-white/5 text-slate-300 hover:text-white'
+                )}
+              >
+                <span className="text-lg mt-0.5">⚡</span>
+                <div>
+                  <p className="font-medium text-sm">Skills</p>
+                  <p className="text-xs text-slate-500 group-hover:text-slate-400">Discover reusable AI capabilities</p>
+                </div>
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
@@ -106,13 +196,17 @@ export function Navbar() {
 
             {/* Desktop Navigation */}
             <div className="hidden lg:flex items-center gap-1">
+              {/* Explore Dropdown */}
+              <ExploreDropdown />
+
+              {/* Other nav links */}
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={cn(
                     'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                    pathname === link.href
+                    pathname?.startsWith(link.href)
                       ? 'text-white bg-white/10'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
                   )}
@@ -158,7 +252,7 @@ export function Navbar() {
                 )}
               >
                 <Plus className="w-4 h-4" />
-                <span>Add Agent</span>
+                <span>Register</span>
               </Link>
 
               {/* Wallet Button */}
@@ -185,6 +279,30 @@ export function Navbar() {
               className="lg:hidden border-t border-white/10 bg-[rgb(10,10,15)]/95 backdrop-blur-xl"
             >
               <div className="px-4 py-4 space-y-2">
+                <Link
+                  href="/agents"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    pathname?.startsWith('/agents')
+                      ? 'text-white bg-white/10'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  🤖 Agents
+                </Link>
+                <Link
+                  href="/skills"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    pathname?.startsWith('/skills')
+                      ? 'text-white bg-white/10'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  ⚡ Skills
+                </Link>
                 {navLinks.map((link) => (
                   <Link
                     key={link.href}
@@ -192,7 +310,7 @@ export function Navbar() {
                     onClick={() => setMobileOpen(false)}
                     className={cn(
                       'block px-4 py-3 rounded-xl text-base font-medium transition-all',
-                      pathname === link.href
+                      pathname?.startsWith(link.href)
                         ? 'text-white bg-white/10'
                         : 'text-slate-400 hover:text-white hover:bg-white/5'
                     )}

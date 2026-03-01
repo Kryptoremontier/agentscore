@@ -115,3 +115,18 @@ FINAL_STATUS.md
 *.backup
 *.bak
 *.orig
+
+# ═══════════════════════════════════════════
+# PROJECT CONTEXT (private — not for GitHub)
+# ═══════════════════════════════════════════
+.context/
+AGENTSCORE-PROJECT-CONTEXT.md
+AGENTSCORE-PROJECT-CONTEXT.md.pdf
+*.context.md
+
+# ═══════════════════════════════════════════
+# CURSOR / AI PROMPTS (private)
+# ═══════════════════════════════════════════
+cursor-prompt*.md
+mega-prompt*.md
+giga-prompt*.md
