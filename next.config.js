@@ -73,6 +73,13 @@ const nextConfig = {
       }
     }
 
+    // Stub optional peer deps that MetaMask SDK / WalletConnect pull in
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@react-native-async-storage/async-storage': false,
+      'pino-pretty': false,
+    }
+
     return config
   },
 }
