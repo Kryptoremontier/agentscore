@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, ArrowRight, Shield, Zap } from 'lucide-react'
+import { Search, X, ArrowRight, Shield, Zap, MessageSquare } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/cn'
 
@@ -48,6 +48,56 @@ async function fetchFromIntuition(search: string): Promise<AgentResult[]> {
     return []
   }
   return data.data?.atoms ?? []
+}
+
+interface ClaimResult {
+  term_id: string
+  subject: { term_id: string; label: string }
+  predicate: { term_id: string; label: string }
+  object: { term_id: string; label: string }
+  positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+}
+
+async function fetchClaimsFromIntuition(search: string): Promise<ClaimResult[]> {
+  const searchFilter = search.trim()
+    ? `, subject: { label: { _ilike: "%${search.trim()}%" } }`
+    : ''
+  const res = await fetch(GRAPHQL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `
+        query SearchClaims {
+          triples(
+            where: {
+              _and: [
+                { _or: [
+                  { subject: { label: { _ilike: "Agent:%" } } }
+                  { subject: { label: { _ilike: "Skill:%" } } }
+                ]}
+                { _or: [
+                  { object: { label: { _ilike: "Agent:%" } } }
+                  { object: { label: { _ilike: "Skill:%" } } }
+                ]}
+              ]
+              ${searchFilter}
+            }
+            order_by: { block_number: desc }
+            limit: 5
+          ) {
+            term_id
+            subject { term_id label }
+            predicate { term_id label }
+            object { term_id label }
+            positions_aggregate { aggregate { count sum { shares } } }
+          }
+        }
+      `,
+    }),
+  })
+  const data = await res.json()
+  if (data.errors) return []
+  return data.data?.triples ?? []
 }
 
 async function fetchSkillsFromIntuition(search: string): Promise<AgentResult[]> {
@@ -110,8 +160,10 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   const [query, setQuery] = useState('')
   const [agentResults, setAgentResults] = useState<AgentResult[]>([])
   const [skillResults, setSkillResults] = useState<AgentResult[]>([])
+  const [claimResults, setClaimResults] = useState<ClaimResult[]>([])
   const [popularAgents, setPopularAgents] = useState<AgentResult[]>([])
   const [popularSkills, setPopularSkills] = useState<AgentResult[]>([])
+  const [popularClaims, setPopularClaims] = useState<ClaimResult[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -122,6 +174,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     setQuery('')
     setAgentResults([])
     setSkillResults([])
+    setClaimResults([])
     setSearched(false)
     setActiveIndex(0)
     setTimeout(() => inputRef.current?.focus(), 50)
@@ -131,6 +184,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     }
     if (popularSkills.length === 0) {
       fetchSkillsFromIntuition('').then(setPopularSkills).catch(() => {})
+    }
+    if (popularClaims.length === 0) {
+      fetchClaimsFromIntuition('').then(setPopularClaims).catch(() => {})
     }
   }, [open])
 
@@ -146,6 +202,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     if (!query.trim()) {
       setAgentResults([])
       setSkillResults([])
+      setClaimResults([])
       setSearched(false)
       return
     }
@@ -153,16 +210,19 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     setLoading(true)
     const t = setTimeout(async () => {
       try {
-        const [agents, skills] = await Promise.all([
+        const [agents, skills, claims] = await Promise.all([
           fetchFromIntuition(query),
           fetchSkillsFromIntuition(query),
+          fetchClaimsFromIntuition(query),
         ])
         setAgentResults(agents)
         setSkillResults(skills)
+        setClaimResults(claims)
         setActiveIndex(0)
       } catch {
         setAgentResults([])
         setSkillResults([])
+        setClaimResults([])
       } finally {
         setLoading(false)
         setSearched(true)
@@ -174,9 +234,11 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   // Combined list for keyboard navigation
   const displayAgents = query.trim() ? agentResults : popularAgents
   const displaySkills = query.trim() ? skillResults : popularSkills
+  const displayClaims = query.trim() ? claimResults : popularClaims
   const combinedList = [
     ...displayAgents.map(a => ({ item: a, type: 'agent' as const })),
     ...displaySkills.map(s => ({ item: s, type: 'skill' as const })),
+    ...displayClaims.map(c => ({ item: c, type: 'claim' as const })),
   ]
 
   // Keyboard: arrows + enter + esc
@@ -190,20 +252,24 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
       if (e.key === 'Enter') {
         e.preventDefault()
         const hit = combinedList[activeIndex]
-        if (hit) navigate(hit.item.term_id, hit.type)
+        if (hit) {
+          if (hit.type === 'claim') navigate((hit.item as ClaimResult).term_id, 'claim')
+          else navigate((hit.item as AgentResult).term_id, hit.type as 'agent' | 'skill')
+        }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, combinedList, activeIndex, query])
 
-  function navigate(termId: string, type: 'agent' | 'skill') {
+  function navigate(termId: string, type: 'agent' | 'skill' | 'claim') {
     onClose()
-    router.push(`/${type === 'agent' ? 'agents' : 'skills'}?open=${termId}`)
+    if (type === 'claim') router.push(`/claims?open=${termId}`)
+    else router.push(`/${type === 'agent' ? 'agents' : 'skills'}?open=${termId}`)
   }
 
-  const hasResults = displayAgents.length > 0 || displaySkills.length > 0
-  const noResults = searched && !loading && agentResults.length === 0 && skillResults.length === 0 && query.trim()
+  const hasResults = displayAgents.length > 0 || displaySkills.length > 0 || displayClaims.length > 0
+  const noResults = searched && !loading && agentResults.length === 0 && skillResults.length === 0 && claimResults.length === 0 && query.trim()
 
   // Track combined index offsets
   let globalIndex = 0
@@ -369,6 +435,52 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   </div>
                 )}
               </div>
+
+                {/* Claims section */}
+                {!loading && displayClaims.length > 0 && (
+                  <div className="p-2">
+                    <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      <MessageSquare className="w-3 h-3" />
+                      {query.trim() ? 'Claims' : 'Recent Claims'}
+                    </div>
+                    {displayClaims.map((claim) => {
+                      const idx = globalIndex++
+                      const subjName = claim.subject.label.replace(/^(Agent|Skill):\s*/i, '').split(' - ')[0].trim()
+                      const objName  = claim.object.label.replace(/^(Agent|Skill):\s*/i, '').split(' - ')[0].trim()
+                      const predLabel = claim.predicate.label
+                      const score = Math.min(100, Math.round(Number(claim.positions_aggregate?.aggregate?.sum?.shares ?? 0) / 1e18))
+
+                      return (
+                        <button
+                          key={claim.term_id}
+                          onClick={() => navigate(claim.term_id, 'claim')}
+                          onMouseEnter={() => setActiveIndex(idx)}
+                          className={cn(
+                            'w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-colors text-left group',
+                            idx === activeIndex ? 'bg-white/10' : 'hover:bg-white/5'
+                          )}
+                        >
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-purple-500 flex items-center justify-center shrink-0 text-base">
+                            💬
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-white truncate text-sm">
+                              <span className="text-indigo-400">{subjName}</span>
+                              <span className="text-slate-500 mx-1">{predLabel}</span>
+                              <span className="text-emerald-400">{objName}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={cn('text-sm font-mono font-bold', score >= 70 ? 'text-emerald-400' : 'text-amber-400')}>
+                              {score}
+                            </span>
+                            <ArrowRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
 
               {/* Footer */}
               <div className="flex items-center justify-between px-4 py-3 border-t border-white/10 text-xs text-slate-500">

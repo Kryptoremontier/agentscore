@@ -25,7 +25,7 @@ function ExploreDropdown() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const isActive = pathname?.startsWith('/agents') || pathname?.startsWith('/skills')
+  const isActive = pathname?.startsWith('/agents') || pathname?.startsWith('/skills') || pathname?.startsWith('/claims')
 
   // Click outside to close
   useEffect(() => {
@@ -101,6 +101,23 @@ function ExploreDropdown() {
                 <div>
                   <p className="font-medium text-sm">Skills</p>
                   <p className="text-xs text-slate-500 group-hover:text-slate-400">Discover reusable AI capabilities</p>
+                </div>
+              </Link>
+
+              <Link
+                href="/claims"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
+                  pathname?.startsWith('/claims')
+                    ? 'bg-white/10 text-white'
+                    : 'hover:bg-white/5 text-slate-300 hover:text-white'
+                )}
+              >
+                <span className="text-lg mt-0.5">💬</span>
+                <div>
+                  <p className="font-medium text-sm">Claims</p>
+                  <p className="text-xs text-slate-500 group-hover:text-slate-400">Agent-Skill relationship claims</p>
                 </div>
               </Link>
             </div>
@@ -302,6 +319,18 @@ export function Navbar() {
                   )}
                 >
                   ⚡ Skills
+                </Link>
+                <Link
+                  href="/claims"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    pathname?.startsWith('/claims')
+                      ? 'text-white bg-white/10'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  💬 Claims
                 </Link>
                 {navLinks.map((link) => (
                   <Link

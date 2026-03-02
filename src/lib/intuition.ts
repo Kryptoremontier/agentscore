@@ -632,6 +632,167 @@ export async function createTrustTriple(
 }
 
 // ============================================================================
+// Claim Triples — [Agent/Skill] [predicate] [Agent/Skill]
+// ============================================================================
+
+/**
+ * Create a Claim Triple: [Subject] [predicate atom] [Object]
+ * Subject and Object must be existing atoms (agents or skills).
+ * Predicate atom is found or created automatically.
+ * The triple gets its own vault (Support + Oppose) identical to agents.
+ */
+export async function createTripleClaim(
+  cfg: WriteConfig,
+  subjectTermId: `0x${string}`,
+  predicateLabel: string,
+  objectTermId: `0x${string}`,
+): Promise<{ termId: `0x${string}`; counterTermId: `0x${string}` }> {
+  // 1. Find or create the predicate atom
+  const predicateTermId = await findOrCreateAtom(cfg, predicateLabel)
+
+  // Short delay for indexer
+  await new Promise(r => setTimeout(r, 1500))
+
+  // 2. Create the Triple
+  const CLAIM_DEPOSIT = parseEther('0.01')
+  await createTriple(cfg, subjectTermId, predicateTermId, objectTermId, CLAIM_DEPOSIT)
+
+  // 3. Poll until indexed (typically 2–5s)
+  for (let i = 0; i < 12; i++) {
+    await new Promise(r => setTimeout(r, 2500))
+    const res = await fetch(INTUITION_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `
+          query FindClaimTriple($subjectId: String!, $predicateId: String!, $objectId: String!) {
+            triples(
+              where: {
+                subject_id: { _eq: $subjectId }
+                predicate_id: { _eq: $predicateId }
+                object_id: { _eq: $objectId }
+              }
+              limit: 1
+            ) { term_id counter_term_id }
+          }
+        `,
+        variables: {
+          subjectId: subjectTermId,
+          predicateId: predicateTermId,
+          objectId: objectTermId,
+        },
+      }),
+    })
+    const data = await res.json()
+    const triple = data.data?.triples?.[0]
+    if (triple?.term_id) {
+      return {
+        termId: triple.term_id as `0x${string}`,
+        counterTermId: triple.counter_term_id as `0x${string}`,
+      }
+    }
+  }
+  throw new Error('Claim created on-chain but not yet indexed — please refresh in a few seconds')
+}
+
+/**
+ * Fetch Claim Triples from Intuition GraphQL.
+ * Returns triples where subject or object is an Agent/Skill atom,
+ * excluding internal trust and report triples.
+ */
+export async function fetchTripleClaims(search = ''): Promise<any[]> {
+  // Build optional search filter on subject/object label
+  const searchFilter = search.trim()
+    ? `, subject: { label: { _ilike: "%${search.trim()}%" } }`
+    : ''
+
+  const res = await fetch(INTUITION_GRAPHQL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `
+        query FetchClaims {
+          triples(
+            where: {
+              _and: [
+                {
+                  _or: [
+                    { subject: { label: { _ilike: "Agent:%" } } }
+                    { subject: { label: { _ilike: "Skill:%" } } }
+                  ]
+                }
+                {
+                  _or: [
+                    { object: { label: { _ilike: "Agent:%" } } }
+                    { object: { label: { _ilike: "Skill:%" } } }
+                  ]
+                }
+              ]
+              ${searchFilter}
+            }
+            order_by: { block_number: desc }
+            limit: 50
+          ) {
+            term_id
+            counter_term_id
+            created_at
+            subject { term_id label }
+            predicate { term_id label }
+            object { term_id label }
+            creator { label id }
+            positions_aggregate {
+              aggregate { count sum { shares } }
+            }
+          }
+        }
+      `,
+    }),
+  })
+  const data = await res.json()
+  if (data.errors) {
+    console.error('[fetchTripleClaims] GraphQL error:', data.errors[0]?.message)
+    return []
+  }
+  return data.data?.triples ?? []
+}
+
+/**
+ * Find an existing claim triple (by subject+predicate+object).
+ */
+export async function findClaimTriple(
+  subjectTermId: string,
+  predicateTermId: string,
+  objectTermId: string,
+): Promise<{ termId: `0x${string}`; counterTermId: `0x${string}` } | null> {
+  const res = await fetch(INTUITION_GRAPHQL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: `
+        query FindClaimTriple($s: String!, $p: String!, $o: String!) {
+          triples(
+            where: {
+              subject_id: { _eq: $s }
+              predicate_id: { _eq: $p }
+              object_id: { _eq: $o }
+            }
+            limit: 1
+          ) { term_id counter_term_id }
+        }
+      `,
+      variables: { s: subjectTermId, p: predicateTermId, o: objectTermId },
+    }),
+  })
+  const data = await res.json()
+  const triple = data.data?.triples?.[0]
+  if (!triple) return null
+  return {
+    termId: triple.term_id as `0x${string}`,
+    counterTermId: triple.counter_term_id as `0x${string}`,
+  }
+}
+
+// ============================================================================
 // Reports
 // ============================================================================
 
