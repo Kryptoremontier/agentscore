@@ -50,8 +50,8 @@ function ExploreDropdown() {
         className={cn(
           'flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
           isActive
-            ? 'text-white bg-white/10'
-            : 'text-slate-400 hover:text-white hover:bg-white/5'
+            ? 'text-[#F5B841] bg-[#F5B841]/10'
+            : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
         )}
       >
         Explore
@@ -69,15 +69,15 @@ function ExploreDropdown() {
             transition={{ duration: 0.15 }}
             className="absolute top-full left-0 mt-1 w-56 z-50"
           >
-            <div className="bg-[rgb(10,10,15)] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden p-1.5">
+            <div className="bg-[#0F1113] border border-[#F5B841]/20 rounded-xl shadow-2xl shadow-black/40 overflow-hidden p-1.5">
               <Link
                 href="/agents"
                 onClick={() => setOpen(false)}
                 className={cn(
                   'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
                   pathname?.startsWith('/agents')
-                    ? 'bg-white/10 text-white'
-                    : 'hover:bg-white/5 text-slate-300 hover:text-white'
+                    ? 'bg-[#F5B841]/10 text-[#F5B841]'
+                    : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
                 <span className="text-lg mt-0.5">🤖</span>
@@ -93,8 +93,8 @@ function ExploreDropdown() {
                 className={cn(
                   'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
                   pathname?.startsWith('/skills')
-                    ? 'bg-white/10 text-white'
-                    : 'hover:bg-white/5 text-slate-300 hover:text-white'
+                    ? 'bg-[#F5B841]/10 text-[#F5B841]'
+                    : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
                 <span className="text-lg mt-0.5">⚡</span>
@@ -110,8 +110,8 @@ function ExploreDropdown() {
                 className={cn(
                   'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
                   pathname?.startsWith('/claims')
-                    ? 'bg-white/10 text-white'
-                    : 'hover:bg-white/5 text-slate-300 hover:text-white'
+                    ? 'bg-[#F5B841]/10 text-[#F5B841]'
+                    : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
                 <span className="text-lg mt-0.5">💬</span>
@@ -167,7 +167,7 @@ export function Navbar() {
         className={cn(
           'fixed top-0 left-0 right-0 z-50 transition-all duration-500',
           scrolled
-            ? 'bg-[rgb(10,10,15)]/80 backdrop-blur-xl border-b border-white/10 shadow-lg shadow-black/20'
+            ? 'bg-[#0F1113]/85 backdrop-blur-xl border-b border-[#F5B841]/15 shadow-lg shadow-black/30'
             : 'bg-transparent'
         )}
       >
@@ -186,10 +186,9 @@ export function Navbar() {
                   {/* Gradient definition */}
                   <defs>
                     <linearGradient id="checkGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#F97316" />
-                      <stop offset="30%" stopColor="#EC4899" />
-                      <stop offset="60%" stopColor="#8B5CF6" />
-                      <stop offset="100%" stopColor="#00D4FF" />
+                      <stop offset="0%" stopColor="#E69C1F" />
+                      <stop offset="50%" stopColor="#F5B841" />
+                      <stop offset="100%" stopColor="#FFD166" />
                     </linearGradient>
                   </defs>
                   {/* Checkmark path */}
@@ -199,7 +198,7 @@ export function Navbar() {
                     strokeWidth="4"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="drop-shadow-[0_0_8px_rgba(0,212,255,0.5)]"
+                    className="drop-shadow-[0_0_8px_rgba(245,184,65,0.6)]"
                   />
                 </svg>
               </div>
@@ -207,7 +206,7 @@ export function Navbar() {
               {/* Text */}
               <span className="text-xl font-bold tracking-tight">
                 <span className="text-white">Agent</span>
-                <span className="text-cyan-400">Score</span>
+                <span className="text-[#F5B841]">Score</span>
               </span>
             </Link>
 
@@ -224,8 +223,8 @@ export function Navbar() {
                   className={cn(
                     'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                     pathname?.startsWith(link.href)
-                      ? 'text-white bg-white/10'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'text-[#F5B841] bg-[#F5B841]/10'
+                      : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
                   {link.label}
@@ -293,7 +292,7 @@ export function Navbar() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="lg:hidden border-t border-white/10 bg-[rgb(10,10,15)]/95 backdrop-blur-xl"
+              className="lg:hidden border-t border-[#F5B841]/15 bg-[#0F1113]/95 backdrop-blur-xl"
             >
               <div className="px-4 py-4 space-y-2">
                 <Link
@@ -302,8 +301,8 @@ export function Navbar() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/agents')
-                      ? 'text-white bg-white/10'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'text-[#F5B841] bg-[#F5B841]/10'
+                      : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
                   🤖 Agents
@@ -314,8 +313,8 @@ export function Navbar() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/skills')
-                      ? 'text-white bg-white/10'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'text-[#F5B841] bg-[#F5B841]/10'
+                      : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
                   ⚡ Skills
@@ -326,8 +325,8 @@ export function Navbar() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/claims')
-                      ? 'text-white bg-white/10'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'text-[#F5B841] bg-[#F5B841]/10'
+                      : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
                   💬 Claims
@@ -340,8 +339,8 @@ export function Navbar() {
                     className={cn(
                       'block px-4 py-3 rounded-xl text-base font-medium transition-all',
                       pathname?.startsWith(link.href)
-                        ? 'text-white bg-white/10'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'text-[#F5B841] bg-[#F5B841]/10'
+                        : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                     )}
                   >
                     {link.label}

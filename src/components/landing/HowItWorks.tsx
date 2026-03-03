@@ -9,19 +9,19 @@ const steps = [
     icon: UserPlus,
     title: 'Register Agent',
     description: 'Create an on-chain identity for your AI agent as an Intuition Atom. Costs 0.01 tTRUST.',
-    color: 'from-primary to-accent-cyan',
+    color: 'from-[#F5B841] to-[#FFB300]',
   },
   {
     icon: Shield,
     title: 'Support or Oppose',
     description: 'Stake tTRUST via bonding curves to signal trust (Support) or flag risks (Oppose).',
-    color: 'from-accent-cyan to-trust-good',
+    color: 'from-[#FFB300] to-[#2ECC71]',
   },
   {
     icon: CheckCircle,
     title: 'Verify & Interact',
     description: 'Check real-time trust scores powered by on-chain stakes before interacting with any agent.',
-    color: 'from-trust-good to-primary',
+    color: 'from-[#2ECC71] to-[#F5B841]',
   },
 ]
 

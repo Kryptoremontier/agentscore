@@ -66,7 +66,7 @@ export function WalletButton() {
       <>
         <Button
           onClick={() => setShowConnectors(true)}
-          className="glow-blue"
+          className="bg-gradient-to-r from-[#F5B841] to-[#E69C1F] text-[#0F1113] font-bold hover:shadow-lg hover:shadow-[#F5B841]/25 border-0"
         >
           <Wallet className="w-4 h-4 mr-2" />
           Connect Wallet
@@ -116,9 +116,9 @@ export function WalletButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="glass flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-200">
+        <button className="glass flex items-center gap-2 px-4 py-2 rounded-xl border border-[#F5B841]/20 hover:bg-[#F5B841]/8 hover:border-[#F5B841]/40 transition-all duration-200">
           {/* Identicon */}
-          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-accent-cyan" />
+          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-[#F5B841] to-[#E69C1F]" />
 
           {/* Address */}
           <span className="font-mono text-sm">
@@ -207,7 +207,7 @@ function WalletModal({ connectors, onConnect, onClose }: WalletModalProps) {
               onClick={() => onConnect(connector)}
               className="w-full glass glass-hover rounded-lg p-4 text-left transition-all flex items-center gap-3"
             >
-              <span className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent-cyan flex items-center justify-center">
+              <span className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#F5B841] to-[#E69C1F] flex items-center justify-center">
                 <Wallet className="w-5 h-5 text-white" />
               </span>
               <span className="flex flex-col">

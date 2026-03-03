@@ -53,8 +53,8 @@ export function CTA() {
           viewport={{ once: true }}
         >
           {/* Icon */}
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/20 mb-8">
-            <Sparkles className="w-8 h-8 text-primary" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#F5B841]/15 mb-8">
+            <Sparkles className="w-8 h-8 text-[#F5B841]" />
           </div>
 
           {/* Headline */}
@@ -73,9 +73,8 @@ export function CTA() {
               href="/register"
               className={cn(
                 'group flex items-center gap-2 px-8 py-4 rounded-xl',
-                'bg-white text-black font-semibold',
-                'hover:bg-white/90 transition-all duration-300',
-                'shadow-lg shadow-white/10 hover:shadow-xl hover:shadow-white/20',
+                'bg-gradient-to-r from-[#F5B841] to-[#E69C1F] text-[#0F1113] font-bold',
+                'hover:shadow-xl hover:shadow-[#F5B841]/30 transition-all duration-300',
                 'hover:scale-105'
               )}
             >
@@ -87,8 +86,8 @@ export function CTA() {
               href="/agents"
               className={cn(
                 'flex items-center gap-2 px-8 py-4 rounded-xl',
-                'bg-white/10 backdrop-blur-sm border border-white/20',
-                'hover:bg-white/15 font-semibold transition-all duration-300'
+                'bg-white/5 border border-[#F5B841]/30',
+                'hover:bg-[#F5B841]/10 hover:border-[#F5B841]/50 font-semibold text-white transition-all duration-300'
               )}
             >
               Explore Platform
@@ -102,11 +101,11 @@ export function CTA() {
               <span>{agentCount} Agents Registered</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-primary" />
+              <div className="w-2 h-2 rounded-full bg-[#F5B841]" />
               <span>{stakerCount} Active Stakers</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-purple-500" />
+              <div className="w-2 h-2 rounded-full bg-[#2EE6D6]" />
               <span>Powered by Intuition</span>
             </div>
           </div>

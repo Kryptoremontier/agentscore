@@ -17,62 +17,64 @@ const config: Config = {
     },
     extend: {
       colors: {
-        // Backgrounds
+        // Backgrounds — Core Dark
         background: {
-          DEFAULT: '#0A0A0F',      // Deep space black
-          secondary: '#0D1117',     // Card backgrounds
-          tertiary: '#161B22',      // Elevated surfaces
+          DEFAULT: '#0F1113',       // Core dark
+          secondary: '#171A1D',     // Card backgrounds
+          tertiary: '#1E2229',      // Elevated surfaces
         },
 
-        // Brand colors (Intuition-inspired)
+        // Brand — Trust Gold
         primary: {
-          DEFAULT: '#0066FF',       // Electric blue
-          hover: '#0052CC',
-          light: '#3385FF',
+          DEFAULT: '#F5B841',       // Trust Gold
+          hover: '#E69C1F',         // Darker gold on hover
+          light: '#FFD166',         // Light gold
         },
 
         accent: {
-          cyan: '#00D4FF',          // Highlights
-          purple: '#8B5CF6',        // Secondary accent
+          gold: '#FFB300',          // Energy Glow gold
+          amber: '#E69C1F',         // Deep amber
+          teal: '#2EE6D6',          // AI Tech Accent teal
+          blue: '#38B6FF',          // AI Tech Accent blue
         },
 
         // Semantic colors for trust levels
         trust: {
-          excellent: '#06B6D4',     // 90-100 (cyan)
-          good: '#22C55E',          // 70-89 (green)
-          moderate: '#EAB308',      // 50-69 (yellow)
-          low: '#F97316',           // 30-49 (orange)
-          critical: '#EF4444',      // 0-29 (red)
+          excellent: '#2ECC71',     // 90-100 Verified green
+          good: '#2ECC71',          // 70-89 (green)
+          moderate: '#FFB020',      // 50-69 Warning yellow
+          low: '#FF8000',           // 30-49 (orange)
+          critical: '#FF4D4F',      // 0-29 Risk red
         },
 
         // Text colors
         text: {
           primary: '#FFFFFF',
-          secondary: '#94A3B8',
-          muted: '#64748B',
+          secondary: '#B5BDC6',
+          muted: '#7A838D',
         },
 
         // Border colors
         border: {
-          DEFAULT: 'rgba(255,255,255,0.1)',
-          hover: 'rgba(255,255,255,0.2)',
+          DEFAULT: 'rgba(245,184,65,0.15)',
+          hover: 'rgba(245,184,65,0.3)',
         },
 
         // Semantic UI colors
         destructive: {
-          DEFAULT: '#EF4444',
+          DEFAULT: '#FF4D4F',
           foreground: '#FFFFFF',
         },
         muted: {
-          DEFAULT: 'rgba(255,255,255,0.05)',
-          foreground: '#94A3B8',
+          DEFAULT: 'rgba(245,184,65,0.05)',
+          foreground: '#7A838D',
         },
         popover: {
-          DEFAULT: '#0D1117',
+          DEFAULT: '#171A1D',
           foreground: '#FFFFFF',
         },
         card: {
-          DEFAULT: '#0D1117',
+          DEFAULT: '#171A1D',
           foreground: '#FFFFFF',
         },
       },
@@ -156,10 +158,10 @@ const config: Config = {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
         'mesh-gradient': `
-          radial-gradient(at 40% 20%, rgba(0, 102, 255, 0.15) 0px, transparent 50%),
-          radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
-          radial-gradient(at 0% 50%, rgba(0, 212, 255, 0.1) 0px, transparent 50%),
-          radial-gradient(at 80% 100%, rgba(0, 102, 255, 0.1) 0px, transparent 50%)
+          radial-gradient(at 40% 20%, rgba(245, 184, 65, 0.12) 0px, transparent 50%),
+          radial-gradient(at 80% 0%, rgba(230, 156, 31, 0.08) 0px, transparent 50%),
+          radial-gradient(at 0% 50%, rgba(255, 179, 0, 0.07) 0px, transparent 50%),
+          radial-gradient(at 80% 100%, rgba(46, 230, 214, 0.06) 0px, transparent 50%)
         `,
       },
     },

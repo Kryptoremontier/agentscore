@@ -68,7 +68,7 @@ export default function RootLayout({
           backgroundPosition: 'center top',
           backgroundAttachment: 'fixed',
           backgroundRepeat: 'no-repeat',
-          backgroundColor: 'rgb(10,10,15)',
+          backgroundColor: '#0F1113',
         }}
         suppressHydrationWarning
       >

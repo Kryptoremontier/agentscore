@@ -142,7 +142,7 @@ export function Hero() {
       <div className="absolute inset-0 bg-gradient-to-r from-[rgb(10,10,15)]/40 via-transparent to-[rgb(10,10,15)]/40" />
 
       <motion.div
-        className="absolute inset-0 bg-gradient-to-t from-primary/10 via-transparent to-accent-purple/5"
+        className="absolute inset-0 bg-gradient-to-t from-[#F5B841]/8 via-transparent to-[#E69C1F]/4"
         animate={{ opacity: [0.3, 0.5, 0.3] }}
         transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
       />
@@ -186,7 +186,7 @@ export function Hero() {
           <span className="block mt-2">
             <WaveText
               text="AI Agents"
-              className="bg-gradient-to-r from-white via-primary to-accent-cyan bg-clip-text text-transparent drop-shadow-2xl"
+              className="bg-gradient-to-r from-[#FFD166] via-[#F5B841] to-[#E69C1F] bg-clip-text text-transparent drop-shadow-2xl"
             />
           </span>
         </h1>
@@ -213,9 +213,9 @@ export function Hero() {
             href="/agents"
             className={cn(
               'group flex items-center gap-2 px-8 py-4 rounded-xl',
-              'bg-primary hover:bg-primary/90 text-white font-semibold',
+              'bg-gradient-to-r from-[#F5B841] to-[#E69C1F] text-[#0F1113] font-bold',
               'transition-all duration-300',
-              'shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30',
+              'shadow-lg shadow-[#F5B841]/25 hover:shadow-xl hover:shadow-[#F5B841]/40',
               'hover:scale-105'
             )}
           >
@@ -227,9 +227,9 @@ export function Hero() {
             href="/register"
             className={cn(
               'flex items-center gap-2 px-8 py-4 rounded-xl',
-              'bg-white/10 backdrop-blur-sm border border-white/20',
-              'hover:bg-white/15 hover:border-white/30',
-              'font-semibold transition-all duration-300',
+              'bg-white/5 backdrop-blur-sm border border-[#F5B841]/30',
+              'hover:bg-[#F5B841]/10 hover:border-[#F5B841]/50',
+              'font-semibold transition-all duration-300 text-white',
               'hover:scale-105'
             )}
           >
