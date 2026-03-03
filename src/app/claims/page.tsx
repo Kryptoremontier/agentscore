@@ -264,7 +264,7 @@ function ClaimsPageContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: `query GetAll($ids: [String!]!) { positions(where: { term_id: { _in: $ids } } order_by: { shares: desc } limit: 100) { account_id account { label } shares term_id updated_at } }`,
-          variables: { termIds },
+          variables: { ids: termIds },
         }),
       })
       const data = await res.json()
@@ -288,7 +288,7 @@ function ClaimsPageContent() {
             }
             signals_aggregate(where: { term_id: { _in: $ids } }) { aggregate { count } }
           }`,
-          variables: { termIds },
+          variables: { ids: termIds },
         }),
       })
       const data = await res.json()
