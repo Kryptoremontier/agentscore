@@ -74,6 +74,8 @@ export default function RootLayout({
       >
         <Providers>
           <div className="relative min-h-screen text-white">
+            {/* Dark overlay to dim the background image */}
+            <div className="fixed inset-0 bg-[rgb(10,10,15)]/75 pointer-events-none z-0" />
             {/* Navbar is outside ErrorBoundary — stays visible even if a page crashes */}
             <Navbar />
             <main className="relative">
