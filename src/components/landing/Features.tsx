@@ -60,7 +60,7 @@ export function Features() {
           className="text-center mb-16"
         >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">
-            Why <span className="text-[#F5B841]">AgentScore</span>?
+            Why <span className="text-[#C8963C]">AgentScore</span>?
           </h2>
           <p className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
             The trust infrastructure the AI economy needs. Verify, stake, earn.
@@ -94,7 +94,7 @@ export function Features() {
               </div>
 
               {/* Content */}
-              <h3 className="text-xl font-semibold mb-3 group-hover:text-[#F5B841] transition-colors">
+              <h3 className="text-xl font-semibold mb-3 group-hover:text-[#C8963C] transition-colors">
                 {feature.title}
               </h3>
               <p className="text-slate-400 leading-relaxed">

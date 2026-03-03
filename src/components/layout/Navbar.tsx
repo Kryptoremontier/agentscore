@@ -50,7 +50,7 @@ function ExploreDropdown() {
         className={cn(
           'flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
           isActive
-            ? 'text-[#F5B841] bg-[#F5B841]/10'
+            ? 'text-[#C8963C] bg-[#C8963C]/10'
             : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
         )}
       >
@@ -69,14 +69,14 @@ function ExploreDropdown() {
             transition={{ duration: 0.15 }}
             className="absolute top-full left-0 mt-1 w-56 z-50"
           >
-            <div className="bg-[#0F1113] border border-[#F5B841]/20 rounded-xl shadow-2xl shadow-black/40 overflow-hidden p-1.5">
+            <div className="bg-[#0F1113] border border-[#C8963C]/20 rounded-xl shadow-2xl shadow-black/40 overflow-hidden p-1.5">
               <Link
                 href="/agents"
                 onClick={() => setOpen(false)}
                 className={cn(
                   'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
                   pathname?.startsWith('/agents')
-                    ? 'bg-[#F5B841]/10 text-[#F5B841]'
+                    ? 'bg-[#C8963C]/10 text-[#C8963C]'
                     : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
@@ -93,7 +93,7 @@ function ExploreDropdown() {
                 className={cn(
                   'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
                   pathname?.startsWith('/skills')
-                    ? 'bg-[#F5B841]/10 text-[#F5B841]'
+                    ? 'bg-[#C8963C]/10 text-[#C8963C]'
                     : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
@@ -110,7 +110,7 @@ function ExploreDropdown() {
                 className={cn(
                   'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
                   pathname?.startsWith('/claims')
-                    ? 'bg-[#F5B841]/10 text-[#F5B841]'
+                    ? 'bg-[#C8963C]/10 text-[#C8963C]'
                     : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
@@ -167,7 +167,7 @@ export function Navbar() {
         className={cn(
           'fixed top-0 left-0 right-0 z-50 transition-all duration-500',
           scrolled
-            ? 'bg-[#0F1113]/85 backdrop-blur-xl border-b border-[#F5B841]/15 shadow-lg shadow-black/30'
+            ? 'bg-[#0F1113]/85 backdrop-blur-xl border-b border-[#C8963C]/15 shadow-lg shadow-black/30'
             : 'bg-transparent'
         )}
       >
@@ -186,9 +186,9 @@ export function Navbar() {
                   {/* Gradient definition */}
                   <defs>
                     <linearGradient id="checkGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#E69C1F" />
-                      <stop offset="50%" stopColor="#F5B841" />
-                      <stop offset="100%" stopColor="#FFD166" />
+                      <stop offset="0%" stopColor="#A87820" />
+                      <stop offset="50%" stopColor="#C8963C" />
+                      <stop offset="100%" stopColor="#C9A84C" />
                     </linearGradient>
                   </defs>
                   {/* Checkmark path */}
@@ -198,7 +198,7 @@ export function Navbar() {
                     strokeWidth="4"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="drop-shadow-[0_0_8px_rgba(245,184,65,0.6)]"
+                    className="drop-shadow-[0_0_8px_rgba(200,150,60,0.6)]"
                   />
                 </svg>
               </div>
@@ -206,7 +206,7 @@ export function Navbar() {
               {/* Text */}
               <span className="text-xl font-bold tracking-tight">
                 <span className="text-white">Agent</span>
-                <span className="text-[#F5B841]">Score</span>
+                <span className="text-[#C8963C]">Score</span>
               </span>
             </Link>
 
@@ -223,7 +223,7 @@ export function Navbar() {
                   className={cn(
                     'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                     pathname?.startsWith(link.href)
-                      ? 'text-[#F5B841] bg-[#F5B841]/10'
+                      ? 'text-[#C8963C] bg-[#C8963C]/10'
                       : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
@@ -292,7 +292,7 @@ export function Navbar() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="lg:hidden border-t border-[#F5B841]/15 bg-[#0F1113]/95 backdrop-blur-xl"
+              className="lg:hidden border-t border-[#C8963C]/15 bg-[#0F1113]/95 backdrop-blur-xl"
             >
               <div className="px-4 py-4 space-y-2">
                 <Link
@@ -301,7 +301,7 @@ export function Navbar() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/agents')
-                      ? 'text-[#F5B841] bg-[#F5B841]/10'
+                      ? 'text-[#C8963C] bg-[#C8963C]/10'
                       : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
@@ -313,7 +313,7 @@ export function Navbar() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/skills')
-                      ? 'text-[#F5B841] bg-[#F5B841]/10'
+                      ? 'text-[#C8963C] bg-[#C8963C]/10'
                       : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
@@ -325,7 +325,7 @@ export function Navbar() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/claims')
-                      ? 'text-[#F5B841] bg-[#F5B841]/10'
+                      ? 'text-[#C8963C] bg-[#C8963C]/10'
                       : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
@@ -339,7 +339,7 @@ export function Navbar() {
                     className={cn(
                       'block px-4 py-3 rounded-xl text-base font-medium transition-all',
                       pathname?.startsWith(link.href)
-                        ? 'text-[#F5B841] bg-[#F5B841]/10'
+                        ? 'text-[#C8963C] bg-[#C8963C]/10'
                         : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                     )}
                   >
