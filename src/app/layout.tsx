@@ -60,7 +60,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jetbrains.variable} font-sans antialiased bg-[rgb(10,10,15)]`} suppressHydrationWarning>
+      <body
+        className={`${inter.variable} ${jetbrains.variable} font-sans antialiased`}
+        style={{
+          backgroundImage: "url('/images/brand/gold/background.png')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center top',
+          backgroundAttachment: 'fixed',
+          backgroundRepeat: 'no-repeat',
+          backgroundColor: 'rgb(10,10,15)',
+        }}
+        suppressHydrationWarning
+      >
         <Providers>
           <div className="relative min-h-screen text-white">
             {/* Navbar is outside ErrorBoundary — stays visible even if a page crashes */}
