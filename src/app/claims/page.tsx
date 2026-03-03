@@ -673,14 +673,14 @@ function ClaimsPageContent() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setSelectedClaim(null)}
-              className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+              className="fixed inset-x-0 top-[64px] bottom-0 z-30 bg-black/70 backdrop-blur-sm"
             />
             <motion.div
               initial={{ opacity: 0, x: '100%' }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 bottom-0 w-full max-w-2xl z-50 overflow-y-auto bg-[rgb(10,10,15)] border-l border-white/10 shadow-2xl"
+              className="fixed right-0 top-[64px] bottom-0 w-full max-w-2xl z-40 overflow-y-auto bg-[rgb(10,10,15)] border-l border-white/10 shadow-2xl"
             >
               <div className="p-6">
                 {/* Header */}
