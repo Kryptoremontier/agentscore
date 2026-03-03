@@ -423,14 +423,14 @@ function ClaimsPageContent() {
   const buyAmount = parseAmount(signalSide === 'support' ? voteAmount : untrustAmount)
   const currentSupply = signalSide === 'support' ? supportSupply : opposeSupply
   const buyPreview = useMemo(() => {
-    try { return calculateBuy(currentSupply, Number(buyAmount) / 1e18) } catch { return null }
+    try { return calculateBuy(Number(buyAmount) / 1e18, currentSupply) } catch { return null }
   }, [currentSupply, buyAmount])
   const userSharesBigInt = useMemo(() => {
     try { return signalSide === 'support' ? BigInt(userPosition.forShares ?? '0') : BigInt(userPosition.againstShares ?? '0') } catch { return 0n }
   }, [signalSide, userPosition])
   const redeemAmount = useMemo(() => {
     const shares = parseFloat(redeemShares) || 0
-    try { return getSellProceeds(currentSupply, shares) } catch { return null }
+    try { return getSellProceeds(shares, currentSupply) } catch { return null }
   }, [currentSupply, redeemShares])
   const curveData = useMemo(() => generateCurveData(currentSupply), [currentSupply])
 
@@ -457,7 +457,7 @@ function ClaimsPageContent() {
         const freshSharesRaw = rawPos[0]?.shares ?? '0'
         let freshSharesBig = 0n; try { freshSharesBig = BigInt(freshSharesRaw) } catch { freshSharesBig = 0n }
         if (freshSharesBig === 0n) { alert('No shares to redeem'); return }
-        await redeemFromVault(cfg, redeemVaultId as `0x${string}`, freshSharesBig)
+        await redeemFromVault(cfg, redeemVaultId as `0x${string}`, freshSharesBig, address as `0x${string}`)
       } else if (pendingVote.type === 'trust') {
         await depositToVault(cfg, pendingVote.claim.term_id as `0x${string}`, parseAmount(pendingVote.amount))
       } else if (pendingVote.type === 'distrust') {
@@ -523,7 +523,17 @@ function ClaimsPageContent() {
   }, [claims, filterValue])
 
   const enrichedPositions = useMemo(() => {
-    return [...allPositions].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    if (!allPositions || allPositions.length === 0) return []
+    const sorted = [...allPositions].sort((a, b) => {
+      const dateA = new Date(a.updated_at || 0).getTime()
+      const dateB = new Date(b.updated_at || 0).getTime()
+      return isNaN(dateA) || isNaN(dateB) ? 0 : dateA - dateB
+    })
+    return sorted.map((pos, index) => ({
+      ...pos,
+      rank: index + 1,
+      isEarlySupporter: index < Math.max(1, Math.ceil(sorted.length * 0.2)),
+    }))
   }, [allPositions])
 
   // ── Helper functions ──
