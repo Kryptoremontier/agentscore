@@ -389,9 +389,40 @@ function SkillsPageContent() {
     })
   }, [selectedSkill?.term_id])
 
+  // PRIMARY: Derive userPosition from allPositions (same data that feeds Attestations — reliable)
+  useEffect(() => {
+    if (!address || allPositions.length === 0) return
+    const qAddr = address.toLowerCase()
+    const atomId = selectedSkill?.term_id?.toLowerCase()
+    const ctrId = skillTriple.counterTermId?.toLowerCase()
+
+    const forPos = allPositions.filter((p: any) =>
+      p.account_id?.toLowerCase() === qAddr && p.term_id?.toLowerCase() === atomId
+    )
+    const agaPos = allPositions.filter((p: any) =>
+      p.account_id?.toLowerCase() === qAddr && ctrId && p.term_id?.toLowerCase() === ctrId
+    )
+
+    const forRaw = forPos[0]?.shares
+    const agaRaw = agaPos[0]?.shares
+    let forBig = 0n, agaBig = 0n
+    try { forBig = BigInt(forRaw ?? '0') } catch { /* ignore */ }
+    try { agaBig = BigInt(agaRaw ?? '0') } catch { /* ignore */ }
+
+    setUserPosition({
+      forShares: (forRaw && forBig > 0n) ? forRaw : null,
+      againstShares: (agaRaw && agaBig > 0n) ? agaRaw : null,
+      rawPositions: forPos,
+      againstRawPositions: agaPos,
+    })
+  }, [allPositions, address, selectedSkill?.term_id, skillTriple.counterTermId])
+
+  // FALLBACK: Also fetch directly when skill/address changes
   useEffect(() => {
     if (!selectedSkill || !address) return
-    fetchUserPosition(selectedSkill.term_id, address, skillTriple.counterTermId).then(setUserPosition)
+    fetchUserPosition(selectedSkill.term_id, address, skillTriple.counterTermId).then(pos => {
+      if (pos.forShares || pos.againstShares) setUserPosition(pos)
+    })
   }, [selectedSkill?.term_id, address, skillTriple.counterTermId])
 
   const refreshPositionsAndSupply = async (

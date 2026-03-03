@@ -410,10 +410,41 @@ function AgentsPageContent() {
     })
   }, [selectedAgent?.term_id])
 
-  // Fetch user positions — re-fetches when triple counterTermId becomes available
+  // PRIMARY: Derive userPosition from allPositions (same data that feeds Attestations — reliable)
+  // This prevents race conditions with separate fetchUserPosition calls
+  useEffect(() => {
+    if (!address || allPositions.length === 0) return
+    const qAddr = address.toLowerCase()
+    const atomId = selectedAgent?.term_id?.toLowerCase()
+    const ctrId = agentTriple.counterTermId?.toLowerCase()
+
+    const forPos = allPositions.filter((p: any) =>
+      p.account_id?.toLowerCase() === qAddr && p.term_id?.toLowerCase() === atomId
+    )
+    const agaPos = allPositions.filter((p: any) =>
+      p.account_id?.toLowerCase() === qAddr && ctrId && p.term_id?.toLowerCase() === ctrId
+    )
+
+    const forRaw = forPos[0]?.shares
+    const agaRaw = agaPos[0]?.shares
+    let forBig = 0n, agaBig = 0n
+    try { forBig = BigInt(forRaw ?? '0') } catch { /* ignore */ }
+    try { agaBig = BigInt(agaRaw ?? '0') } catch { /* ignore */ }
+
+    setUserPosition({
+      forShares: (forRaw && forBig > 0n) ? forRaw : null,
+      againstShares: (agaRaw && agaBig > 0n) ? agaRaw : null,
+      rawPositions: forPos,
+      againstRawPositions: agaPos,
+    })
+  }, [allPositions, address, selectedAgent?.term_id, agentTriple.counterTermId])
+
+  // FALLBACK: Also fetch directly when agent/address changes (covers fresh connect or post-tx)
   useEffect(() => {
     if (!selectedAgent || !address) return
-    fetchUserPosition(selectedAgent.term_id, address, agentTriple.counterTermId).then(setUserPosition)
+    fetchUserPosition(selectedAgent.term_id, address, agentTriple.counterTermId).then(pos => {
+      if (pos.forShares || pos.againstShares) setUserPosition(pos)
+    })
   }, [selectedAgent?.term_id, address, agentTriple.counterTermId])
 
   // Reusable: fetch positions + recompute supply in one shot
