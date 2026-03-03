@@ -42,7 +42,11 @@ body {
 }
 
 .glass-hover {
-  @apply hover:bg-[#F5B841]/8 hover:border-[#F5B841]/30 transition-all duration-300;
+  @apply transition-all duration-300;
+}
+.glass-hover:hover {
+  background-color: rgba(245, 184, 65, 0.08);
+  border-color: rgba(245, 184, 65, 0.30);
 }
 
 .glass-card {
