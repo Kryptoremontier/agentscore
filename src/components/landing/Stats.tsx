@@ -49,10 +49,10 @@ function AnimatedCounter({ value, suffix = '', decimals = 0 }: AnimatedCounterPr
 
 export function Stats() {
   const [stats, setStats] = useState([
-    { icon: Users, label: 'Registered Agents', value: 0, suffix: '', color: 'text-accent-cyan', decimals: 0 },
-    { icon: Shield, label: 'Attestations', value: 0, suffix: '', color: 'text-trust-good', decimals: 0 },
-    { icon: DollarSign, label: 'Total Staked', value: 0, suffix: ' tTRUST', color: 'text-primary', decimals: 4 },
-    { icon: Activity, label: 'Active Stakers', value: 0, suffix: '', color: 'text-accent-purple', decimals: 0 },
+    { icon: Users, label: 'Registered Agents', value: 0, suffix: '', iconColor: '#38B6FF', glowColor: 'rgba(56,182,255,0.25)', decimals: 0 },
+    { icon: Shield, label: 'Attestations', value: 0, suffix: '', iconColor: '#2ECC71', glowColor: 'rgba(46,204,113,0.25)', decimals: 0 },
+    { icon: DollarSign, label: 'Total Staked', value: 0, suffix: ' tTRUST', iconColor: '#C8963C', glowColor: 'rgba(200,150,60,0.25)', decimals: 4 },
+    { icon: Activity, label: 'Active Stakers', value: 0, suffix: '', iconColor: '#2EE6D6', glowColor: 'rgba(46,230,214,0.25)', decimals: 0 },
   ])
 
   useEffect(() => {
@@ -147,8 +147,15 @@ export function Stats() {
             >
               <GlassCard className="text-center group" hover>
                 <div className="mb-4 flex justify-center">
-                  <div className={`p-3 rounded-xl bg-white/5 ${stat.color} group-hover:scale-110 transition-transform`}>
-                    <stat.icon className="w-6 h-6" />
+                  <div
+                    className="p-3 rounded-xl group-hover:scale-110 transition-transform duration-300"
+                    style={{
+                      background: `${stat.glowColor.replace('0.25', '0.10')}`,
+                      border: `1px solid ${stat.glowColor.replace('0.25', '0.25')}`,
+                      boxShadow: `0 0 16px ${stat.glowColor}`,
+                    }}
+                  >
+                    <stat.icon className="w-6 h-6" style={{ color: stat.iconColor, filter: `drop-shadow(0 0 4px ${stat.glowColor})` }} />
                   </div>
                 </div>
                 <div className="mb-2">

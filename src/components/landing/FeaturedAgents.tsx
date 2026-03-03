@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { TrendingUp, ChevronLeft, ChevronRight, Users } from 'lucide-react'
+import { TrendingUp, ChevronLeft, ChevronRight, Users, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
@@ -145,7 +145,12 @@ export function FeaturedAgents() {
             </div>
           ) : agents.length === 0 ? (
             <div className="text-center py-20 glass rounded-2xl">
-              <p className="text-6xl mb-4">🤖</p>
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.25)', boxShadow: '0 0 24px rgba(200,150,60,0.2)' }}>
+                  <Bot className="w-8 h-8" style={{ color: '#C8963C' }} />
+                </div>
+              </div>
               <h3 className="text-2xl font-bold mb-3">No agents registered yet</h3>
               <p className="text-text-secondary mb-6 max-w-md mx-auto">
                 Be the first to register AI agents on AgentScore testnet!
@@ -187,10 +192,12 @@ export function FeaturedAgents() {
                       <Link href="/agents">
                         <div className={cn(
                           'group relative p-6 rounded-2xl h-full cursor-pointer',
-                          'bg-white/5 backdrop-blur-sm border border-white/10',
-                          'hover:bg-white/10 hover:border-white/20',
                           'transition-all duration-300 hover:-translate-y-1'
-                        )}>
+                        )}
+                          style={{ background: 'linear-gradient(135deg,#171A1D,#1E2229)', border: '1px solid rgba(200,150,60,0.15)' }}
+                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(200,150,60,0.35)')}
+                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(200,150,60,0.15)')}
+                        >
                           {/* Score badge */}
                           <div className="absolute top-4 right-4">
                             <span className={cn('text-2xl font-bold font-mono', scoreColor)}>
@@ -200,10 +207,11 @@ export function FeaturedAgents() {
                           </div>
 
                           {/* Agent identity */}
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/30 to-accent-cyan/30 flex items-center justify-center mb-4 text-lg">
-                            🤖
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+                            style={{ background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.25)', boxShadow: '0 0 12px rgba(200,150,60,0.15)' }}>
+                            <Bot className="w-5 h-5" style={{ color: '#C8963C' }} />
                           </div>
-                          <h4 className="font-semibold text-white group-hover:text-primary transition-colors mb-1 pr-16 truncate">
+                          <h4 className="font-semibold text-white group-hover:text-[#C8963C] transition-colors mb-1 pr-16 truncate">
                             {name}
                           </h4>
                           {description && (

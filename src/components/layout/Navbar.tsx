@@ -10,7 +10,10 @@ import {
   X,
   Plus,
   Command,
-  ChevronDown
+  ChevronDown,
+  Bot,
+  Zap,
+  MessageSquare,
 } from 'lucide-react'
 import { WalletButton } from '@/components/wallet/WalletButton'
 import { SearchModal } from '@/components/shared/SearchModal'
@@ -74,16 +77,19 @@ function ExploreDropdown() {
                 href="/agents"
                 onClick={() => setOpen(false)}
                 className={cn(
-                  'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group',
                   pathname?.startsWith('/agents')
                     ? 'bg-[#C8963C]/10 text-[#C8963C]'
                     : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
-                <span className="text-lg mt-0.5">🤖</span>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.25)', boxShadow: '0 0 10px rgba(200,150,60,0.15)' }}>
+                  <Bot className="w-4 h-4" style={{ color: '#C8963C' }} />
+                </div>
                 <div>
                   <p className="font-medium text-sm">Agents</p>
-                  <p className="text-xs text-slate-500 group-hover:text-slate-400">Browse AI agents & trust scores</p>
+                  <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Browse AI agents & trust scores</p>
                 </div>
               </Link>
 
@@ -91,16 +97,19 @@ function ExploreDropdown() {
                 href="/skills"
                 onClick={() => setOpen(false)}
                 className={cn(
-                  'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group',
                   pathname?.startsWith('/skills')
-                    ? 'bg-[#C8963C]/10 text-[#C8963C]'
+                    ? 'bg-[#2EE6D6]/10 text-[#2EE6D6]'
                     : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
-                <span className="text-lg mt-0.5">⚡</span>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(46,230,214,0.10)', border: '1px solid rgba(46,230,214,0.22)', boxShadow: '0 0 10px rgba(46,230,214,0.12)' }}>
+                  <Zap className="w-4 h-4" style={{ color: '#2EE6D6' }} />
+                </div>
                 <div>
                   <p className="font-medium text-sm">Skills</p>
-                  <p className="text-xs text-slate-500 group-hover:text-slate-400">Discover reusable AI capabilities</p>
+                  <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Discover reusable AI capabilities</p>
                 </div>
               </Link>
 
@@ -108,16 +117,19 @@ function ExploreDropdown() {
                 href="/claims"
                 onClick={() => setOpen(false)}
                 className={cn(
-                  'flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors group',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group',
                   pathname?.startsWith('/claims')
-                    ? 'bg-[#C8963C]/10 text-[#C8963C]'
+                    ? 'bg-[#38B6FF]/10 text-[#38B6FF]'
                     : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
                 )}
               >
-                <span className="text-lg mt-0.5">💬</span>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(56,182,255,0.10)', border: '1px solid rgba(56,182,255,0.22)', boxShadow: '0 0 10px rgba(56,182,255,0.12)' }}>
+                  <MessageSquare className="w-4 h-4" style={{ color: '#38B6FF' }} />
+                </div>
                 <div>
                   <p className="font-medium text-sm">Claims</p>
-                  <p className="text-xs text-slate-500 group-hover:text-slate-400">Agent-Skill relationship claims</p>
+                  <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Agent-Skill relationship claims</p>
                 </div>
               </Link>
             </div>
@@ -299,37 +311,37 @@ export function Navbar() {
                   href="/agents"
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/agents')
                       ? 'text-[#C8963C] bg-[#C8963C]/10'
                       : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
-                  🤖 Agents
+                  <Bot className="w-5 h-5 text-[#C8963C]" /> Agents
                 </Link>
                 <Link
                   href="/skills"
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/skills')
-                      ? 'text-[#C8963C] bg-[#C8963C]/10'
+                      ? 'text-[#2EE6D6] bg-[#2EE6D6]/10'
                       : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
-                  ⚡ Skills
+                  <Zap className="w-5 h-5 text-[#2EE6D6]" /> Skills
                 </Link>
                 <Link
                   href="/claims"
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all',
                     pathname?.startsWith('/claims')
-                      ? 'text-[#C8963C] bg-[#C8963C]/10'
+                      ? 'text-[#38B6FF] bg-[#38B6FF]/10'
                       : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
                   )}
                 >
-                  💬 Claims
+                  <MessageSquare className="w-5 h-5 text-[#38B6FF]" /> Claims
                 </Link>
                 {navLinks.map((link) => (
                   <Link
