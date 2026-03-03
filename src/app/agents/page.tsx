@@ -2092,26 +2092,6 @@ function AgentsPageContent() {
                       </>
                     )}
 
-                    {/* Your Position */}
-                    {(userPosition.forShares || userPosition.againstShares) && (
-                      <div className="mt-3 pt-3 border-t border-[#21262d]">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[#8b949e] text-xs">Your Position</span>
-                          <div className="flex items-center gap-3">
-                            {userPosition.forShares && (
-                              <span className="text-[#34a872] text-xs font-semibold">
-                                Support {(Number(userPosition.forShares) / 1e18).toFixed(4)} shares
-                              </span>
-                            )}
-                            {userPosition.againstShares && (
-                              <span className="text-[#c45454] text-xs font-semibold">
-                                Oppose {(Number(userPosition.againstShares) / 1e18).toFixed(4)} shares
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </>
                 ) : (
                   <div className="p-4 bg-[#161b22] border border-[#21262d] rounded-xl text-center">
@@ -2120,6 +2100,57 @@ function AgentsPageContent() {
                   </div>
                 )}
               </div>
+
+              {/* === YOUR HOLDINGS === */}
+              {isConnected && (userPosition.forShares || userPosition.againstShares) && (() => {
+                const forSf = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
+                const agaSf = userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0
+                const forVal = forSf > 0 ? getSellProceeds(forSf, supportSupply) : 0
+                const agaVal = agaSf > 0 ? getSellProceeds(agaSf, opposeSupply) : 0
+                const totalVal = forVal + agaVal
+                return (
+                  <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-4 mb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Your Holdings</p>
+                      <span className="text-white text-xs font-bold">
+                        ≈ {totalVal.toFixed(4)} <span className="text-[#8b949e] font-normal">tTRUST</span>
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {forSf > 0 && (
+                        <div className="flex items-center justify-between bg-[#2d7a5f10] border border-[#2d7a5f30] rounded-xl px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-[#34a872] flex-shrink-0" />
+                            <div>
+                              <p className="text-[#34a872] text-xs font-semibold">Support</p>
+                              <p className="text-[#6b7280] text-[10px]">FOR vault</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-white text-xs font-bold">{forSf.toFixed(4)} <span className="text-[#6b7280] font-normal text-[10px]">shares</span></p>
+                            <p className="text-[#34a872] text-[10px] font-semibold">≈ {forVal.toFixed(4)} tTRUST</p>
+                          </div>
+                        </div>
+                      )}
+                      {agaSf > 0 && (
+                        <div className="flex items-center justify-between bg-[#8b3a3a10] border border-[#8b3a3a30] rounded-xl px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-[#c45454] flex-shrink-0" />
+                            <div>
+                              <p className="text-[#c45454] text-xs font-semibold">Oppose</p>
+                              <p className="text-[#6b7280] text-[10px]">AGAINST vault</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-white text-xs font-bold">{agaSf.toFixed(4)} <span className="text-[#6b7280] font-normal text-[10px]">shares</span></p>
+                            <p className="text-[#c45454] text-[10px] font-semibold">≈ {agaVal.toFixed(4)} tTRUST</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* === TRUST SCORE + STAKE BREAKDOWN === */}
               {(() => {
