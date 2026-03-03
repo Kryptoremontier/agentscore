@@ -537,7 +537,16 @@ function ClaimsPageContent() {
             : 'No FOR shares to redeem — position may already be empty')
           return
         }
-        await redeemFromVault(cfg, redeemVaultId as `0x${string}`, freshSharesBig, address as `0x${string}`)
+
+        // Honor the user's slider/input amount — convert decimal string → BigInt (18 decimals)
+        // Cap at actual on-chain balance to avoid over-redeem errors
+        let requestedShares = 0n
+        try { requestedShares = parseEther(pendingVote.amount) } catch { requestedShares = 0n }
+        const sharesToRedeem = (requestedShares > 0n && requestedShares <= freshSharesBig)
+          ? requestedShares
+          : freshSharesBig
+
+        await redeemFromVault(cfg, redeemVaultId as `0x${string}`, sharesToRedeem, address as `0x${string}`)
       } else if (pendingVote.type === 'trust') {
         await depositToVault(cfg, pendingVote.claim.term_id as `0x${string}`, parseAmount(pendingVote.amount))
       } else if (pendingVote.type === 'distrust') {

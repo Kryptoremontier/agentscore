@@ -584,17 +584,25 @@ function SkillsPageContent() {
           return
         }
 
+        // Honor the user's slider/input amount — convert decimal string → BigInt (18 decimals)
+        // Cap at actual on-chain balance to avoid over-redeem errors
+        let requestedShares = 0n
+        try { requestedShares = parseEther(pendingVote.amount) } catch { requestedShares = 0n }
+        const sharesToRedeem = (requestedShares > 0n && requestedShares <= freshShares)
+          ? requestedShares
+          : freshShares
+
         const tx = await redeemFromVault(
           cfg,
           redeemVaultId,
-          freshShares,
+          sharesToRedeem,
           address as `0x${string}`
         )
         console.log('✅ Redeem TX:', tx)
 
         const updated = await fetchUserPosition(agent.term_id, address!, pendingVote.counterTermId)
         setUserPosition(updated)
-        setToast(`Redeemed ${(Number(freshSharesRaw) / 1e18).toFixed(4)} shares!`)
+        setToast(`Redeemed ${(Number(sharesToRedeem) / 1e18).toFixed(4)} shares!`)
         setTimeout(() => setToast(null), 4000)
 
       } else if (pendingVote.type === 'trust') {
