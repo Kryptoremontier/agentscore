@@ -733,7 +733,7 @@ function ClaimsPageContent() {
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="Search claims by subject..."
-              className="w-full px-4 py-3 glass rounded-xl border border-white/10 focus:ring-2 focus:ring-primary outline-none bg-transparent"
+              className="w-full px-4 py-3 glass rounded-xl border border-white/10 focus:ring-2 focus:ring-[#C8963C]/40 outline-none bg-transparent"
             />
             <div className="flex gap-2 flex-wrap items-center">
               {CLAIM_FILTERS.map(f => {
@@ -887,12 +887,12 @@ function ClaimsPageContent() {
             <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
 
               {/* === TOP CARD: Claim Header === */}
-              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 mb-3">
+              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                 <div className="flex items-start gap-4 mb-4">
                   {/* Triple icon */}
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 bg-indigo-500/10 border-2 border-indigo-500/30">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 bg-[#C8963C]/10 border-2 border-[#C8963C]/30">
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                      <path d="M10 3H6a2 2 0 00-2 2v14c0 1.1.9 2 2 2h4M16 17l5-5-5-5M21 12H9" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M10 3H6a2 2 0 00-2 2v14c0 1.1.9 2 2 2h4M16 17l5-5-5-5M21 12H9" stroke="#C8963C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </div>
 
@@ -919,13 +919,13 @@ function ClaimsPageContent() {
                         </>)
                       })()}
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-[#8b949e]">
+                    <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
                       {selectedClaim.creator?.id ? (
-                        <a href={`/profile/${selectedClaim.creator.id}`} className="bg-[#21262d] px-2 py-0.5 rounded text-xs hover:bg-[#30363d] hover:text-white transition-colors">
+                        <a href={`/profile/${selectedClaim.creator.id}`} className="bg-[#1E2229] px-2 py-0.5 rounded text-xs hover:bg-[#252B33] hover:text-white transition-colors">
                           {selectedClaim.creator.label || selectedClaim.creator.id.slice(0, 10)}
                         </a>
                       ) : selectedClaim.creator?.label ? (
-                        <span className="bg-[#21262d] px-2 py-0.5 rounded text-xs">{selectedClaim.creator.label}</span>
+                        <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs">{selectedClaim.creator.label}</span>
                       ) : null}
                       <span>·</span>
                       <span>{new Date(selectedClaim.created_at).toLocaleDateString('pl-PL')}</span>
@@ -935,23 +935,23 @@ function ClaimsPageContent() {
                   {/* Close button */}
                   <button
                     onClick={() => setSelectedClaim(null)}
-                    className="w-8 h-8 rounded-lg bg-[#21262d] hover:bg-[#30363d] flex items-center justify-center transition-colors flex-shrink-0"
+                    className="w-8 h-8 rounded-lg bg-[#1E2229] hover:bg-[#252B33] flex items-center justify-center transition-colors flex-shrink-0"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                      <path d="M18 6L6 18M6 6l12 12" stroke="#8b949e" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M18 6L6 18M6 6l12 12" stroke="#B5BDC6" strokeWidth="2" strokeLinecap="round"/>
                     </svg>
                   </button>
                 </div>
 
                 {/* Term ID row */}
                 <div className="flex items-center gap-2 text-sm mb-5">
-                  <span className="text-[#8b949e] w-16 flex-shrink-0">Term ID:</span>
-                  <code className="text-[#8b949e] text-xs font-mono">
+                  <span className="text-[#B5BDC6] w-16 flex-shrink-0">Term ID:</span>
+                  <code className="text-[#B5BDC6] text-xs font-mono">
                     {selectedClaim.term_id.slice(0, 14)}...{selectedClaim.term_id.slice(-8)}
                   </code>
                   <button
                     onClick={() => navigator.clipboard.writeText(selectedClaim.term_id)}
-                    className="text-[#8b949e] hover:text-white transition-colors"
+                    className="text-[#B5BDC6] hover:text-white transition-colors"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                       <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
@@ -968,29 +968,29 @@ function ClaimsPageContent() {
                     { value: supportSupply.toFixed(3), label: 'Support Pool' },
                     { value: opposeSupply.toFixed(3), label: 'Oppose Pool' },
                   ].map((s, i) => (
-                    <div key={i} className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 text-center">
+                    <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-white">{s.value}</p>
-                      <p className="text-xs text-[#8b949e] mt-0.5">{s.label}</p>
+                      <p className="text-xs text-[#B5BDC6] mt-0.5">{s.label}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* === ACTION CARD: Bonding Curve Market === */}
-              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-5 mb-3">
-                <p className="text-[#8b949e] text-xs font-semibold mb-1">Bonding Curve Market</p>
-                <p className="text-[#6b7280] text-xs mb-3">One market: choose side (Support/Oppose) and action (Buy/Sell).</p>
+              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
+                <p className="text-[#B5BDC6] text-xs font-semibold mb-1">Bonding Curve Market</p>
+                <p className="text-[#7A838D] text-xs mb-3">One market: choose side (Support/Oppose) and action (Buy/Sell).</p>
 
                 {isConnected ? (
                   <>
                     {/* Support / Oppose tabs */}
-                    <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-3">
+                    <div className="flex rounded-xl overflow-hidden border border-[#C8963C]/12 mb-3">
                       <button onClick={(e) => { e.stopPropagation(); setSignalSide('support'); setTradeAction('buy') }}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors ${signalSide === 'support' ? 'bg-[#2d7a5f] text-white' : 'bg-transparent text-[#8b949e] hover:text-white'}`}>
+                        className={`flex-1 py-2 text-xs font-bold transition-colors ${signalSide === 'support' ? 'bg-[#2d7a5f] text-white' : 'bg-transparent text-[#B5BDC6] hover:text-white'}`}>
                         Support
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setSignalSide('oppose'); setTradeAction('buy') }}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors ${signalSide === 'oppose' ? 'bg-[#8b3a3a] text-white' : 'bg-transparent text-[#8b949e] hover:text-white'}`}>
+                        className={`flex-1 py-2 text-xs font-bold transition-colors ${signalSide === 'oppose' ? 'bg-[#8b3a3a] text-white' : 'bg-transparent text-[#B5BDC6] hover:text-white'}`}>
                         Oppose
                       </button>
                     </div>
@@ -1003,7 +1003,7 @@ function ClaimsPageContent() {
                           <path d="M12 8v4m0 4h.01" stroke="#b8860b" strokeWidth="2" strokeLinecap="round"/>
                         </svg>
                         <p className="text-[#b8860b] text-xs font-semibold mb-1">Oppose Vault Indexing</p>
-                        <p className="text-[#8b949e] text-xs mb-3 leading-relaxed">
+                        <p className="text-[#B5BDC6] text-xs mb-3 leading-relaxed">
                           The Oppose vault for this claim is still being indexed by the protocol.<br/>
                           It should appear within seconds — please refresh or try again shortly.
                         </p>
@@ -1016,13 +1016,13 @@ function ClaimsPageContent() {
                     ) : (
                       <>
                         {/* Buy / Sell tabs */}
-                        <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-3">
+                        <div className="flex rounded-xl overflow-hidden border border-[#C8963C]/12 mb-3">
                           <button onClick={(e) => { e.stopPropagation(); setTradeAction('buy') }}
-                            className={`flex-1 py-2 text-xs font-bold transition-colors ${tradeAction === 'buy' ? 'bg-white text-black' : 'bg-transparent text-[#8b949e] hover:text-white'}`}>
+                            className={`flex-1 py-2 text-xs font-bold transition-colors ${tradeAction === 'buy' ? 'bg-white text-black' : 'bg-transparent text-[#B5BDC6] hover:text-white'}`}>
                             Buy
                           </button>
                           <button onClick={(e) => { e.stopPropagation(); setTradeAction('sell') }}
-                            className={`flex-1 py-2 text-xs font-bold transition-colors ${tradeAction === 'sell' ? 'bg-white text-black' : 'bg-transparent text-[#8b949e] hover:text-white'}`}>
+                            className={`flex-1 py-2 text-xs font-bold transition-colors ${tradeAction === 'sell' ? 'bg-white text-black' : 'bg-transparent text-[#B5BDC6] hover:text-white'}`}>
                             Sell
                           </button>
                         </div>
@@ -1031,11 +1031,11 @@ function ClaimsPageContent() {
                         <div className="flex items-center justify-between mb-3 px-1">
                           <div>
                             <p className="text-white text-xs font-semibold">Bonding Curve</p>
-                            <p className="text-[#8b949e] text-xs">
+                            <p className="text-[#B5BDC6] text-xs">
                               Current price: {getCurrentPrice(signalSide === 'support' ? supportSupply : opposeSupply).toFixed(4)} tTRUST/share
                             </p>
                           </div>
-                          <span className="text-[10px] px-2 py-1 rounded-full border border-[#30363d] text-[#8b949e]">Active</span>
+                          <span className="text-[10px] px-2 py-1 rounded-full border border-[#C8963C]/25 text-[#B5BDC6]">Active</span>
                         </div>
 
                         {/* First Oppose Buy hint */}
@@ -1058,27 +1058,27 @@ function ClaimsPageContent() {
                             : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
                           const supply = signalSide === 'support' ? supportSupply : opposeSupply
                           return ownedShares > 0 ? (
-                            <div className="mb-3 p-3 rounded-xl bg-[#161b22] border border-[#21262d]">
+                            <div className="mb-3 p-3 rounded-xl bg-[#171A1D] border border-[#C8963C]/12">
                               <div className="flex justify-between items-center">
-                                <span className="text-[#8b949e] text-xs">Your shares</span>
+                                <span className="text-[#B5BDC6] text-xs">Your shares</span>
                                 <span className="text-white text-sm font-bold font-mono">{ownedShares.toFixed(4)} shares</span>
                               </div>
                               <div className="flex justify-between items-center mt-1">
-                                <span className="text-[#6b7280] text-[10px]">Current value</span>
-                                <span className="text-[#6b7280] text-[10px] font-mono">{getSellProceeds(ownedShares, supply).toFixed(6)} tTRUST</span>
+                                <span className="text-[#7A838D] text-[10px]">Current value</span>
+                                <span className="text-[#7A838D] text-[10px] font-mono">{getSellProceeds(ownedShares, supply).toFixed(6)} tTRUST</span>
                               </div>
                             </div>
                           ) : (
-                            <div className="mb-3 p-3 rounded-xl bg-[#161b22] border border-[#21262d] text-center">
-                              <p className="text-[#6b7280] text-xs">No {signalSide} shares to sell</p>
+                            <div className="mb-3 p-3 rounded-xl bg-[#171A1D] border border-[#C8963C]/12 text-center">
+                              <p className="text-[#7A838D] text-xs">No {signalSide} shares to sell</p>
                             </div>
                           )
                         })()}
 
                         {/* Amount input */}
-                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 mb-3">
+                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 mb-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[#8b949e] text-xs">{tradeAction === 'buy' ? 'Amount in tTRUST' : 'Shares to sell'}</span>
+                            <span className="text-[#B5BDC6] text-xs">{tradeAction === 'buy' ? 'Amount in tTRUST' : 'Shares to sell'}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             {tradeAction === 'buy' ? (
@@ -1101,7 +1101,7 @@ function ClaimsPageContent() {
                                 onClick={e => e.stopPropagation()} min="0" step="0.0001"
                                 className="flex-1 bg-transparent text-white text-lg font-bold outline-none" placeholder="0.00" />
                             )}
-                            <span className="text-[#8b949e] text-sm font-semibold">{tradeAction === 'buy' ? 'tTRUST' : 'shares'}</span>
+                            <span className="text-[#B5BDC6] text-sm font-semibold">{tradeAction === 'buy' ? 'tTRUST' : 'shares'}</span>
                             {tradeAction === 'sell' && (
                               <button onClick={e => {
                                 e.stopPropagation()
@@ -1111,7 +1111,7 @@ function ClaimsPageContent() {
                                   const effectiveMax = exitLimit?.isLimited ? Math.min(exitLimit.maxSellShares, maxShares) : maxShares
                                   setRedeemShares(effectiveMax.toFixed(6))
                                 }
-                              }} className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f6feb20] text-[#58a6ff] hover:bg-[#1f6feb30] transition-colors font-bold">
+                              }} className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(200,150,60,0.12)] text-[#C8963C] hover:bg-[rgba(200,150,60,0.20)] transition-colors font-bold">
                                 MAX
                               </button>
                             )}
@@ -1129,8 +1129,8 @@ function ClaimsPageContent() {
                                   value={parseFloat(redeemShares) || 0}
                                   onChange={e => setRedeemShares(e.target.value)}
                                   onClick={e => e.stopPropagation()}
-                                  className="w-full h-1 bg-[#21262d] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#58a6ff]" />
-                                <div className="flex justify-between text-[10px] text-[#6b7280] mt-1">
+                                  className="w-full h-1 bg-[#1E2229] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#C8963C]" />
+                                <div className="flex justify-between text-[10px] text-[#7A838D] mt-1">
                                   <span>0</span>
                                   {[0.25, 0.5, 0.75].map(pct => (
                                     <button key={pct} onClick={e => { e.stopPropagation(); setRedeemShares((maxShares * pct).toFixed(4)) }} className="hover:text-white transition-colors">{pct * 100}%</button>
@@ -1186,21 +1186,21 @@ function ClaimsPageContent() {
                             return (
                               <div className="space-y-1 mb-3 px-1">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#8b949e] text-xs">You receive</span>
+                                  <span className="text-[#B5BDC6] text-xs">You receive</span>
                                   <span className="text-white text-xs font-semibold">{inputAmt > 0 ? `${preview.sharesReceived.toFixed(4)} shares` : '—'}</span>
                                 </div>
                                 {inputAmt > 0 && (<>
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[#6b7280] text-[10px]">Fee (5%)</span>
-                                    <span className="text-[#6b7280] text-[10px]">{preview.fee.toFixed(4)} tTRUST</span>
+                                    <span className="text-[#7A838D] text-[10px]">Fee (5%)</span>
+                                    <span className="text-[#7A838D] text-[10px]">{preview.fee.toFixed(4)} tTRUST</span>
                                   </div>
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[#6b7280] text-[10px]">Avg price</span>
-                                    <span className="text-[#6b7280] text-[10px]">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
+                                    <span className="text-[#7A838D] text-[10px]">Avg price</span>
+                                    <span className="text-[#7A838D] text-[10px]">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
                                   </div>
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[#6b7280] text-[10px]">Price after</span>
-                                    <span className="text-[#6b7280] text-[10px]">{preview.newPrice.toFixed(4)} tTRUST/share</span>
+                                    <span className="text-[#7A838D] text-[10px]">Price after</span>
+                                    <span className="text-[#7A838D] text-[10px]">{preview.newPrice.toFixed(4)} tTRUST/share</span>
                                   </div>
                                 </>)}
                               </div>
@@ -1218,21 +1218,21 @@ function ClaimsPageContent() {
                                   <p className="text-[#f85149] text-[10px] mb-1">Exceeds owned shares ({maxOwned.toFixed(4)})</p>
                                 )}
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#8b949e] text-xs">Gross proceeds</span>
-                                  <span className="text-[#8b949e] text-xs font-mono">{validShares ? `${preview.grossProceeds.toFixed(6)} tTRUST` : '—'}</span>
+                                  <span className="text-[#B5BDC6] text-xs">Gross proceeds</span>
+                                  <span className="text-[#B5BDC6] text-xs font-mono">{validShares ? `${preview.grossProceeds.toFixed(6)} tTRUST` : '—'}</span>
                                 </div>
                                 {validShares && (<>
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[#6b7280] text-[10px]">Fee (5%)</span>
+                                    <span className="text-[#7A838D] text-[10px]">Fee (5%)</span>
                                     <span className="text-[#f85149] text-[10px] font-mono">-{preview.fee.toFixed(6)} tTRUST</span>
                                   </div>
-                                  <div className="h-px bg-[#21262d] my-1" />
+                                  <div className="h-px bg-[#1E2229] my-1" />
                                   <div className="flex items-center justify-between">
                                     <span className="text-white text-xs font-medium">You receive</span>
                                     <span className="text-white text-xs font-bold font-mono">{preview.netProceeds.toFixed(6)} tTRUST</span>
                                   </div>
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[#6b7280] text-[10px]">Price after sell</span>
+                                    <span className="text-[#7A838D] text-[10px]">Price after sell</span>
                                     <span className="text-[#f85149] text-[10px] font-mono">{preview.newPrice.toFixed(6)} tTRUST/share</span>
                                   </div>
                                 </>)}
@@ -1277,7 +1277,7 @@ function ClaimsPageContent() {
                               setShowConfirm(true)
                             }}
                             disabled={!parseFloat(redeemShares) || parseFloat(redeemShares) <= 0}
-                            className="w-full py-2.5 rounded-xl text-sm font-bold border border-[#21262d] text-[#8b949e] hover:text-white hover:border-white/30 transition-colors disabled:opacity-50"
+                            className="w-full py-2.5 rounded-xl text-sm font-bold border border-[#C8963C]/12 text-[#B5BDC6] hover:text-white hover:border-white/30 transition-colors disabled:opacity-50"
                           >
                             Sell Shares → Redeem tTRUST
                           </button>
@@ -1287,9 +1287,9 @@ function ClaimsPageContent() {
                     )}
                   </>
                 ) : (
-                  <div className="text-center py-6 bg-[#161b22] rounded-xl border border-[#21262d]">
-                    <p className="text-[#8b949e] text-sm font-medium mb-1">Connect wallet to trade</p>
-                    <p className="text-[#6b7280] text-xs">You need a connected wallet to support or oppose claims</p>
+                  <div className="text-center py-6 bg-[#171A1D] rounded-xl border border-[#C8963C]/12">
+                    <p className="text-[#B5BDC6] text-sm font-medium mb-1">Connect wallet to trade</p>
+                    <p className="text-[#7A838D] text-xs">You need a connected wallet to support or oppose claims</p>
                   </div>
                 )}
               </div>
@@ -1302,11 +1302,11 @@ function ClaimsPageContent() {
                 const agaVal = agaSf > 0 ? getSellProceeds(agaSf, opposeSupply) : 0
                 const totalVal = forVal + agaVal
                 return (
-                  <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-4 mb-3">
+                  <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-4 mb-3">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Your Holdings</p>
+                      <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Your Holdings</p>
                       <span className="text-white text-xs font-bold">
-                        ≈ {totalVal.toFixed(4)} <span className="text-[#8b949e] font-normal">tTRUST</span>
+                        ≈ {totalVal.toFixed(4)} <span className="text-[#B5BDC6] font-normal">tTRUST</span>
                       </span>
                     </div>
                     <div className="space-y-2">
@@ -1316,11 +1316,11 @@ function ClaimsPageContent() {
                             <div className="w-2 h-2 rounded-full bg-[#34a872] flex-shrink-0" />
                             <div>
                               <p className="text-[#34a872] text-xs font-semibold">Support</p>
-                              <p className="text-[#6b7280] text-[10px]">FOR vault</p>
+                              <p className="text-[#7A838D] text-[10px]">FOR vault</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-white text-xs font-bold">{forSf.toFixed(4)} <span className="text-[#6b7280] font-normal text-[10px]">shares</span></p>
+                            <p className="text-white text-xs font-bold">{forSf.toFixed(4)} <span className="text-[#7A838D] font-normal text-[10px]">shares</span></p>
                             <p className="text-[#34a872] text-[10px] font-semibold">≈ {forVal.toFixed(4)} tTRUST</p>
                           </div>
                         </div>
@@ -1331,11 +1331,11 @@ function ClaimsPageContent() {
                             <div className="w-2 h-2 rounded-full bg-[#c45454] flex-shrink-0" />
                             <div>
                               <p className="text-[#c45454] text-xs font-semibold">Oppose</p>
-                              <p className="text-[#6b7280] text-[10px]">AGAINST vault</p>
+                              <p className="text-[#7A838D] text-[10px]">AGAINST vault</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-white text-xs font-bold">{agaSf.toFixed(4)} <span className="text-[#6b7280] font-normal text-[10px]">shares</span></p>
+                            <p className="text-white text-xs font-bold">{agaSf.toFixed(4)} <span className="text-[#7A838D] font-normal text-[10px]">shares</span></p>
                             <p className="text-[#c45454] text-[10px] font-semibold">≈ {agaVal.toFixed(4)} tTRUST</p>
                           </div>
                         </div>
@@ -1369,7 +1369,7 @@ function ClaimsPageContent() {
                 const circumference = 2 * Math.PI * 32
                 const dashLen = (score / 100) * circumference
                 return (
-                  <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 mb-3">
+                  <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                     <div className="grid grid-cols-2 gap-6">
                       {/* LEFT: Trust Score gauge */}
                       <div>
@@ -1389,11 +1389,11 @@ function ClaimsPageContent() {
                             <div className="flex items-center gap-1 mb-1">
                               {momDir === 'up' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="#10b981" strokeWidth="2" strokeLinecap="round"/></svg>}
                               {momDir === 'down' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M7 7L17 17M17 17H7M17 17V7" stroke="#f85149" strokeWidth="2" strokeLinecap="round"/></svg>}
-                              <span className={`text-sm font-medium ${momDir === 'up' ? 'text-[#10b981]' : momDir === 'down' ? 'text-[#f85149]' : 'text-[#8b949e]'}`}>{momText}</span>
+                              <span className={`text-sm font-medium ${momDir === 'up' ? 'text-[#10b981]' : momDir === 'down' ? 'text-[#f85149]' : 'text-[#B5BDC6]'}`}>{momText}</span>
                             </div>
-                            <p className="text-[#8b949e] text-xs">Trust Level</p>
+                            <p className="text-[#B5BDC6] text-xs">Trust Level</p>
                             <p className="text-white text-sm font-semibold capitalize">{level}</p>
-                            <p className="text-[#8b949e] text-xs mt-1">Confidence</p>
+                            <p className="text-[#B5BDC6] text-xs mt-1">Confidence</p>
                             <p className="text-white text-sm font-semibold">{(confidence * 100).toFixed(0)}%</p>
                           </div>
                         </div>
@@ -1405,21 +1405,21 @@ function ClaimsPageContent() {
                           <span className="text-[#10b981]">Support ({supportPct.toFixed(1)}%)</span>
                           <span className="text-[#f85149]">Oppose ({(100 - supportPct).toFixed(1)}%)</span>
                         </div>
-                        <div className="h-2 bg-[#21262d] rounded-full overflow-hidden mb-4">
+                        <div className="h-2 bg-[#1E2229] rounded-full overflow-hidden mb-4">
                           <div className="h-full rounded-full bg-gradient-to-r from-[#10b981] to-[#059669] transition-all" style={{ width: `${supportPct}%` }} />
                         </div>
                         <div className="space-y-2">
-                          <div className="bg-[#161b22] border border-[#21262d] rounded-lg p-3">
-                            <p className="text-xs text-[#8b949e] mb-0.5">Support Stake</p>
+                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
+                            <p className="text-xs text-[#B5BDC6] mb-0.5">Support Stake</p>
                             <p className="text-[#10b981] font-bold">{formatStakes(supportWei)}</p>
                           </div>
-                          <div className="bg-[#161b22] border border-[#21262d] rounded-lg p-3">
-                            <p className="text-xs text-[#8b949e] mb-0.5">Oppose Stake</p>
+                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
+                            <p className="text-xs text-[#B5BDC6] mb-0.5">Oppose Stake</p>
                             <p className="text-[#f85149] font-bold">{formatStakes(opposeWei)}</p>
                           </div>
-                          <div className="bg-[#161b22] border border-[#21262d] rounded-lg p-3">
-                            <p className="text-xs text-[#8b949e] mb-0.5">Net Stake</p>
-                            <p className="text-[#58a6ff] font-bold">{netWei >= BigInt(0) ? '+' : ''}{formatStakes(netWei)} tTRUST</p>
+                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
+                            <p className="text-xs text-[#B5BDC6] mb-0.5">Net Stake</p>
+                            <p className="text-[#C8963C] font-bold">{netWei >= BigInt(0) ? '+' : ''}{formatStakes(netWei)} tTRUST</p>
                           </div>
                         </div>
                       </div>
@@ -1429,15 +1429,15 @@ function ClaimsPageContent() {
               })()}
 
               {/* === BONDING CURVE INFO BANNER === */}
-              <div className="bg-[#1f6feb15] border border-[#1f6feb25] rounded-2xl p-4 mb-3">
+              <div className="bg-[rgba(200,150,60,0.10)] border border-[#1f6feb25] rounded-2xl p-4 mb-3">
                 <div className="flex items-start gap-3">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                    <circle cx="12" cy="12" r="9" stroke="#58a6ff" strokeWidth="2" />
-                    <path d="M12 8v4m0 4h.01" stroke="#58a6ff" strokeWidth="2" strokeLinecap="round" />
+                    <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2" />
+                    <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                   <div>
-                    <p className="text-[#58a6ff] text-sm font-semibold mb-1">Bonding Curve Economics</p>
-                    <p className="text-[#8b949e] text-xs leading-relaxed">
+                    <p className="text-[#C8963C] text-sm font-semibold mb-1">Bonding Curve Economics</p>
+                    <p className="text-[#B5BDC6] text-xs leading-relaxed">
                       Early stakers get more shares per tTRUST. As more people support this claim, your shares increase in value. Redeem anytime to realize gains.
                     </p>
                   </div>
@@ -1445,8 +1445,8 @@ function ClaimsPageContent() {
               </div>
 
               {/* === TABS: Overview / Attestations / Activity === */}
-              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl overflow-hidden mb-3">
-                <div className="flex border-b border-[#21262d]">
+              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl overflow-hidden mb-3">
+                <div className="flex border-b border-[#C8963C]/12">
                   {[
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
                     { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
@@ -1454,7 +1454,7 @@ function ClaimsPageContent() {
                   ].map(tab => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
                       className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                        activeTab === tab.id ? 'text-white border-[#34a872]' : 'text-[#8b949e] border-transparent hover:text-white hover:border-[#30363d]'
+                        activeTab === tab.id ? 'text-white border-[#34a872]' : 'text-[#B5BDC6] border-transparent hover:text-white hover:border-[#C8963C]/25'
                       }`}>
                       {tab.icon}{tab.label}
                     </button>
@@ -1487,9 +1487,9 @@ function ClaimsPageContent() {
                   return (
                     <div className="p-5 space-y-5">
                       {/* Trust Score Visual */}
-                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
+                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
                           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
                             style={{ backgroundColor: lc.bg, color: lc.text, border: `1px solid ${lc.border}` }}>
                             {level}
@@ -1497,53 +1497,53 @@ function ClaimsPageContent() {
                         </div>
                         <div className="flex items-end gap-4 mb-3">
                           <p className="text-4xl font-bold text-white leading-none">{score}</p>
-                          <p className="text-[#8b949e] text-xs pb-1">/100</p>
+                          <p className="text-[#B5BDC6] text-xs pb-1">/100</p>
                           {momentum !== 0 && (
                             <span className={`text-xs font-medium pb-1 ${momentum > 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
                               {momentum > 0 ? '▲' : '▼'} {Math.abs(momentum).toFixed(1)} momentum
                             </span>
                           )}
                         </div>
-                        <div className="w-full h-2 bg-[#21262d] rounded-full overflow-hidden mb-2">
+                        <div className="w-full h-2 bg-[#1E2229] rounded-full overflow-hidden mb-2">
                           <div className="h-full rounded-full transition-all duration-700"
                             style={{ width: `${score}%`, background: `linear-gradient(90deg, ${lc.text}80, ${lc.text})` }} />
                         </div>
-                        <div className="flex justify-between text-[10px] text-[#6b7280]">
+                        <div className="flex justify-between text-[10px] text-[#7A838D]">
                           <span>Critical</span><span>Low</span><span>Moderate</span><span>Good</span><span>Excellent</span>
                         </div>
                       </div>
 
                       {/* Weighted Trust */}
                       {weightedTrust && (
-                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Trust Score (time-weighted)</p>
+                            <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Trust Score (time-weighted)</p>
                             <span className="text-base font-bold" style={{ color: weightedTrust.weightedRatio >= 60 ? '#22c55e' : weightedTrust.weightedRatio >= 40 ? '#eab308' : '#ef4444' }}>
                               {weightedTrust.weightedRatio.toFixed(1)}%
                             </span>
                           </div>
-                          <div className="w-full h-1.5 bg-[#21262d] rounded-full overflow-hidden mb-2">
+                          <div className="w-full h-1.5 bg-[#1E2229] rounded-full overflow-hidden mb-2">
                             <div className="h-full rounded-full transition-all duration-500"
                               style={{ width: `${weightedTrust.weightedRatio}%`, background: weightedTrust.weightedRatio >= 60 ? 'linear-gradient(90deg, #22c55e, #4ade80)' : weightedTrust.weightedRatio >= 40 ? 'linear-gradient(90deg, #eab308, #facc15)' : 'linear-gradient(90deg, #ef4444, #f87171)' }} />
                           </div>
                           <div className="flex justify-between text-[10px]">
-                            <span className="text-[#6b7280]">Raw: {weightedTrust.rawRatio.toFixed(1)}%{weightedTrust.decayImpact !== 0 && <span style={{ color: weightedTrust.decayImpact > 0 ? '#22c55e' : '#ef4444', marginLeft: '4px' }}>({weightedTrust.decayImpact > 0 ? '+' : ''}{weightedTrust.decayImpact.toFixed(1)}% freshness)</span>}</span>
-                            <span className="text-[#6b7280]">{weightedTrust.freshSignalsCount} fresh / {weightedTrust.totalSignalsCount} signals</span>
+                            <span className="text-[#7A838D]">Raw: {weightedTrust.rawRatio.toFixed(1)}%{weightedTrust.decayImpact !== 0 && <span style={{ color: weightedTrust.decayImpact > 0 ? '#22c55e' : '#ef4444', marginLeft: '4px' }}>({weightedTrust.decayImpact > 0 ? '+' : ''}{weightedTrust.decayImpact.toFixed(1)}% freshness)</span>}</span>
+                            <span className="text-[#7A838D]">{weightedTrust.freshSignalsCount} fresh / {weightedTrust.totalSignalsCount} signals</span>
                           </div>
                         </div>
                       )}
 
                       {/* Composite Trust */}
                       {compositeTrust && (
-                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Composite Trust Score</p>
+                            <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Composite Trust Score</p>
                             <div className="flex items-center gap-2">
                               {compositeTrust.isStable && <span style={{ fontSize:'10px', padding:'2px 6px', borderRadius:'4px', background:'rgba(34,197,94,0.1)', color:'#22c55e', border:'1px solid rgba(34,197,94,0.2)' }}>Stable</span>}
                               <span className="text-base font-bold" style={{ color: compositeTrust.score >= 60 ? '#22c55e' : compositeTrust.score >= 40 ? '#eab308' : '#ef4444' }}>{compositeTrust.score.toFixed(1)}</span>
                             </div>
                           </div>
-                          <div className="w-full h-1.5 bg-[#21262d] rounded-full overflow-hidden mb-3">
+                          <div className="w-full h-1.5 bg-[#1E2229] rounded-full overflow-hidden mb-3">
                             <div className="h-full rounded-full transition-all duration-500"
                               style={{ width: `${compositeTrust.score}%`, background: compositeTrust.score >= 60 ? 'linear-gradient(90deg, #22c55e, #4ade80)' : compositeTrust.score >= 40 ? 'linear-gradient(90deg, #eab308, #facc15)' : 'linear-gradient(90deg, #ef4444, #f87171)' }} />
                           </div>
@@ -1555,17 +1555,17 @@ function ClaimsPageContent() {
                               { label: 'Price Retention', value: compositeTrust.breakdown.priceScore, weight: Math.round(COMPOSITE_WEIGHTS.PRICE_RETENTION * 100) },
                             ].map(({ label, value, weight }) => (
                               <div key={label}>
-                                <div className="flex justify-between text-[10px] text-[#6b7280] mb-0.5">
+                                <div className="flex justify-between text-[10px] text-[#7A838D] mb-0.5">
                                   <span>{label} <span style={{ color:'rgba(255,255,255,0.2)' }}>({weight}%)</span></span>
                                   <span style={{ color: value >= 60 ? '#22c55e' : value >= 40 ? '#eab308' : '#ef4444' }}>{value}</span>
                                 </div>
-                                <div className="w-full h-1 bg-[#0d1117] rounded-full overflow-hidden">
+                                <div className="w-full h-1 bg-[#0F1113] rounded-full overflow-hidden">
                                   <div className="h-full rounded-full transition-all duration-500" style={{ width: `${value}%`, background: value >= 60 ? '#22c55e' : value >= 40 ? '#eab308' : '#ef4444', opacity: 0.7 }} />
                                 </div>
                               </div>
                             ))}
                           </div>
-                          <div className="flex justify-between text-[10px] text-[#6b7280] mt-2">
+                          <div className="flex justify-between text-[10px] text-[#7A838D] mt-2">
                             <span>Price retention: {(compositeTrust.priceRetentionRatio * 100).toFixed(0)}% of ATH</span>
                             <span style={{ color: compositeTrust.isStable ? '#22c55e' : '#6b7280' }}>{compositeTrust.isStable ? '● Stable' : '● Unstable'}</span>
                           </div>
@@ -1573,9 +1573,9 @@ function ClaimsPageContent() {
                       )}
 
                       {/* Community Sentiment */}
-                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                        <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Community Sentiment</p>
-                        <div className="w-full h-3 bg-[#21262d] rounded-full overflow-hidden flex mb-2">
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                        <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Community Sentiment</p>
+                        <div className="w-full h-3 bg-[#1E2229] rounded-full overflow-hidden flex mb-2">
                           {supportPct > 0 && <div className="h-full bg-[#34a872] transition-all duration-500" style={{ width: `${supportPct}%` }} />}
                           {opsPct > 0 && <div className="h-full bg-[#c45454] transition-all duration-500" style={{ width: `${opsPct}%` }} />}
                         </div>
@@ -1583,33 +1583,33 @@ function ClaimsPageContent() {
                           <div className="flex items-center gap-1.5">
                             <div className="w-2.5 h-2.5 rounded-full bg-[#34a872]" />
                             <span className="text-white text-xs font-medium">{supportPct}% Support</span>
-                            <span className="text-[#6b7280] text-[10px]">({(Number(supportWei) / 1e18).toFixed(4)} tTRUST)</span>
+                            <span className="text-[#7A838D] text-[10px]">({(Number(supportWei) / 1e18).toFixed(4)} tTRUST)</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[#6b7280] text-[10px]">({(Number(opposeWei) / 1e18).toFixed(4)} tTRUST)</span>
+                            <span className="text-[#7A838D] text-[10px]">({(Number(opposeWei) / 1e18).toFixed(4)} tTRUST)</span>
                             <span className="text-white text-xs font-medium">{opsPct}% Oppose</span>
                             <div className="w-2.5 h-2.5 rounded-full bg-[#c45454]" />
                           </div>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                          <div className="bg-[#0d1117] rounded-lg p-2.5 text-center">
+                          <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
                             <p className="text-white text-sm font-bold">{(Number(totalWei) / 1e18).toFixed(4)}</p>
-                            <p className="text-[#6b7280] text-[10px]">Total TVL</p>
+                            <p className="text-[#7A838D] text-[10px]">Total TVL</p>
                           </div>
-                          <div className="bg-[#0d1117] rounded-lg p-2.5 text-center">
+                          <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
                             <p className={`text-sm font-bold ${netStake >= 0 ? 'text-[#34a872]' : 'text-[#c45454]'}`}>{netStake >= 0 ? '+' : ''}{netStake.toFixed(4)}</p>
-                            <p className="text-[#6b7280] text-[10px]">Net Stake</p>
+                            <p className="text-[#7A838D] text-[10px]">Net Stake</p>
                           </div>
-                          <div className="bg-[#0d1117] rounded-lg p-2.5 text-center">
+                          <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
                             <p className="text-white text-sm font-bold">{(confidence * 100).toFixed(0)}%</p>
-                            <p className="text-[#6b7280] text-[10px]">Confidence</p>
+                            <p className="text-[#7A838D] text-[10px]">Confidence</p>
                           </div>
                         </div>
                       </div>
 
                       {/* Bonding Curves (dual) */}
-                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                        <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Bonding Curves</p>
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                        <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Bonding Curves</p>
                         <div className="grid grid-cols-2 gap-4">
                           {(() => {
                             const data = generateCurveData(supportSupply)
@@ -1629,7 +1629,7 @@ function ClaimsPageContent() {
                                     </AreaChart>
                                   </ResponsiveContainer>
                                 </div>
-                                <p className="text-[#6b7280] text-[10px] mt-1">Supply: {supportSupply.toFixed(2)} · Price: {cp.toFixed(4)}</p>
+                                <p className="text-[#7A838D] text-[10px] mt-1">Supply: {supportSupply.toFixed(2)} · Price: {cp.toFixed(4)}</p>
                               </div>
                             )
                           })()}
@@ -1651,7 +1651,7 @@ function ClaimsPageContent() {
                                     </AreaChart>
                                   </ResponsiveContainer>
                                 </div>
-                                <p className="text-[#6b7280] text-[10px] mt-1">Supply: {opposeSupply.toFixed(2)} · Price: {cp.toFixed(4)}</p>
+                                <p className="text-[#7A838D] text-[10px] mt-1">Supply: {opposeSupply.toFixed(2)} · Price: {cp.toFixed(4)}</p>
                               </div>
                             )
                           })()}
@@ -1663,8 +1663,8 @@ function ClaimsPageContent() {
                         const chartData = buildTrustChartData(claimSignals, claimTriple.counterTermId)
                         if (chartData.length < 2) return null
                         return (
-                          <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                            <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Trust History</p>
+                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                            <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Trust History</p>
                             <div className="h-40">
                               <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData}>
@@ -1677,7 +1677,7 @@ function ClaimsPageContent() {
                                 </AreaChart>
                               </ResponsiveContainer>
                             </div>
-                            <div className="flex justify-between text-[10px] text-[#6b7280] mt-1">
+                            <div className="flex justify-between text-[10px] text-[#7A838D] mt-1">
                               <span>0% = All Oppose</span><span>50% = Balanced</span><span>100% = All Support</span>
                             </div>
                           </div>
@@ -1686,19 +1686,19 @@ function ClaimsPageContent() {
 
                       {/* Positions Table */}
                       {(() => {
-                        if (positionsLoading) return <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4"><div className="h-16 animate-pulse bg-[#21262d] rounded-lg" /></div>
+                        if (positionsLoading) return <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4"><div className="h-16 animate-pulse bg-[#1E2229] rounded-lg" /></div>
                         if (allPositions.length === 0) return null
                         let totalShares = 0n
                         try { totalShares = allPositions.reduce((acc: bigint, p: any) => { try { return acc + BigInt(p.shares || '0') } catch { return acc } }, 0n) } catch { totalShares = 0n }
                         return (
-                          <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                            <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">
+                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                            <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">
                               Positions ({combinedStakerCount} staker{combinedStakerCount !== 1 ? 's' : ''})
                             </p>
                             <div className="max-h-64 overflow-y-auto">
                               <table className="w-full text-xs">
                                 <thead>
-                                  <tr className="text-[#6b7280] border-b border-[#21262d]">
+                                  <tr className="text-[#7A838D] border-b border-[#C8963C]/12">
                                     <th className="text-left py-2 font-medium">Wallet</th>
                                     <th className="text-left py-2 font-medium">Side</th>
                                     <th className="text-right py-2 font-medium">Shares</th>
@@ -1716,12 +1716,12 @@ function ClaimsPageContent() {
                                     const displayWallet = isENS ? walletLabel : walletLabel?.length > 14 ? walletLabel.slice(0, 8) + '...' + walletLabel.slice(-4) : walletLabel
                                     const isCreator = selectedClaim.creator?.id && pos.account_id?.toLowerCase() === selectedClaim.creator.id.toLowerCase()
                                     return (
-                                      <tr key={`${pos.account_id}-${pos.term_id}-${i}`} className="border-b border-[#21262d]/50 hover:bg-[#0d1117]">
+                                      <tr key={`${pos.account_id}-${pos.term_id}-${i}`} className="border-b border-[#C8963C]/12/50 hover:bg-[#0F1113]">
                                         <td className="py-2">
                                           <div className="flex items-center gap-1.5 flex-wrap">
-                                            <Link href={`/profile/${pos.account_id}`} className="text-[#58a6ff] hover:underline">{displayWallet}</Link>
+                                            <Link href={`/profile/${pos.account_id}`} className="text-[#C8963C] hover:underline">{displayWallet}</Link>
                                             <EarlySupporterBadge rank={i + 1} />
-                                            {isCreator && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-[#1f6feb20] text-[#58a6ff] border border-[#1f6feb30]">CREATOR</span>}
+                                            {isCreator && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-[rgba(200,150,60,0.12)] text-[#C8963C] border border-[rgba(200,150,60,0.20)]">CREATOR</span>}
                                           </div>
                                         </td>
                                         <td className="py-2">
@@ -1730,8 +1730,8 @@ function ClaimsPageContent() {
                                           </span>
                                         </td>
                                         <td className="py-2 text-right text-white font-medium">{(Number(shares) / 1e18).toFixed(4)}</td>
-                                        <td className="py-2 text-right text-[#8b949e]">{getSellProceeds(Number(shares) / 1e18, isOppose ? opposeSupply : supportSupply).toFixed(4)}</td>
-                                        <td className="py-2 text-right text-[#8b949e]">{pct.toFixed(1)}%</td>
+                                        <td className="py-2 text-right text-[#B5BDC6]">{getSellProceeds(Number(shares) / 1e18, isOppose ? opposeSupply : supportSupply).toFixed(4)}</td>
+                                        <td className="py-2 text-right text-[#B5BDC6]">{pct.toFixed(1)}%</td>
                                       </tr>
                                     )
                                   })}
@@ -1744,9 +1744,9 @@ function ClaimsPageContent() {
 
                       {/* Your Position */}
                       {isConnected && (
-                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Your Position</p>
+                            <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Your Position</p>
                             {(() => {
                               const stakedSince = userPosition.rawPositions[0]?.updated_at || null
                               if (!stakedSince) return null
@@ -1761,7 +1761,7 @@ function ClaimsPageContent() {
                                 const val = getSellProceeds(sf, supportSupply)
                                 return <div className="bg-[#2d7a5f15] border border-[#2d7a5f30] rounded-lg px-3 py-2">
                                   <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#34a872]" /><span className="text-[#34a872] text-xs font-medium">Support</span></div><span className="text-white text-xs font-bold">{sf.toFixed(4)} shares</span></div>
-                                  <div className="flex items-center justify-between mt-1"><span className="text-[#6b7280] text-[10px]">Current Value</span><span className="text-[#34a872] text-[10px] font-semibold">{val.toFixed(4)} tTRUST</span></div>
+                                  <div className="flex items-center justify-between mt-1"><span className="text-[#7A838D] text-[10px]">Current Value</span><span className="text-[#34a872] text-[10px] font-semibold">{val.toFixed(4)} tTRUST</span></div>
                                 </div>
                               })()}
                               {userPosition.againstShares && Number(userPosition.againstShares) > 0 && (() => {
@@ -1769,27 +1769,27 @@ function ClaimsPageContent() {
                                 const val = getSellProceeds(sf, opposeSupply)
                                 return <div className="bg-[#8b3a3a15] border border-[#8b3a3a30] rounded-lg px-3 py-2">
                                   <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#c45454]" /><span className="text-[#c45454] text-xs font-medium">Oppose</span></div><span className="text-white text-xs font-bold">{sf.toFixed(4)} shares</span></div>
-                                  <div className="flex items-center justify-between mt-1"><span className="text-[#6b7280] text-[10px]">Current Value</span><span className="text-[#c45454] text-[10px] font-semibold">{val.toFixed(4)} tTRUST</span></div>
+                                  <div className="flex items-center justify-between mt-1"><span className="text-[#7A838D] text-[10px]">Current Value</span><span className="text-[#c45454] text-[10px] font-semibold">{val.toFixed(4)} tTRUST</span></div>
                                 </div>
                               })()}
                             </div>
                           ) : (
-                            <div className="text-center py-3 bg-[#0d1117] rounded-lg">
-                              <p className="text-[#6b7280] text-xs">You haven't staked on this claim yet</p>
-                              <p className="text-[#8b949e] text-[10px] mt-0.5">Use the Bonding Curve Market above to take a position</p>
+                            <div className="text-center py-3 bg-[#0F1113] rounded-lg">
+                              <p className="text-[#7A838D] text-xs">You haven't staked on this claim yet</p>
+                              <p className="text-[#B5BDC6] text-[10px] mt-0.5">Use the Bonding Curve Market above to take a position</p>
                             </div>
                           )}
                         </div>
                       )}
 
                       {/* Claim Details */}
-                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                        <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Details</p>
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                        <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Details</p>
                         <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                           <div>
-                            <p className="text-[#6b7280] text-[10px] mb-0.5">Creator</p>
+                            <p className="text-[#7A838D] text-[10px] mb-0.5">Creator</p>
                             {selectedClaim.creator?.id ? (
-                              <Link href={`/profile/${selectedClaim.creator.id}`} className="text-[#58a6ff] text-xs font-medium hover:underline">
+                              <Link href={`/profile/${selectedClaim.creator.id}`} className="text-[#C8963C] text-xs font-medium hover:underline">
                                 {selectedClaim.creator.label?.replace('.eth','') || selectedClaim.creator.id.slice(0,10)}
                               </Link>
                             ) : <p className="text-white text-xs font-medium">{selectedClaim.creator?.label || 'unknown'}</p>}
@@ -1800,15 +1800,15 @@ function ClaimsPageContent() {
                             { label: 'Stakers', value: String(combinedStakerCount) },
                           ].map((item, i) => (
                             <div key={i}>
-                              <p className="text-[#6b7280] text-[10px] mb-0.5">{item.label}</p>
+                              <p className="text-[#7A838D] text-[10px] mb-0.5">{item.label}</p>
                               <p className="text-white text-xs font-medium">{item.value}</p>
                             </div>
                           ))}
                         </div>
-                        <div className="mt-3 pt-3 border-t border-[#21262d]">
+                        <div className="mt-3 pt-3 border-t border-[#C8963C]/12">
                           <div className="flex gap-2 flex-wrap">
                             {['Triple Claim', selectedClaim.subject.type === 'agent' ? 'AI Agent' : 'Skill', selectedClaim.object.type === 'agent' ? 'AI Agent' : 'Skill'].filter((v,i,a) => a.indexOf(v)===i).map((tag, i) => (
-                              <span key={i} className="px-2.5 py-0.5 bg-[#1f6feb15] border border-[#1f6feb30] rounded-full text-[#58a6ff] text-[10px] font-medium">{tag}</span>
+                              <span key={i} className="px-2.5 py-0.5 bg-[rgba(200,150,60,0.10)] border border-[rgba(200,150,60,0.20)] rounded-full text-[#C8963C] text-[10px] font-medium">{tag}</span>
                             ))}
                           </div>
                         </div>
@@ -1842,8 +1842,8 @@ function ClaimsPageContent() {
                     <div className="p-4 space-y-3">
                       {profiles.length === 0 ? (
                         <div className="text-center py-8">
-                          <p className="text-[#8b949e] text-sm">No attestations yet</p>
-                          <p className="text-[#6b7280] text-xs mt-1">Be the first to stake on this claim</p>
+                          <p className="text-[#B5BDC6] text-sm">No attestations yet</p>
+                          <p className="text-[#7A838D] text-xs mt-1">Be the first to stake on this claim</p>
                         </div>
                       ) : profiles.map(profile => {
                         const isSupporter = profile.netShares > 0
@@ -1851,35 +1851,35 @@ function ClaimsPageContent() {
                         const isENS = walletLabel?.includes('.eth')
                         const displayWallet = isENS ? walletLabel : walletLabel?.length > 20 ? walletLabel.slice(0, 12) + '...' + walletLabel.slice(-4) : walletLabel
                         return (
-                          <div key={profile.accountId} className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                          <div key={profile.accountId} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-center gap-3">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${isSupporter ? 'bg-[#2d7a5f20] text-[#34a872]' : 'bg-[#8b3a3a20] text-[#c45454]'}`}>
                                   {isSupporter ? '▲' : '▼'}
                                 </div>
                                 <div>
-                                  <Link href={`/profile/${profile.accountId}`} className="text-white text-sm font-medium hover:text-[#58a6ff] transition-colors">{displayWallet}</Link>
-                                  <p className="text-[#6b7280] text-[10px] mt-0.5">Last active {new Date(profile.lastSeen).toLocaleDateString('pl-PL')}</p>
+                                  <Link href={`/profile/${profile.accountId}`} className="text-white text-sm font-medium hover:text-[#C8963C] transition-colors">{displayWallet}</Link>
+                                  <p className="text-[#7A838D] text-[10px] mt-0.5">Last active {new Date(profile.lastSeen).toLocaleDateString('pl-PL')}</p>
                                 </div>
                               </div>
                               <div className="text-right flex-shrink-0">
                                 <p className={`text-sm font-bold ${isSupporter ? 'text-[#34a872]' : 'text-[#c45454]'}`}>
                                   {isSupporter ? '+' : ''}{profile.netShares.toFixed(4)}
                                 </p>
-                                <p className="text-[#6b7280] text-[10px]">net shares</p>
+                                <p className="text-[#7A838D] text-[10px]">net shares</p>
                               </div>
                             </div>
-                            <div className="flex gap-4 mt-3 pt-3 border-t border-[#21262d]">
+                            <div className="flex gap-4 mt-3 pt-3 border-t border-[#C8963C]/12">
                               <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-[#34a872]" />
-                                <span className="text-[#6b7280] text-[10px]">{profile.supportCount} support signal{profile.supportCount !== 1 ? 's' : ''}</span>
+                                <span className="text-[#7A838D] text-[10px]">{profile.supportCount} support signal{profile.supportCount !== 1 ? 's' : ''}</span>
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-[#c45454]" />
-                                <span className="text-[#6b7280] text-[10px]">{profile.opposeCount} oppose signal{profile.opposeCount !== 1 ? 's' : ''}</span>
+                                <span className="text-[#7A838D] text-[10px]">{profile.opposeCount} oppose signal{profile.opposeCount !== 1 ? 's' : ''}</span>
                               </div>
                               <div className="ml-auto">
-                                <span className="text-[#8b949e] text-[10px]">{profile.totalSignals} total</span>
+                                <span className="text-[#B5BDC6] text-[10px]">{profile.totalSignals} total</span>
                               </div>
                             </div>
                           </div>
@@ -1893,52 +1893,52 @@ function ClaimsPageContent() {
                 {activeTab === 'activity' && (
                   <div className="p-4 space-y-3">
                     {/* Creation event */}
-                    <div className="flex items-start gap-3 bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                      <div className="w-8 h-8 rounded-full bg-[#1f6feb20] border border-[#1f6feb40] flex items-center justify-center flex-shrink-0">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#58a6ff" strokeWidth="2" strokeLinecap="round"/></svg>
+                    <div className="flex items-start gap-3 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                      <div className="w-8 h-8 rounded-full bg-[rgba(200,150,60,0.12)] border border-[#1f6feb40] flex items-center justify-center flex-shrink-0">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#C8963C" strokeWidth="2" strokeLinecap="round"/></svg>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-white text-xs font-medium">Claim Created</p>
-                        <p className="text-[#6b7280] text-[10px] mt-0.5">
+                        <p className="text-[#7A838D] text-[10px] mt-0.5">
                           by {selectedClaim.creator?.id
-                            ? <Link href={`/profile/${selectedClaim.creator.id}`} className="text-[#58a6ff] hover:underline">{selectedClaim.creator.label || selectedClaim.creator.id.slice(0,10)}</Link>
+                            ? <Link href={`/profile/${selectedClaim.creator.id}`} className="text-[#C8963C] hover:underline">{selectedClaim.creator.label || selectedClaim.creator.id.slice(0,10)}</Link>
                             : (selectedClaim.creator?.label || 'unknown')}
                           {' · '}{new Date(selectedClaim.created_at).toLocaleDateString('pl-PL')}
                         </p>
                       </div>
                     </div>
                     {claimSignals.length === 0 ? (
-                      <p className="text-center text-[#8b949e] text-sm py-4">No staking activity yet</p>
+                      <p className="text-center text-[#B5BDC6] text-sm py-4">No staking activity yet</p>
                     ) : [...claimSignals].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((sig: any) => {
                       const isDeposit = !!sig.deposit_id
                       const isOppose = claimTriple.counterTermId && sig.term_id === claimTriple.counterTermId
                       const delta = Math.abs(Number(sig.delta || 0)) / 1e18
                       const walletLabel = sig.account?.label || sig.account_id?.slice(0,8) + '...'
                       return (
-                        <div key={sig.id} className="flex items-start gap-3 bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                        <div key={sig.id} className="flex items-start gap-3 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm ${
                             isDeposit
                               ? isOppose ? 'bg-[#8b3a3a20] text-[#c45454]' : 'bg-[#2d7a5f20] text-[#34a872]'
-                              : 'bg-[#21262d] text-[#8b949e]'
+                              : 'bg-[#1E2229] text-[#B5BDC6]'
                           }`}>
                             {isDeposit ? (isOppose ? '▼' : '▲') : '↩'}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-white text-xs font-medium">{isDeposit ? (isOppose ? 'Oppose Stake' : 'Support Stake') : 'Redeem'}</span>
-                              <span className="text-[#6b7280] text-[10px]">by</span>
+                              <span className="text-[#7A838D] text-[10px]">by</span>
                               {sig.account_id
-                                ? <Link href={`/profile/${sig.account_id}`} className="text-[#58a6ff] text-[10px] hover:underline">{walletLabel}</Link>
-                                : <span className="text-[#8b949e] text-[10px]">{walletLabel}</span>}
+                                ? <Link href={`/profile/${sig.account_id}`} className="text-[#C8963C] text-[10px] hover:underline">{walletLabel}</Link>
+                                : <span className="text-[#B5BDC6] text-[10px]">{walletLabel}</span>}
                             </div>
-                            <p className="text-[#6b7280] text-[10px] mt-0.5">{new Date(sig.created_at).toLocaleDateString('pl-PL')}</p>
+                            <p className="text-[#7A838D] text-[10px] mt-0.5">{new Date(sig.created_at).toLocaleDateString('pl-PL')}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className={`text-xs font-bold ${isDeposit ? (isOppose ? 'text-[#c45454]' : 'text-[#34a872]') : 'text-[#8b949e]'}`}>
+                            <p className={`text-xs font-bold ${isDeposit ? (isOppose ? 'text-[#c45454]' : 'text-[#34a872]') : 'text-[#B5BDC6]'}`}>
                               {isDeposit ? '+' : '-'}{delta.toFixed(4)} tTRUST
                             </p>
                             {sig.transaction_hash && (
-                              <a href={`https://testnet.explorer.intuition.systems/tx/${sig.transaction_hash}`} target="_blank" rel="noopener noreferrer" className="text-[#58a6ff] text-[10px] hover:underline">tx →</a>
+                              <a href={`https://testnet.explorer.intuition.systems/tx/${sig.transaction_hash}`} target="_blank" rel="noopener noreferrer" className="text-[#C8963C] text-[10px] hover:underline">tx →</a>
                             )}
                           </div>
                         </div>

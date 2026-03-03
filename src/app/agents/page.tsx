@@ -1216,7 +1216,7 @@ function AgentsPageContent() {
             </h1>
 
             {/* Description */}
-            <p className="text-[#6b7280] text-lg max-w-2xl leading-relaxed">
+            <p className="text-[#7A838D] text-lg max-w-2xl leading-relaxed">
               Decentralized trust verification for AI agents.
               Stake <span className="text-[#9ca3af] font-medium">tTRUST</span> to signal
               confidence — every vote is transparent, on-chain, and permanent.
@@ -1225,7 +1225,7 @@ function AgentsPageContent() {
             {/* Live indicator */}
             <div className="flex items-center gap-2 mt-4">
               <div className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
-              <span className="text-xs text-[#6b7280]">
+              <span className="text-xs text-[#7A838D]">
                 {agents.length} agents indexed · GraphQL live feed
               </span>
             </div>
@@ -1240,7 +1240,7 @@ function AgentsPageContent() {
           >
             {/* Search Input */}
             <div className="relative mb-4">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7280]">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7A838D]">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
                   <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -1251,12 +1251,12 @@ function AgentsPageContent() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search agents, platforms, addresses..."
-                className="w-full pl-11 pr-10 py-3 bg-[#0d1117] border border-[#21262d] rounded-xl text-white text-sm placeholder:text-[#6b7280] focus:border-[#2d7a5f] focus:ring-1 focus:ring-[#2d7a5f40] outline-none transition-all"
+                className="w-full pl-11 pr-10 py-3 bg-[#0F1113] border border-[#C8963C]/12 rounded-xl text-white text-sm placeholder:text-[#7A838D] focus:border-[#2d7a5f] focus:ring-1 focus:ring-[#2d7a5f40] outline-none transition-all"
               />
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7A838D] hover:text-white transition-colors"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                     <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -1281,8 +1281,8 @@ function AgentsPageContent() {
                   onClick={() => setSelectedCategory(f.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     selectedCategory === f.id
-                      ? 'bg-[#21262d] text-white border border-[#30363d]'
-                      : 'text-[#8b949e] border border-transparent hover:text-white hover:bg-[#161b22]'
+                      ? 'bg-[#1E2229] text-white border border-[#C8963C]/25'
+                      : 'text-[#B5BDC6] border border-transparent hover:text-white hover:bg-[#171A1D]'
                   }`}
                 >
                   {f.color ? (
@@ -1300,8 +1300,8 @@ function AgentsPageContent() {
                 onClick={() => setShowOnlyOurs(v => !v)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                   showOnlyOurs
-                    ? 'bg-[#1f6feb20] border-[#1f6feb50] text-[#58a6ff]'
-                    : 'border-[#21262d] text-[#6b7280] hover:text-white hover:bg-white/5'
+                    ? 'bg-[#C8963C]/12 border-[rgba(200,150,60,0.35)] text-[#C8963C]'
+                    : 'border-[#C8963C]/12 text-[#7A838D] hover:text-white hover:bg-white/5'
                 }`}
                 title={showOnlyOurs ? 'Showing AgentScore agents only' : 'Showing all Intuition agents'}
               >
@@ -1312,7 +1312,7 @@ function AgentsPageContent() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-[#0d1117] border border-[#21262d] rounded-lg px-3 py-1.5 text-xs text-[#8b949e] focus:border-[#2d7a5f] outline-none cursor-pointer"
+                className="bg-[#0F1113] border border-[#C8963C]/12 rounded-lg px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#2d7a5f] outline-none cursor-pointer"
               >
                 <option value="newest">Newest First</option>
                 <option value="score_desc">Highest Score</option>
@@ -1375,7 +1375,7 @@ function AgentsPageContent() {
               <p className="text-text-secondary mb-6">Try a different search term</p>
               <button
                 onClick={() => setSearchTerm('')}
-                className="px-4 py-2 bg-primary rounded-lg text-white font-semibold hover:bg-primary-hover transition-colors"
+                className="px-4 py-2 bg-[#C8963C] rounded-lg text-white font-semibold hover:bg-[#C8963C]-hover transition-colors"
               >
                 Clear search
               </button>
@@ -1423,20 +1423,20 @@ function AgentsPageContent() {
             >
               <div className="mb-6 flex items-center justify-between">
                 <div className="text-sm text-text-muted">
-                  <span className="font-semibold text-text-primary">{sorted.length}</span>
+                  <span className="font-semibold text-text-[#C8963C]">{sorted.length}</span>
                   {sorted.length !== agents.length && ` of ${agents.length}`} agents
                   {selectedCategory !== 'all' && (
-                    <span className="text-[#8b949e]"> · filtered by <span className="text-white font-medium">{selectedCategory}</span></span>
+                    <span className="text-[#B5BDC6]"> · filtered by <span className="text-white font-medium">{selectedCategory}</span></span>
                   )}
                 </div>
               </div>
 
               {sorted.length === 0 ? (
                 <div className="text-center py-16">
-                  <p className="text-[#6b7280] text-sm">No agents match this filter</p>
+                  <p className="text-[#7A838D] text-sm">No agents match this filter</p>
                   <button
                     onClick={() => setSelectedCategory('all')}
-                    className="mt-2 text-xs text-[#58a6ff] hover:underline"
+                    className="mt-2 text-xs text-[#C8963C] hover:underline"
                   >
                     Show all agents
                   </button>
@@ -1499,7 +1499,7 @@ function AgentsPageContent() {
                               <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
                               {(() => { try { return <TrustTierBadge tier={calculateTier(stakers, Number(agent.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18, 50, agent.created_at ? getAgentAgeDays(agent.created_at) : 0)} size="sm" /> } catch { return null } })()}
                             </div>
-                            <span className="text-xs text-[#6b7280] bg-[#1e2028] px-2 py-0.5 rounded inline-block">
+                            <span className="text-xs text-[#7A838D] bg-[#1e2028] px-2 py-0.5 rounded inline-block">
                               {creator.replace('.eth', '')}
                             </span>
                           </div>
@@ -1510,7 +1510,7 @@ function AgentsPageContent() {
                           <p className="text-2xl font-bold leading-none" style={{ color: getTrustColor(trustScore) }}>
                             {trustScore}
                           </p>
-                          <p className="text-xs text-[#6b7280] mt-0.5">Trust Score</p>
+                          <p className="text-xs text-[#7A838D] mt-0.5">Trust Score</p>
                         </div>
                       </div>
 
@@ -1555,7 +1555,7 @@ function AgentsPageContent() {
             <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
 
               {/* === TOP CARD: Agent Header === */}
-              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 mb-3">
+              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                 <div className="flex items-start gap-4 mb-4">
                   {/* Icon */}
                   <div
@@ -1587,16 +1587,16 @@ function AgentsPageContent() {
                         />
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-[#8b949e]">
+                    <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
                       {selectedAgent.creator?.id ? (
                         <Link
                           href={`/profile/${selectedAgent.creator.id}`}
-                          className="bg-[#21262d] px-2 py-0.5 rounded text-xs hover:bg-[#30363d] hover:text-white transition-colors"
+                          className="bg-[#1E2229] px-2 py-0.5 rounded text-xs hover:bg-[#252B33] hover:text-white transition-colors"
                         >
                           {selectedAgent.creator.label?.replace('.eth','') || selectedAgent.creator.id.slice(0, 10)}
                         </Link>
                       ) : (
-                        <span className="bg-[#21262d] px-2 py-0.5 rounded text-xs">
+                        <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs">
                           {selectedAgent.creator?.label?.replace('.eth','') || 'unknown'}
                         </span>
                       )}
@@ -1608,16 +1608,16 @@ function AgentsPageContent() {
                   {/* Close */}
                   <button
                     onClick={() => setSelectedAgent(null)}
-                    className="w-8 h-8 rounded-lg bg-[#21262d] hover:bg-[#30363d] flex items-center justify-center transition-colors flex-shrink-0"
+                    className="w-8 h-8 rounded-lg bg-[#1E2229] hover:bg-[#252B33] flex items-center justify-center transition-colors flex-shrink-0"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                      <path d="M18 6L6 18M6 6l12 12" stroke="#8b949e" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M18 6L6 18M6 6l12 12" stroke="#B5BDC6" strokeWidth="2" strokeLinecap="round"/>
                     </svg>
                   </button>
                 </div>
 
                 {/* Description */}
-                <p className="text-[#8b949e] text-sm leading-relaxed mb-5">
+                <p className="text-[#B5BDC6] text-sm leading-relaxed mb-5">
                   {selectedAgent.label.includes(' - ')
                     ? selectedAgent.label.split(' - ').slice(1).join(' - ')
                     : 'AI Agent registered on Intuition Protocol.'}
@@ -1626,28 +1626,28 @@ function AgentsPageContent() {
                 {/* Wallet + Atom ID */}
                 <div className="space-y-2 mb-5">
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="text-[#8b949e] w-16 flex-shrink-0">Wallet:</span>
+                    <span className="text-[#B5BDC6] w-16 flex-shrink-0">Wallet:</span>
                     {selectedAgent.creator?.id ? (
                       <Link
                         href={`/profile/${selectedAgent.creator.id}`}
-                        className="text-[#58a6ff] text-xs font-mono hover:underline"
+                        className="text-[#C8963C] text-xs font-mono hover:underline"
                       >
                         {selectedAgent.creator.label || selectedAgent.creator.id}
                       </Link>
                     ) : (
-                      <code className="text-[#58a6ff] text-xs font-mono">
+                      <code className="text-[#C8963C] text-xs font-mono">
                         {selectedAgent.creator?.label || '0x???'}
                       </code>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="text-[#8b949e] w-16 flex-shrink-0">Atom ID:</span>
-                    <code className="text-[#8b949e] text-xs font-mono">
+                    <span className="text-[#B5BDC6] w-16 flex-shrink-0">Atom ID:</span>
+                    <code className="text-[#B5BDC6] text-xs font-mono">
                       {selectedAgent.term_id.slice(0, 14)}...{selectedAgent.term_id.slice(-8)}
                     </code>
                     <button
                       onClick={() => navigator.clipboard.writeText(selectedAgent.term_id)}
-                      className="text-[#8b949e] hover:text-white transition-colors"
+                      className="text-[#B5BDC6] hover:text-white transition-colors"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                         <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
@@ -1665,31 +1665,31 @@ function AgentsPageContent() {
                     { value: formatStakes(selectedAgent.positions_aggregate?.aggregate?.sum?.shares), label: 'Total Stake' },
                     { value: reportCount, label: 'Reports' },
                   ].map((s, i) => (
-                    <div key={i} className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 text-center">
+                    <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-white">{s.value}</p>
-                      <p className="text-xs text-[#8b949e] mt-0.5">{s.label}</p>
+                      <p className="text-xs text-[#B5BDC6] mt-0.5">{s.label}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* === ACTION SECTION: Support / Oppose / Buy / Sell === */}
-              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-5 mb-3">
-                <p className="text-[#8b949e] text-xs font-semibold mb-1">Bonding Curve Market</p>
-                <p className="text-[#6b7280] text-xs mb-3">
+              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
+                <p className="text-[#B5BDC6] text-xs font-semibold mb-1">Bonding Curve Market</p>
+                <p className="text-[#7A838D] text-xs mb-3">
                   One market: choose side (Support/Oppose) and action (Buy/Sell).
                 </p>
 
                 {isConnected ? (
                   <>
                     {/* Support / Oppose tabs */}
-                    <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-3">
+                    <div className="flex rounded-xl overflow-hidden border border-[#C8963C]/12 mb-3">
                       <button
                         onClick={(e) => { e.stopPropagation(); setSignalSide('support'); setTradeAction('buy') }}
                         className={`flex-1 py-2 text-xs font-bold transition-colors ${
                           signalSide === 'support'
                             ? 'bg-[#2d7a5f] text-white'
-                            : 'bg-transparent text-[#8b949e] hover:text-white'
+                            : 'bg-transparent text-[#B5BDC6] hover:text-white'
                         }`}
                       >
                         Support
@@ -1699,7 +1699,7 @@ function AgentsPageContent() {
                         className={`flex-1 py-2 text-xs font-bold transition-colors ${
                           signalSide === 'oppose'
                             ? 'bg-[#8b3a3a] text-white'
-                            : 'bg-transparent text-[#8b949e] hover:text-white'
+                            : 'bg-transparent text-[#B5BDC6] hover:text-white'
                         }`}
                       >
                         Oppose
@@ -1715,7 +1715,7 @@ function AgentsPageContent() {
                           <path d="M15 9l-6 6M9 9l6 6" stroke="#c45454" strokeWidth="1.5" strokeLinecap="round"/>
                         </svg>
                         <p className="text-[#c45454] text-xs font-semibold mb-1">Oppose Vault Not Set Up</p>
-                        <p className="text-[#8b949e] text-xs mb-3 leading-relaxed">
+                        <p className="text-[#B5BDC6] text-xs mb-3 leading-relaxed">
                           Opposing requires a Trust Triple on-chain.<br/>
                           One transaction to activate Oppose for this agent.
                         </p>
@@ -1733,20 +1733,20 @@ function AgentsPageContent() {
                         </button>
                       </div>
                     ) : agentTriple.loading && signalSide === 'oppose' ? (
-                      <div className="flex items-center justify-center gap-2 py-6 text-[#8b949e] text-xs">
+                      <div className="flex items-center justify-center gap-2 py-6 text-[#B5BDC6] text-xs">
                         <span className="w-3 h-3 border border-[#8b949e] border-t-transparent rounded-full animate-spin" />
                         Checking Oppose vault...
                       </div>
                     ) : (
                       <>
                     {/* Buy / Sell tabs */}
-                    <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-3">
+                    <div className="flex rounded-xl overflow-hidden border border-[#C8963C]/12 mb-3">
                       <button
                         onClick={(e) => { e.stopPropagation(); setTradeAction('buy') }}
                         className={`flex-1 py-2 text-xs font-bold transition-colors ${
                           tradeAction === 'buy'
                             ? 'bg-white text-black'
-                            : 'bg-transparent text-[#8b949e] hover:text-white'
+                            : 'bg-transparent text-[#B5BDC6] hover:text-white'
                         }`}
                       >
                         Buy
@@ -1756,7 +1756,7 @@ function AgentsPageContent() {
                         className={`flex-1 py-2 text-xs font-bold transition-colors ${
                           tradeAction === 'sell'
                             ? 'bg-white text-black'
-                            : 'bg-transparent text-[#8b949e] hover:text-white'
+                            : 'bg-transparent text-[#B5BDC6] hover:text-white'
                         }`}
                       >
                         Sell
@@ -1767,11 +1767,11 @@ function AgentsPageContent() {
                     <div className="flex items-center justify-between mb-3 px-1">
                       <div>
                         <p className="text-white text-xs font-semibold">Bonding Curve</p>
-                        <p className="text-[#8b949e] text-xs">
+                        <p className="text-[#B5BDC6] text-xs">
                           Current price: {getCurrentPrice(signalSide === 'support' ? supportSupply : opposeSupply).toFixed(4)} tTRUST/share
                         </p>
                       </div>
-                      <span className="text-[10px] px-2 py-1 rounded-full border border-[#30363d] text-[#8b949e]">
+                      <span className="text-[10px] px-2 py-1 rounded-full border border-[#C8963C]/25 text-[#B5BDC6]">
                         Active
                       </span>
                     </div>
@@ -1797,35 +1797,35 @@ function AgentsPageContent() {
                         : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
                       const currentSupply = signalSide === 'support' ? supportSupply : opposeSupply
                       return ownedShares > 0 ? (
-                        <div className="mb-3 p-3 rounded-xl bg-[#161b22] border border-[#21262d]">
+                        <div className="mb-3 p-3 rounded-xl bg-[#171A1D] border border-[#C8963C]/12">
                           <div className="flex justify-between items-center">
-                            <span className="text-[#8b949e] text-xs">Your shares</span>
+                            <span className="text-[#B5BDC6] text-xs">Your shares</span>
                             <span className="text-white text-sm font-bold font-mono">
                               {ownedShares.toFixed(4)} shares
                             </span>
                           </div>
                           <div className="flex justify-between items-center mt-1">
-                            <span className="text-[#6b7280] text-[10px]">Current value</span>
-                            <span className="text-[#6b7280] text-[10px] font-mono">
+                            <span className="text-[#7A838D] text-[10px]">Current value</span>
+                            <span className="text-[#7A838D] text-[10px] font-mono">
                               {getSellProceeds(ownedShares, currentSupply).toFixed(6)} tTRUST
                             </span>
                           </div>
                         </div>
                       ) : (
-                        <div className="mb-3 p-3 rounded-xl bg-[#161b22] border border-[#21262d] text-center">
-                          <p className="text-[#6b7280] text-xs">No {signalSide} shares to sell</p>
+                        <div className="mb-3 p-3 rounded-xl bg-[#171A1D] border border-[#C8963C]/12 text-center">
+                          <p className="text-[#7A838D] text-xs">No {signalSide} shares to sell</p>
                         </div>
                       )
                     })()}
 
                     {/* Amount input */}
-                    <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 mb-3">
+                    <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 mb-3">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[#8b949e] text-xs">
+                        <span className="text-[#B5BDC6] text-xs">
                           {tradeAction === 'buy' ? 'Amount in tTRUST' : 'Shares to sell'}
                         </span>
                         {tradeAction === 'buy' && (
-                          <span className="text-[#8b949e] text-xs">
+                          <span className="text-[#B5BDC6] text-xs">
                             Balance: {tTrustBalance || '—'} tTRUST
                           </span>
                         )}
@@ -1870,7 +1870,7 @@ function AgentsPageContent() {
                             placeholder="0.00"
                           />
                         )}
-                        <span className="text-[#8b949e] text-sm font-semibold">
+                        <span className="text-[#B5BDC6] text-sm font-semibold">
                           {tradeAction === 'buy' ? 'tTRUST' : 'shares'}
                         </span>
                         {tradeAction === 'sell' && (
@@ -1888,7 +1888,7 @@ function AgentsPageContent() {
                                 setRedeemShares(effectiveMax.toFixed(6))
                               }
                             }}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f6feb20] text-[#58a6ff] hover:bg-[#1f6feb30] transition-colors font-bold"
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#C8963C]/12 text-[#C8963C] hover:bg-[rgba(200,150,60,0.20)] transition-colors font-bold"
                           >
                             MAX
                           </button>
@@ -1910,11 +1910,11 @@ function AgentsPageContent() {
                               value={parseFloat(redeemShares) || 0}
                               onChange={(e) => setRedeemShares(e.target.value)}
                               onClick={(e) => e.stopPropagation()}
-                              className="w-full h-1 bg-[#21262d] rounded-full appearance-none cursor-pointer
+                              className="w-full h-1 bg-[#1E2229] rounded-full appearance-none cursor-pointer
                                 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#58a6ff]"
+                                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#C8963C]"
                             />
-                            <div className="flex justify-between text-[10px] text-[#6b7280] mt-1">
+                            <div className="flex justify-between text-[10px] text-[#7A838D] mt-1">
                               <span>0</span>
                               <button onClick={(e) => { e.stopPropagation(); setRedeemShares((maxShares * 0.25).toFixed(4)) }} className="hover:text-white transition-colors">25%</button>
                               <button onClick={(e) => { e.stopPropagation(); setRedeemShares((maxShares * 0.5).toFixed(4)) }} className="hover:text-white transition-colors">50%</button>
@@ -1977,7 +1977,7 @@ function AgentsPageContent() {
                         return (
                           <div className="space-y-1 mb-3 px-1">
                             <div className="flex items-center justify-between">
-                              <span className="text-[#8b949e] text-xs">You receive</span>
+                              <span className="text-[#B5BDC6] text-xs">You receive</span>
                               <span className="text-white text-xs font-semibold">
                                 {inputAmt > 0 ? `${preview.sharesReceived.toFixed(4)} shares` : '—'}
                               </span>
@@ -1985,16 +1985,16 @@ function AgentsPageContent() {
                             {inputAmt > 0 && (
                               <>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#6b7280] text-[10px]">Fee (5%)</span>
-                                  <span className="text-[#6b7280] text-[10px]">{preview.fee.toFixed(4)} tTRUST</span>
+                                  <span className="text-[#7A838D] text-[10px]">Fee (5%)</span>
+                                  <span className="text-[#7A838D] text-[10px]">{preview.fee.toFixed(4)} tTRUST</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#6b7280] text-[10px]">Avg price</span>
-                                  <span className="text-[#6b7280] text-[10px]">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
+                                  <span className="text-[#7A838D] text-[10px]">Avg price</span>
+                                  <span className="text-[#7A838D] text-[10px]">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#6b7280] text-[10px]">Price after</span>
-                                  <span className="text-[#6b7280] text-[10px]">{preview.newPrice.toFixed(4)} tTRUST/share</span>
+                                  <span className="text-[#7A838D] text-[10px]">Price after</span>
+                                  <span className="text-[#7A838D] text-[10px]">{preview.newPrice.toFixed(4)} tTRUST/share</span>
                                 </div>
                               </>
                             )}
@@ -2013,28 +2013,28 @@ function AgentsPageContent() {
                               <p className="text-[#f85149] text-[10px] mb-1">Exceeds owned shares ({maxOwned.toFixed(4)})</p>
                             )}
                             <div className="flex items-center justify-between">
-                              <span className="text-[#8b949e] text-xs">Gross proceeds</span>
-                              <span className="text-[#8b949e] text-xs font-mono">
+                              <span className="text-[#B5BDC6] text-xs">Gross proceeds</span>
+                              <span className="text-[#B5BDC6] text-xs font-mono">
                                 {validShares ? `${preview.grossProceeds.toFixed(6)} tTRUST` : '—'}
                               </span>
                             </div>
                             {validShares && (
                               <>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#6b7280] text-[10px]">Fee (5%)</span>
+                                  <span className="text-[#7A838D] text-[10px]">Fee (5%)</span>
                                   <span className="text-[#f85149] text-[10px] font-mono">-{preview.fee.toFixed(6)} tTRUST</span>
                                 </div>
-                                <div className="h-px bg-[#21262d] my-1" />
+                                <div className="h-px bg-[#1E2229] my-1" />
                                 <div className="flex items-center justify-between">
                                   <span className="text-white text-xs font-medium">You receive</span>
                                   <span className="text-white text-xs font-bold font-mono">{preview.netProceeds.toFixed(6)} tTRUST</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#6b7280] text-[10px]">Price per share</span>
-                                  <span className="text-[#6b7280] text-[10px] font-mono">{(preview.grossProceeds / inputShares).toFixed(6)} tTRUST</span>
+                                  <span className="text-[#7A838D] text-[10px]">Price per share</span>
+                                  <span className="text-[#7A838D] text-[10px] font-mono">{(preview.grossProceeds / inputShares).toFixed(6)} tTRUST</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#6b7280] text-[10px]">Price after sell</span>
+                                  <span className="text-[#7A838D] text-[10px]">Price after sell</span>
                                   <span className="text-[#f85149] text-[10px] font-mono">{preview.newPrice.toFixed(6)} tTRUST/share</span>
                                 </div>
                               </>
@@ -2125,9 +2125,9 @@ function AgentsPageContent() {
 
                   </>
                 ) : (
-                  <div className="p-4 bg-[#161b22] border border-[#21262d] rounded-xl text-center">
-                    <p className="text-[#8b949e] font-semibold mb-1">Connect wallet to vote</p>
-                    <p className="text-xs text-[#6b7280]">Intuition Testnet · Chain ID 13579</p>
+                  <div className="p-4 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl text-center">
+                    <p className="text-[#B5BDC6] font-semibold mb-1">Connect wallet to vote</p>
+                    <p className="text-xs text-[#7A838D]">Intuition Testnet · Chain ID 13579</p>
                   </div>
                 )}
               </div>
@@ -2140,11 +2140,11 @@ function AgentsPageContent() {
                 const agaVal = agaSf > 0 ? getSellProceeds(agaSf, opposeSupply) : 0
                 const totalVal = forVal + agaVal
                 return (
-                  <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-4 mb-3">
+                  <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-4 mb-3">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Your Holdings</p>
+                      <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Your Holdings</p>
                       <span className="text-white text-xs font-bold">
-                        ≈ {totalVal.toFixed(4)} <span className="text-[#8b949e] font-normal">tTRUST</span>
+                        ≈ {totalVal.toFixed(4)} <span className="text-[#B5BDC6] font-normal">tTRUST</span>
                       </span>
                     </div>
                     <div className="space-y-2">
@@ -2154,11 +2154,11 @@ function AgentsPageContent() {
                             <div className="w-2 h-2 rounded-full bg-[#34a872] flex-shrink-0" />
                             <div>
                               <p className="text-[#34a872] text-xs font-semibold">Support</p>
-                              <p className="text-[#6b7280] text-[10px]">FOR vault</p>
+                              <p className="text-[#7A838D] text-[10px]">FOR vault</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-white text-xs font-bold">{forSf.toFixed(4)} <span className="text-[#6b7280] font-normal text-[10px]">shares</span></p>
+                            <p className="text-white text-xs font-bold">{forSf.toFixed(4)} <span className="text-[#7A838D] font-normal text-[10px]">shares</span></p>
                             <p className="text-[#34a872] text-[10px] font-semibold">≈ {forVal.toFixed(4)} tTRUST</p>
                           </div>
                         </div>
@@ -2169,11 +2169,11 @@ function AgentsPageContent() {
                             <div className="w-2 h-2 rounded-full bg-[#c45454] flex-shrink-0" />
                             <div>
                               <p className="text-[#c45454] text-xs font-semibold">Oppose</p>
-                              <p className="text-[#6b7280] text-[10px]">AGAINST vault</p>
+                              <p className="text-[#7A838D] text-[10px]">AGAINST vault</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-white text-xs font-bold">{agaSf.toFixed(4)} <span className="text-[#6b7280] font-normal text-[10px]">shares</span></p>
+                            <p className="text-white text-xs font-bold">{agaSf.toFixed(4)} <span className="text-[#7A838D] font-normal text-[10px]">shares</span></p>
                             <p className="text-[#c45454] text-[10px] font-semibold">≈ {agaVal.toFixed(4)} tTRUST</p>
                           </div>
                         </div>
@@ -2218,7 +2218,7 @@ function AgentsPageContent() {
                 const dashLen = (score / 100) * circumference
 
                 return (
-                  <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 mb-3">
+                  <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                     <div className="grid grid-cols-2 gap-6">
 
                       {/* LEFT: Trust Score */}
@@ -2252,14 +2252,14 @@ function AgentsPageContent() {
                                 </svg>
                               )}
                               <span className={`text-sm font-medium ${
-                                momDir === 'up' ? 'text-[#10b981]' : momDir === 'down' ? 'text-[#f85149]' : 'text-[#8b949e]'
+                                momDir === 'up' ? 'text-[#10b981]' : momDir === 'down' ? 'text-[#f85149]' : 'text-[#B5BDC6]'
                               }`}>
                                 {momText}
                               </span>
                             </div>
-                            <p className="text-[#8b949e] text-xs">Trust Level</p>
+                            <p className="text-[#B5BDC6] text-xs">Trust Level</p>
                             <p className="text-white text-sm font-semibold capitalize">{level}</p>
-                            <p className="text-[#8b949e] text-xs mt-1">Confidence</p>
+                            <p className="text-[#B5BDC6] text-xs mt-1">Confidence</p>
                             <p className="text-white text-sm font-semibold">{(confidence * 100).toFixed(0)}%</p>
                           </div>
                         </div>
@@ -2273,7 +2273,7 @@ function AgentsPageContent() {
                           <span className="text-[#10b981]">Support ({supportPct.toFixed(1)}%)</span>
                           <span className="text-[#f85149]">Oppose ({(100 - supportPct).toFixed(1)}%)</span>
                         </div>
-                        <div className="h-2 bg-[#21262d] rounded-full overflow-hidden mb-4">
+                        <div className="h-2 bg-[#1E2229] rounded-full overflow-hidden mb-4">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-[#10b981] to-[#059669] transition-all"
                             style={{ width: `${supportPct}%` }}
@@ -2281,17 +2281,17 @@ function AgentsPageContent() {
                         </div>
 
                         <div className="space-y-2">
-                          <div className="bg-[#161b22] border border-[#21262d] rounded-lg p-3">
-                            <p className="text-xs text-[#8b949e] mb-0.5">Support Stake</p>
+                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
+                            <p className="text-xs text-[#B5BDC6] mb-0.5">Support Stake</p>
                             <p className="text-[#10b981] font-bold">{fmtWei(supportWei)}</p>
                           </div>
-                          <div className="bg-[#161b22] border border-[#21262d] rounded-lg p-3">
-                            <p className="text-xs text-[#8b949e] mb-0.5">Oppose Stake</p>
+                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
+                            <p className="text-xs text-[#B5BDC6] mb-0.5">Oppose Stake</p>
                             <p className="text-[#f85149] font-bold">{fmtWei(opposeWei)}</p>
                           </div>
-                          <div className="bg-[#161b22] border border-[#21262d] rounded-lg p-3">
-                            <p className="text-xs text-[#8b949e] mb-0.5">Net Stake</p>
-                            <p className="text-[#58a6ff] font-bold">
+                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
+                            <p className="text-xs text-[#B5BDC6] mb-0.5">Net Stake</p>
+                            <p className="text-[#C8963C] font-bold">
                               {netWei >= BigInt(0) ? '+' : ''}{fmtWei(netWei)} tTRUST
                             </p>
                           </div>
@@ -2303,15 +2303,15 @@ function AgentsPageContent() {
               })()}
 
               {/* === BONDING CURVE INFO === */}
-              <div className="bg-[#1f6feb15] border border-[#1f6feb25] rounded-2xl p-4 mb-3">
+              <div className="bg-[rgba(200,150,60,0.10)] border border-[#1f6feb25] rounded-2xl p-4 mb-3">
                 <div className="flex items-start gap-3">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                    <circle cx="12" cy="12" r="9" stroke="#58a6ff" strokeWidth="2" />
-                    <path d="M12 8v4m0 4h.01" stroke="#58a6ff" strokeWidth="2" strokeLinecap="round" />
+                    <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2" />
+                    <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                   <div>
-                    <p className="text-[#58a6ff] text-sm font-semibold mb-1">Bonding Curve Economics</p>
-                    <p className="text-[#8b949e] text-xs leading-relaxed">
+                    <p className="text-[#C8963C] text-sm font-semibold mb-1">Bonding Curve Economics</p>
+                    <p className="text-[#B5BDC6] text-xs leading-relaxed">
                       Early stakers get more shares per tTRUST. As more people trust this agent,
                       your shares increase in value. Redeem anytime to realize gains.
                     </p>
@@ -2320,8 +2320,8 @@ function AgentsPageContent() {
               </div>
 
               {/* === TABS: Overview / Attestations / Activity === */}
-              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl overflow-hidden mb-3">
-                <div className="flex border-b border-[#21262d]">
+              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl overflow-hidden mb-3">
+                <div className="flex border-b border-[#C8963C]/12">
                   {[
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
                     { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
@@ -2333,7 +2333,7 @@ function AgentsPageContent() {
                       className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
                         activeTab === tab.id
                           ? 'text-white border-[#34a872]'
-                          : 'text-[#8b949e] border-transparent hover:text-white hover:border-[#30363d]'
+                          : 'text-[#B5BDC6] border-transparent hover:text-white hover:border-[#C8963C]/25'
                       }`}
                     >
                       {tab.icon}
@@ -2370,9 +2370,9 @@ function AgentsPageContent() {
                   return (
                   <div className="p-5 space-y-5">
                     {/* Trust Score Visual */}
-                    <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                    <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
+                        <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
                         <span
                           className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
                           style={{ backgroundColor: lc.bg, color: lc.text, border: `1px solid ${lc.border}` }}
@@ -2384,7 +2384,7 @@ function AgentsPageContent() {
                       {/* Score gauge */}
                       <div className="flex items-end gap-4 mb-3">
                         <p className="text-4xl font-bold text-white leading-none">{score}</p>
-                        <p className="text-[#8b949e] text-xs pb-1">/100</p>
+                        <p className="text-[#B5BDC6] text-xs pb-1">/100</p>
                         {momentum !== 0 && (
                           <span className={`text-xs font-medium pb-1 ${momentum > 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
                             {momentum > 0 ? '▲' : '▼'} {Math.abs(momentum).toFixed(1)} momentum
@@ -2393,7 +2393,7 @@ function AgentsPageContent() {
                       </div>
 
                       {/* Score bar */}
-                      <div className="w-full h-2 bg-[#21262d] rounded-full overflow-hidden mb-2">
+                      <div className="w-full h-2 bg-[#1E2229] rounded-full overflow-hidden mb-2">
                         <div
                           className="h-full rounded-full transition-all duration-700"
                           style={{
@@ -2402,7 +2402,7 @@ function AgentsPageContent() {
                           }}
                         />
                       </div>
-                      <div className="flex justify-between text-[10px] text-[#6b7280]">
+                      <div className="flex justify-between text-[10px] text-[#7A838D]">
                         <span>Critical</span>
                         <span>Low</span>
                         <span>Moderate</span>
@@ -2413,9 +2413,9 @@ function AgentsPageContent() {
 
                     {/* Weighted Trust (time-decayed) */}
                     {weightedTrust && (
-                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-2">
-                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">
+                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">
                             Trust Score (time-weighted)
                           </p>
                           <span
@@ -2429,7 +2429,7 @@ function AgentsPageContent() {
                             {weightedTrust.weightedRatio.toFixed(1)}%
                           </span>
                         </div>
-                        <div className="w-full h-1.5 bg-[#21262d] rounded-full overflow-hidden mb-2">
+                        <div className="w-full h-1.5 bg-[#1E2229] rounded-full overflow-hidden mb-2">
                           <div
                             className="h-full rounded-full transition-all duration-500"
                             style={{
@@ -2443,7 +2443,7 @@ function AgentsPageContent() {
                           />
                         </div>
                         <div className="flex justify-between text-[10px]">
-                          <span className="text-[#6b7280]">
+                          <span className="text-[#7A838D]">
                             Raw: {weightedTrust.rawRatio.toFixed(1)}%
                             {weightedTrust.decayImpact !== 0 && (
                               <span style={{ color: weightedTrust.decayImpact > 0 ? '#22c55e' : '#ef4444', marginLeft: '4px' }}>
@@ -2451,7 +2451,7 @@ function AgentsPageContent() {
                               </span>
                             )}
                           </span>
-                          <span className="text-[#6b7280]">
+                          <span className="text-[#7A838D]">
                             {weightedTrust.freshSignalsCount} fresh / {weightedTrust.totalSignalsCount} signals
                           </span>
                         </div>
@@ -2460,9 +2460,9 @@ function AgentsPageContent() {
 
                     {/* Composite Trust Score */}
                     {compositeTrust && (
-                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">
+                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">
                             Composite Trust Score
                           </p>
                           <div className="flex items-center gap-2">
@@ -2478,7 +2478,7 @@ function AgentsPageContent() {
                             </span>
                           </div>
                         </div>
-                        <div className="w-full h-1.5 bg-[#21262d] rounded-full overflow-hidden mb-3">
+                        <div className="w-full h-1.5 bg-[#1E2229] rounded-full overflow-hidden mb-3">
                           <div className="h-full rounded-full transition-all duration-500"
                             style={{
                               width: `${compositeTrust.score}%`,
@@ -2497,11 +2497,11 @@ function AgentsPageContent() {
                             { label: 'Price Retention', value: compositeTrust.breakdown.priceScore, weight: Math.round(COMPOSITE_WEIGHTS.PRICE_RETENTION * 100) },
                           ].map(({ label, value, weight }) => (
                             <div key={label}>
-                              <div className="flex justify-between text-[10px] text-[#6b7280] mb-0.5">
+                              <div className="flex justify-between text-[10px] text-[#7A838D] mb-0.5">
                                 <span>{label} <span style={{ color:'rgba(255,255,255,0.2)' }}>({weight}%)</span></span>
                                 <span style={{ color: value >= 60 ? '#22c55e' : value >= 40 ? '#eab308' : '#ef4444' }}>{value}</span>
                               </div>
-                              <div className="w-full h-1 bg-[#0d1117] rounded-full overflow-hidden">
+                              <div className="w-full h-1 bg-[#0F1113] rounded-full overflow-hidden">
                                 <div className="h-full rounded-full transition-all duration-500"
                                   style={{
                                     width: `${value}%`,
@@ -2512,7 +2512,7 @@ function AgentsPageContent() {
                             </div>
                           ))}
                         </div>
-                        <div className="flex justify-between text-[10px] text-[#6b7280] mt-2">
+                        <div className="flex justify-between text-[10px] text-[#7A838D] mt-2">
                           <span>Price retention: {(compositeTrust.priceRetentionRatio * 100).toFixed(0)}% of ATH</span>
                           <span style={{ color: compositeTrust.isStable ? '#22c55e' : '#6b7280' }}>
                             {compositeTrust.isStable ? '● Stable' : '● Unstable'}
@@ -2522,11 +2522,11 @@ function AgentsPageContent() {
                     )}
 
                     {/* Support vs Oppose breakdown */}
-                    <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                      <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Community Sentiment</p>
+                    <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                      <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Community Sentiment</p>
 
                       {/* Stacked bar */}
-                      <div className="w-full h-3 bg-[#21262d] rounded-full overflow-hidden flex mb-2">
+                      <div className="w-full h-3 bg-[#1E2229] rounded-full overflow-hidden flex mb-2">
                         {supportPct > 0 && (
                           <div className="h-full bg-[#34a872] transition-all duration-500" style={{ width: `${supportPct}%` }} />
                         )}
@@ -2539,36 +2539,36 @@ function AgentsPageContent() {
                         <div className="flex items-center gap-1.5">
                           <div className="w-2.5 h-2.5 rounded-full bg-[#34a872]" />
                           <span className="text-white text-xs font-medium">{supportPct}% Support</span>
-                          <span className="text-[#6b7280] text-[10px]">({(Number(supportWei) / 1e18).toFixed(4)} tTRUST)</span>
+                          <span className="text-[#7A838D] text-[10px]">({(Number(supportWei) / 1e18).toFixed(4)} tTRUST)</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[#6b7280] text-[10px]">({(Number(opposeWei) / 1e18).toFixed(4)} tTRUST)</span>
+                          <span className="text-[#7A838D] text-[10px]">({(Number(opposeWei) / 1e18).toFixed(4)} tTRUST)</span>
                           <span className="text-white text-xs font-medium">{opsPct}% Oppose</span>
                           <div className="w-2.5 h-2.5 rounded-full bg-[#c45454]" />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-[#0d1117] rounded-lg p-2.5 text-center">
+                        <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
                           <p className="text-white text-sm font-bold">{(Number(totalWei) / 1e18).toFixed(4)}</p>
-                          <p className="text-[#6b7280] text-[10px]">Total TVL</p>
+                          <p className="text-[#7A838D] text-[10px]">Total TVL</p>
                         </div>
-                        <div className="bg-[#0d1117] rounded-lg p-2.5 text-center">
+                        <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
                           <p className={`text-sm font-bold ${netStake >= 0 ? 'text-[#34a872]' : 'text-[#c45454]'}`}>
                             {netStake >= 0 ? '+' : ''}{netStake.toFixed(4)}
                           </p>
-                          <p className="text-[#6b7280] text-[10px]">Net Stake</p>
+                          <p className="text-[#7A838D] text-[10px]">Net Stake</p>
                         </div>
-                        <div className="bg-[#0d1117] rounded-lg p-2.5 text-center">
+                        <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
                           <p className="text-white text-sm font-bold">{(confidence * 100).toFixed(0)}%</p>
-                          <p className="text-[#6b7280] text-[10px]">Confidence</p>
+                          <p className="text-[#7A838D] text-[10px]">Confidence</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Bonding Curve Charts */}
-                    <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                      <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Bonding Curves</p>
+                    <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                      <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Bonding Curves</p>
                       <div className="grid grid-cols-2 gap-4">
                         {/* Support curve */}
                         {(() => {
@@ -2601,7 +2601,7 @@ function AgentsPageContent() {
                                   </AreaChart>
                                 </ResponsiveContainer>
                               </div>
-                              <p className="text-[#6b7280] text-[10px] mt-1">Supply: {supportSupply.toFixed(2)} · Price: {currentPrice.toFixed(4)}</p>
+                              <p className="text-[#7A838D] text-[10px] mt-1">Supply: {supportSupply.toFixed(2)} · Price: {currentPrice.toFixed(4)}</p>
                             </div>
                           )
                         })()}
@@ -2636,7 +2636,7 @@ function AgentsPageContent() {
                                   </AreaChart>
                                 </ResponsiveContainer>
                               </div>
-                              <p className="text-[#6b7280] text-[10px] mt-1">Supply: {opposeSupply.toFixed(2)} · Price: {currentPrice.toFixed(4)}</p>
+                              <p className="text-[#7A838D] text-[10px] mt-1">Supply: {opposeSupply.toFixed(2)} · Price: {currentPrice.toFixed(4)}</p>
                             </div>
                           )
                         })()}
@@ -2648,8 +2648,8 @@ function AgentsPageContent() {
                       const chartData = buildTrustChartData(agentSignals, agentTriple.counterTermId)
                       if (chartData.length < 2) return null
                       return (
-                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Trust History</p>
+                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Trust History</p>
                           <div className="h-40">
                             <ResponsiveContainer width="100%" height="100%">
                               <AreaChart data={chartData}>
@@ -2671,7 +2671,7 @@ function AgentsPageContent() {
                               </AreaChart>
                             </ResponsiveContainer>
                           </div>
-                          <div className="flex justify-between text-[10px] text-[#6b7280] mt-1">
+                          <div className="flex justify-between text-[10px] text-[#7A838D] mt-1">
                             <span>0% = All Oppose</span>
                             <span>50% = Balanced</span>
                             <span>100% = All Support</span>
@@ -2683,8 +2683,8 @@ function AgentsPageContent() {
                     {/* Positions Table */}
                     {(() => {
                       if (positionsLoading) return (
-                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                          <div className="h-16 animate-pulse bg-[#21262d] rounded-lg" />
+                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                          <div className="h-16 animate-pulse bg-[#1E2229] rounded-lg" />
                         </div>
                       )
                       if (allPositions.length === 0) return null
@@ -2694,14 +2694,14 @@ function AgentsPageContent() {
                       try { totalShares = allPositions.reduce((acc: bigint, p: any) => { try { return acc + BigInt(p.shares || '0') } catch { return acc } }, 0n) } catch { totalShares = 0n }
 
                       return (
-                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">
+                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">
                             Positions ({combinedStakerCount} staker{combinedStakerCount !== 1 ? 's' : ''})
                           </p>
                           <div className="max-h-64 overflow-y-auto">
                             <table className="w-full text-xs">
                               <thead>
-                                <tr className="text-[#6b7280] border-b border-[#21262d]">
+                                <tr className="text-[#7A838D] border-b border-[#C8963C]/12">
                                   <th className="text-left py-2 font-medium">Wallet</th>
                                   <th className="text-left py-2 font-medium">Side</th>
                                   <th className="text-right py-2 font-medium">Shares</th>
@@ -2725,15 +2725,15 @@ function AgentsPageContent() {
                                     pos.account_id?.toLowerCase() === selectedAgent.creator.id.toLowerCase()
 
                                   return (
-                                    <tr key={`${pos.account_id}-${pos.term_id}-${i}`} className="border-b border-[#21262d]/50 hover:bg-[#0d1117]">
+                                    <tr key={`${pos.account_id}-${pos.term_id}-${i}`} className="border-b border-[#C8963C]/12/50 hover:bg-[#0F1113]">
                                       <td className="py-2">
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                          <Link href={`/profile/${pos.account_id}`} className="text-[#58a6ff] hover:underline">
+                                          <Link href={`/profile/${pos.account_id}`} className="text-[#C8963C] hover:underline">
                                             {displayWallet}
                                           </Link>
                                           <EarlySupporterBadge rank={pos.rank} />
                                           {isCreator && (
-                                            <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-[#1f6feb20] text-[#58a6ff] border border-[#1f6feb30]">
+                                            <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-[#C8963C]/12 text-[#C8963C] border border-[rgba(200,150,60,0.20)]">
                                               CREATOR
                                             </span>
                                           )}
@@ -2751,13 +2751,13 @@ function AgentsPageContent() {
                                       <td className="py-2 text-right text-white font-medium">
                                         {(Number(shares) / 1e18).toFixed(4)}
                                       </td>
-                                      <td className="py-2 text-right text-[#8b949e]">
+                                      <td className="py-2 text-right text-[#B5BDC6]">
                                         {getSellProceeds(
                                           Number(shares) / 1e18,
                                           isOppose ? opposeSupply : supportSupply
                                         ).toFixed(4)}
                                       </td>
-                                      <td className="py-2 text-right text-[#8b949e]">
+                                      <td className="py-2 text-right text-[#B5BDC6]">
                                         {pct.toFixed(1)}%
                                       </td>
                                     </tr>
@@ -2772,9 +2772,9 @@ function AgentsPageContent() {
 
                     {/* Your Position */}
                     {isConnected && (
-                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider">Your Position</p>
+                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Your Position</p>
                           {(() => {
                             const stakedSince = userPosition.rawPositions[0]?.updated_at || null
                             if (!stakedSince) return null
@@ -2809,7 +2809,7 @@ function AgentsPageContent() {
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between mt-1">
-                                  <span className="text-[#6b7280] text-[10px]">Current Value</span>
+                                  <span className="text-[#7A838D] text-[10px]">Current Value</span>
                                   <span className="text-[#34a872] text-[10px] font-semibold">{value.toFixed(4)} tTRUST</span>
                                 </div>
                               </div>
@@ -2830,7 +2830,7 @@ function AgentsPageContent() {
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between mt-1">
-                                  <span className="text-[#6b7280] text-[10px]">Current Value</span>
+                                  <span className="text-[#7A838D] text-[10px]">Current Value</span>
                                   <span className="text-[#c45454] text-[10px] font-semibold">{value.toFixed(4)} tTRUST</span>
                                 </div>
                               </div>
@@ -2838,9 +2838,9 @@ function AgentsPageContent() {
                             })()}
                           </div>
                         ) : (
-                          <div className="text-center py-3 bg-[#0d1117] rounded-lg">
-                            <p className="text-[#6b7280] text-xs">You haven't staked on this agent yet</p>
-                            <p className="text-[#8b949e] text-[10px] mt-0.5">Use the Bonding Curve Market above to take a position</p>
+                          <div className="text-center py-3 bg-[#0F1113] rounded-lg">
+                            <p className="text-[#7A838D] text-xs">You haven't staked on this agent yet</p>
+                            <p className="text-[#B5BDC6] text-[10px] mt-0.5">Use the Bonding Curve Market above to take a position</p>
                           </div>
                         )}
                       </div>
@@ -2848,7 +2848,7 @@ function AgentsPageContent() {
 
                     {/* Reports Info */}
                     {reportCount > 0 && (
-                      <div className="bg-[#161b22] border border-[#f9731630] rounded-xl p-4">
+                      <div className="bg-[#171A1D] border border-[#f9731630] rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-3">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                             <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -2878,24 +2878,24 @@ function AgentsPageContent() {
                             const icon = categoryIcons[predLabel] || '⚠️'
 
                             return (
-                              <div key={report.id || i} className="flex items-start gap-2.5 bg-[#0d1117] rounded-lg px-3 py-2">
+                              <div key={report.id || i} className="flex items-start gap-2.5 bg-[#0F1113] rounded-lg px-3 py-2">
                                 <span className="text-sm flex-shrink-0 mt-0.5">{icon}</span>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="text-[#f97316] text-[10px] font-bold uppercase">{predLabel}</span>
                                     <span className="text-[#30363d]">·</span>
                                     {report.creator?.id ? (
-                                      <Link href={`/profile/${report.creator.id}`} className="text-[#58a6ff] text-[10px] hover:underline">
+                                      <Link href={`/profile/${report.creator.id}`} className="text-[#C8963C] text-[10px] hover:underline">
                                         by {displayReporter}
                                       </Link>
                                     ) : (
-                                      <span className="text-[#8b949e] text-[10px]">by {displayReporter}</span>
+                                      <span className="text-[#B5BDC6] text-[10px]">by {displayReporter}</span>
                                     )}
                                     <span className="text-[#30363d]">·</span>
-                                    <span className="text-[#6b7280] text-[10px]">{date}</span>
+                                    <span className="text-[#7A838D] text-[10px]">{date}</span>
                                   </div>
                                   {reason && reason !== `${predLabel} report` && (
-                                    <p className="text-[#8b949e] text-[11px] mt-0.5 truncate">{reason}</p>
+                                    <p className="text-[#B5BDC6] text-[11px] mt-0.5 truncate">{reason}</p>
                                   )}
                                 </div>
                               </div>
@@ -2906,13 +2906,13 @@ function AgentsPageContent() {
                     )}
 
                     {/* Agent Details */}
-                    <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
-                      <p className="text-[#8b949e] text-xs font-semibold uppercase tracking-wider mb-3">Details</p>
+                    <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                      <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Details</p>
                       <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                         <div>
-                          <p className="text-[#6b7280] text-[10px] mb-0.5">Creator</p>
+                          <p className="text-[#7A838D] text-[10px] mb-0.5">Creator</p>
                           {selectedAgent.creator?.id ? (
-                            <Link href={`/profile/${selectedAgent.creator.id}`} className="text-[#58a6ff] text-xs font-medium hover:underline">
+                            <Link href={`/profile/${selectedAgent.creator.id}`} className="text-[#C8963C] text-xs font-medium hover:underline">
                               {selectedAgent.creator.label?.replace('.eth', '') || selectedAgent.creator.id.slice(0, 10)}
                             </Link>
                           ) : (
@@ -2925,16 +2925,16 @@ function AgentsPageContent() {
                           { label: 'Stakers', value: String(combinedStakerCount) },
                         ].map((item, i) => (
                           <div key={i}>
-                            <p className="text-[#6b7280] text-[10px] mb-0.5">{item.label}</p>
+                            <p className="text-[#7A838D] text-[10px] mb-0.5">{item.label}</p>
                             <p className="text-white text-xs font-medium">{item.value}</p>
                           </div>
                         ))}
                       </div>
 
-                      <div className="mt-3 pt-3 border-t border-[#21262d]">
+                      <div className="mt-3 pt-3 border-t border-[#C8963C]/12">
                         <div className="flex gap-2 flex-wrap">
                           {['AI Agent', selectedAgent.type || 'General'].map((tag, i) => (
-                            <span key={i} className="px-2.5 py-0.5 bg-[#1f6feb15] border border-[#1f6feb30] rounded-full text-[#58a6ff] text-[10px] font-medium">
+                            <span key={i} className="px-2.5 py-0.5 bg-[rgba(200,150,60,0.10)] border border-[rgba(200,150,60,0.20)] rounded-full text-[#C8963C] text-[10px] font-medium">
                               {tag}
                             </span>
                           ))}
@@ -2998,10 +2998,10 @@ function AgentsPageContent() {
                         <h4 className="text-white font-semibold text-sm">Attestors</h4>
                         <div className="flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#34a872] animate-pulse" />
-                          <span className="text-xs text-[#8b949e]">live</span>
+                          <span className="text-xs text-[#B5BDC6]">live</span>
                         </div>
                       </div>
-                      <span className="text-xs text-[#8b949e] bg-[#21262d] px-2 py-1 rounded-full">
+                      <span className="text-xs text-[#B5BDC6] bg-[#1E2229] px-2 py-1 rounded-full">
                         {uniqueStakers} profile{uniqueStakers !== 1 ? 's' : ''} · {agentSignalsCount} signal{agentSignalsCount !== 1 ? 's' : ''}
                       </span>
                     </div>
@@ -3009,18 +3009,18 @@ function AgentsPageContent() {
                     {signalsLoading ? (
                       <div className="space-y-2">
                         {[1, 2, 3].map(i => (
-                          <div key={i} className="h-16 bg-[#161b22] border border-[#21262d] rounded-xl animate-pulse" />
+                          <div key={i} className="h-16 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl animate-pulse" />
                         ))}
                       </div>
                     ) : profiles.length === 0 ? (
                       <div className="text-center py-10">
-                        <div className="w-12 h-12 rounded-full bg-[#21262d] flex items-center justify-center mx-auto mb-3">
+                        <div className="w-12 h-12 rounded-full bg-[#1E2229] flex items-center justify-center mx-auto mb-3">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#8b949e" strokeWidth="2"/>
+                            <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#B5BDC6" strokeWidth="2"/>
                           </svg>
                         </div>
-                        <p className="text-[#8b949e] text-sm">No attestors yet</p>
-                        <p className="text-[#6b7280] text-xs mt-1">Be the first to stake on this agent</p>
+                        <p className="text-[#B5BDC6] text-sm">No attestors yet</p>
+                        <p className="text-[#7A838D] text-xs mt-1">Be the first to stake on this agent</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -3038,7 +3038,7 @@ function AgentsPageContent() {
                             <Link
                               key={profile.accountId}
                               href={`/profile/${profile.accountId}`}
-                              className="flex items-center justify-between p-3.5 bg-[#161b22] border border-[#21262d] rounded-xl hover:border-[#30363d] transition-colors cursor-pointer"
+                              className="flex items-center justify-between p-3.5 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl hover:border-[#C8963C]/25 transition-colors cursor-pointer"
                             >
                               <div className="flex items-center gap-3">
                                 <div
@@ -3057,7 +3057,7 @@ function AgentsPageContent() {
                                   </svg>
                                 </div>
                                 <div>
-                                  <p className="text-white text-sm font-medium hover:text-[#58a6ff] transition-colors">{displayName}</p>
+                                  <p className="text-white text-sm font-medium hover:text-[#C8963C] transition-colors">{displayName}</p>
                                   <div className="flex items-center gap-2 mt-0.5">
                                     {profile.supportCount > 0 && (
                                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#2d7a5f20] text-[#34a872]">
@@ -3069,14 +3069,14 @@ function AgentsPageContent() {
                                         ↓ {profile.opposeCount} Oppose
                                       </span>
                                     )}
-                                    <span className="text-[#6b7280] text-[10px]">{lastDate}</span>
+                                    <span className="text-[#7A838D] text-[10px]">{lastDate}</span>
                                   </div>
                                 </div>
                               </div>
 
                               <div className="text-right">
                                 <p className="text-white text-sm font-bold">{profile.totalSignals}</p>
-                                <p className="text-[#6b7280] text-[10px]">attestation{profile.totalSignals !== 1 ? 's' : ''}</p>
+                                <p className="text-[#7A838D] text-[10px]">attestation{profile.totalSignals !== 1 ? 's' : ''}</p>
                               </div>
                             </Link>
                           )
@@ -3092,7 +3092,7 @@ function AgentsPageContent() {
                   <div className="p-5">
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-white font-semibold">Activity</h4>
-                      <span className="text-xs text-[#8b949e] bg-[#21262d] px-2 py-1 rounded-full">
+                      <span className="text-xs text-[#B5BDC6] bg-[#1E2229] px-2 py-1 rounded-full">
                         {agentSignalsCount + 1} event{agentSignalsCount !== 0 ? 's' : ''}
                       </span>
                     </div>
@@ -3100,22 +3100,22 @@ function AgentsPageContent() {
                       {/* Registration event - always first */}
                       <div className="flex gap-3">
                         <div className="flex flex-col items-center">
-                          <div className="w-8 h-8 rounded-full bg-[#1f6feb20] border border-[#1f6feb40] flex items-center justify-center flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-[#C8963C]/12 border border-[#1f6feb40] flex items-center justify-center flex-shrink-0">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                               <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
-                                stroke="#58a6ff" strokeWidth="2"/>
+                                stroke="#C8963C" strokeWidth="2"/>
                             </svg>
                           </div>
                           {agentSignals.length > 0 && (
-                            <div className="w-px flex-1 bg-[#21262d] my-1" />
+                            <div className="w-px flex-1 bg-[#1E2229] my-1" />
                           )}
                         </div>
                         <div className="pb-4">
                           <p className="text-white text-sm font-medium">Agent Registered</p>
-                          <p className="text-[#8b949e] text-xs mt-0.5">
+                          <p className="text-[#B5BDC6] text-xs mt-0.5">
                             Registered on Intuition Protocol
                           </p>
-                          <p className="text-[#8b949e] text-xs mt-1">
+                          <p className="text-[#B5BDC6] text-xs mt-1">
                             {new Date(selectedAgent.created_at).toLocaleDateString('pl-PL', {
                               day: 'numeric', month: 'long', year: 'numeric'
                             })}
@@ -3126,7 +3126,7 @@ function AgentsPageContent() {
                       {signalsLoading ? (
                         <div className="space-y-2 ml-11">
                           {[1, 2].map(i => (
-                            <div key={i} className="h-10 bg-[#161b22] border border-[#21262d] rounded-lg animate-pulse" />
+                            <div key={i} className="h-10 bg-[#171A1D] border border-[#C8963C]/12 rounded-lg animate-pulse" />
                           ))}
                         </div>
                       ) : (
@@ -3164,27 +3164,27 @@ function AgentsPageContent() {
                                     </svg>
                                   )}
                                 </div>
-                                {!isLast && <div className="w-px flex-1 bg-[#21262d] my-1" />}
+                                {!isLast && <div className="w-px flex-1 bg-[#1E2229] my-1" />}
                               </div>
                               <div className="pb-4">
                                 <p className="text-white text-sm font-medium">
                                   {actionLabel}
-                                  <span className="text-[#8b949e] font-normal ml-1.5">by </span>
+                                  <span className="text-[#B5BDC6] font-normal ml-1.5">by </span>
                                   {signal.account_id ? (
                                     <Link
                                       href={`/profile/${signal.account_id}`}
-                                      className="text-[#58a6ff] font-normal hover:underline"
+                                      className="text-[#C8963C] font-normal hover:underline"
                                     >
                                       {accountLabel}
                                     </Link>
                                   ) : (
-                                    <span className="text-[#8b949e] font-normal">{accountLabel}</span>
+                                    <span className="text-[#B5BDC6] font-normal">{accountLabel}</span>
                                   )}
                                 </p>
                                 <p style={{ color: dotColor }} className="text-xs font-medium mt-0.5">
                                   {isDeposit ? '+' : '-'}{sharesDisplay} shares
                                 </p>
-                                <p className="text-[#8b949e] text-xs mt-0.5">
+                                <p className="text-[#B5BDC6] text-xs mt-0.5">
                                   {new Date(signal.created_at).toLocaleDateString('pl-PL', {
                                     day: 'numeric', month: 'short', year: 'numeric',
                                     hour: '2-digit', minute: '2-digit'
@@ -3198,7 +3198,7 @@ function AgentsPageContent() {
 
                       {!signalsLoading && agentSignals.length === 0 && (
                         <div className="text-center py-4">
-                          <p className="text-[#8b949e] text-sm">No staking activity yet</p>
+                          <p className="text-[#B5BDC6] text-sm">No staking activity yet</p>
                         </div>
                       )}
                     </div>
@@ -3208,11 +3208,11 @@ function AgentsPageContent() {
 
               {/* === REPORT SECTION === */}
               {isConnected && (
-                <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-5">
+                <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5">
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="text-white font-semibold text-sm">Something wrong?</h4>
-                      <p className="text-[#6b7280] text-xs mt-0.5">
+                      <p className="text-[#7A838D] text-xs mt-0.5">
                         Report this agent if you believe it's malicious or misleading.
                         {reportCount > 0 && (
                           <span className="text-[#f97316] ml-1">{reportCount} report{reportCount !== 1 ? 's' : ''} filed</span>
@@ -3245,7 +3245,7 @@ function AgentsPageContent() {
       {/* Report Modal */}
       {showReportModal && selectedAgent && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+          <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
             <div className="flex items-start justify-between mb-5">
               <div>
                 <h2 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
@@ -3256,16 +3256,16 @@ function AgentsPageContent() {
                   </svg>
                   Report Agent
                 </h2>
-                <p className="text-[#8b949e] text-sm">
+                <p className="text-[#B5BDC6] text-sm">
                   Report <span className="text-white font-medium">{getAgentName(selectedAgent.label)}</span>
                 </p>
               </div>
               <button
                 onClick={() => { setShowReportModal(false); setReportReason('') }}
-                className="w-8 h-8 rounded-lg bg-[#21262d] hover:bg-[#30363d] flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-lg bg-[#1E2229] hover:bg-[#252B33] flex items-center justify-center transition-colors"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 6L6 18M6 6l12 12" stroke="#8b949e" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M18 6L6 18M6 6l12 12" stroke="#B5BDC6" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
               </button>
             </div>
@@ -3286,7 +3286,7 @@ function AgentsPageContent() {
                     className={`text-left p-3 rounded-xl border transition-all ${
                       reportCategory === cat.id
                         ? 'bg-[#f9731615] border-[#f97316] ring-1 ring-[#f9731640]'
-                        : 'bg-[#161b22] border-[#21262d] hover:border-[#30363d]'
+                        : 'bg-[#171A1D] border-[#C8963C]/12 hover:border-[#C8963C]/25'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -3295,7 +3295,7 @@ function AgentsPageContent() {
                         {cat.label}
                       </span>
                     </div>
-                    <p className="text-[#6b7280] text-[10px] leading-tight">{cat.desc}</p>
+                    <p className="text-[#7A838D] text-[10px] leading-tight">{cat.desc}</p>
                   </button>
                 ))}
               </div>
@@ -3303,16 +3303,16 @@ function AgentsPageContent() {
 
             {/* Reason */}
             <div className="mb-4">
-              <p className="text-white text-sm font-medium mb-2">Description <span className="text-[#6b7280] font-normal">(optional)</span></p>
+              <p className="text-white text-sm font-medium mb-2">Description <span className="text-[#7A838D] font-normal">(optional)</span></p>
               <textarea
                 value={reportReason}
                 onChange={e => setReportReason(e.target.value)}
                 placeholder="Describe what happened or why you're reporting this agent..."
                 rows={3}
                 maxLength={200}
-                className="w-full bg-[#161b22] border border-[#21262d] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#6b7280] focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f9731640] resize-none"
+                className="w-full bg-[#171A1D] border border-[#C8963C]/12 rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#6b7280] focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f9731640] resize-none"
               />
-              <p className="text-[#6b7280] text-[10px] text-right mt-1">{reportReason.length}/200</p>
+              <p className="text-[#7A838D] text-[10px] text-right mt-1">{reportReason.length}/200</p>
             </div>
 
             {/* Cost notice */}
@@ -3326,7 +3326,7 @@ function AgentsPageContent() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowReportModal(false); setReportReason('') }}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-[#8b949e] bg-[#161b22] border border-[#21262d] hover:border-[#30363d] transition-colors"
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-[#B5BDC6] bg-[#171A1D] border border-[#C8963C]/12 hover:border-[#C8963C]/25 transition-colors"
               >
                 Cancel
               </button>
@@ -3353,14 +3353,14 @@ function AgentsPageContent() {
       {/* Claim Selection Modal */}
       {showClaimSelect && pendingVote && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+          <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
 
             {/* Header */}
             <div className="mb-5">
               <h2 className="text-xl font-bold text-white mb-1">
                 Select a Claim
               </h2>
-              <p className="text-[#8b949e] text-sm">
+              <p className="text-[#B5BDC6] text-sm">
                 Choose what you want to attest about{' '}
                 <span className="text-white font-medium">
                   {getAgentName(pendingVote.agent.label)}
@@ -3372,7 +3372,7 @@ function AgentsPageContent() {
             {claimsLoading && (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#34a872] border-t-transparent mr-3" />
-                <span className="text-[#8b949e]">Loading claims from graph...</span>
+                <span className="text-[#B5BDC6]">Loading claims from graph...</span>
               </div>
             )}
 
@@ -3411,12 +3411,12 @@ function AgentsPageContent() {
                         )}
                       </div>
                       {claim.creator && (
-                        <p className="text-[#8b949e] text-xs">
+                        <p className="text-[#B5BDC6] text-xs">
                           Created by {claim.creator.label?.replace('.eth', '') || 'unknown'}
                         </p>
                       )}
                       {claim.positions_aggregate?.aggregate?.count > 0 && (
-                        <p className="text-[#8b949e] text-xs mt-1">
+                        <p className="text-[#B5BDC6] text-xs mt-1">
                           {claim.positions_aggregate.aggregate.count} attestations
                         </p>
                       )}
@@ -3434,14 +3434,14 @@ function AgentsPageContent() {
             {/* Empty State */}
             {!claimsLoading && claims.length === 0 && (
               <div className="text-center py-12">
-                <div className="w-12 h-12 rounded-full bg-[#21262d] flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 rounded-full bg-[#1E2229] flex items-center justify-center mx-auto mb-3">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="9" stroke="#8b949e" strokeWidth="2"/>
-                    <line x1="12" y1="8" x2="12" y2="12" stroke="#8b949e" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="12" y1="16" x2="12.01" y2="16" stroke="#8b949e" strokeWidth="2" strokeLinecap="round"/>
+                    <circle cx="12" cy="12" r="9" stroke="#B5BDC6" strokeWidth="2"/>
+                    <line x1="12" y1="8" x2="12" y2="12" stroke="#B5BDC6" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16" stroke="#B5BDC6" strokeWidth="2" strokeLinecap="round"/>
                   </svg>
                 </div>
-                <p className="text-[#8b949e] text-sm">No claims found</p>
+                <p className="text-[#B5BDC6] text-sm">No claims found</p>
               </div>
             )}
 
@@ -3452,7 +3452,7 @@ function AgentsPageContent() {
                   setShowClaimSelect(false)
                   setPendingVote(null)
                 }}
-                className="flex-1 py-3 bg-[#21262d] hover:bg-[#30363d] rounded-xl text-[#8b949e] hover:text-white font-semibold text-sm transition-colors"
+                className="flex-1 py-3 bg-[#1E2229] hover:bg-[#252B33] rounded-xl text-[#B5BDC6] hover:text-white font-semibold text-sm transition-colors"
               >
                 Cancel
               </button>
@@ -3483,7 +3483,7 @@ function AgentsPageContent() {
       {/* Confirmation Modal */}
       {showConfirm && pendingVote && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+          <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
 
             {/* Icon */}
             <div className="flex justify-center mb-5">
@@ -3516,14 +3516,14 @@ function AgentsPageContent() {
                 : pendingVote.type === 'redeem_trust' ? 'Redeem FOR Shares'
                 : 'Redeem AGAINST Shares'}
             </h2>
-            <p className="text-[#8b949e] text-sm text-center mb-6">
+            <p className="text-[#B5BDC6] text-sm text-center mb-6">
               Review your signal before confirming
             </p>
 
             {/* Details */}
-            <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden mb-5">
-              <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
-                <span className="text-[#8b949e] text-sm">Agent</span>
+            <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl overflow-hidden mb-5">
+              <div className="flex justify-between items-center px-4 py-3 border-b border-[#C8963C]/12">
+                <span className="text-[#B5BDC6] text-sm">Agent</span>
                 <span className="text-white text-sm font-semibold text-right max-w-[180px] truncate">
                   {pendingVote.agent.label
                     .replace(/^Agent:\s*/i, '')
@@ -3535,8 +3535,8 @@ function AgentsPageContent() {
               </div>
 
               {pendingVote.claim && pendingVote.type !== 'redeem_trust' && pendingVote.type !== 'redeem_distrust' && (
-                <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
-                  <span className="text-[#8b949e] text-sm">Claim</span>
+                <div className="flex justify-between items-center px-4 py-3 border-b border-[#C8963C]/12">
+                  <span className="text-[#B5BDC6] text-sm">Claim</span>
                   <div className="text-right flex items-center gap-2">
                     <span className="text-white text-sm font-semibold">
                       {pendingVote.claim}
@@ -3551,8 +3551,8 @@ function AgentsPageContent() {
               )}
 
               {(pendingVote.type === 'trust' || pendingVote.type === 'distrust') && (
-                <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
-                  <span className="text-[#8b949e] text-sm">Deposit</span>
+                <div className="flex justify-between items-center px-4 py-3 border-b border-[#C8963C]/12">
+                  <span className="text-[#B5BDC6] text-sm">Deposit</span>
                   <span className="font-bold text-sm" style={{ color: pendingVote.type === 'trust' ? '#5ab8a0' : '#c45454' }}>
                     {pendingVote.amount} tTRUST → {pendingVote.type === 'trust' ? 'FOR' : 'AGAINST'} shares
                   </span>
@@ -3560,8 +3560,8 @@ function AgentsPageContent() {
               )}
 
               {(pendingVote.type === 'redeem_trust' || pendingVote.type === 'redeem_distrust') && (
-                <div className="flex justify-between items-center px-4 py-3 border-b border-[#21262d]">
-                  <span className="text-[#8b949e] text-sm">Redeem</span>
+                <div className="flex justify-between items-center px-4 py-3 border-b border-[#C8963C]/12">
+                  <span className="text-[#B5BDC6] text-sm">Redeem</span>
                   <span className="font-bold text-sm" style={{ color: pendingVote.type === 'redeem_trust' ? '#34a872' : '#c45454' }}>
                     {Number(pendingVote.amount).toFixed(4)} {pendingVote.type === 'redeem_trust' ? 'FOR' : 'AGAINST'} shares → tTRUST
                   </span>
@@ -3569,7 +3569,7 @@ function AgentsPageContent() {
               )}
 
               <div className="flex justify-between items-center px-4 py-3">
-                <span className="text-[#8b949e] text-sm">Network</span>
+                <span className="text-[#B5BDC6] text-sm">Network</span>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#34a872]" />
                   <span className="text-white text-sm">Intuition Testnet</span>
@@ -3592,12 +3592,12 @@ function AgentsPageContent() {
 
             {/* Oppose first-time 2-tx notice */}
             {pendingVote.type === 'distrust' && pendingVote.tripleTermId && (
-              <div className="flex items-start gap-2 p-3 bg-[#58a6ff10] border border-[#58a6ff20] rounded-lg mb-5">
+              <div className="flex items-start gap-2 p-3 bg-[#C8963C10] border border-[#C8963C20] rounded-lg mb-5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                  <circle cx="12" cy="12" r="9" stroke="#58a6ff" strokeWidth="2"/>
-                  <path d="M12 8v4m0 4h.01" stroke="#58a6ff" strokeWidth="2" strokeLinecap="round"/>
+                  <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2"/>
+                  <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
-                <p className="text-[#58a6ff] text-xs leading-relaxed">
+                <p className="text-[#C8963C] text-xs leading-relaxed">
                   First Oppose Buy needs <strong>2 wallet confirmations</strong>: clear activation deposit, then Oppose deposit. Later buys require only 1.
                 </p>
               </div>
@@ -3607,7 +3607,7 @@ function AgentsPageContent() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowConfirm(false); setPendingVote(null); setSellReason(null) }}
-                className="flex-1 py-3 bg-[#21262d] hover:bg-[#30363d] rounded-xl text-[#8b949e] hover:text-white font-semibold text-sm transition-colors"
+                className="flex-1 py-3 bg-[#1E2229] hover:bg-[#252B33] rounded-xl text-[#B5BDC6] hover:text-white font-semibold text-sm transition-colors"
               >
                 Cancel
               </button>
