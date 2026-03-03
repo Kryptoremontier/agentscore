@@ -1,38 +1,41 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { UserPlus, ShieldHalf, ScanLine } from 'lucide-react'
+import { Layers, TrendingUp, ScanLine } from 'lucide-react'
 
 const steps = [
   {
     num: '01',
-    icon: UserPlus,
-    title: 'Register Agent',
-    description: 'Create an on-chain identity for your AI agent as an Intuition Atom. Costs 0.01 tTRUST.',
+    icon: Layers,
+    title: 'Register on Chain',
+    description: 'Create permanent on-chain identities for AI Agents and Skills as Intuition Atoms. Define relationships between them as verifiable Claims (triples).',
     accentRgb: '200,150,60',
     accentHex: '#C8963C',
     brightHex: '#E8B84B',
-    label: 'Identity',
+    label: 'Registry',
+    bullets: ['Agents', 'Skills', 'Claims'],
   },
   {
     num: '02',
-    icon: ShieldHalf,
-    title: 'Support or Oppose',
-    description: 'Stake tTRUST via bonding curves to signal trust (Support) or flag risks (Oppose).',
+    icon: TrendingUp,
+    title: 'Stake & Signal',
+    description: 'Back your conviction with tTRUST. Support entities you trust or Oppose those you deem risky — bonding curves make every position transparent and tradeable.',
     accentRgb: '46,204,113',
     accentHex: '#2ECC71',
     brightHex: '#4AE685',
     label: 'Staking',
+    bullets: ['Support', 'Oppose', 'Trade'],
   },
   {
     num: '03',
     icon: ScanLine,
-    title: 'Verify & Interact',
-    description: 'Check real-time trust scores powered by on-chain stakes before interacting with any agent.',
+    title: 'Verify & Decide',
+    description: 'Query live trust scores derived entirely from on-chain stakes. Make informed decisions before deploying or integrating any AI agent or skill.',
     accentRgb: '56,182,255',
     accentHex: '#38B6FF',
     brightHex: '#5AC8FF',
     label: 'Verification',
+    bullets: ['Trust Score', 'History', 'Attestations'],
   },
 ]
 
@@ -161,7 +164,24 @@ export function HowItWorks() {
                 <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
 
                 {/* Description */}
-                <p className="text-[#6B7480] leading-relaxed text-sm">{step.description}</p>
+                <p className="text-[#6B7480] leading-relaxed text-sm mb-5">{step.description}</p>
+
+                {/* Bullet tags */}
+                <div className="flex flex-wrap gap-1.5">
+                  {step.bullets.map(b => (
+                    <span
+                      key={b}
+                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md"
+                      style={{
+                        color: step.accentHex,
+                        background: `rgba(${step.accentRgb},0.08)`,
+                        border: `1px solid rgba(${step.accentRgb},0.2)`,
+                      }}
+                    >
+                      {b}
+                    </span>
+                  ))}
+                </div>
 
                 {/* Bottom accent line */}
                 <div

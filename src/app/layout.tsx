@@ -25,8 +25,11 @@ export const metadata: Metadata = {
   title: 'AgentScore | Trust Layer for AI Agents',
   description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol. 770K+ AI agents need trust verification.',
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+    ],
     apple: '/apple-touch-icon.png',
+    shortcut: '/favicon.png',
   },
   manifest: '/site.webmanifest',
   openGraph: {
@@ -49,7 +52,7 @@ export const metadata: Metadata = {
     title: 'AgentScore | Trust Layer for AI Agents',
     description: 'Verify AI agent reputation before interaction. Decentralized trust verification.',
     images: ['https://agentscore-gilt.vercel.app/images/brand/og-image.png'],
-    creator: '@Kryptoremontier',
+    creator: '@AgentScoreApp',
   },
 }
 

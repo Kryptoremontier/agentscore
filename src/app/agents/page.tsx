@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Layers, Globe } from 'lucide-react'
+import { Layers, Globe, LayoutGrid, List } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther, getAddress } from 'viem'
 import Link from 'next/link'
@@ -74,6 +74,7 @@ function AgentsPageContent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState<'newest' | 'score_desc' | 'score_asc' | 'stakers' | 'stake'>('newest')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [showOnlyOurs, setShowOnlyOurs] = useState(true)
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity'>('overview')
@@ -1324,6 +1325,8 @@ function AgentsPageContent() {
                 <option value="stakers">Most Stakers</option>
                 <option value="stake">Most Stake</option>
               </select>
+
+
             </div>
           </motion.div>
 
@@ -1426,12 +1429,49 @@ function AgentsPageContent() {
               transition={{ delay: 0.2 }}
             >
               <div className="mb-6 flex items-center justify-between">
-                <div className="text-sm text-text-muted">
-                  <span className="font-semibold text-text-[#C8963C]">{sorted.length}</span>
-                  {sorted.length !== agents.length && ` of ${agents.length}`} agents
+                <p className="text-sm text-[#7A838D]">
+                  <span className="font-semibold text-white">{sorted.length}</span>
+                  {sorted.length !== agents.length && <span className="text-[#4A5260]"> of {agents.length}</span>} agents
                   {selectedCategory !== 'all' && (
-                    <span className="text-[#B5BDC6]"> · filtered by <span className="text-white font-medium">{selectedCategory}</span></span>
+                    <span className="text-[#4A5260]"> · <span className="text-[#B5BDC6]">{selectedCategory}</span></span>
                   )}
+                </p>
+
+                {/* View mode toggle — prominent, above content */}
+                <div
+                  className="flex items-center gap-0.5 p-1 rounded-xl"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200"
+                    style={viewMode === 'grid' ? {
+                      background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.08))',
+                      border: '1px solid rgba(200,150,60,0.35)',
+                      color: '#C8963C',
+                    } : {
+                      border: '1px solid transparent',
+                      color: '#7A838D',
+                    }}
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    Grid
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200"
+                    style={viewMode === 'list' ? {
+                      background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.08))',
+                      border: '1px solid rgba(200,150,60,0.35)',
+                      color: '#C8963C',
+                    } : {
+                      border: '1px solid transparent',
+                      color: '#7A838D',
+                    }}
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    List
+                  </button>
                 </div>
               </div>
 
@@ -1445,7 +1485,8 @@ function AgentsPageContent() {
                     Show all agents
                   </button>
                 </div>
-              ) : (
+              ) : viewMode === 'grid' ? (
+              /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ agent, trust: cardTrust }) => {
                   const trustScore = cardTrust.score
@@ -1458,7 +1499,6 @@ function AgentsPageContent() {
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
                   const name = getAgentName(agent.label)
                   const creator = agent.creator?.label || 'unknown'
-                  const status = voteStatus[agent.term_id]
 
                   return (
                     <motion.div
@@ -1468,36 +1508,19 @@ function AgentsPageContent() {
                       transition={{ delay: 0.05 }}
                       onClick={() => setSelectedAgent(agent)}
                       className="bg-[#111318] border border-[#1e2028] rounded-2xl p-5
-                                 cursor-pointer
-                                 transition-all duration-300 ease-out
-                                 hover:-translate-y-1
-                                 hover:border-[#C8963C]/15
-                                 hover:bg-[#171A1D]
-                                 hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]"
+                                 cursor-pointer transition-all duration-300 ease-out
+                                 hover:-translate-y-1 hover:border-[#C8963C]/15
+                                 hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]"
                     >
-                      {/* Header Row */}
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          {/* Icon */}
-                          <div className="relative">
-                            <div
-                              className="w-12 h-12 rounded-xl flex items-center justify-center"
-                              style={{ backgroundColor: color + '22', border: `1px solid ${color}44` }}
-                            >
-                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                                <path
-                                  d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
-                                  stroke={color}
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  fill={color + '33'}
-                                />
-                              </svg>
-                            </div>
-                            </div>
-
-                          {/* Name + creator */}
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: color + '22', border: `1px solid ${color}44` }}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                              <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+                                stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={color + '33'} />
+                            </svg>
+                          </div>
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
                               <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
@@ -1508,39 +1531,80 @@ function AgentsPageContent() {
                             </span>
                           </div>
                         </div>
-
-                        {/* Trust Score */}
                         <div className="text-right">
-                          <p className="text-2xl font-bold leading-none" style={{ color: getTrustColor(trustScore) }}>
-                            {trustScore}
-                          </p>
+                          <p className="text-2xl font-bold leading-none" style={{ color: getTrustColor(trustScore) }}>{trustScore}</p>
                           <p className="text-xs text-[#7A838D] mt-0.5">Trust Score</p>
                         </div>
                       </div>
-
-                      {/* Stats Row */}
                       <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
-                        <div className="flex items-center gap-1.5">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M7 17L17 7M17 7H7M17 7v10" stroke="#7A838D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="#7A838D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
-                        </div>
+                        <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
+                        <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
                       </div>
-
-                      {/* Score bar */}
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${trustScore}%`, backgroundColor: color }}
-                        />
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${trustScore}%`, backgroundColor: color }} />
                       </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+              ) : (
+              /* ── LIST VIEW ── */
+              <div className="flex flex-col gap-1.5">
+                <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[#4A5260]">
+                  <span className="w-8" />
+                  <span>Agent</span>
+                  <span className="text-right w-20">Stakes</span>
+                  <span className="text-right w-16">Stakers</span>
+                  <span className="text-right w-12">Score</span>
+                </div>
+                {sorted.map(({ agent, trust: cardTrust }, i) => {
+                  const trustScore = cardTrust.score
+                  const color = cardTrust.level === 'excellent' ? '#2ECC71'
+                    : cardTrust.level === 'good' ? '#22C55E'
+                    : cardTrust.level === 'moderate' ? '#EAB308'
+                    : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
+                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
+                  const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
+                  const name = getAgentName(agent.label)
+                  const creator = agent.creator?.label || 'unknown'
+
+                  return (
+                    <motion.div
+                      key={agent.term_id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.015 }}
+                      onClick={() => setSelectedAgent(agent)}
+                      className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center px-4 py-3 rounded-xl cursor-pointer transition-all duration-150"
+                      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(200,150,60,0.05)'
+                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(200,150,60,0.15)'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'
+                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.05)'
+                      }}
+                    >
+                      {/* Icon */}
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: color + '18', border: `1px solid ${color}33` }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+                            stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={color + '33'} />
+                        </svg>
+                      </div>
+                      {/* Name */}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{name}</p>
+                        <p className="text-[11px] text-[#7A838D] truncate">{creator.replace('.eth', '')}</p>
+                      </div>
+                      {/* Stakes */}
+                      <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{stakes}</span>
+                      {/* Stakers */}
+                      <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{stakers}</span>
+                      {/* Score */}
+                      <span className="text-sm font-bold font-mono text-right w-12" style={{ color }}>{trustScore}</span>
                     </motion.div>
                   )
                 })}

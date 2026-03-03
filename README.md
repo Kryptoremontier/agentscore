@@ -1,248 +1,192 @@
 <p align="center">
-  <img src="https://agentscore-gilt.vercel.app/images/brand/og-image.png" alt="AgentScore - Trust Layer for AI Agents" width="600" />
+  <img src="https://agentscore-gilt.vercel.app/images/brand/gold/logo.png" alt="AgentScore" width="120" />
 </p>
 
 <h1 align="center">AgentScore</h1>
 
 <p align="center">
-  <strong>🛡️ The Trust Layer for AI Agents</strong>
+  <strong>Decentralized Trust & Reputation Layer for AI Agents</strong>
 </p>
 
 <p align="center">
-  Decentralized reputation verification built on <a href="https://intuition.systems">Intuition Protocol</a>.<br/>
-  Verify before you interact. Stake your conviction. Build the semantic web of trust.
+  Built on <a href="https://intuition.systems">Intuition Protocol</a> · Live on Intuition Testnet
 </p>
 
 <p align="center">
   <a href="https://agentscore-gilt.vercel.app">
-    <img src="https://img.shields.io/badge/🚀%20Live%20Demo-Visit%20Site-blue?style=for-the-badge" alt="Live Demo" />
+    <img src="https://img.shields.io/badge/🚀%20Live%20App-Visit%20Site-C8963C?style=for-the-badge" alt="Live App" />
   </a>
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#why-agentscore">Why AgentScore</a> •
-  <a href="#how-it-works">How It Works</a> •
-  <a href="#tech-stack">Tech Stack</a> •
-  <a href="#getting-started">Getting Started</a> •
-  <a href="#tokenomics">Tokenomics</a> •
-  <a href="#roadmap">Roadmap</a>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/version-2.1.0-blue?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/version-3.0.0-C8963C?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/built%20on-Intuition%20Protocol-purple?style=flat-square" alt="Built on Intuition" />
-  <img src="https://img.shields.io/badge/network-Base%20L3-blue?style=flat-square" alt="Network" />
-  <img src="https://img.shields.io/badge/status-testnet-orange?style=flat-square" alt="Status" />
+  <img src="https://img.shields.io/badge/built%20on-Intuition%20Protocol-8A63D2?style=flat-square" alt="Built on Intuition" />
+  <img src="https://img.shields.io/badge/network-Intuition%20Testnet-blue?style=flat-square" alt="Network" />
+  <img src="https://img.shields.io/badge/status-testnet%20alpha-orange?style=flat-square" alt="Status" />
 </p>
 
 ---
 
-## 🌟 The Vision
+## The Vision
 
 > *"If Ethereum decentralized money, Intuition is decentralizing trust in information."*
 
-We live in an era of **770,000+ AI agents** operating across platforms — trading, coding, creating, interacting. But here's the problem:
+We live in an era of **AI agents operating everywhere** — coding, trading, creating, interacting on our behalf. But:
 
 **How do you know which agent to trust?**
 
-- Is that trading bot legitimate or a rug pull waiting to happen?
-- Will this coding assistant protect your API keys or leak them?
-- Can you trust this content agent with your brand?
-
-**AgentScore** is the answer. We're building the **trust infrastructure** for the AI agent economy — where reputation is transparent, verifiable, and owned by the community, not corporations.
+AgentScore is the answer. An open, on-chain reputation system where **anyone can stake tTRUST tokens** to signal confidence in an AI agent or skill. Every signal is permanent, transparent, and economically meaningful — no fake reviews, no platform bias.
 
 ---
 
-## ✨ Features
+## What's on the Platform
 
-<table>
-<tr>
-<td width="50%">
+AgentScore handles three types of on-chain entities, all powered by Intuition Protocol atoms and triples:
 
-### 🔍 **Verify Agents**
-Browse and verify AI agents before interaction. See real trust scores backed by economic stakes, not just star ratings.
+### 🤖 Agents
+AI agent identities registered as Intuition **Atoms**. Each agent gets a unique on-chain ID, a live Trust Score (0–100), and two staking vaults (Support / Oppose). Anyone can stake tTRUST to signal confidence.
 
-### 🏆 **Expert Badge System**
-Earn reputation through quality attestations. Experts carry more weight — their trust means more.
+### ⚡ Skills
+Specific capabilities exposed by an agent (e.g. *Code Generation*, *RAG Search*, *Image Analysis*). Registered as Atoms and scored independently — a skilled agent should be backed at both the agent level and skill level.
 
-### 📊 **Advanced Filtering**
-Search by category, trust level, platform. Find exactly the agents you need with confidence.
+### 💬 Claims
+Verifiable **triples** (Subject → Predicate → Object) expressing structured relationships:
+- *Agent X [has skill] Code Generation*
+- *Agent Y [is trusted by] CommunityDAO*
+- *Skill Z [competes with] Skill W*
 
-</td>
-<td width="50%">
-
-### 💰 **Stake Your Conviction**
-Put your $TRUST where your mouth is. Support agents you believe in, warn others about bad actors.
-
-### 📈 **Bonding Curve Economics**
-Early supporters earn more. As an agent gains trust, your position grows in value.
-
-### 👤 **User Profiles**
-Build your reputation. Track your stakes, badges, and the agents you've registered.
-
-</td>
-</tr>
-</table>
+Claims are also stakeable — support or oppose any statement with real tTRUST.
 
 ---
 
-## 🤔 Why AgentScore?
-
-### The Problem
-
-| Issue | Impact |
-|-------|--------|
-| **No verification standard** | Anyone can claim their agent is "trusted" |
-| **Centralized ratings** | Platforms control what you see |
-| **Fake reviews** | Bot armies inflate ratings |
-| **No skin in the game** | Rating costs nothing, means nothing |
-| **Siloed reputation** | Trust doesn't travel between platforms |
-
-### Our Solution
-
-| AgentScore | Benefit |
-|------------|---------|
-| **On-chain attestations** | Permanent, transparent, verifiable |
-| **Economic staking** | Your $TRUST backs your claims |
-| **Expert weighting** | Proven community members carry more influence |
-| **Portable reputation** | Trust travels with agents across the ecosystem |
-| **Community owned** | No central authority decides who's trusted |
-
----
-
-## 🔄 How It Works
+## How Trust Scores Work
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         USER JOURNEY                            │
-└─────────────────────────────────────────────────────────────────┘
+  User A stakes 100 tTRUST  ──────▶  Agent X  ◀──────  User B stakes 50 tTRUST
+  "I trust this agent"                  │               "I trust this agent"
+                                        │
+                              ┌─────────▼──────────┐
+                              │   Trust Score: 87   │
+                              │   ████████████░░    │
+                              │   Tier: Trusted ✓   │
+                              └─────────────────────┘
+```
 
-    ┌──────────┐         ┌──────────┐         ┌──────────┐
-    │    1     │         │    2     │         │    3     │
-    │ REGISTER │───────▶ │  ATTEST  │───────▶ │  VERIFY  │
-    │          │         │          │         │          │
-    └──────────┘         └──────────┘         └──────────┘
-         │                    │                    │
-         ▼                    ▼                    ▼
-    Create Atom          Stake $TRUST         Check Score
-    for your AI          to vouch for         before you
-    agent on-chain       or against           interact
+| Signal | Effect |
+|--------|--------|
+| **Support** — stake in the support vault | Raises Trust Score |
+| **Oppose** — stake in the counter vault | Lowers Trust Score |
 
-┌─────────────────────────────────────────────────────────────────┐
-│                      TRUST SCORE FLOW                           │
-└─────────────────────────────────────────────────────────────────┘
+- Score range **0–100**, anchored at 50 until sufficient stake accumulates
+- **Bonding curves** — price per share rises as more stake enters a vault
+- **Time decay** — older signals gradually lose weight (half-life ~90 days)
+- Positions can be **redeemed (sold)** at any time at the current curve price
 
-  👤 User A                  🤖 Agent X                 👤 User B
-     │                           │                          │
-     │  Stakes 100 $TRUST        │                          │
-     │  "I trust this agent"     │                          │
-     │─────────────────────────▶ │                          │
-     │                           │                          │
-     │                           │    Stakes 50 $TRUST      │
-     │                           │    "I trust this agent"  │
-     │                           │ ◀────────────────────────│
-     │                           │                          │
-     │                    ┌──────┴──────┐                   │
-     │                    │ Trust Score │                   │
-     │                    │     87      │                   │
-     │                    │   ████████░ │                   │
-     │                    └─────────────┘                   │
+### Trust Tiers
+
+| Tier | Threshold | Description |
+|------|-----------|-------------|
+| ○ **Unverified** | 0 stakers | No signals yet |
+| ◐ **Sandbox** | 3+ stakers | Early community activity |
+| ✓ **Trusted** | 10+ stakers | Solid conviction |
+| ⭐ **Verified** | 25+ stakers | High community confidence |
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    FRONTEND                          │
+│            Next.js 14 · TypeScript · Tailwind        │
+│                                                      │
+│  ┌──────────┬──────────┬──────────┬────────────────┐ │
+│  │  Landing │  Agents  │  Skills  │  Claims        │ │
+│  │  Page    │  Explorer│  Explorer│  Registry      │ │
+│  └──────────┴──────────┴──────────┴────────────────┘ │
+│  ┌──────────┬──────────┬──────────┐                  │
+│  │ Register │ Profile  │   Docs   │                  │
+│  └──────────┴──────────┴──────────┘                  │
+│                                                      │
+│           wagmi v2 + viem + React Query              │
+└──────────────────────┬───────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────┐
+│                INTUITION PROTOCOL                    │
+│                                                      │
+│  ┌────────────┐  ┌──────────────┐  ┌─────────────┐  │
+│  │   ATOMS    │  │   TRIPLES    │  │  MULTIVAULT │  │
+│  │            │  │              │  │             │  │
+│  │ • Agents   │  │ [Subject]    │  │ • Support   │  │
+│  │ • Skills   │  │ [Predicate]  │  │   vault     │  │
+│  │ • Users    │  │ [Object]     │  │ • Oppose    │  │
+│  │            │  │              │  │   vault     │  │
+│  └────────────┘  └──────────────┘  └─────────────┘  │
+│                                                      │
+│         GraphQL API · Intuition Testnet              │
+└──────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🏗️ Architecture
+## Features
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    AGENTSCORE ARCHITECTURE                      │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│                         FRONTEND                                │
-│                  Next.js 14 + TypeScript                        │
-│         ┌─────────┬─────────┬─────────┬─────────┐              │
-│         │ Landing │ Explorer│ Profile │ Register│              │
-│         └─────────┴─────────┴─────────┴─────────┘              │
-│                           │                                     │
-│              wagmi v2 + viem + React Query                      │
-└───────────────────────────┼─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    INTUITION PROTOCOL                           │
-│                                                                 │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
-│  │    ATOMS    │  │   TRIPLES   │  │   SIGNALS   │            │
-│  │ (Identities)│  │(Attestations│  │  ($TRUST)   │            │
-│  │             │  │             │  │   Staking)  │            │
-│  │ • Agents    │  │ [A] trusts  │  │             │            │
-│  │ • Users     │  │    [B]      │  │ Economic    │            │
-│  │ • Concepts  │  │             │  │ Weight      │            │
-│  └─────────────┘  └─────────────┘  └─────────────┘            │
-│                           │                                     │
-└───────────────────────────┼─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   INTUITION NETWORK (L3)                        │
-│                  Base + Arbitrum Orbit + AnyTrust               │
-│                    ~10,000x cheaper than L1                     │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Feature | Status |
+|---------|--------|
+| Agent Registry (on-chain Atoms) | ✅ Live |
+| Skill Registry (on-chain Atoms) | ✅ Live |
+| Claims Registry (on-chain Triples) | ✅ Live |
+| Support / Oppose staking via MultiVault | ✅ Live |
+| Bonding curve share pricing | ✅ Live |
+| Your Holdings panel (buy / sell shares) | ✅ Live |
+| Trust Score (0–100) with tier system | ✅ Live |
+| Live GraphQL indexing from testnet | ✅ Live |
+| Public profile pages (`/profile/[address]`) | ✅ Live |
+| Grid / List view toggle on all registries | ✅ Live |
+| App-scoped content filtering | ✅ Live |
+| Platform Documentation page (`/docs`) | ✅ Live |
 
 ---
 
-## 🛠️ Tech Stack
+## Bonding Curve Economics
 
-<table>
-<tr>
-<td align="center" width="96">
-  <img src="https://skillicons.dev/icons?i=nextjs" width="48" height="48" alt="Next.js" />
-  <br>Next.js 14
-</td>
-<td align="center" width="96">
-  <img src="https://skillicons.dev/icons?i=ts" width="48" height="48" alt="TypeScript" />
-  <br>TypeScript
-</td>
-<td align="center" width="96">
-  <img src="https://skillicons.dev/icons?i=tailwind" width="48" height="48" alt="Tailwind" />
-  <br>Tailwind
-</td>
-<td align="center" width="96">
-  <img src="https://skillicons.dev/icons?i=react" width="48" height="48" alt="React" />
-  <br>React 18
-</td>
-<td align="center" width="96">
-  <img src="https://raw.githubusercontent.com/wagmi-dev/wagmi/main/.github/logo-light.svg" width="48" height="48" alt="wagmi" />
-  <br>wagmi v2
-</td>
-<td align="center" width="96">
-  <img src="https://skillicons.dev/icons?i=vercel" width="48" height="48" alt="Vercel" />
-  <br>Vercel
-</td>
-</tr>
-</table>
+Every vault (Support or Oppose) runs an independent bonding curve:
 
-**Core Stack:**
-- ⚛️ **Next.js 14** - App Router, Server Components
-- 📘 **TypeScript** - Type-safe development
-- 🎨 **Tailwind CSS** - Utility-first styling
-- 🧩 **shadcn/ui** - Beautiful components
-- 🎭 **Framer Motion** - Smooth animations
-- 🔗 **wagmi v2 + viem** - Web3 integration
-- 📊 **React Query** - Data fetching
+```
+Price per share = basePrice × totalSupply^1.5
 
-**Blockchain:**
-- 🧠 **Intuition Protocol** - Trust infrastructure
-- ⛓️ **Base L3** - Fast, cheap transactions
-- 💰 **$TRUST Token** - Economic staking
+Early supporter example:
+┌──────────────────────────────────────────────────────┐
+│  Staker A (early):  100 tTRUST → 100 shares @ 1.0   │
+│  Staker B:          100 tTRUST →  63 shares @ 1.58  │
+│  Staker C:          100 tTRUST →  45 shares @ 2.22  │
+│  ────────────────────────────────────────────────    │
+│  Total staked: 300 tTRUST                            │
+│  Staker A value: 100 × 2.22 = 222 tTRUST (+122%)    │
+└──────────────────────────────────────────────────────┘
+```
+
+Early believers are rewarded. Bad agents lose stake value as holders exit.
 
 ---
 
-## 🚀 Getting Started
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 14 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS + Framer Motion |
+| Web3 | wagmi v2 + viem |
+| Protocol | Intuition Protocol SDK (`@0xintuition/sdk`) |
+| Data | GraphQL (`testnet.intuition.sh/v1/graphql`) |
+| Deployment | Vercel |
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
@@ -255,8 +199,6 @@ Build your reputation. Track your stakes, badges, and the agents you've register
 ```bash
 # Clone the repository
 git clone https://github.com/Kryptoremontier/agentscore.git
-
-# Navigate to project
 cd agentscore
 
 # Install dependencies
@@ -279,152 +221,100 @@ NEXT_PUBLIC_WC_PROJECT_ID=your_project_id
 NEXT_PUBLIC_NETWORK=testnet
 ```
 
-### Build for Production
+### Useful Scripts
 
 ```bash
-npm run build
-npm start
+npm run dev          # Start dev server
+npm run dev:clean    # Clear .next cache and start fresh (fixes HMR issues)
+npm run build        # Production build
+npm start            # Run production server
 ```
 
 ---
 
-## 💰 Tokenomics
+## Roadmap
 
-### Bonding Curve Model
-
-AgentScore uses **bonding curves** to create fair, market-driven trust scores:
-
-```
-Price Formula: price = basePrice × (totalShares)^1.5
-
-Early Supporter Advantage:
-┌────────────────────────────────────────────────────┐
-│  Staker A (early):  100 $TRUST → 100 shares @ 1.0 │
-│  Staker B:          100 $TRUST →  63 shares @ 1.58│
-│  Staker C:          100 $TRUST →  45 shares @ 2.22│
-│  ─────────────────────────────────────────────────│
-│  Total staked: 300 $TRUST                         │
-│  Staker A value: 100 × 2.22 = 222 $TRUST (+122%)  │
-└────────────────────────────────────────────────────┘
-```
-
-### Platform Fees
-
-| Action | Fee | Purpose |
-|--------|-----|---------|
-| Agent Registration | 0.01 tTRUST | Spam prevention |
-| Staking | 1% | Protocol treasury |
-| Unstaking | 1.5% | Discourage speculation |
-
-### Why This Works
-
-✅ **Early believers rewarded** - First supporters get more shares per $TRUST  
-✅ **Skin in the game** - Staking costs real tokens  
-✅ **Self-correcting** - Bad agents lose stake value  
-✅ **Sustainable** - Fees fund ongoing development  
-
----
-
-## 🗺️ Roadmap
-
-### Phase 1: Foundation ✅
-- [x] Core UI/UX with glassmorphism design
+### Phase 1: Foundation ✅ Complete
+- [x] Core UI/UX with gold/dark design system
 - [x] Agent registration system
-- [x] Trust/Distrust staking
-- [x] User profiles with avatars
-- [x] Expert badge system
-- [x] Advanced filtering
+- [x] Skill registration system
+- [x] Claims (triples) creation
+- [x] User profiles (`/profile/[address]`)
+- [x] Trust tier badge system
 
-### Phase 2: Integration 🔄
-- [ ] Intuition Protocol SDK integration
-- [ ] Real on-chain attestations
-- [ ] $TRUST token staking
-- [ ] Testnet deployment
+### Phase 2: On-chain Integration ✅ Complete
+- [x] Intuition Protocol SDK integration
+- [x] Real on-chain Atoms (agents & skills)
+- [x] Real on-chain Triples (claims)
+- [x] tTRUST staking via MultiVault
+- [x] Support & Oppose vaults
+- [x] Bonding curve share pricing
+- [x] Buy / Sell shares (Your Holdings panel)
+- [x] Live GraphQL data indexing
+- [x] Testnet deployment on Vercel
 
-### Phase 3: Growth 📈
+### Phase 3: Growth 📈 In Progress
 - [ ] Mainnet launch
-- [ ] API for third-party integrations
-- [ ] Mobile app
+- [ ] Public API for third-party integrations
+- [ ] Agent SDK for auto-registration
+- [ ] Governance module
+- [ ] Mobile-optimised PWA
 - [ ] Multi-chain support
 
-### Phase 4: Ecosystem 🌐
-- [ ] Agent SDK for auto-registration
-- [ ] Governance token
+### Phase 4: Ecosystem 🌐 Planned
 - [ ] DAO transition
-- [ ] Partner integrations
+- [ ] Partner integrations (agent frameworks: LangChain, AutoGen, CrewAI)
+- [ ] Reputation portability across protocols
 
 ---
 
-## 📚 Documentation
+## Contributing
 
-Explore our vision, roadmap, and technical documentation:
-
-| Document | Description |
-|----------|-------------|
-| [Vision & Mission](VISION.md) | Our long-term vision for AI agent trust infrastructure |
-| [Roadmap](ROADMAP.md) | Development phases and milestones |
-| [Architecture](ARCHITECTURE.md) | Technical architecture and design decisions |
-| [Why Trust Matters](docs/WHY_TRUST_MATTERS.md) | Philosophical foundation of the project |
-| [Intuition Integration](docs/INTUITION_INTEGRATION.md) | How we integrate with Intuition Protocol |
-| [Economic Model](docs/TOKENOMICS.md) | Incentive design and tokenomics |
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions!
 
 ```bash
-# Fork the repo
-# Create your feature branch
-git checkout -b feature/amazing-feature
-
-# Commit your changes
-git commit -m 'Add amazing feature'
-
-# Push to the branch
-git push origin feature/amazing-feature
-
+git checkout -b feature/your-feature
+git commit -m 'Add your feature'
+git push origin feature/your-feature
 # Open a Pull Request
 ```
 
 ---
 
-## 📜 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-## 🔗 Links
+## Links
 
 <p align="center">
   <a href="https://agentscore-gilt.vercel.app">
-    <img src="https://img.shields.io/badge/Website-Visit%20Demo-blue?style=for-the-badge&logo=vercel" alt="Website" />
+    <img src="https://img.shields.io/badge/Website-Live%20App-C8963C?style=for-the-badge&logo=vercel" alt="Website" />
   </a>
   &nbsp;
-  <a href="https://twitter.com/Kryptoremontier">
-    <img src="https://img.shields.io/badge/Twitter-@Kryptoremontier-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white" alt="Twitter" />
+  <a href="https://x.com/AgentScoreApp">
+    <img src="https://img.shields.io/badge/X%20%2F%20Twitter-@AgentScoreApp-1DA1F2?style=for-the-badge&logo=x&logoColor=white" alt="X / Twitter" />
   </a>
   &nbsp;
-  <a href="https://warpcast.com/kryptoremontier">
-    <img src="https://img.shields.io/badge/Farcaster-kryptoremontier-8A63D2?style=for-the-badge" alt="Farcaster" />
+  <a href="https://intuition.systems">
+    <img src="https://img.shields.io/badge/Built%20on-Intuition%20Protocol-8A63D2?style=for-the-badge" alt="Intuition" />
   </a>
 </p>
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-- **[Intuition Protocol](https://intuition.systems)** - The foundation of decentralized trust
-- **[Base](https://base.org)** - Scalable L2 infrastructure
-- **[shadcn/ui](https://ui.shadcn.com)** - Beautiful component library
-- **[Vercel](https://vercel.com)** - Seamless deployment
+- **[Intuition Protocol](https://intuition.systems)** — The foundation of decentralized trust
+- **[shadcn/ui](https://ui.shadcn.com)** — Component library
+- **[Vercel](https://vercel.com)** — Deployment
 
 ---
 
 <p align="center">
-  <strong>Built with conviction by <a href="https://twitter.com/Kryptoremontier">@Kryptoremontier</a></strong>
+  <strong>Built with conviction — follow us on <a href="https://x.com/AgentScoreApp">@AgentScoreApp</a></strong>
 </p>
 
 <p align="center">
@@ -432,5 +322,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 </p>
 
 <p align="center">
-  <sub>🧠 Powered by Intuition Protocol | 💙 Built on Base</sub>
+  <sub>Powered by Intuition Protocol · Testnet Alpha · All rights reserved © 2026 AgentScore</sub>
 </p>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Sparkles, CheckCircle, ArrowRight, Shield, Users, TrendingUp } from 'lucide-react'
+import { Sparkles, CheckCircle, ArrowRight, Shield, Users, TrendingUp, Bot, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { RegisterAgentForm } from '@/components/agents/RegisterAgentForm'
@@ -52,24 +52,28 @@ export default function RegisterPage() {
               </p>
 
               {/* ID card */}
-              <div className="bg-[#0d1117] border border-[#21262d] rounded-xl p-5 mb-8 text-left">
+              <div
+                className="rounded-2xl p-5 mb-8 text-left"
+                style={{ background: 'linear-gradient(145deg,#16191E,#1B1F26)', border: '1px solid rgba(200,150,60,0.18)' }}
+              >
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs text-[#6b7280] mb-1.5">Atom ID</p>
-                    <p className="font-mono text-sm text-emerald-400 break-all leading-relaxed">{agentId}</p>
+                    <p className="text-xs text-[#7A838D] mb-1.5 uppercase tracking-wider font-medium">Atom ID</p>
+                    <p className="font-mono text-sm text-[#2ECC71] break-all leading-relaxed">{agentId}</p>
                   </div>
+                  <div className="h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
                   <div className="flex gap-8">
                     <div>
-                      <p className="text-xs text-[#6b7280] mb-1">Status</p>
-                      <p className="text-sm font-medium text-trust-good">Active</p>
+                      <p className="text-xs text-[#7A838D] mb-1 uppercase tracking-wider font-medium">Status</p>
+                      <p className="text-sm font-semibold text-[#2ECC71]">Active</p>
                     </div>
                     <div>
-                      <p className="text-xs text-[#6b7280] mb-1">Initial Score</p>
-                      <p className="text-sm font-mono font-medium">50</p>
+                      <p className="text-xs text-[#7A838D] mb-1 uppercase tracking-wider font-medium">Score</p>
+                      <p className="text-sm font-mono font-semibold text-white">50</p>
                     </div>
                     <div>
-                      <p className="text-xs text-[#6b7280] mb-1">Network</p>
-                      <p className="text-sm font-medium text-primary">Intuition Testnet</p>
+                      <p className="text-xs text-[#7A838D] mb-1 uppercase tracking-wider font-medium">Network</p>
+                      <p className="text-sm font-semibold text-[#C8963C]">Intuition Testnet</p>
                     </div>
                   </div>
                 </div>
@@ -78,7 +82,7 @@ export default function RegisterPage() {
               {/* Action buttons */}
               <div className="flex gap-3 justify-center mb-10">
                 <Link href={isSkill ? `/skills?open=${encodeURIComponent(agentId)}` : `/agents?open=${encodeURIComponent(agentId)}`}>
-                  <Button size="lg" className="glow-blue">
+                  <Button size="lg">
                     {isSkill ? 'View Skill' : 'View Agent'}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
@@ -92,18 +96,22 @@ export default function RegisterPage() {
 
               {/* Next Steps */}
               <div className="text-left">
-                <h2 className="text-lg font-semibold mb-4 text-[#8b949e]">Next Steps</h2>
-                <div className="space-y-3">
+                <h2 className="text-sm font-bold uppercase tracking-widest mb-4 text-[#7A838D]">Next Steps</h2>
+                <div className="space-y-2.5">
                   {[
-                    { icon: Shield, color: 'text-primary', title: 'Build Trust', desc: `Encourage users to Support your ${isSkill ? 'skill' : 'agent'} with tTRUST stakes` },
-                    { icon: Users, color: 'text-accent-cyan', title: 'Engage Community', desc: 'Grow your reputation through attestations' },
-                    { icon: TrendingUp, color: 'text-trust-good', title: 'Monitor Score', desc: 'Track trust score, stakers and activity in Explorer' },
+                    { icon: Shield, hex: '#C8963C', rgb: '200,150,60', title: 'Build Trust', desc: `Encourage users to Support your ${isSkill ? 'skill' : 'agent'} with tTRUST stakes` },
+                    { icon: Users, hex: '#2EE6D6', rgb: '46,230,214', title: 'Engage Community', desc: 'Grow your reputation through attestations' },
+                    { icon: TrendingUp, hex: '#2ECC71', rgb: '46,204,113', title: 'Monitor Score', desc: 'Track trust score, stakers and activity in Explorer' },
                   ].map((step) => (
-                    <div key={step.title} className="flex items-center gap-3 bg-white/[0.03] rounded-lg px-4 py-3 border border-white/5">
-                      <step.icon className={`w-4 h-4 ${step.color} flex-shrink-0`} />
+                    <div
+                      key={step.title}
+                      className="flex items-center gap-3 rounded-xl px-4 py-3"
+                      style={{ background: `rgba(${step.rgb},0.05)`, border: `1px solid rgba(${step.rgb},0.12)` }}
+                    >
+                      <step.icon className="w-4 h-4 flex-shrink-0" style={{ color: step.hex }} />
                       <div className="min-w-0">
-                        <span className="font-medium text-sm">{step.title}</span>
-                        <span className="text-xs text-[#6b7280] ml-2">{step.desc}</span>
+                        <span className="font-semibold text-sm text-white">{step.title}</span>
+                        <span className="text-xs text-[#7A838D] ml-2">{step.desc}</span>
                       </div>
                     </div>
                   ))}
@@ -126,8 +134,15 @@ export default function RegisterPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-10"
         >
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent-cyan mb-6">
-            <Sparkles className="w-8 h-8 text-white" />
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 transition-all duration-300"
+            style={{
+              background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.06))',
+              border: '1px solid rgba(200,150,60,0.35)',
+              boxShadow: '0 0 32px rgba(200,150,60,0.2), 0 0 12px rgba(200,150,60,0.12)',
+            }}
+          >
+            <Sparkles className="w-8 h-8" style={{ color: '#C8963C', filter: 'drop-shadow(0 0 8px rgba(200,150,60,0.8))' }} />
           </div>
           <h1 className="text-4xl font-bold mb-4">Register on AgentScore</h1>
           <p className="text-xl text-text-secondary max-w-2xl mx-auto">
@@ -143,28 +158,41 @@ export default function RegisterPage() {
           transition={{ delay: 0.05 }}
           className="flex justify-center mb-10"
         >
-          <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
+          <div
+            className="flex gap-1.5 p-1.5 rounded-2xl"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
             <button
               onClick={() => setActiveTab('agent')}
-              className={cn(
-                'flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all',
-                activeTab === 'agent'
-                  ? 'bg-white/15 text-white shadow'
-                  : 'text-[#7A838D] hover:text-white hover:bg-white/5'
-              )}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
+              style={activeTab === 'agent' ? {
+                background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.08))',
+                border: '1px solid rgba(200,150,60,0.4)',
+                color: '#E8B84B',
+                boxShadow: '0 0 16px rgba(200,150,60,0.12)',
+              } : {
+                border: '1px solid transparent',
+                color: '#7A838D',
+              }}
             >
-              🤖 Agent
+              <Bot className="w-4 h-4" style={{ color: activeTab === 'agent' ? '#C8963C' : '#7A838D' }} />
+              Agent
             </button>
             <button
               onClick={() => setActiveTab('skill')}
-              className={cn(
-                'flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all',
-                activeTab === 'skill'
-                  ? 'bg-white/15 text-white shadow'
-                  : 'text-[#7A838D] hover:text-white hover:bg-white/5'
-              )}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
+              style={activeTab === 'skill' ? {
+                background: 'linear-gradient(135deg, rgba(46,230,214,0.15), rgba(46,230,214,0.06))',
+                border: '1px solid rgba(46,230,214,0.35)',
+                color: '#2EE6D6',
+                boxShadow: '0 0 16px rgba(46,230,214,0.1)',
+              } : {
+                border: '1px solid transparent',
+                color: '#7A838D',
+              }}
             >
-              ⚡ Skill
+              <Zap className="w-4 h-4" style={{ color: activeTab === 'skill' ? '#2EE6D6' : '#7A838D' }} />
+              Skill
             </button>
           </div>
         </motion.div>
@@ -176,37 +204,53 @@ export default function RegisterPage() {
           transition={{ delay: 0.1 }}
           className="grid md:grid-cols-3 gap-6 mb-12"
         >
-          <GlassCard className="text-center">
-            <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center mx-auto mb-4">
-              <Shield className="w-6 h-6 text-primary" />
-            </div>
-            <h3 className="font-semibold mb-2">Build Trust</h3>
-            <p className="text-sm text-text-secondary">
-              Earn reputation through positive attestations from users
-            </p>
-          </GlassCard>
-
-          <GlassCard className="text-center">
-            <div className="w-12 h-12 rounded-lg bg-accent-cyan/20 flex items-center justify-center mx-auto mb-4">
-              <Users className="w-6 h-6 text-accent-cyan" />
-            </div>
-            <h3 className="font-semibold mb-2">Get Discovered</h3>
-            <p className="text-sm text-text-secondary">
-              {activeTab === 'agent'
+          {[
+            {
+              icon: Shield,
+              title: 'Build Trust',
+              desc: 'Earn reputation through positive attestations from users',
+              rgb: '200,150,60',
+              hex: '#C8963C',
+            },
+            {
+              icon: Users,
+              title: 'Get Discovered',
+              desc: activeTab === 'agent'
                 ? 'Appear in agent explorer and reach more users'
-                : 'Appear in skills registry and reach developers'}
-            </p>
-          </GlassCard>
-
-          <GlassCard className="text-center">
-            <div className="w-12 h-12 rounded-lg bg-trust-good/20 flex items-center justify-center mx-auto mb-4">
-              <TrendingUp className="w-6 h-6 text-trust-good" />
+                : 'Appear in skills registry and reach developers',
+              rgb: '46,230,214',
+              hex: '#2EE6D6',
+            },
+            {
+              icon: TrendingUp,
+              title: 'Track Performance',
+              desc: 'Monitor your trust score and user feedback in real time',
+              rgb: '46,204,113',
+              hex: '#2ECC71',
+            },
+          ].map(({ icon: Icon, title, desc, rgb, hex }) => (
+            <div
+              key={title}
+              className="text-center p-6 rounded-2xl transition-all duration-300 hover:-translate-y-1"
+              style={{
+                background: 'linear-gradient(145deg, #16191E, #1B1F26)',
+                border: `1px solid rgba(${rgb},0.15)`,
+              }}
+            >
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4"
+                style={{
+                  background: `rgba(${rgb},0.1)`,
+                  border: `1px solid rgba(${rgb},0.25)`,
+                  boxShadow: `0 0 20px rgba(${rgb},0.15)`,
+                }}
+              >
+                <Icon className="w-6 h-6" style={{ color: hex, filter: `drop-shadow(0 0 6px rgba(${rgb},0.6))` }} />
+              </div>
+              <h3 className="font-semibold mb-2 text-white">{title}</h3>
+              <p className="text-sm text-[#6B7480]">{desc}</p>
             </div>
-            <h3 className="font-semibold mb-2">Track Performance</h3>
-            <p className="text-sm text-text-secondary">
-              Monitor your trust score and user feedback
-            </p>
-          </GlassCard>
+          ))}
         </motion.div>
 
         {/* Registration Form */}

@@ -1,21 +1,21 @@
 {
   "name": "AgentScore",
   "short_name": "AgentScore",
-  "description": "Trust Layer for AI Agents",
+  "description": "Decentralized trust verification for AI agents built on Intuition Protocol.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F1113",
+  "theme_color": "#C8963C",
   "icons": [
     {
-      "src": "/android-chrome-192x192.png",
+      "src": "/favicon.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/android-chrome-512x512.png",
+      "src": "/favicon.png",
       "sizes": "512x512",
       "type": "image/png"
     }
-  ],
-  "theme_color": "#0A0A0F",
-  "background_color": "#0A0A0F",
-  "display": "standalone",
-  "start_url": "/"
+  ]
 }

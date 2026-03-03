@@ -34,6 +34,7 @@ import {
   Bot, Zap, MessageSquare, Globe, Layers,
   Flame, HeartHandshake, TrendingUp, Link as LinkIcon,
   Sparkles, ArrowLeftRight, Swords, ShieldCheck, BadgeCheck,
+  LayoutGrid, List,
   type LucideProps,
 } from 'lucide-react'
 
@@ -148,6 +149,7 @@ function ClaimsPageContent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterValue, setFilterValue] = useState('all')
   const [showOnlyOurs, setShowOnlyOurs] = useState(true)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity'>('overview')
@@ -668,9 +670,14 @@ function ClaimsPageContent() {
   }, [allPositions])
 
   // ── Helper functions ──
+  // Fixed positional colors: Subject=gold, Predicate=teal, Object=blue
+  const SUBJECT_COLOR  = { bg: 'rgba(200,150,60,0.13)',  border: 'rgba(200,150,60,0.32)',  text: '#C8963C'  }
+  const PRED_COLOR     = { bg: 'rgba(46,230,214,0.10)',  border: 'rgba(46,230,214,0.28)',  text: '#2EE6D6'  }
+  const OBJECT_COLOR   = { bg: 'rgba(56,182,255,0.10)',  border: 'rgba(56,182,255,0.28)',  text: '#38B6FF'  }
+  // kept for backward compat in modal header
   const atomColor = (type: string) => type === 'agent'
-    ? { bg: 'rgba(200,150,60,0.12)', border: 'rgba(200,150,60,0.28)', text: '#C8963C' }
-    : { bg: 'rgba(46,230,214,0.10)', border: 'rgba(46,230,214,0.25)', text: '#2EE6D6' }
+    ? SUBJECT_COLOR
+    : { bg: 'rgba(56,182,255,0.10)', border: 'rgba(56,182,255,0.28)', text: '#38B6FF' }
 
   const getTrustColor = (score: number): string => {
     if (score >= 60) return '#22c55e'
@@ -789,6 +796,7 @@ function ClaimsPageContent() {
                   : <><Globe className="w-3 h-3" /> All Intuition</>
                 }
               </button>
+
             </div>
           </motion.div>
 
@@ -812,11 +820,47 @@ function ClaimsPageContent() {
               <Button onClick={() => setShowCreateModal(true)}>+ Create First Claim</Button>
             </div>
           ) : (
+            <>
+            {/* View mode toggle bar — above content */}
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm text-[#7A838D]">
+                <span className="font-semibold text-white">{filteredClaims.length}</span> claims
+              </p>
+              <div
+                className="flex items-center gap-0.5 p-1 rounded-xl"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200"
+                  style={viewMode === 'grid' ? {
+                    background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.08))',
+                    border: '1px solid rgba(200,150,60,0.35)',
+                    color: '#C8963C',
+                  } : { border: '1px solid transparent', color: '#7A838D' }}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Grid
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200"
+                  style={viewMode === 'list' ? {
+                    background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.08))',
+                    border: '1px solid rgba(200,150,60,0.35)',
+                    color: '#C8963C',
+                  } : { border: '1px solid transparent', color: '#7A838D' }}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  List
+                </button>
+              </div>
+            </div>
+            {viewMode === 'grid' ? (
+            /* ── GRID VIEW ── */
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredClaims.map((claim, i) => {
                 const predCfg = claim.predicate.config
-                const sc = atomColor(claim.subject.type)
-                const oc = atomColor(claim.object.type)
                 const tierCfg = calculateTier(claim.stakers_count || 0, claim.trust_score || 0, 50, getAgentAgeDays(claim.created_at))
                 const score = claim.trust_score ?? 0
                 return (
@@ -826,41 +870,109 @@ function ClaimsPageContent() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.03 }}
                     onClick={() => { setSelectedClaim(claim); setActiveTab('overview') }}
-                    className="glass-card rounded-xl p-4 cursor-pointer hover:bg-white/[0.04] transition-all border border-white/5 hover:border-white/10"
+                    className="rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
+                    style={{
+                      background: 'linear-gradient(145deg,#16191E,#1B1F26)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                    }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(200,150,60,0.2)'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)'}
                   >
-                    {/* Triple display */}
+                    {/* Triple pills */}
                     <div className="flex flex-wrap gap-1.5 mb-3">
-                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: sc.bg, border: `1px solid ${sc.border}`, color: sc.text }}>
-                        <AtomTypeIcon type={claim.subject.type} color={sc.text} />
+                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: SUBJECT_COLOR.bg, border: `1px solid ${SUBJECT_COLOR.border}`, color: SUBJECT_COLOR.text }}>
+                        <AtomTypeIcon type={claim.subject.type} color={SUBJECT_COLOR.text} />
                         {getAtomName(claim.subject.label)}
                       </span>
-                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: (predCfg?.color ?? '#6b7280') + '15', border: `1px solid ${(predCfg?.color ?? '#6b7280')}30`, color: predCfg?.color ?? '#9ca3af' }}>
-                        <PredicateIcon name={predCfg?.icon} color={predCfg?.color} size={3} />
+                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: PRED_COLOR.bg, border: `1px solid ${PRED_COLOR.border}`, color: PRED_COLOR.text }}>
+                        <PredicateIcon name={predCfg?.icon} color={PRED_COLOR.text} size={3} />
                         {claim.predicate.label}
                       </span>
-                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: oc.bg, border: `1px solid ${oc.border}`, color: oc.text }}>
-                        <AtomTypeIcon type={claim.object.type} color={oc.text} />
+                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: OBJECT_COLOR.bg, border: `1px solid ${OBJECT_COLOR.border}`, color: OBJECT_COLOR.text }}>
+                        <AtomTypeIcon type={claim.object.type} color={OBJECT_COLOR.text} />
                         {getAtomName(claim.object.label)}
                       </span>
                     </div>
                     {/* Stats */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mt-3">
                       <div className="flex items-center gap-2">
                         <TrustTierBadge tier={tierCfg} size="sm" />
                         <span className="text-xs text-[#7A838D]">{claim.stakers_count ?? 0} stakers</span>
                       </div>
-                      <span className={cn('text-sm font-bold font-mono', score >= 70 ? 'text-emerald-400' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>
+                      <span className={cn('text-sm font-bold font-mono', score >= 70 ? 'text-[#2ECC71]' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>
                         {score}
                       </span>
                     </div>
-                    {/* Bar */}
+                    {/* Score bar */}
                     <div className="w-full h-1 bg-white/5 rounded-full mt-2.5 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${Math.min(100, score)}%` }} />
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, score)}%`, background: score >= 70 ? '#2ECC71' : score >= 40 ? '#EAB308' : '#6B7480' }}
+                      />
                     </div>
                   </motion.div>
                 )
               })}
             </motion.div>
+          ) : (
+            /* ── LIST VIEW ── */
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="flex flex-col gap-1.5">
+              {/* List header */}
+              <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[#4A5260]">
+                <span>Claim (Subject → Predicate → Object)</span>
+                <span className="text-right w-20">Stakers</span>
+                <span className="text-right w-12">Score</span>
+              </div>
+              {filteredClaims.map((claim, i) => {
+                const predCfg = claim.predicate.config
+                const score = claim.trust_score ?? 0
+                return (
+                  <motion.div
+                    key={claim.term_id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.015 }}
+                    onClick={() => { setSelectedClaim(claim); setActiveTab('overview') }}
+                    className="grid grid-cols-[1fr_auto_auto] gap-4 items-center px-4 py-3 rounded-xl cursor-pointer transition-all duration-150"
+                    style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(200,150,60,0.05)'
+                      ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(200,150,60,0.15)'
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'
+                      ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.05)'
+                    }}
+                  >
+                    {/* Triple inline */}
+                    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap" style={{ backgroundColor: SUBJECT_COLOR.bg, border: `1px solid ${SUBJECT_COLOR.border}`, color: SUBJECT_COLOR.text }}>
+                        <AtomTypeIcon type={claim.subject.type} color={SUBJECT_COLOR.text} />
+                        {getAtomName(claim.subject.label)}
+                      </span>
+                      <span className="text-[#4A5260] text-xs">→</span>
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap" style={{ backgroundColor: PRED_COLOR.bg, border: `1px solid ${PRED_COLOR.border}`, color: PRED_COLOR.text }}>
+                        <PredicateIcon name={predCfg?.icon} color={PRED_COLOR.text} size={3} />
+                        {claim.predicate.label}
+                      </span>
+                      <span className="text-[#4A5260] text-xs">→</span>
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap" style={{ backgroundColor: OBJECT_COLOR.bg, border: `1px solid ${OBJECT_COLOR.border}`, color: OBJECT_COLOR.text }}>
+                        <AtomTypeIcon type={claim.object.type} color={OBJECT_COLOR.text} />
+                        {getAtomName(claim.object.label)}
+                      </span>
+                    </div>
+                    {/* Stakers */}
+                    <span className="text-xs text-[#7A838D] text-right w-20 whitespace-nowrap">{claim.stakers_count ?? 0} stakers</span>
+                    {/* Score */}
+                    <span className={cn('text-sm font-bold font-mono text-right w-12', score >= 70 ? 'text-[#2ECC71]' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>
+                      {score}
+                    </span>
+                  </motion.div>
+                )
+              })}
+            </motion.div>
+            )}
+            </>
           )}
         </div>
       </div>
@@ -913,20 +1025,18 @@ function ClaimsPageContent() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {(() => {
-                        const sc = atomColor(selectedClaim.subject.type)
-                        const oc = atomColor(selectedClaim.object.type)
                         const predCfg = selectedClaim.predicate.config
                         return (<>
-                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: sc.bg, border: `1px solid ${sc.border}`, color: sc.text }}>
-                            <AtomTypeIcon type={selectedClaim.subject.type} color={sc.text} />
+                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: SUBJECT_COLOR.bg, border: `1px solid ${SUBJECT_COLOR.border}`, color: SUBJECT_COLOR.text }}>
+                            <AtomTypeIcon type={selectedClaim.subject.type} color={SUBJECT_COLOR.text} />
                             {getAtomName(selectedClaim.subject.label)}
                           </span>
-                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: (predCfg?.color ?? '#6b7280') + '15', border: `1px solid ${(predCfg?.color ?? '#6b7280')}30`, color: predCfg?.color ?? '#9ca3af' }}>
-                            <PredicateIcon name={predCfg?.icon} color={predCfg?.color} size={3} />
+                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: PRED_COLOR.bg, border: `1px solid ${PRED_COLOR.border}`, color: PRED_COLOR.text }}>
+                            <PredicateIcon name={predCfg?.icon} color={PRED_COLOR.text} size={3} />
                             {selectedClaim.predicate.label}
                           </span>
-                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: oc.bg, border: `1px solid ${oc.border}`, color: oc.text }}>
-                            <AtomTypeIcon type={selectedClaim.object.type} color={oc.text} />
+                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: OBJECT_COLOR.bg, border: `1px solid ${OBJECT_COLOR.border}`, color: OBJECT_COLOR.text }}>
+                            <AtomTypeIcon type={selectedClaim.object.type} color={OBJECT_COLOR.text} />
                             {getAtomName(selectedClaim.object.label)}
                           </span>
                         </>)

@@ -27,10 +27,10 @@ const navLinks = [
   {
     heading: 'Ecosystem',
     items: [
-      { label: 'Intuition Protocol', href: 'https://intuition.systems', external: true },
-      { label: 'Intuition Testnet', href: 'https://testnet.intuition.sh', external: true },
+      { label: 'Intuition Protocol', href: 'https://github.com/0xIntuition', external: true },
+      { label: 'Intuition Testnet', href: 'https://testnet.portal.intuition.systems/', external: true },
       { label: 'Intuition Docs', href: 'https://docs.intuition.systems', external: true },
-      { label: 'GitHub', href: 'https://github.com', external: true },
+      { label: 'GitHub', href: 'https://github.com/Kryptoremontier/agentscore', external: true },
     ],
   },
 ]
@@ -105,8 +105,8 @@ export function Footer() {
             {/* Social links */}
             <div className="flex items-center gap-3 mt-1">
               {[
-                { icon: Github, href: 'https://github.com', label: 'GitHub' },
-                { icon: Twitter, href: 'https://twitter.com', label: 'Twitter' },
+                { icon: Github, href: 'https://github.com/Kryptoremontier/agentscore', label: 'GitHub' },
+                { icon: Twitter, href: 'https://x.com/AgentScoreApp', label: 'X / Twitter' },
                 { icon: Globe, href: 'https://intuition.systems', label: 'Intuition' },
               ].map(({ icon: Icon, href, label }) => (
                 <a
