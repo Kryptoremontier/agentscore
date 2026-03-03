@@ -142,6 +142,7 @@ function ClaimsPageContent() {
   const [signalSide, setSignalSide] = useState<'support' | 'oppose'>('support')
   const [tradeAction, setTradeAction] = useState<'buy' | 'sell'>('buy')
   const [voteAmount, setVoteAmount] = useState('0.05')
+  const [untrustAmount, setUntrustAmount] = useState('0.05')
   const [redeemShares, setRedeemShares] = useState('0')
   const [sellReason, setSellReason] = useState<SellReason | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -419,7 +420,7 @@ function ClaimsPageContent() {
 
   // ── Bonding curve preview ──
   const parseAmount = (v: string) => { try { return parseEther(v) } catch { return 0n } }
-  const buyAmount = parseAmount(voteAmount)
+  const buyAmount = parseAmount(signalSide === 'support' ? voteAmount : untrustAmount)
   const currentSupply = signalSide === 'support' ? supportSupply : opposeSupply
   const buyPreview = useMemo(() => {
     try { return calculateBuy(currentSupply, Number(buyAmount) / 1e18) } catch { return null }
@@ -805,114 +806,335 @@ function ClaimsPageContent() {
               {/* === ACTION CARD: Bonding Curve Market === */}
               <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-5 mb-3">
                 <p className="text-[#8b949e] text-xs font-semibold mb-1">Bonding Curve Market</p>
-                <p className="text-[#6b7280] text-xs mb-3">Choose side (Support/Oppose) and action (Buy/Sell).</p>
+                <p className="text-[#6b7280] text-xs mb-3">One market: choose side (Support/Oppose) and action (Buy/Sell).</p>
 
-                {/* Support / Oppose */}
-                <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-3">
-                  {(['support', 'oppose'] as const).map(side => (
-                    <button key={side} onClick={(e) => { e.stopPropagation(); setSignalSide(side); setTradeAction('buy') }}
-                      className={`flex-1 py-2 text-xs font-bold transition-colors ${
-                        signalSide === side
-                          ? side === 'support' ? 'bg-[#2d7a5f] text-white' : 'bg-[#8b3a3a] text-white'
-                          : 'bg-transparent text-[#8b949e] hover:text-white'
-                      }`}>
-                      {side === 'support' ? '▲ Support' : '▼ Oppose'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Buy / Sell */}
-                <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-4">
-                  {(['buy', 'sell'] as const).map(action => (
-                    <button key={action} onClick={(e) => { e.stopPropagation(); setTradeAction(action) }}
-                      className={`flex-1 py-2 text-xs font-bold transition-colors ${
-                        tradeAction === action ? 'bg-white text-black' : 'bg-transparent text-[#8b949e] hover:text-white'
-                      }`}>
-                      {action === 'buy' ? 'Buy' : 'Sell'}
-                    </button>
-                  ))}
-                </div>
-
-                {tradeAction === 'buy' ? (
+                {isConnected ? (
                   <>
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center gap-3">
-                        <input type="number" value={voteAmount} onChange={e => setVoteAmount(e.target.value)} min="0.001" step="0.01"
-                          className="flex-1 px-3 py-2 bg-[#161b22] border border-[#21262d] rounded-lg text-white focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono text-sm" />
-                        <span className="text-sm text-[#8b949e] shrink-0">tTRUST</span>
-                      </div>
-                      <div className="flex gap-2">
-                        {['0.01', '0.05', '0.1', '0.5'].map(v => (
-                          <button key={v} onClick={() => setVoteAmount(v)}
-                            className={cn('px-2.5 py-1 rounded text-xs font-mono transition-all border',
-                              voteAmount === v ? 'bg-indigo-500/20 border-indigo-500/40 text-white' : 'border-[#21262d] text-[#8b949e] hover:text-white'
-                            )}>{v}</button>
-                        ))}
-                      </div>
+                    {/* Support / Oppose tabs */}
+                    <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-3">
+                      <button onClick={(e) => { e.stopPropagation(); setSignalSide('support'); setTradeAction('buy') }}
+                        className={`flex-1 py-2 text-xs font-bold transition-colors ${signalSide === 'support' ? 'bg-[#2d7a5f] text-white' : 'bg-transparent text-[#8b949e] hover:text-white'}`}>
+                        Support
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setSignalSide('oppose'); setTradeAction('buy') }}
+                        className={`flex-1 py-2 text-xs font-bold transition-colors ${signalSide === 'oppose' ? 'bg-[#8b3a3a] text-white' : 'bg-transparent text-[#8b949e] hover:text-white'}`}>
+                        Oppose
+                      </button>
                     </div>
-                    {buyPreview && (
-                      <div className="text-xs text-[#8b949e] mb-3 space-y-1">
-                        <div className="flex justify-between"><span>Shares to receive</span><span className="text-white font-mono">{buyPreview.sharesReceived.toFixed(4)}</span></div>
-                        <div className="flex justify-between"><span>Price per share</span><span className="text-white font-mono">{buyPreview.avgPricePerShare.toFixed(6)} tTRUST</span></div>
+
+                    {/* Oppose vault indexing check */}
+                    {signalSide === 'oppose' && !claimTriple.counterTermId ? (
+                      <div className="bg-[#1a1018] border border-[#b8860b40] rounded-xl p-4 text-center">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="mx-auto mb-2 opacity-60">
+                          <circle cx="12" cy="12" r="9" stroke="#b8860b" strokeWidth="2"/>
+                          <path d="M12 8v4m0 4h.01" stroke="#b8860b" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                        <p className="text-[#b8860b] text-xs font-semibold mb-1">Oppose Vault Indexing</p>
+                        <p className="text-[#8b949e] text-xs mb-3 leading-relaxed">
+                          The Oppose vault for this claim is still being indexed by the protocol.<br/>
+                          It should appear within seconds — please refresh or try again shortly.
+                        </p>
+                        <button onClick={() => {
+                          if (selectedClaim) setClaimTriple({ termId: selectedClaim.term_id, counterTermId: selectedClaim.counter_term_id ?? null, loading: false })
+                        }} className="px-5 py-2 bg-[#8b3a3a] hover:bg-[#c45454] text-white text-xs font-bold rounded-lg transition-colors">
+                          Retry
+                        </button>
                       </div>
+                    ) : (
+                      <>
+                        {/* Buy / Sell tabs */}
+                        <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-3">
+                          <button onClick={(e) => { e.stopPropagation(); setTradeAction('buy') }}
+                            className={`flex-1 py-2 text-xs font-bold transition-colors ${tradeAction === 'buy' ? 'bg-white text-black' : 'bg-transparent text-[#8b949e] hover:text-white'}`}>
+                            Buy
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); setTradeAction('sell') }}
+                            className={`flex-1 py-2 text-xs font-bold transition-colors ${tradeAction === 'sell' ? 'bg-white text-black' : 'bg-transparent text-[#8b949e] hover:text-white'}`}>
+                            Sell
+                          </button>
+                        </div>
+
+                        {/* Current price */}
+                        <div className="flex items-center justify-between mb-3 px-1">
+                          <div>
+                            <p className="text-white text-xs font-semibold">Bonding Curve</p>
+                            <p className="text-[#8b949e] text-xs">
+                              Current price: {getCurrentPrice(signalSide === 'support' ? supportSupply : opposeSupply).toFixed(4)} tTRUST/share
+                            </p>
+                          </div>
+                          <span className="text-[10px] px-2 py-1 rounded-full border border-[#30363d] text-[#8b949e]">Active</span>
+                        </div>
+
+                        {/* First Oppose Buy hint */}
+                        {signalSide === 'oppose' && tradeAction === 'buy' && claimTriple.counterTermId && (
+                          <div className="flex items-start gap-2 p-2.5 mb-3 bg-[#b8860b10] border border-[#b8860b20] rounded-lg">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
+                              <circle cx="12" cy="12" r="9" stroke="#b8860b" strokeWidth="2"/>
+                              <path d="M12 8v4m0 4h.01" stroke="#b8860b" strokeWidth="2" strokeLinecap="round"/>
+                            </svg>
+                            <p className="text-[#b8860b] text-[10px] leading-relaxed">
+                              First Oppose Buy may require 2 confirmations: one to clear the activation deposit (FOR), then the actual Oppose deposit. Subsequent buys need only 1 confirmation.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Your shares info — visible in Sell mode */}
+                        {tradeAction === 'sell' && (() => {
+                          const ownedShares = signalSide === 'support'
+                            ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                            : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                          const supply = signalSide === 'support' ? supportSupply : opposeSupply
+                          return ownedShares > 0 ? (
+                            <div className="mb-3 p-3 rounded-xl bg-[#161b22] border border-[#21262d]">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[#8b949e] text-xs">Your shares</span>
+                                <span className="text-white text-sm font-bold font-mono">{ownedShares.toFixed(4)} shares</span>
+                              </div>
+                              <div className="flex justify-between items-center mt-1">
+                                <span className="text-[#6b7280] text-[10px]">Current value</span>
+                                <span className="text-[#6b7280] text-[10px] font-mono">{getSellProceeds(ownedShares, supply).toFixed(6)} tTRUST</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mb-3 p-3 rounded-xl bg-[#161b22] border border-[#21262d] text-center">
+                              <p className="text-[#6b7280] text-xs">No {signalSide} shares to sell</p>
+                            </div>
+                          )
+                        })()}
+
+                        {/* Amount input */}
+                        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 mb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[#8b949e] text-xs">{tradeAction === 'buy' ? 'Amount in tTRUST' : 'Shares to sell'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {tradeAction === 'buy' ? (
+                              <input type="number"
+                                value={signalSide === 'support' ? voteAmount : untrustAmount}
+                                onChange={e => signalSide === 'support' ? setVoteAmount(e.target.value) : setUntrustAmount(e.target.value)}
+                                onClick={e => e.stopPropagation()} min="0.001" step="0.001"
+                                className="flex-1 bg-transparent text-white text-lg font-bold outline-none" placeholder="0.05" />
+                            ) : (
+                              <input type="number" value={redeemShares}
+                                onChange={e => {
+                                  const maxShares = signalSide === 'support'
+                                    ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                                    : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                                  const val = parseFloat(e.target.value)
+                                  const effectiveMax = exitLimit?.isLimited ? Math.min(exitLimit.maxSellShares, maxShares) : maxShares
+                                  if (!isNaN(val) && val > effectiveMax) setRedeemShares(effectiveMax.toFixed(6))
+                                  else setRedeemShares(e.target.value)
+                                }}
+                                onClick={e => e.stopPropagation()} min="0" step="0.0001"
+                                className="flex-1 bg-transparent text-white text-lg font-bold outline-none" placeholder="0.00" />
+                            )}
+                            <span className="text-[#8b949e] text-sm font-semibold">{tradeAction === 'buy' ? 'tTRUST' : 'shares'}</span>
+                            {tradeAction === 'sell' && (
+                              <button onClick={e => {
+                                e.stopPropagation()
+                                const maxRaw = signalSide === 'support' ? userPosition.forShares : userPosition.againstShares
+                                if (maxRaw) {
+                                  const maxShares = Number(maxRaw) / 1e18
+                                  const effectiveMax = exitLimit?.isLimited ? Math.min(exitLimit.maxSellShares, maxShares) : maxShares
+                                  setRedeemShares(effectiveMax.toFixed(6))
+                                }
+                              }} className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f6feb20] text-[#58a6ff] hover:bg-[#1f6feb30] transition-colors font-bold">
+                                MAX
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Percentage slider — sell mode only */}
+                          {tradeAction === 'sell' && (() => {
+                            const maxShares = signalSide === 'support'
+                              ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                              : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                            if (maxShares <= 0) return null
+                            return (
+                              <div className="mt-2">
+                                <input type="range" min="0" max={maxShares} step={maxShares / 100 || 0.0001}
+                                  value={parseFloat(redeemShares) || 0}
+                                  onChange={e => setRedeemShares(e.target.value)}
+                                  onClick={e => e.stopPropagation()}
+                                  className="w-full h-1 bg-[#21262d] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#58a6ff]" />
+                                <div className="flex justify-between text-[10px] text-[#6b7280] mt-1">
+                                  <span>0</span>
+                                  {[0.25, 0.5, 0.75].map(pct => (
+                                    <button key={pct} onClick={e => { e.stopPropagation(); setRedeemShares((maxShares * pct).toFixed(4)) }} className="hover:text-white transition-colors">{pct * 100}%</button>
+                                  ))}
+                                  <button onClick={e => { e.stopPropagation(); setRedeemShares(maxShares.toFixed(6)) }} className="hover:text-white transition-colors">MAX</button>
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+
+                        {/* Sell Reason selector */}
+                        {tradeAction === 'sell' && parseFloat(redeemShares || '0') > 0 && (
+                          <div style={{ marginTop:'12px', marginBottom:'12px' }}>
+                            <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)', marginBottom:'8px', fontWeight:500 }}>
+                              Why are you selling?
+                              <span style={{ color:'rgba(255,255,255,0.2)', fontWeight:400, marginLeft:'4px' }}>(affects trust impact)</span>
+                            </div>
+                            <div style={{ display:'flex', flexWrap:'wrap', gap:'6px' }}>
+                              {SELL_REASONS.map(reason => {
+                                const isSelected = sellReason === reason.id
+                                return (
+                                  <button key={reason.id} onClick={e => { e.stopPropagation(); setSellReason(isSelected ? null : reason.id) }}
+                                    style={{ padding:'6px 12px', borderRadius:'8px', border: isSelected ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.08)', background: isSelected ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)', color: isSelected ? '#a5b4fc' : 'rgba(255,255,255,0.5)', fontSize:'11px', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px' }}>
+                                    <span>{reason.icon}</span><span>{reason.label}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            {sellReason && (() => {
+                              const cfg = getSellReasonConfig(sellReason)
+                              const color = cfg.trustImpact <= 0.3 ? '#22c55e' : cfg.trustImpact >= 0.8 ? '#ef4444' : '#eab308'
+                              const label = cfg.trustImpact <= 0.3 ? '● Low' : cfg.trustImpact >= 0.8 ? '● High' : '● Medium'
+                              return (
+                                <div style={{ marginTop:'8px', padding:'8px 12px', borderRadius:'8px', background:`${color}14`, border:`1px solid ${color}33`, fontSize:'11px' }}>
+                                  <div style={{ display:'flex', justifyContent:'space-between' }}>
+                                    <span style={{ color:'rgba(255,255,255,0.5)' }}>Trust impact</span>
+                                    <span style={{ fontWeight:600, color }}>{label}</span>
+                                  </div>
+                                  {cfg.description && <div style={{ color:'rgba(255,255,255,0.3)', marginTop:'4px' }}>{cfg.description}</div>}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        )}
+
+                        {/* Buy/Sell preview */}
+                        {(() => {
+                          const supply = signalSide === 'support' ? supportSupply : opposeSupply
+                          if (tradeAction === 'buy') {
+                            const inputAmt = Number(signalSide === 'support' ? voteAmount : untrustAmount) || 0
+                            const preview = calculateBuy(inputAmt, supply)
+                            return (
+                              <div className="space-y-1 mb-3 px-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#8b949e] text-xs">You receive</span>
+                                  <span className="text-white text-xs font-semibold">{inputAmt > 0 ? `${preview.sharesReceived.toFixed(4)} shares` : '—'}</span>
+                                </div>
+                                {inputAmt > 0 && (<>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#6b7280] text-[10px]">Fee (5%)</span>
+                                    <span className="text-[#6b7280] text-[10px]">{preview.fee.toFixed(4)} tTRUST</span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#6b7280] text-[10px]">Avg price</span>
+                                    <span className="text-[#6b7280] text-[10px]">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#6b7280] text-[10px]">Price after</span>
+                                    <span className="text-[#6b7280] text-[10px]">{preview.newPrice.toFixed(4)} tTRUST/share</span>
+                                  </div>
+                                </>)}
+                              </div>
+                            )
+                          } else {
+                            const inputShares = Number(redeemShares) || 0
+                            const maxOwned = signalSide === 'support'
+                              ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
+                              : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                            const validShares = inputShares > 0 && inputShares <= maxOwned
+                            const preview = calculateSell(inputShares, supply)
+                            return (
+                              <div className="space-y-1 mb-3 px-1">
+                                {inputShares > maxOwned && maxOwned > 0 && (
+                                  <p className="text-[#f85149] text-[10px] mb-1">Exceeds owned shares ({maxOwned.toFixed(4)})</p>
+                                )}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#8b949e] text-xs">Gross proceeds</span>
+                                  <span className="text-[#8b949e] text-xs font-mono">{validShares ? `${preview.grossProceeds.toFixed(6)} tTRUST` : '—'}</span>
+                                </div>
+                                {validShares && (<>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#6b7280] text-[10px]">Fee (5%)</span>
+                                    <span className="text-[#f85149] text-[10px] font-mono">-{preview.fee.toFixed(6)} tTRUST</span>
+                                  </div>
+                                  <div className="h-px bg-[#21262d] my-1" />
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-white text-xs font-medium">You receive</span>
+                                    <span className="text-white text-xs font-bold font-mono">{preview.netProceeds.toFixed(6)} tTRUST</span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#6b7280] text-[10px]">Price after sell</span>
+                                    <span className="text-[#f85149] text-[10px] font-mono">{preview.newPrice.toFixed(6)} tTRUST/share</span>
+                                  </div>
+                                </>)}
+                              </div>
+                            )
+                          }
+                        })()}
+
+                        {/* Gradual exit warning */}
+                        {tradeAction === 'sell' && exitLimit?.isLimited && (
+                          <div style={{ marginBottom:'12px', padding:'10px 14px', borderRadius:'10px', background:'rgba(234,179,8,0.08)', border:'1px solid rgba(234,179,8,0.2)', fontSize:'11px', color:'#eab308', display:'flex', alignItems:'flex-start', gap:'8px' }}>
+                            <span style={{ fontSize:'14px', flexShrink:0, marginTop:'1px' }}>⚠️</span>
+                            <div>
+                              <div style={{ fontWeight:600, marginBottom:'2px' }}>Gradual exit limit active</div>
+                              <div style={{ color:'rgba(234,179,8,0.7)' }}>{exitLimit.reason}</div>
+                              <div style={{ marginTop:'4px', color:'rgba(255,255,255,0.4)' }}>
+                                Max today: <span style={{ color:'#eab308', fontFamily:'monospace', fontWeight:600 }}>{exitLimit.maxSellShares.toFixed(4)} shares</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action button */}
+                        {tradeAction === 'buy' ? (
+                          <button
+                            onClick={() => {
+                              const amount = signalSide === 'support' ? voteAmount : untrustAmount
+                              setPendingVote({ type: signalSide === 'support' ? 'trust' : 'distrust', claim: selectedClaim, amount, counterTermId: claimTriple.counterTermId })
+                              setShowConfirm(true)
+                            }}
+                            disabled={parseFloat(signalSide === 'support' ? voteAmount : untrustAmount) <= 0}
+                            className={cn('w-full py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-50',
+                              signalSide === 'support' ? 'bg-[#2d7a5f] hover:bg-[#34a872] text-white' : 'bg-[#8b3a3a] hover:bg-[#c45454] text-white'
+                            )}
+                          >
+                            {signalSide === 'support' ? '▲ Support → Get Shares' : '▼ Oppose → Get Shares'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setPendingVote({ type: signalSide === 'support' ? 'redeem_trust' : 'redeem_distrust', claim: selectedClaim, amount: redeemShares, counterTermId: claimTriple.counterTermId })
+                              setShowConfirm(true)
+                            }}
+                            disabled={!parseFloat(redeemShares) || parseFloat(redeemShares) <= 0}
+                            className="w-full py-2.5 rounded-xl text-sm font-bold border border-[#21262d] text-[#8b949e] hover:text-white hover:border-white/30 transition-colors disabled:opacity-50"
+                          >
+                            Sell Shares → Redeem tTRUST
+                          </button>
+                        )}
+
+                        {/* Your Position mini summary */}
+                        {(userPosition.forShares || userPosition.againstShares) && (
+                          <div className="mt-3 pt-3 border-t border-[#21262d] flex gap-3">
+                            {userPosition.forShares && Number(userPosition.forShares) > 0 && (
+                              <div className="flex-1 bg-[#2d7a5f10] border border-[#2d7a5f20] rounded-lg p-2 text-center">
+                                <p className="text-[#34a872] text-xs font-bold">{(Number(userPosition.forShares) / 1e18).toFixed(4)}</p>
+                                <p className="text-[#6b7280] text-[10px]">Support shares</p>
+                              </div>
+                            )}
+                            {userPosition.againstShares && Number(userPosition.againstShares) > 0 && (
+                              <div className="flex-1 bg-[#8b3a3a10] border border-[#8b3a3a20] rounded-lg p-2 text-center">
+                                <p className="text-[#c45454] text-xs font-bold">{(Number(userPosition.againstShares) / 1e18).toFixed(4)}</p>
+                                <p className="text-[#6b7280] text-[10px]">Oppose shares</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
-                    <button
-                      onClick={() => {
-                        setPendingVote({ type: signalSide === 'support' ? 'trust' : 'distrust', claim: selectedClaim, amount: voteAmount, counterTermId: claimTriple.counterTermId })
-                        setShowConfirm(true)
-                      }}
-                      disabled={!isConnected || parseFloat(voteAmount) <= 0}
-                      className={cn(
-                        'w-full py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-50',
-                        signalSide === 'support' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-red-700 hover:bg-red-600 text-white'
-                      )}
-                    >
-                      {signalSide === 'support' ? '▲ Support Claim' : '▼ Oppose Claim'}
-                    </button>
                   </>
                 ) : (
-                  <>
-                    <div className="text-xs text-[#8b949e] mb-3 flex justify-between">
-                      <span>Your {signalSide} shares</span>
-                      <span className="text-white font-mono">{(Number(userSharesBigInt) / 1e18).toFixed(4)}</span>
-                    </div>
-                    <input type="number" value={redeemShares} onChange={e => setRedeemShares(e.target.value)} min="0" step="0.001"
-                      placeholder="Shares to redeem"
-                      className="w-full px-3 py-2 bg-[#161b22] border border-[#21262d] rounded-lg text-white focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono text-sm mb-3" />
-                    {redeemAmount && (
-                      <div className="text-xs text-[#8b949e] mb-3">
-                        <div className="flex justify-between"><span>You receive</span><span className="text-white font-mono">{redeemAmount.toFixed(6)} tTRUST</span></div>
-                      </div>
-                    )}
-                    {sellReason && (
-                      <div className="p-3 rounded-lg mb-3 text-xs bg-white/5">
-                        {getSellReasonConfig(sellReason).icon} {getSellReasonConfig(sellReason).label}
-                      </div>
-                    )}
-                    <div className="mb-3">
-                      <p className="text-xs text-[#8b949e] mb-2">Reason for selling</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {SELL_REASONS.map(cfg => (
-                          <button key={cfg.id} onClick={() => setSellReason(cfg.id)}
-                            className={cn('px-2 py-1 rounded text-xs transition-all border',
-                              sellReason === cfg.id ? 'bg-indigo-500/20 border-indigo-500/40 text-white' : 'border-[#21262d] text-[#8b949e] hover:text-white'
-                            )}>
-                            {cfg.icon} {cfg.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setPendingVote({ type: signalSide === 'support' ? 'redeem_trust' : 'redeem_distrust', claim: selectedClaim, amount: redeemShares, counterTermId: claimTriple.counterTermId })
-                        setShowConfirm(true)
-                      }}
-                      disabled={!isConnected || (!userPosition.forShares && !userPosition.againstShares)}
-                      className="w-full py-2.5 rounded-xl text-sm font-bold border border-[#21262d] text-[#8b949e] hover:text-white hover:border-white/30 transition-colors disabled:opacity-50"
-                    >
-                      Sell Shares
-                    </button>
-                  </>
+                  <div className="text-center py-6 bg-[#161b22] rounded-xl border border-[#21262d]">
+                    <p className="text-[#8b949e] text-sm font-medium mb-1">Connect wallet to trade</p>
+                    <p className="text-[#6b7280] text-xs">You need a connected wallet to support or oppose claims</p>
+                  </div>
                 )}
               </div>
 
