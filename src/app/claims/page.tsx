@@ -219,22 +219,34 @@ function ClaimsPageContent() {
   }, [claims, searchParams])
 
   // ── Positions helpers ──
+  // Matches agents/page.tsx fetchUserPosition exactly — same variable names, same format
   const fetchUserPosition = async (termId: string, userAddr: string, counterTermId?: string | null) => {
     try {
-      const qAddr = getAddress(userAddr).toLowerCase()
+      const checksummedAddress = userAddr ? getAddress(userAddr) : ''
+      const queryAddress = checksummedAddress.toLowerCase()
+
       const forRes = await fetch(GRAPHQL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query GetForPos($t: String!, $a: String!) { forPositions: positions(where: { term_id: { _eq: $t }, account_id: { _eq: $a } } limit: 5) { shares curve_id updated_at } }`,
-          variables: { t: termId, a: qAddr },
+          query: `
+            query GetForPositions($termId: String!, $address: String!) {
+              forPositions: positions(
+                where: { term_id: { _eq: $termId }, account_id: { _eq: $address } }
+                limit: 5
+              ) { shares curve_id updated_at }
+            }
+          `,
+          variables: { termId, address: queryAddress },
         }),
       })
       const forData = await forRes.json()
       const forPos = forData.data?.forPositions || []
       const forSharesRaw = forPos[0]?.shares
-      let forBigInt = 0n; try { forBigInt = BigInt(forSharesRaw ?? '0') } catch { forBigInt = 0n }
+      let forBigInt = 0n
+      try { forBigInt = BigInt(forSharesRaw ?? '0') } catch { forBigInt = 0n }
       const forShares = (forSharesRaw && forBigInt > 0n) ? forSharesRaw : null
+
       let againstShares: string | null = null
       let againstRawPositions: any[] = []
       if (counterTermId) {
@@ -242,16 +254,25 @@ function ClaimsPageContent() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            query: `query GetAgainst($t: String!, $a: String!) { againstPositions: positions(where: { term_id: { _eq: $t }, account_id: { _eq: $a } } limit: 5) { shares curve_id updated_at } }`,
-            variables: { t: counterTermId, a: qAddr },
+            query: `
+              query GetAgainstPositions($termId: String!, $address: String!) {
+                againstPositions: positions(
+                  where: { term_id: { _eq: $termId }, account_id: { _eq: $address } }
+                  limit: 5
+                ) { shares curve_id updated_at }
+              }
+            `,
+            variables: { termId: counterTermId, address: queryAddress },
           }),
         })
         const agData = await agRes.json()
         againstRawPositions = agData.data?.againstPositions || []
         const agSharesRaw = againstRawPositions[0]?.shares
-        let agBigInt = 0n; try { agBigInt = BigInt(agSharesRaw ?? '0') } catch { agBigInt = 0n }
+        let agBigInt = 0n
+        try { agBigInt = BigInt(agSharesRaw ?? '0') } catch { agBigInt = 0n }
         againstShares = (agSharesRaw && agBigInt > 0n) ? agSharesRaw : null
       }
+
       return { forShares, againstShares, rawPositions: forPos, againstRawPositions }
     } catch { return { forShares: null, againstShares: null, rawPositions: [], againstRawPositions: [] } }
   }
@@ -345,9 +366,48 @@ function ClaimsPageContent() {
     })
   }, [selectedClaim?.term_id, claimTriple.counterTermId])
 
+  // Primary: derive userPosition from allPositions (same data source as Attestations tab — reliable)
+  // allPositions contains positions for both support vault (term_id) and oppose vault (counter_term_id)
+  useEffect(() => {
+    if (!address) {
+      setUserPosition({ forShares: null, againstShares: null, rawPositions: [], againstRawPositions: [] })
+      return
+    }
+    if (allPositions.length === 0) return
+
+    const qAddr = address.toLowerCase()
+    const forPos = allPositions.filter(
+      (p: any) => p.account_id?.toLowerCase() === qAddr &&
+        p.term_id?.toLowerCase() === claimTriple.termId?.toLowerCase()
+    )
+    const agaPos = allPositions.filter(
+      (p: any) => p.account_id?.toLowerCase() === qAddr &&
+        claimTriple.counterTermId &&
+        p.term_id?.toLowerCase() === claimTriple.counterTermId?.toLowerCase()
+    )
+
+    const forSharesRaw = forPos[0]?.shares
+    const agaSharesRaw = agaPos[0]?.shares
+    let forBigInt = 0n
+    let agaBigInt = 0n
+    try { forBigInt = BigInt(forSharesRaw ?? '0') } catch { /* ignore */ }
+    try { agaBigInt = BigInt(agaSharesRaw ?? '0') } catch { /* ignore */ }
+
+    setUserPosition({
+      forShares: (forSharesRaw && forBigInt > 0n) ? forSharesRaw : null,
+      againstShares: (agaSharesRaw && agaBigInt > 0n) ? agaSharesRaw : null,
+      rawPositions: forPos,
+      againstRawPositions: agaPos,
+    })
+  }, [allPositions, address, claimTriple.termId, claimTriple.counterTermId])
+
+  // Fallback: also fetch directly when claim/address changes (covers case where user just transacted)
   useEffect(() => {
     if (!selectedClaim || !address) return
-    fetchUserPosition(selectedClaim.term_id, address, claimTriple.counterTermId).then(setUserPosition)
+    fetchUserPosition(selectedClaim.term_id, address, claimTriple.counterTermId).then(pos => {
+      // Only update if we got real data (prefer allPositions-derived when both exist)
+      if (pos.forShares || pos.againstShares) setUserPosition(pos)
+    })
   }, [selectedClaim?.term_id, address, claimTriple.counterTermId])
 
   useEffect(() => { setRedeemShares('0') }, [signalSide])
@@ -452,11 +512,29 @@ function ClaimsPageContent() {
         const isDistrust = pendingVote.type === 'redeem_distrust'
         const redeemVaultId = isDistrust ? pendingVote.counterTermId : pendingVote.claim.term_id
         if (!redeemVaultId) { alert('Vault not found'); return }
+
+        // Try fresh fetch first; fall back to current userPosition state if fetch returns 0
         const freshPos = await fetchUserPosition(pendingVote.claim.term_id, address!, isDistrust ? redeemVaultId : null)
         const rawPos = isDistrust ? freshPos.againstRawPositions : freshPos.rawPositions
-        const freshSharesRaw = rawPos[0]?.shares ?? '0'
-        let freshSharesBig = 0n; try { freshSharesBig = BigInt(freshSharesRaw) } catch { freshSharesBig = 0n }
-        if (freshSharesBig === 0n) { alert('No shares to redeem'); return }
+        let freshSharesRaw = rawPos[0]?.shares ?? '0'
+        let freshSharesBig = 0n
+        try { freshSharesBig = BigInt(freshSharesRaw) } catch { freshSharesBig = 0n }
+
+        // Fallback: use shares from userPosition state (derived from allPositions — most reliable source)
+        if (freshSharesBig === 0n) {
+          const fallbackRaw = isDistrust ? userPosition.againstShares : userPosition.forShares
+          if (fallbackRaw) {
+            freshSharesRaw = fallbackRaw
+            try { freshSharesBig = BigInt(freshSharesRaw) } catch { freshSharesBig = 0n }
+          }
+        }
+
+        if (freshSharesBig === 0n) {
+          alert(isDistrust
+            ? 'No AGAINST shares to redeem — you have not staked in the Oppose vault'
+            : 'No FOR shares to redeem — position may already be empty')
+          return
+        }
         await redeemFromVault(cfg, redeemVaultId as `0x${string}`, freshSharesBig, address as `0x${string}`)
       } else if (pendingVote.type === 'trust') {
         await depositToVault(cfg, pendingVote.claim.term_id as `0x${string}`, parseAmount(pendingVote.amount))
