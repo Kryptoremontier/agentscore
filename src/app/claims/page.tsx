@@ -668,23 +668,22 @@ function ClaimsPageContent() {
       </AnimatePresence>
 
       {/* ── Claim Detail Modal ── */}
-      <AnimatePresence>
-        {selectedClaim && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setSelectedClaim(null)}
-              className="fixed inset-x-0 top-[64px] bottom-0 z-30 bg-black/70 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, x: '100%' }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-[64px] bottom-0 w-full max-w-2xl z-40 overflow-y-auto bg-[rgb(10,10,15)] border-l border-white/10 shadow-2xl"
-            >
-              <div className="p-6">
-                {/* Header */}
-                <div className="flex items-start justify-between mb-6">
+      {selectedClaim && (
+        <div className="fixed inset-0 top-[64px] bg-black/80 backdrop-blur-sm z-40 overflow-y-auto">
+          <div className="min-h-full p-4 flex items-start justify-center">
+            <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
+
+              {/* === TOP CARD: Claim Header === */}
+              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 mb-3">
+                <div className="flex items-start gap-4 mb-4">
+                  {/* Triple icon */}
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 bg-indigo-500/10 border-2 border-indigo-500/30">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                      <path d="M10 3H6a2 2 0 00-2 2v14c0 1.1.9 2 2 2h4M16 17l5-5-5-5M21 12H9" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+
+                  {/* Triple chips + meta */}
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {(() => {
@@ -704,157 +703,209 @@ function ClaimsPageContent() {
                         </>)
                       })()}
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <div className="flex items-center gap-2 text-sm text-[#8b949e]">
                       {selectedClaim.creator?.id ? (
-                        <><a href={`/profile/${selectedClaim.creator.id}`} className="hover:text-[#58a6ff] transition-colors">
+                        <a href={`/profile/${selectedClaim.creator.id}`} className="bg-[#21262d] px-2 py-0.5 rounded text-xs hover:bg-[#30363d] hover:text-white transition-colors">
                           {selectedClaim.creator.label || selectedClaim.creator.id.slice(0, 10)}
-                        </a> · </>
-                      ) : selectedClaim.creator?.label ? `by ${selectedClaim.creator.label} · ` : ''}
-                      {new Date(selectedClaim.created_at).toLocaleDateString()}
-                    </p>
+                        </a>
+                      ) : selectedClaim.creator?.label ? (
+                        <span className="bg-[#21262d] px-2 py-0.5 rounded text-xs">{selectedClaim.creator.label}</span>
+                      ) : null}
+                      <span>·</span>
+                      <span>{new Date(selectedClaim.created_at).toLocaleDateString('pl-PL')}</span>
+                    </div>
                   </div>
-                  <button onClick={() => setSelectedClaim(null)} className="ml-4 p-2 rounded-lg hover:bg-white/10 transition-colors shrink-0">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+
+                  {/* Close button */}
+                  <button
+                    onClick={() => setSelectedClaim(null)}
+                    className="w-8 h-8 rounded-lg bg-[#21262d] hover:bg-[#30363d] flex items-center justify-center transition-colors flex-shrink-0"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                      <path d="M18 6L6 18M6 6l12 12" stroke="#8b949e" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
                   </button>
                 </div>
 
-                {/* Bonding Curve Market */}
-                <div className="glass rounded-xl p-5 mb-4">
-                  <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Bonding Curve Market</h3>
+                {/* Term ID row */}
+                <div className="flex items-center gap-2 text-sm mb-5">
+                  <span className="text-[#8b949e] w-16 flex-shrink-0">Term ID:</span>
+                  <code className="text-[#8b949e] text-xs font-mono">
+                    {selectedClaim.term_id.slice(0, 14)}...{selectedClaim.term_id.slice(-8)}
+                  </code>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(selectedClaim.term_id)}
+                    className="text-[#8b949e] hover:text-white transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                      <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" strokeWidth="2"/>
+                    </svg>
+                  </button>
+                </div>
 
-                  {/* Support / Oppose */}
-                  <div className="flex gap-1 p-1 bg-black/40 rounded-lg mb-4">
-                    {(['support', 'oppose'] as const).map(side => (
-                      <button key={side} onClick={() => { setSignalSide(side); setTradeAction('buy') }}
-                        className={cn('flex-1 py-2 rounded-md text-sm font-semibold transition-all',
-                          signalSide === side
-                            ? side === 'support' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                            : 'text-slate-400 hover:text-white'
-                        )}>
-                        {side === 'support' ? '▲ Support' : '▼ Oppose'}
-                      </button>
-                    ))}
-                  </div>
+                {/* Stats Grid */}
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { value: selectedClaim.trust_score ?? 0, label: 'Trust Score' },
+                    { value: combinedStakerCount, label: 'Stakers' },
+                    { value: supportSupply.toFixed(3), label: 'Support Pool' },
+                    { value: opposeSupply.toFixed(3), label: 'Oppose Pool' },
+                  ].map((s, i) => (
+                    <div key={i} className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 text-center">
+                      <p className="text-lg font-bold text-white">{s.value}</p>
+                      <p className="text-xs text-[#8b949e] mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-                  {/* Buy / Sell */}
-                  <div className="flex gap-1 p-1 bg-black/20 rounded-lg mb-4">
-                    {(['buy', 'sell'] as const).map(action => (
-                      <button key={action} onClick={() => setTradeAction(action)}
-                        className={cn('flex-1 py-1.5 rounded-md text-xs font-medium transition-all',
-                          tradeAction === action ? 'bg-white/15 text-white' : 'text-slate-500 hover:text-white'
-                        )}>
-                        {action === 'buy' ? 'Buy' : 'Sell'}
-                      </button>
-                    ))}
-                  </div>
+              {/* === ACTION CARD: Bonding Curve Market === */}
+              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-5 mb-3">
+                <p className="text-[#8b949e] text-xs font-semibold mb-1">Bonding Curve Market</p>
+                <p className="text-[#6b7280] text-xs mb-3">Choose side (Support/Oppose) and action (Buy/Sell).</p>
 
-                  {tradeAction === 'buy' ? (
-                    <>
-                      <div className="space-y-3 mb-4">
-                        <div className="flex items-center gap-3">
-                          <input type="number" value={voteAmount} onChange={e => setVoteAmount(e.target.value)} min="0.001" step="0.01"
-                            className="flex-1 px-3 py-2 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none font-mono text-sm" />
-                          <span className="text-sm text-slate-400 shrink-0">tTRUST</span>
-                        </div>
-                        <div className="flex gap-2">
-                          {['0.01', '0.05', '0.1', '0.5'].map(v => (
-                            <button key={v} onClick={() => setVoteAmount(v)} className={cn('px-2.5 py-1 rounded text-xs font-mono transition-all border', voteAmount === v ? 'bg-primary/20 border-primary/40 text-white' : 'border-white/10 text-slate-400 hover:text-white')}>{v}</button>
-                          ))}
-                        </div>
+                {/* Support / Oppose */}
+                <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-3">
+                  {(['support', 'oppose'] as const).map(side => (
+                    <button key={side} onClick={(e) => { e.stopPropagation(); setSignalSide(side); setTradeAction('buy') }}
+                      className={`flex-1 py-2 text-xs font-bold transition-colors ${
+                        signalSide === side
+                          ? side === 'support' ? 'bg-[#2d7a5f] text-white' : 'bg-[#8b3a3a] text-white'
+                          : 'bg-transparent text-[#8b949e] hover:text-white'
+                      }`}>
+                      {side === 'support' ? '▲ Support' : '▼ Oppose'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Buy / Sell */}
+                <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-4">
+                  {(['buy', 'sell'] as const).map(action => (
+                    <button key={action} onClick={(e) => { e.stopPropagation(); setTradeAction(action) }}
+                      className={`flex-1 py-2 text-xs font-bold transition-colors ${
+                        tradeAction === action ? 'bg-white text-black' : 'bg-transparent text-[#8b949e] hover:text-white'
+                      }`}>
+                      {action === 'buy' ? 'Buy' : 'Sell'}
+                    </button>
+                  ))}
+                </div>
+
+                {tradeAction === 'buy' ? (
+                  <>
+                    <div className="space-y-3 mb-4">
+                      <div className="flex items-center gap-3">
+                        <input type="number" value={voteAmount} onChange={e => setVoteAmount(e.target.value)} min="0.001" step="0.01"
+                          className="flex-1 px-3 py-2 bg-[#161b22] border border-[#21262d] rounded-lg text-white focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono text-sm" />
+                        <span className="text-sm text-[#8b949e] shrink-0">tTRUST</span>
                       </div>
-                      {buyPreview && (
-                        <div className="text-xs text-slate-500 mb-3 space-y-1">
-                          <div className="flex justify-between"><span>Shares to receive</span><span className="text-white font-mono">{buyPreview.sharesReceived.toFixed(4)}</span></div>
-                          <div className="flex justify-between"><span>Price per share</span><span className="text-white font-mono">{buyPreview.avgPricePerShare.toFixed(6)} tTRUST</span></div>
-                        </div>
-                      )}
-                      <Button
-                        onClick={() => {
-                          setPendingVote({ type: signalSide === 'support' ? 'trust' : 'distrust', claim: selectedClaim, amount: voteAmount, counterTermId: claimTriple.counterTermId })
-                          setShowConfirm(true)
-                        }}
-                        disabled={!isConnected || parseFloat(voteAmount) <= 0}
-                        className={cn('w-full', signalSide === 'support' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-700 hover:bg-red-600')}
-                      >
-                        {signalSide === 'support' ? '▲ Support Claim' : '▼ Oppose Claim'}
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-xs text-slate-500 mb-3 flex justify-between">
-                        <span>Your {signalSide} shares</span>
-                        <span className="text-white font-mono">{(Number(userSharesBigInt) / 1e18).toFixed(4)}</span>
+                      <div className="flex gap-2">
+                        {['0.01', '0.05', '0.1', '0.5'].map(v => (
+                          <button key={v} onClick={() => setVoteAmount(v)}
+                            className={cn('px-2.5 py-1 rounded text-xs font-mono transition-all border',
+                              voteAmount === v ? 'bg-indigo-500/20 border-indigo-500/40 text-white' : 'border-[#21262d] text-[#8b949e] hover:text-white'
+                            )}>{v}</button>
+                        ))}
                       </div>
-                      <input type="number" value={redeemShares} onChange={e => setRedeemShares(e.target.value)} min="0" step="0.001"
-                        placeholder="Shares to redeem"
-                        className="w-full px-3 py-2 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none font-mono text-sm mb-3" />
-                      {redeemAmount && (
-                        <div className="text-xs text-slate-500 mb-3">
-                          <div className="flex justify-between"><span>You receive</span><span className="text-white font-mono">{redeemAmount.toFixed(6)} tTRUST</span></div>
-                        </div>
-                      )}
-                      {sellReason && (
-                        <div className="p-3 rounded-lg mb-3 text-xs bg-white/5">
-                          {getSellReasonConfig(sellReason).icon} {getSellReasonConfig(sellReason).label}
-                        </div>
-                      )}
-                      <div className="mb-3">
-                        <p className="text-xs text-slate-500 mb-2">Reason for selling</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {SELL_REASONS.map(cfg => (
-                            <button key={cfg.id} onClick={() => setSellReason(cfg.id)} className={cn('px-2 py-1 rounded text-xs transition-all border', sellReason === cfg.id ? 'bg-primary/20 border-primary/40 text-white' : 'border-white/10 text-slate-400 hover:text-white')}>
-                              {cfg.icon} {cfg.label}
-                            </button>
-                          ))}
-                        </div>
+                    </div>
+                    {buyPreview && (
+                      <div className="text-xs text-[#8b949e] mb-3 space-y-1">
+                        <div className="flex justify-between"><span>Shares to receive</span><span className="text-white font-mono">{buyPreview.sharesReceived.toFixed(4)}</span></div>
+                        <div className="flex justify-between"><span>Price per share</span><span className="text-white font-mono">{buyPreview.avgPricePerShare.toFixed(6)} tTRUST</span></div>
                       </div>
-                      <Button onClick={() => {
+                    )}
+                    <button
+                      onClick={() => {
+                        setPendingVote({ type: signalSide === 'support' ? 'trust' : 'distrust', claim: selectedClaim, amount: voteAmount, counterTermId: claimTriple.counterTermId })
+                        setShowConfirm(true)
+                      }}
+                      disabled={!isConnected || parseFloat(voteAmount) <= 0}
+                      className={cn(
+                        'w-full py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-50',
+                        signalSide === 'support' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-red-700 hover:bg-red-600 text-white'
+                      )}
+                    >
+                      {signalSide === 'support' ? '▲ Support Claim' : '▼ Oppose Claim'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs text-[#8b949e] mb-3 flex justify-between">
+                      <span>Your {signalSide} shares</span>
+                      <span className="text-white font-mono">{(Number(userSharesBigInt) / 1e18).toFixed(4)}</span>
+                    </div>
+                    <input type="number" value={redeemShares} onChange={e => setRedeemShares(e.target.value)} min="0" step="0.001"
+                      placeholder="Shares to redeem"
+                      className="w-full px-3 py-2 bg-[#161b22] border border-[#21262d] rounded-lg text-white focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono text-sm mb-3" />
+                    {redeemAmount && (
+                      <div className="text-xs text-[#8b949e] mb-3">
+                        <div className="flex justify-between"><span>You receive</span><span className="text-white font-mono">{redeemAmount.toFixed(6)} tTRUST</span></div>
+                      </div>
+                    )}
+                    {sellReason && (
+                      <div className="p-3 rounded-lg mb-3 text-xs bg-white/5">
+                        {getSellReasonConfig(sellReason).icon} {getSellReasonConfig(sellReason).label}
+                      </div>
+                    )}
+                    <div className="mb-3">
+                      <p className="text-xs text-[#8b949e] mb-2">Reason for selling</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {SELL_REASONS.map(cfg => (
+                          <button key={cfg.id} onClick={() => setSellReason(cfg.id)}
+                            className={cn('px-2 py-1 rounded text-xs transition-all border',
+                              sellReason === cfg.id ? 'bg-indigo-500/20 border-indigo-500/40 text-white' : 'border-[#21262d] text-[#8b949e] hover:text-white'
+                            )}>
+                            {cfg.icon} {cfg.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
                         setPendingVote({ type: signalSide === 'support' ? 'redeem_trust' : 'redeem_distrust', claim: selectedClaim, amount: redeemShares, counterTermId: claimTriple.counterTermId })
                         setShowConfirm(true)
-                      }} disabled={!isConnected || !userPosition.forShares && !userPosition.againstShares} variant="outline" className="w-full">
-                        Sell Shares
-                      </Button>
-                    </>
-                  )}
+                      }}
+                      disabled={!isConnected || (!userPosition.forShares && !userPosition.againstShares)}
+                      className="w-full py-2.5 rounded-xl text-sm font-bold border border-[#21262d] text-[#8b949e] hover:text-white hover:border-white/30 transition-colors disabled:opacity-50"
+                    >
+                      Sell Shares
+                    </button>
+                  </>
+                )}
+              </div>
 
-                  {/* Supply stats */}
-                  <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-2 gap-3 text-xs">
-                    <div><p className="text-slate-500 mb-1">Support Pool</p><p className="font-mono font-bold text-emerald-400">{supportSupply.toFixed(4)} shares</p></div>
-                    <div><p className="text-slate-500 mb-1">Oppose Pool</p><p className="font-mono font-bold text-red-400">{opposeSupply.toFixed(4)} shares</p></div>
-                  </div>
-                </div>
+              {/* === TABS CARD: Trust Score + Overview / Attestations / Activity === */}
+              <div className="bg-[#0d1117] border border-[#21262d] rounded-2xl p-5">
 
                 {/* Trust Score */}
                 {claimTier && (
-                  <div className="glass rounded-xl p-5 mb-4">
+                  <div className="mb-5">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Trust Score</h3>
+                      <p className="text-[#8b949e] text-xs font-semibold">Trust Score</p>
                       <TrustTierBadgeWithProgress tier={claimTier} progress={calculateTierProgress(combinedStakerCount, supportSupply, 50, getAgentAgeDays(selectedClaim?.created_at ?? ''))} />
                     </div>
-                    <div className="grid grid-cols-3 gap-3 text-xs">
-                      <div className="glass rounded-lg p-3 text-center">
-                        <p className="text-slate-500 mb-1">Score</p>
-                        <p className="text-2xl font-bold font-mono">{selectedClaim.trust_score ?? 0}</p>
-                      </div>
-                      <div className="glass rounded-lg p-3 text-center">
-                        <p className="text-slate-500 mb-1">Stakers</p>
-                        <p className="text-2xl font-bold font-mono">{combinedStakerCount}</p>
-                      </div>
-                      <div className="glass rounded-lg p-3 text-center">
-                        <p className="text-slate-500 mb-1">Composite</p>
-                        <p className="text-2xl font-bold font-mono">{compositeTrust?.score ?? '-'}</p>
-                      </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { value: selectedClaim.trust_score ?? 0, label: 'Score' },
+                        { value: combinedStakerCount, label: 'Stakers' },
+                        { value: compositeTrust?.score ?? '-', label: 'Composite' },
+                      ].map((s, i) => (
+                        <div key={i} className="bg-[#161b22] border border-[#21262d] rounded-xl p-3 text-center">
+                          <p className="text-xl font-bold text-white font-mono">{s.value}</p>
+                          <p className="text-xs text-[#8b949e] mt-0.5">{s.label}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
 
                 {/* Tabs */}
-                <div className="flex gap-1 p-1 bg-black/30 rounded-lg mb-4">
+                <div className="flex rounded-xl overflow-hidden border border-[#21262d] mb-4">
                   {(['overview', 'attestations', 'activity'] as const).map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
-                      className={cn('flex-1 py-2 rounded-md text-xs font-medium capitalize transition-all',
-                        activeTab === tab ? 'bg-white/15 text-white' : 'text-slate-500 hover:text-white'
-                      )}>
+                      className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
+                        activeTab === tab ? 'bg-white/15 text-white' : 'text-[#8b949e] hover:text-white'
+                      }`}>
                       {tab}
                     </button>
                   ))}
@@ -862,11 +913,10 @@ function ClaimsPageContent() {
 
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (
-                  <div className="space-y-4">
-                    {/* Bonding Curve Chart */}
+                  <div className="space-y-3">
                     {curveData.length > 0 && (
-                      <div className="glass rounded-xl p-4">
-                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">Bonding Curve</h4>
+                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                        <h4 className="text-xs font-medium text-[#8b949e] uppercase tracking-wider mb-3">Bonding Curve</h4>
                         <ResponsiveContainer width="100%" height={120}>
                           <AreaChart data={curveData}>
                             <defs>
@@ -884,10 +934,9 @@ function ClaimsPageContent() {
                       </div>
                     )}
 
-                    {/* Positions leaderboard */}
                     {enrichedPositions.length > 0 && (
-                      <div className="glass rounded-xl p-4">
-                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">Stakers ({combinedStakerCount})</h4>
+                      <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                        <h4 className="text-xs font-medium text-[#8b949e] uppercase tracking-wider mb-3">Stakers ({combinedStakerCount})</h4>
                         <div className="space-y-2">
                           {enrichedPositions.slice(0, 8).map((pos, idx) => {
                             const isOppose = claimTriple.counterTermId && pos.term_id === claimTriple.counterTermId
@@ -895,7 +944,7 @@ function ClaimsPageContent() {
                             return (
                               <div key={pos.account_id + pos.term_id} className="flex items-center gap-3">
                                 <EarlySupporterBadge rank={idx + 1} />
-                                <span className="flex-1 text-xs text-slate-300 truncate font-mono">{pos.account?.label || pos.account_id?.slice(0, 8) + '...'}</span>
+                                <span className="flex-1 text-xs text-[#8b949e] truncate font-mono">{pos.account?.label || pos.account_id?.slice(0, 8) + '...'}</span>
                                 <span className={cn('text-xs font-mono', isOppose ? 'text-red-400' : 'text-emerald-400')}>
                                   {isOppose ? '▼' : '▲'} {shares.toFixed(3)}
                                 </span>
@@ -906,15 +955,14 @@ function ClaimsPageContent() {
                       </div>
                     )}
 
-                    {/* Claim details */}
-                    <div className="glass rounded-xl p-4">
-                      <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">Claim Details</h4>
+                    <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                      <h4 className="text-xs font-medium text-[#8b949e] uppercase tracking-wider mb-3">Claim Details</h4>
                       <dl className="space-y-2 text-xs">
-                        <div className="flex justify-between"><dt className="text-slate-500">Type</dt><dd>Triple Claim</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-500">Subject Type</dt><dd className="capitalize">{selectedClaim.subject.type}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-500">Object Type</dt><dd className="capitalize">{selectedClaim.object.type}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-500">Created</dt><dd>{new Date(selectedClaim.created_at).toLocaleDateString()}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-500">Term ID</dt><dd className="font-mono text-emerald-400 text-[10px] truncate max-w-[180px]">{selectedClaim.term_id}</dd></div>
+                        <div className="flex justify-between"><dt className="text-[#8b949e]">Type</dt><dd>Triple Claim</dd></div>
+                        <div className="flex justify-between"><dt className="text-[#8b949e]">Subject Type</dt><dd className="capitalize">{selectedClaim.subject.type}</dd></div>
+                        <div className="flex justify-between"><dt className="text-[#8b949e]">Object Type</dt><dd className="capitalize">{selectedClaim.object.type}</dd></div>
+                        <div className="flex justify-between"><dt className="text-[#8b949e]">Created</dt><dd>{new Date(selectedClaim.created_at).toLocaleDateString()}</dd></div>
+                        <div className="flex justify-between"><dt className="text-[#8b949e]">Term ID</dt><dd className="font-mono text-emerald-400 text-[10px] truncate max-w-[180px]">{selectedClaim.term_id}</dd></div>
                       </dl>
                     </div>
                   </div>
@@ -924,23 +972,23 @@ function ClaimsPageContent() {
                 {activeTab === 'attestations' && (
                   <div className="space-y-2">
                     {claimSignals.length === 0 ? (
-                      <p className="text-center text-slate-500 text-sm py-8">No signals yet. Be the first to stake!</p>
+                      <p className="text-center text-[#8b949e] text-sm py-8">No signals yet. Be the first to stake!</p>
                     ) : claimSignals.map((sig: any) => {
                       const delta = Number(sig.delta || '0')
                       const isPos = delta > 0
                       const accountLabel = sig.account?.label || sig.account_id?.slice(0, 10) + '...'
                       return (
-                        <div key={sig.id} className="flex items-center gap-3 p-3 glass rounded-lg text-xs">
+                        <div key={sig.id} className="flex items-center gap-3 p-3 bg-[#161b22] border border-[#21262d] rounded-lg text-xs">
                           <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0', isPos ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400')}>
                             {isPos ? '▲' : '▼'}
                           </div>
                           <div className="flex-1 min-w-0">
                             {sig.account_id ? (
-                              <a href={`/profile/${sig.account_id}`} className="text-slate-300 hover:text-[#58a6ff] truncate block transition-colors">{accountLabel}</a>
+                              <a href={`/profile/${sig.account_id}`} className="text-[#8b949e] hover:text-[#58a6ff] truncate block transition-colors">{accountLabel}</a>
                             ) : (
-                              <p className="text-slate-300 truncate">{accountLabel}</p>
+                              <p className="text-[#8b949e] truncate">{accountLabel}</p>
                             )}
-                            <p className="text-slate-500">{new Date(sig.created_at).toLocaleDateString()}</p>
+                            <p className="text-[#6b7280]">{new Date(sig.created_at).toLocaleDateString()}</p>
                           </div>
                           <span className={cn('font-mono font-bold', isPos ? 'text-emerald-400' : 'text-red-400')}>
                             {isPos ? '+' : ''}{(delta / 1e18).toFixed(4)}
@@ -955,28 +1003,31 @@ function ClaimsPageContent() {
                 {activeTab === 'activity' && (
                   <div className="space-y-2">
                     {claimSignals.length === 0 ? (
-                      <p className="text-center text-slate-500 text-sm py-8">No activity yet</p>
+                      <p className="text-center text-[#8b949e] text-sm py-8">No activity yet</p>
                     ) : claimSignals.map((sig: any) => {
-                      const delta = Number(sig.delta || '0')
                       const isDeposit = sig.deposit_id
                       return (
-                        <div key={sig.id} className="flex items-center gap-3 p-3 glass rounded-lg text-xs">
+                        <div key={sig.id} className="flex items-center gap-3 p-3 bg-[#161b22] border border-[#21262d] rounded-lg text-xs">
                           <span className="text-lg">{isDeposit ? '⬆️' : '⬇️'}</span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-slate-300">{isDeposit ? 'Stake' : 'Redeem'} by {sig.account?.label || sig.account_id?.slice(0, 8) + '...'}</p>
-                            <p className="text-slate-500">{new Date(sig.created_at).toLocaleDateString()}</p>
+                            <p className="text-[#8b949e]">{isDeposit ? 'Stake' : 'Redeem'} by {sig.account?.label || sig.account_id?.slice(0, 8) + '...'}</p>
+                            <p className="text-[#6b7280]">{new Date(sig.created_at).toLocaleDateString()}</p>
                           </div>
-                          <a href={`https://testnet.explorer.intuition.systems/tx/${sig.transaction_hash}`} target="_blank" rel="noopener noreferrer" className="text-accent-cyan hover:underline shrink-0">→</a>
+                          <a href={`https://testnet.explorer.intuition.systems/tx/${sig.transaction_hash}`} target="_blank" rel="noopener noreferrer" className="text-[#58a6ff] hover:underline shrink-0">→</a>
                         </div>
                       )
                     })}
                   </div>
                 )}
+
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Backdrop click to close */}
+          <div className="fixed inset-0 top-[64px] -z-10" onClick={() => setSelectedClaim(null)} />
+        </div>
+      )}
 
       {/* ── Confirm Modal ── */}
       <AnimatePresence>
