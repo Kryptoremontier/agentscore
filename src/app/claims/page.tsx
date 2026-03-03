@@ -698,16 +698,25 @@ function ClaimsPageContent() {
     if (!signals || signals.length === 0) return []
     const sorted = [...signals].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     let supportTotal = 0; let opposeTotal = 0
-    return sorted.map(sig => {
-      const delta = Math.abs(Number(sig.delta || 0)) / 1e18
-      const isOppose = counterTermId && sig.term_id === counterTermId
+    // Prepend a neutral starting point so chart always begins at 50 (no history)
+    const results: { date: string; trustRatio: number }[] = []
+    sorted.forEach(sig => {
+      // delta can be negative for redemptions in some indexers; use absolute value
+      const rawDelta = Number(sig.delta ?? sig.amount ?? 0)
+      const delta = Math.abs(rawDelta) / 1e18
+      if (delta === 0) return
+      const isOppose = !!(counterTermId && sig.term_id?.toLowerCase() === counterTermId.toLowerCase())
       const isDeposit = !!sig.deposit_id
       if (isOppose) { isDeposit ? opposeTotal += delta : opposeTotal = Math.max(0, opposeTotal - delta) }
       else { isDeposit ? supportTotal += delta : supportTotal = Math.max(0, supportTotal - delta) }
       const total = supportTotal + opposeTotal
       const ratio = total > 0 ? Math.round((supportTotal / total) * 100) : 50
-      return { date: new Date(sig.created_at).toLocaleDateString('pl-PL', { month: 'short', day: 'numeric' }), trustRatio: ratio }
+      results.push({
+        date: new Date(sig.created_at).toLocaleDateString('pl-PL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        trustRatio: ratio,
+      })
     })
+    return results
   }
 
   return (
@@ -1341,7 +1350,7 @@ function ClaimsPageContent() {
                                   <p className="text-[#f85149] text-[10px] mb-1">Exceeds owned shares ({maxOwned.toFixed(4)})</p>
                                 )}
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#B5BDC6] text-xs">Gross proceeds</span>
+                                  <span className="text-[#B5BDC6] text-xs">Gross proceeds <span className="text-[#4A5260] text-[9px]">(UI est.)</span></span>
                                   <span className="text-[#B5BDC6] text-xs font-mono">{validShares ? `${preview.grossProceeds.toFixed(6)} tTRUST` : '—'}</span>
                                 </div>
                                 {validShares && (<>
@@ -1354,10 +1363,12 @@ function ClaimsPageContent() {
                                     <span className="text-white text-xs font-medium">You receive</span>
                                     <span className="text-white text-xs font-bold font-mono">{preview.netProceeds.toFixed(6)} tTRUST</span>
                                   </div>
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[#7A838D] text-[10px]">Price after sell</span>
-                                    <span className="text-[#f85149] text-[10px] font-mono">{preview.newPrice.toFixed(6)} tTRUST/share</span>
-                                  </div>
+                                  {preview.newPrice < getCurrentPrice(supply) && (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[#7A838D] text-[10px]">Price after sell</span>
+                                      <span className="text-[#f85149] text-[10px] font-mono">{preview.newPrice.toFixed(6)} tTRUST/share</span>
+                                    </div>
+                                  )}
                                 </>)}
                               </div>
                             )
@@ -2089,7 +2100,16 @@ function ClaimsPageContent() {
                 <dl className="space-y-2 text-sm mb-6">
                   <div className="flex justify-between"><dt className="text-[#7A838D]">Action</dt><dd className="capitalize">{pendingVote.type.replace('_', ' ')}</dd></div>
                   <div className="flex justify-between"><dt className="text-[#7A838D]">Claim</dt><dd className="text-xs truncate max-w-[200px]">{formatClaimText(pendingVote.claim)}</dd></div>
-                  {pendingVote.amount && <div className="flex justify-between"><dt className="text-[#7A838D]">Amount</dt><dd className="font-mono">{pendingVote.amount} tTRUST</dd></div>}
+                  {pendingVote.amount && (
+                    pendingVote.type === 'redeem_trust' || pendingVote.type === 'redeem_distrust'
+                      ? <>
+                          <div className="flex justify-between"><dt className="text-[#7A838D]">Shares to redeem</dt><dd className="font-mono">{pendingVote.amount} shares</dd></div>
+                          {redeemAmount !== null && redeemAmount > 0 && (
+                            <div className="flex justify-between"><dt className="text-[#7A838D]">Est. proceeds</dt><dd className="font-mono text-[#2ECC71]">~{(redeemAmount * 0.95).toFixed(6)} tTRUST</dd></div>
+                          )}
+                        </>
+                      : <div className="flex justify-between"><dt className="text-[#7A838D]">Amount</dt><dd className="font-mono">{pendingVote.amount} tTRUST</dd></div>
+                  )}
                 </dl>
                 <div className="flex gap-3">
                   <Button variant="outline" onClick={() => setShowConfirm(false)} className="flex-1">Cancel</Button>

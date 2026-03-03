@@ -88,8 +88,11 @@ export function generateCurveData(
   currentSupply: number,
   points = 50,
 ): { supply: number; price: number }[] {
-  // Show curve from 0 to 2x current supply (min 20 for empty vaults)
-  const maxSupply = Math.max(currentSupply * 2, 20)
+  // Adaptive range: when supply is small show proportional context,
+  // when supply is large keep 2x headroom. Minimum range ensures curve is visible.
+  const maxSupply = currentSupply > 0
+    ? Math.max(currentSupply * 3, 0.5)   // 3x headroom, min 0.5 range
+    : 1                                   // empty vault: show 0–1 range
   const step = maxSupply / points
   const data: { supply: number; price: number }[] = []
   for (let i = 0; i <= points; i++) {
