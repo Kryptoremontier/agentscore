@@ -668,7 +668,9 @@ function ClaimsPageContent() {
   }, [allPositions])
 
   // ── Helper functions ──
-  const atomColor = (type: string) => type === 'agent' ? { bg: 'rgba(99,102,241,0.15)', border: 'rgba(99,102,241,0.3)', text: '#818cf8' } : { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.3)', text: '#22c55e' }
+  const atomColor = (type: string) => type === 'agent'
+    ? { bg: 'rgba(200,150,60,0.12)', border: 'rgba(200,150,60,0.28)', text: '#C8963C' }
+    : { bg: 'rgba(46,230,214,0.10)', border: 'rgba(46,230,214,0.25)', text: '#2EE6D6' }
 
   const getTrustColor = (score: number): string => {
     if (score >= 60) return '#22c55e'
