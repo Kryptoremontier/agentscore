@@ -501,6 +501,8 @@ function ClaimsPageContent() {
     setShowConfirm(false); setSellReason(null)
     const key = pendingVote.claim.term_id
     setVoteStatus(prev => ({ ...prev, [key]: 'pending' }))
+    // Track the actual counterTermId used (may be fetched dynamically for first Oppose)
+    let resolvedCounterTermId: string | null = claimTriple.counterTermId
     try {
       const { getWalletClient } = await import('@wagmi/core')
       const { config: wagmiConfig } = await import('@/lib/wagmi')
@@ -561,6 +563,7 @@ function ClaimsPageContent() {
           }
         }
         if (!counterTermId) throw new Error('Oppose vault not found for this claim. The triple may still be indexing — please try again in a few seconds.')
+        resolvedCounterTermId = counterTermId
         setClaimTriple(prev => ({ ...prev, counterTermId }))
         await depositToVault(cfg, counterTermId as `0x${string}`, parseAmount(pendingVote.amount))
       }
@@ -568,14 +571,28 @@ function ClaimsPageContent() {
       setVoteStatus(prev => ({ ...prev, [key]: 'success' }))
       setToast('Transaction confirmed! Refreshing...')
       setTimeout(() => setToast(null), 4000)
-      await fetchClaims(searchTerm)
-      if (selectedClaim) {
-        await refreshPositionsAndSupply(selectedClaim.term_id, claimTriple.counterTermId, false)
+
+      // Refetch all data — called twice (2s + 5s) to handle indexer lag
+      // Uses resolvedCounterTermId which is correct even for first-time Oppose tx
+      const refetchAll = () => {
+        if (!selectedClaim) return
+        fetchClaims(searchTerm)
+        // Refresh signals → updates Attestations + Activity tabs
+        fetchSignals(selectedClaim.term_id, resolvedCounterTermId).then(({ signals, totalCount }) => {
+          setClaimSignals(signals)
+          setClaimSignalsCount(totalCount)
+        })
+        refreshPositionsAndSupply(selectedClaim.term_id, resolvedCounterTermId, false)
         if (address) {
-          const newPos = await fetchUserPosition(selectedClaim.term_id, address, claimTriple.counterTermId)
-          setUserPosition(newPos)
+          fetchUserPosition(selectedClaim.term_id, address, resolvedCounterTermId).then(pos => {
+            if (pos.forShares || pos.againstShares) setUserPosition(pos)
+          })
         }
       }
+
+      setTimeout(refetchAll, 2000)
+      setTimeout(refetchAll, 5000)
+
     } catch (e: any) {
       setVoteStatus(prev => ({ ...prev, [key]: 'error' }))
       setToast(`Error: ${e.message || 'Transaction failed'}`)
