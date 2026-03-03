@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
+import { Layers, Globe } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther, getAddress } from 'viem'
 import Link from 'next/link'
@@ -1201,8 +1202,8 @@ function AgentsPageContent() {
           >
             {/* Label */}
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-1 h-5 bg-[#10b981] rounded-full" />
-              <span className="text-xs font-semibold text-[#10b981] uppercase tracking-widest">
+              <div className="w-1 h-5 bg-[#C8963C] rounded-full" />
+              <span className="text-xs font-semibold text-[#C8963C] uppercase tracking-widest">
                 Live on Intuition Testnet
               </span>
             </div>
@@ -1210,7 +1211,7 @@ function AgentsPageContent() {
             {/* Title */}
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-3 leading-tight">
               AI Agent
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#10b981] to-[#06b6d4]">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] to-[#C9A84C]">
                 {" "}Intelligence Registry
               </span>
             </h1>
@@ -1218,13 +1219,13 @@ function AgentsPageContent() {
             {/* Description */}
             <p className="text-[#7A838D] text-lg max-w-2xl leading-relaxed">
               Decentralized trust verification for AI agents.
-              Stake <span className="text-[#9ca3af] font-medium">tTRUST</span> to signal
+              Stake <span className="text-[#B5BDC6] font-medium">tTRUST</span> to signal
               confidence — every vote is transparent, on-chain, and permanent.
             </p>
 
             {/* Live indicator */}
             <div className="flex items-center gap-2 mt-4">
-              <div className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-[#C8963C] animate-pulse" />
               <span className="text-xs text-[#7A838D]">
                 {agents.length} agents indexed · GraphQL live feed
               </span>
@@ -1251,7 +1252,7 @@ function AgentsPageContent() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search agents, platforms, addresses..."
-                className="w-full pl-11 pr-10 py-3 bg-[#0F1113] border border-[#C8963C]/12 rounded-xl text-white text-sm placeholder:text-[#7A838D] focus:border-[#2d7a5f] focus:ring-1 focus:ring-[#2d7a5f40] outline-none transition-all"
+                className="w-full pl-11 pr-10 py-3 bg-[#191C21] border border-white/12 rounded-xl text-white text-sm placeholder:text-[#7A838D] focus:border-[#C8963C]/60 focus:ring-1 focus:ring-[#C8963C]/20 outline-none transition-all"
               />
               {searchTerm && (
                 <button
@@ -1270,7 +1271,7 @@ function AgentsPageContent() {
               {/* Trust Level filter */}
               {([
                 { id: 'all', label: 'All', color: '' },
-                { id: 'excellent', label: 'Excellent', color: '#06B6D4' },
+                { id: 'excellent', label: 'Excellent', color: '#2ECC71' },
                 { id: 'good', label: 'Good', color: '#22C55E' },
                 { id: 'moderate', label: 'Moderate', color: '#EAB308' },
                 { id: 'low', label: 'Low', color: '#F97316' },
@@ -1281,8 +1282,8 @@ function AgentsPageContent() {
                   onClick={() => setSelectedCategory(f.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     selectedCategory === f.id
-                      ? 'bg-[#1E2229] text-white border border-[#C8963C]/25'
-                      : 'text-[#B5BDC6] border border-transparent hover:text-white hover:bg-[#171A1D]'
+                      ? 'bg-[#1E2229] text-white border border-[#C8963C]/50'
+                      : 'text-[#B5BDC6] border border-white/[0.12] hover:text-white hover:bg-[#1E2229] hover:border-white/20'
                   }`}
                 >
                   {f.color ? (
@@ -1298,21 +1299,24 @@ function AgentsPageContent() {
               {/* Platform toggle */}
               <button
                 onClick={() => setShowOnlyOurs(v => !v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                   showOnlyOurs
-                    ? 'bg-[#C8963C]/12 border-[rgba(200,150,60,0.35)] text-[#C8963C]'
-                    : 'border-[#C8963C]/12 text-[#7A838D] hover:text-white hover:bg-white/5'
+                    ? 'bg-[#1E2229] text-[#C8963C] border-[#C8963C]/50'
+                    : 'text-[#B5BDC6] border-white/[0.12] hover:text-white hover:bg-[#1E2229] hover:border-white/20'
                 }`}
                 title={showOnlyOurs ? 'Showing AgentScore agents only' : 'Showing all Intuition agents'}
               >
-                {showOnlyOurs ? '🔵 Platform only' : '🌐 All Intuition'}
+                {showOnlyOurs
+                  ? <><Layers className="w-3 h-3" /> Platform only</>
+                  : <><Globe className="w-3 h-3" /> All Intuition</>
+                }
               </button>
 
               {/* Sort dropdown */}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-[#0F1113] border border-[#C8963C]/12 rounded-lg px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#2d7a5f] outline-none cursor-pointer"
+                className="bg-[#191C21] border border-white/12 rounded-lg px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#C8963C]/50 outline-none cursor-pointer"
               >
                 <option value="newest">Newest First</option>
                 <option value="score_desc">Highest Score</option>
@@ -1445,7 +1449,7 @@ function AgentsPageContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ agent, trust: cardTrust }) => {
                   const trustScore = cardTrust.score
-                  const color = cardTrust.level === 'excellent' ? '#06B6D4'
+                  const color = cardTrust.level === 'excellent' ? '#2ECC71'
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316'
@@ -1467,9 +1471,9 @@ function AgentsPageContent() {
                                  cursor-pointer
                                  transition-all duration-300 ease-out
                                  hover:-translate-y-1
-                                 hover:border-[#2d7a5f40]
-                                 hover:bg-[#111d18]
-                                 hover:shadow-[0_8px_30px_rgba(45,122,95,0.12)]"
+                                 hover:border-[#C8963C]/15
+                                 hover:bg-[#171A1D]
+                                 hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]"
                     >
                       {/* Header Row */}
                       <div className="flex items-start justify-between mb-4">
@@ -1515,16 +1519,16 @@ function AgentsPageContent() {
                       </div>
 
                       {/* Stats Row */}
-                      <div className="flex items-center gap-4 text-sm text-[#9ca3af] mb-4">
+                      <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
                         <div className="flex items-center gap-1.5">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M7 17L17 7M17 7H7M17 7v10" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M7 17L17 7M17 7H7M17 7v10" stroke="#7A838D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
                           <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="#7A838D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
                           <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
                         </div>
@@ -2203,7 +2207,7 @@ function AgentsPageContent() {
                   if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
                   return `$${n.toFixed(4)}`
                 }
-                const scoreColor = level === 'excellent' ? '#06B6D4'
+                const scoreColor = level === 'excellent' ? '#2ECC71'
                   : level === 'good' ? '#22C55E'
                   : level === 'moderate' ? '#EAB308'
                   : level === 'low' ? '#F97316'
@@ -2252,7 +2256,7 @@ function AgentsPageContent() {
                                 </svg>
                               )}
                               <span className={`text-sm font-medium ${
-                                momDir === 'up' ? 'text-[#10b981]' : momDir === 'down' ? 'text-[#f85149]' : 'text-[#B5BDC6]'
+                                momDir === 'up' ? 'text-[#C8963C]' : momDir === 'down' ? 'text-[#f85149]' : 'text-[#B5BDC6]'
                               }`}>
                                 {momText}
                               </span>
@@ -2270,7 +2274,7 @@ function AgentsPageContent() {
                         <h3 className="text-white font-bold mb-4">Stake Breakdown</h3>
 
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-[#10b981]">Support ({supportPct.toFixed(1)}%)</span>
+                          <span className="text-[#C8963C]">Support ({supportPct.toFixed(1)}%)</span>
                           <span className="text-[#f85149]">Oppose ({(100 - supportPct).toFixed(1)}%)</span>
                         </div>
                         <div className="h-2 bg-[#1E2229] rounded-full overflow-hidden mb-4">
@@ -2283,7 +2287,7 @@ function AgentsPageContent() {
                         <div className="space-y-2">
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Support Stake</p>
-                            <p className="text-[#10b981] font-bold">{fmtWei(supportWei)}</p>
+                            <p className="text-[#C8963C] font-bold">{fmtWei(supportWei)}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Oppose Stake</p>
@@ -2356,7 +2360,7 @@ function AgentsPageContent() {
                   const netStake = Number(supportWei - opposeWei) / 1e18
 
                   const levelColors: Record<string, { bg: string; text: string; border: string }> = {
-                    excellent: { bg: '#06b6d420', text: '#06b6d4', border: '#06b6d440' },
+                    excellent: { bg: '#2ECC7120', text: '#2ECC71', border: '#2ECC7140' },
                     good:      { bg: '#22c55e20', text: '#22c55e', border: '#22c55e40' },
                     moderate:  { bg: '#eab30820', text: '#eab308', border: '#eab30840' },
                     low:       { bg: '#f9731620', text: '#f97316', border: '#f9731640' },
@@ -3395,7 +3399,7 @@ function AgentsPageContent() {
                         ? (pendingVote.type === 'trust' ? '#2d7a5f' : '#8b3a3a')
                         : '#21262d',
                       backgroundColor: pendingVote.claim === claim.label
-                        ? (pendingVote.type === 'trust' ? 'rgba(45,122,95,0.12)' : 'rgba(139,58,58,0.12)')
+                        ? (pendingVote.type === 'trust' ? 'rgba(200,150,60,0.08)' : 'rgba(139,58,58,0.12)')
                         : '#161b22',
                     }}
                   >
@@ -3405,7 +3409,7 @@ function AgentsPageContent() {
                           {claim.label}
                         </span>
                         {claim.term_id && (
-                          <span className="px-2 py-0.5 bg-[#10b98115] border border-[#10b98130] rounded-full text-[#10b981] text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-[#C8963C]/8 border border-[#C8963C]/20 rounded-full text-[#C8963C] text-xs font-medium">
                             On-chain
                           </span>
                         )}
@@ -3542,7 +3546,7 @@ function AgentsPageContent() {
                       {pendingVote.claim}
                     </span>
                     {pendingVote.claimAtomId && (
-                      <span className="px-2 py-0.5 bg-[#10b98115] border border-[#10b98130] rounded-full text-[#10b981] text-xs font-medium">
+                      <span className="px-2 py-0.5 bg-[#C8963C]/8 border border-[#C8963C]/20 rounded-full text-[#C8963C] text-xs font-medium">
                         On-chain
                       </span>
                     )}

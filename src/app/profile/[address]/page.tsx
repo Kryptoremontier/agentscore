@@ -42,7 +42,7 @@ export default function PublicProfilePage() {
         <div className="pt-24 pb-16">
           <div className="max-w-6xl mx-auto px-4 text-center py-20">
             <h1 className="text-2xl font-bold mb-3">Invalid Address</h1>
-            <p className="text-slate-400 mb-6">The wallet address provided is not valid.</p>
+            <p className="text-[#7A838D] mb-6">The wallet address provided is not valid.</p>
             <Link href="/agents" className="text-primary hover:text-primary/80 transition-colors">
               Back to Explorer
             </Link>
@@ -65,7 +65,7 @@ export default function PublicProfilePage() {
           <div className="flex items-center justify-between mb-6">
             <Link
               href="/agents"
-              className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+              className="flex items-center gap-2 text-sm text-[#7A838D] hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Explorer
@@ -135,7 +135,7 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
       case 'master': return 'from-purple-400 to-violet-600'
       case 'expert': return 'from-blue-400 to-cyan-600'
       case 'contributor': return 'from-emerald-400 to-green-600'
-      default: return 'from-slate-400 to-slate-600'
+      default: return 'from-[#7A838D] to-[#5A6370]'
     }
   }
 
@@ -183,12 +183,12 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
           </h1>
 
           {profile.bio && (
-            <p className="text-slate-400 mt-1 text-sm">{profile.bio}</p>
+            <p className="text-[#7A838D] mt-1 text-sm">{profile.bio}</p>
           )}
 
           {/* Address */}
           <div className="flex items-center gap-2 mt-3">
-            <code className="text-sm text-slate-500 font-mono">
+            <code className="text-sm text-[#7A838D] font-mono">
               {profile.address.slice(0, 6)}...{profile.address.slice(-4)}
             </code>
             <button
@@ -198,7 +198,7 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
             >
               {copied
                 ? <Check className="w-4 h-4 text-emerald-400" />
-                : <Copy className="w-4 h-4 text-slate-400" />
+                : <Copy className="w-4 h-4 text-[#7A838D]" />
               }
             </button>
             <a
@@ -208,7 +208,7 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
               className="p-1 rounded hover:bg-white/10 transition-colors"
               title="View on explorer"
             >
-              <ExternalLink className="w-4 h-4 text-slate-400" />
+              <ExternalLink className="w-4 h-4 text-[#7A838D]" />
             </a>
           </div>
 
@@ -220,7 +220,7 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
                   href={`https://twitter.com/${profile.twitter}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-slate-400 hover:text-white transition-colors"
+                  className="text-sm text-[#7A838D] hover:text-white transition-colors"
                 >
                   @{profile.twitter}
                 </a>
@@ -230,7 +230,7 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
                   href={`https://warpcast.com/${profile.farcaster}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-slate-400 hover:text-white transition-colors"
+                  className="text-sm text-[#7A838D] hover:text-white transition-colors"
                 >
                   /{profile.farcaster}
                 </a>
@@ -240,7 +240,7 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
                   href={profile.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-slate-400 hover:text-white transition-colors"
+                  className="text-sm text-[#7A838D] hover:text-white transition-colors"
                 >
                   {profile.website.replace(/^https?:\/\//, '')}
                 </a>
@@ -255,13 +255,13 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
                 <BadgeDisplay key={badge.id} badge={badge} size="sm" />
               ))}
               {profile.badges.length > 4 && (
-                <span className="text-xs text-slate-500">+{profile.badges.length - 4}</span>
+                <span className="text-xs text-[#7A838D]">+{profile.badges.length - 4}</span>
               )}
             </div>
           )}
 
           {/* Member since + activity */}
-          <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+          <div className="flex items-center gap-4 mt-3 text-xs text-[#7A838D]">
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
               Member for {profile.stats.daysActive} day{profile.stats.daysActive !== 1 ? 's' : ''}
@@ -277,17 +277,17 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
         <div className="flex gap-6 text-center shrink-0">
           <div>
             <div className="text-2xl font-bold font-mono">{profile.stats.totalAgentsRegistered}</div>
-            <div className="text-xs text-slate-500">Agents</div>
+            <div className="text-xs text-[#7A838D]">Agents</div>
           </div>
           <div>
             <div className="text-2xl font-bold font-mono text-emerald-400">
               {formatStaked(profile.stats.totalTrustStaked)}
             </div>
-            <div className="text-xs text-slate-500">tTRUST</div>
+            <div className="text-xs text-[#7A838D]">tTRUST</div>
           </div>
           <div>
             <div className="text-2xl font-bold font-mono">{profile.badges.length}</div>
-            <div className="text-xs text-slate-500">Badges</div>
+            <div className="text-xs text-[#7A838D]">Badges</div>
           </div>
         </div>
       </div>

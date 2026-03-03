@@ -710,17 +710,30 @@ function ClaimsPageContent() {
 
           {/* Header */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1 h-5 bg-[#C8963C] rounded-full" />
+              <span className="text-xs font-semibold text-[#C8963C] uppercase tracking-widest">
+                Live on Intuition Testnet
+              </span>
+            </div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold mb-1 flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl" style={{ background: 'rgba(56,182,255,0.12)', border: '1px solid rgba(56,182,255,0.25)', boxShadow: '0 0 12px rgba(56,182,255,0.15)' }}>
-                    <MessageSquare className="w-4.5 h-4.5" style={{ color: '#38B6FF' }} />
+                <h1 className="text-4xl md:text-5xl font-bold text-white mb-3 leading-tight">
+                  Claims
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] to-[#C9A84C]">
+                    {' '}Registry
                   </span>
-                  Claims Registry
                 </h1>
-                <p className="text-slate-400">On-chain relationship claims between Agents and Skills</p>
+                <p className="text-[#7A838D] text-lg max-w-2xl leading-relaxed">
+                  On-chain relationship claims between Agents and Skills.
+                  Stake <span className="text-[#B5BDC6] font-medium">tTRUST</span> to signal confidence.
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <div className="w-2 h-2 rounded-full bg-[#C8963C] animate-pulse" />
+                  <span className="text-xs text-[#7A838D]">GraphQL live feed</span>
+                </div>
               </div>
-              <Button onClick={() => setShowCreateModal(true)} className="glow-blue shrink-0">
+              <Button onClick={() => setShowCreateModal(true)} className="shrink-0" style={{ background: 'linear-gradient(135deg,#C8963C,#C9A84C)', color: '#0F1113', fontWeight: 600, border: 'none' }}>
                 + Create Claim
               </Button>
             </div>
@@ -728,13 +741,21 @@ function ClaimsPageContent() {
 
           {/* Search + Filters */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mb-6 space-y-3">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Search claims by subject..."
-              className="w-full px-4 py-3 glass rounded-xl border border-white/10 focus:ring-2 focus:ring-[#C8963C]/40 outline-none bg-transparent"
-            />
+            <div className="relative">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7A838D]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Search claims by subject, predicate, object..."
+                className="w-full pl-11 pr-4 py-3 bg-[#191C21] border border-white/12 rounded-xl text-white text-sm placeholder:text-[#7A838D] focus:border-[#C8963C]/60 focus:ring-1 focus:ring-[#C8963C]/20 outline-none transition-all"
+              />
+            </div>
             <div className="flex gap-2 flex-wrap items-center">
               {CLAIM_FILTERS.map(f => {
                 const FilterIcon = f.icon ? FILTER_ICON_MAP[f.icon] : null
@@ -743,17 +764,13 @@ function ClaimsPageContent() {
                   <button
                     key={f.value}
                     onClick={() => setFilterValue(f.value)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border"
-                    style={active ? {
-                      background: `${f.color ?? '#C8963C'}20`,
-                      borderColor: `${f.color ?? '#C8963C'}50`,
-                      color: f.color ?? '#C8963C',
-                    } : {
-                      borderColor: 'rgba(255,255,255,0.1)',
-                      color: '#7A838D',
-                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      active
+                        ? 'bg-[#1E2229] text-white border border-[#C8963C]/50'
+                        : 'text-[#B5BDC6] border border-white/[0.12] hover:text-white hover:bg-[#1E2229] hover:border-white/20'
+                    }`}
                   >
-                    {FilterIcon && <FilterIcon className="w-3 h-3" style={{ color: active ? (f.color ?? '#C8963C') : '#7A838D' }} />}
+                    {FilterIcon && <FilterIcon className="w-3 h-3" style={{ color: active ? '#C8963C' : '#7A838D' }} />}
                     {f.label}
                   </button>
                 )
@@ -761,18 +778,14 @@ function ClaimsPageContent() {
               <div className="flex-1" />
               <button
                 onClick={() => setShowOnlyOurs(v => !v)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border"
-                style={showOnlyOurs ? {
-                  background: 'rgba(56,182,255,0.12)',
-                  borderColor: 'rgba(56,182,255,0.4)',
-                  color: '#38B6FF',
-                } : {
-                  borderColor: 'rgba(255,255,255,0.1)',
-                  color: '#7A838D',
-                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                  showOnlyOurs
+                    ? 'bg-[#1E2229] text-[#C8963C] border-[#C8963C]/50'
+                    : 'text-[#B5BDC6] border-white/[0.12] hover:text-white hover:bg-[#1E2229] hover:border-white/20'
+                }`}
               >
                 {showOnlyOurs
-                  ? <><Layers className="w-3 h-3" style={{ color: '#38B6FF' }} /> Platform only</>
+                  ? <><Layers className="w-3 h-3" /> Platform only</>
                   : <><Globe className="w-3 h-3" /> All Intuition</>
                 }
               </button>
@@ -790,12 +803,12 @@ function ClaimsPageContent() {
             <div className="text-center py-16">
               <div className="flex justify-center mb-4">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'rgba(56,182,255,0.10)', border: '1px solid rgba(56,182,255,0.22)', boxShadow: '0 0 18px rgba(56,182,255,0.15)' }}>
-                  <MessageSquare className="w-7 h-7" style={{ color: '#38B6FF' }} />
+                  style={{ background: 'rgba(200,150,60,0.10)', border: '1px solid rgba(200,150,60,0.22)', boxShadow: '0 0 18px rgba(200,150,60,0.12)' }}>
+                  <MessageSquare className="w-7 h-7" style={{ color: '#C8963C' }} />
                 </div>
               </div>
               <p className="text-[#B5BDC6] mb-2">No claims found</p>
-              <p className="text-slate-500 text-sm mb-6">Be the first to create an on-chain relationship claim</p>
+              <p className="text-[#7A838D] text-sm mb-6">Be the first to create an on-chain relationship claim</p>
               <Button onClick={() => setShowCreateModal(true)}>+ Create First Claim</Button>
             </div>
           ) : (
@@ -834,9 +847,9 @@ function ClaimsPageContent() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <TrustTierBadge tier={tierCfg} size="sm" />
-                        <span className="text-xs text-slate-500">{claim.stakers_count ?? 0} stakers</span>
+                        <span className="text-xs text-[#7A838D]">{claim.stakers_count ?? 0} stakers</span>
                       </div>
-                      <span className={cn('text-sm font-bold font-mono', score >= 70 ? 'text-emerald-400' : score >= 40 ? 'text-amber-400' : 'text-slate-400')}>
+                      <span className={cn('text-sm font-bold font-mono', score >= 70 ? 'text-emerald-400' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>
                         {score}
                       </span>
                     </div>
@@ -1475,7 +1488,7 @@ function ClaimsPageContent() {
                   const opsPct = 100 - supportPct
                   const netStake = Number(supportWei - opposeWei) / 1e18
                   const levelColors: Record<string, { bg: string; text: string; border: string }> = {
-                    excellent: { bg: '#06b6d420', text: '#06b6d4', border: '#06b6d440' },
+                    excellent: { bg: '#2ECC7120', text: '#06b6d4', border: '#2ECC7140' },
                     good:      { bg: '#22c55e20', text: '#22c55e', border: '#22c55e40' },
                     moderate:  { bg: '#eab30820', text: '#eab308', border: '#eab30840' },
                     low:       { bg: '#f9731620', text: '#f97316', border: '#f9731640' },
@@ -1964,13 +1977,13 @@ function ClaimsPageContent() {
               <div className="glass-card rounded-2xl p-6">
                 <h3 className="text-lg font-bold mb-4">Confirm Transaction</h3>
                 <dl className="space-y-2 text-sm mb-6">
-                  <div className="flex justify-between"><dt className="text-slate-400">Action</dt><dd className="capitalize">{pendingVote.type.replace('_', ' ')}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Claim</dt><dd className="text-xs truncate max-w-[200px]">{formatClaimText(pendingVote.claim)}</dd></div>
-                  {pendingVote.amount && <div className="flex justify-between"><dt className="text-slate-400">Amount</dt><dd className="font-mono">{pendingVote.amount} tTRUST</dd></div>}
+                  <div className="flex justify-between"><dt className="text-[#7A838D]">Action</dt><dd className="capitalize">{pendingVote.type.replace('_', ' ')}</dd></div>
+                  <div className="flex justify-between"><dt className="text-[#7A838D]">Claim</dt><dd className="text-xs truncate max-w-[200px]">{formatClaimText(pendingVote.claim)}</dd></div>
+                  {pendingVote.amount && <div className="flex justify-between"><dt className="text-[#7A838D]">Amount</dt><dd className="font-mono">{pendingVote.amount} tTRUST</dd></div>}
                 </dl>
                 <div className="flex gap-3">
                   <Button variant="outline" onClick={() => setShowConfirm(false)} className="flex-1">Cancel</Button>
-                  <Button onClick={executeVote} className="flex-1 glow-blue">Confirm</Button>
+                  <Button onClick={executeVote} className="flex-1 shrink-0">Confirm</Button>
                 </div>
               </div>
             </motion.div>

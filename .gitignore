@@ -117,6 +117,14 @@ FINAL_STATUS.md
 *.orig
 
 # ═══════════════════════════════════════════
+# INTERNAL DOCS (not for public repo)
+# ═══════════════════════════════════════════
+PLATFORM_SHARES_LOGIC.md
+PLATFORM_*.md
+DEV_*.md
+*_NOTES.md
+
+# ═══════════════════════════════════════════
 # PROJECT CONTEXT (private — not for GitHub)
 # ═══════════════════════════════════════════
 .context/

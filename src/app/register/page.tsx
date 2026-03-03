@@ -150,7 +150,7 @@ export default function RegisterPage() {
                 'flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all',
                 activeTab === 'agent'
                   ? 'bg-white/15 text-white shadow'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  : 'text-[#7A838D] hover:text-white hover:bg-white/5'
               )}
             >
               🤖 Agent
@@ -161,7 +161,7 @@ export default function RegisterPage() {
                 'flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all',
                 activeTab === 'skill'
                   ? 'bg-white/15 text-white shadow'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  : 'text-[#7A838D] hover:text-white hover:bg-white/5'
               )}
             >
               ⚡ Skill
