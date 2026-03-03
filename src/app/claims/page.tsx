@@ -30,6 +30,29 @@ import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 import { CreateClaimForm } from '@/components/claims/CreateClaimForm'
 import { PREDICATES, getPredicateConfig, getAtomName, getAtomType, formatClaimText, type Claim } from '@/types/claim'
 import { cn } from '@/lib/cn'
+import {
+  Bot, Zap, MessageSquare, Globe, Layers,
+  Flame, HeartHandshake, TrendingUp, Link as LinkIcon,
+  Sparkles, ArrowLeftRight, Swords, ShieldCheck, BadgeCheck,
+  type LucideProps,
+} from 'lucide-react'
+
+// Maps predicate icon name string → Lucide component
+const PRED_ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
+  Flame, HeartHandshake, TrendingUp, Link: LinkIcon,
+  Sparkles, ArrowLeftRight, Swords, ShieldCheck, BadgeCheck, MessageSquare,
+}
+
+function PredicateIcon({ name, color, size = 10 }: { name?: string; color?: string; size?: number }) {
+  const Icon = PRED_ICON_MAP[name ?? ''] ?? MessageSquare
+  return <Icon className={`w-${size} h-${size} inline-block mr-1 align-middle`} style={{ color: color ?? '#9ca3af' }} />
+}
+
+function AtomTypeIcon({ type, color }: { type: 'agent' | 'skill' | 'unknown'; color?: string }) {
+  if (type === 'agent') return <Bot className="w-3 h-3 inline-block mr-1 align-middle" style={{ color: color ?? '#C8963C' }} />
+  if (type === 'skill') return <Zap className="w-3 h-3 inline-block mr-1 align-middle" style={{ color: color ?? '#2EE6D6' }} />
+  return <Layers className="w-3 h-3 inline-block mr-1 align-middle" style={{ color: color ?? '#7A838D' }} />
+}
 
 const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
 
@@ -79,14 +102,18 @@ function tripleToDisplayClaim(t: GraphQLTriple): Claim {
 }
 
 const CLAIM_FILTERS = [
-  { label: 'All', value: 'all' },
-  { label: '🔥 Positive', value: 'positive' },
-  { label: '⚔️ Comparative', value: 'comparative' },
-  { label: '🔗 Neutral', value: 'neutral' },
-  { label: '🤖 Agent-Agent', value: 'agent-agent' },
-  { label: '⚡ Skill-Skill', value: 'skill-skill' },
-  { label: '🤖⚡ Mixed', value: 'mixed' },
+  { label: 'All', value: 'all', icon: null, color: null },
+  { label: 'Positive', value: 'positive', icon: 'Flame', color: '#f97316' },
+  { label: 'Comparative', value: 'comparative', icon: 'Swords', color: '#ef4444' },
+  { label: 'Neutral', value: 'neutral', icon: 'Link', color: '#3b82f6' },
+  { label: 'Agent-Agent', value: 'agent-agent', icon: 'Bot', color: '#C8963C' },
+  { label: 'Skill-Skill', value: 'skill-skill', icon: 'Zap', color: '#2EE6D6' },
+  { label: 'Mixed', value: 'mixed', icon: 'Layers', color: '#a855f7' },
 ]
+
+const FILTER_ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
+  Flame, Swords, Link: LinkIcon, Bot, Zap, Layers,
+}
 
 export default function ClaimsPage() {
   return (
@@ -683,7 +710,12 @@ function ClaimsPageContent() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold mb-1">💬 Claims Registry</h1>
+                <h1 className="text-3xl font-bold mb-1 flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl" style={{ background: 'rgba(56,182,255,0.12)', border: '1px solid rgba(56,182,255,0.25)', boxShadow: '0 0 12px rgba(56,182,255,0.15)' }}>
+                    <MessageSquare className="w-4.5 h-4.5" style={{ color: '#38B6FF' }} />
+                  </span>
+                  Claims Registry
+                </h1>
                 <p className="text-slate-400">On-chain relationship claims between Agents and Skills</p>
               </div>
               <Button onClick={() => setShowCreateModal(true)} className="glow-blue shrink-0">
@@ -702,31 +734,45 @@ function ClaimsPageContent() {
               className="w-full px-4 py-3 glass rounded-xl border border-white/10 focus:ring-2 focus:ring-primary outline-none bg-transparent"
             />
             <div className="flex gap-2 flex-wrap items-center">
-              {CLAIM_FILTERS.map(f => (
-                <button
-                  key={f.value}
-                  onClick={() => setFilterValue(f.value)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
-                    filterValue === f.value
-                      ? 'bg-primary/20 border-primary/40 text-white'
-                      : 'border-white/10 text-slate-400 hover:text-white hover:bg-white/5'
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
+              {CLAIM_FILTERS.map(f => {
+                const FilterIcon = f.icon ? FILTER_ICON_MAP[f.icon] : null
+                const active = filterValue === f.value
+                return (
+                  <button
+                    key={f.value}
+                    onClick={() => setFilterValue(f.value)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border"
+                    style={active ? {
+                      background: `${f.color ?? '#C8963C'}20`,
+                      borderColor: `${f.color ?? '#C8963C'}50`,
+                      color: f.color ?? '#C8963C',
+                    } : {
+                      borderColor: 'rgba(255,255,255,0.1)',
+                      color: '#7A838D',
+                    }}
+                  >
+                    {FilterIcon && <FilterIcon className="w-3 h-3" style={{ color: active ? (f.color ?? '#C8963C') : '#7A838D' }} />}
+                    {f.label}
+                  </button>
+                )
+              })}
               <div className="flex-1" />
               <button
                 onClick={() => setShowOnlyOurs(v => !v)}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
-                  showOnlyOurs
-                    ? 'bg-[#1f6feb20] border-[#1f6feb50] text-[#58a6ff]'
-                    : 'border-white/10 text-slate-400 hover:text-white hover:bg-white/5'
-                )}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border"
+                style={showOnlyOurs ? {
+                  background: 'rgba(56,182,255,0.12)',
+                  borderColor: 'rgba(56,182,255,0.4)',
+                  color: '#38B6FF',
+                } : {
+                  borderColor: 'rgba(255,255,255,0.1)',
+                  color: '#7A838D',
+                }}
               >
-                {showOnlyOurs ? '🔵 Platform only' : '🌐 All Intuition'}
+                {showOnlyOurs
+                  ? <><Layers className="w-3 h-3" style={{ color: '#38B6FF' }} /> Platform only</>
+                  : <><Globe className="w-3 h-3" /> All Intuition</>
+                }
               </button>
             </div>
           </motion.div>
@@ -740,8 +786,13 @@ function ClaimsPageContent() {
             <div className="text-center py-16 text-red-400">{error}</div>
           ) : filteredClaims.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-4xl mb-4">💬</p>
-              <p className="text-slate-400 mb-2">No claims found</p>
+              <div className="flex justify-center mb-4">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'rgba(56,182,255,0.10)', border: '1px solid rgba(56,182,255,0.22)', boxShadow: '0 0 18px rgba(56,182,255,0.15)' }}>
+                  <MessageSquare className="w-7 h-7" style={{ color: '#38B6FF' }} />
+                </div>
+              </div>
+              <p className="text-[#B5BDC6] mb-2">No claims found</p>
               <p className="text-slate-500 text-sm mb-6">Be the first to create an on-chain relationship claim</p>
               <Button onClick={() => setShowCreateModal(true)}>+ Create First Claim</Button>
             </div>
@@ -764,14 +815,17 @@ function ClaimsPageContent() {
                   >
                     {/* Triple display */}
                     <div className="flex flex-wrap gap-1.5 mb-3">
-                      <span className="px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: sc.bg, border: `1px solid ${sc.border}`, color: sc.text }}>
-                        {claim.subject.type === 'agent' ? '🤖' : '⚡'} {getAtomName(claim.subject.label)}
+                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: sc.bg, border: `1px solid ${sc.border}`, color: sc.text }}>
+                        <AtomTypeIcon type={claim.subject.type} color={sc.text} />
+                        {getAtomName(claim.subject.label)}
                       </span>
-                      <span className="px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: (predCfg?.color ?? '#6b7280') + '15', border: `1px solid ${(predCfg?.color ?? '#6b7280')}30`, color: predCfg?.color ?? '#9ca3af' }}>
-                        {predCfg?.icon ?? '💬'} {claim.predicate.label}
+                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: (predCfg?.color ?? '#6b7280') + '15', border: `1px solid ${(predCfg?.color ?? '#6b7280')}30`, color: predCfg?.color ?? '#9ca3af' }}>
+                        <PredicateIcon name={predCfg?.icon} color={predCfg?.color} size={3} />
+                        {claim.predicate.label}
                       </span>
-                      <span className="px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: oc.bg, border: `1px solid ${oc.border}`, color: oc.text }}>
-                        {claim.object.type === 'agent' ? '🤖' : '⚡'} {getAtomName(claim.object.label)}
+                      <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: oc.bg, border: `1px solid ${oc.border}`, color: oc.text }}>
+                        <AtomTypeIcon type={claim.object.type} color={oc.text} />
+                        {getAtomName(claim.object.label)}
                       </span>
                     </div>
                     {/* Stats */}
@@ -848,14 +902,17 @@ function ClaimsPageContent() {
                         const oc = atomColor(selectedClaim.object.type)
                         const predCfg = selectedClaim.predicate.config
                         return (<>
-                          <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: sc.bg, border: `1px solid ${sc.border}`, color: sc.text }}>
-                            {selectedClaim.subject.type === 'agent' ? '🤖' : '⚡'} {getAtomName(selectedClaim.subject.label)}
+                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: sc.bg, border: `1px solid ${sc.border}`, color: sc.text }}>
+                            <AtomTypeIcon type={selectedClaim.subject.type} color={sc.text} />
+                            {getAtomName(selectedClaim.subject.label)}
                           </span>
-                          <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: (predCfg?.color ?? '#6b7280') + '15', border: `1px solid ${(predCfg?.color ?? '#6b7280')}30`, color: predCfg?.color ?? '#9ca3af' }}>
-                            {predCfg?.icon ?? '💬'} {selectedClaim.predicate.label}
+                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: (predCfg?.color ?? '#6b7280') + '15', border: `1px solid ${(predCfg?.color ?? '#6b7280')}30`, color: predCfg?.color ?? '#9ca3af' }}>
+                            <PredicateIcon name={predCfg?.icon} color={predCfg?.color} size={3} />
+                            {selectedClaim.predicate.label}
                           </span>
-                          <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: oc.bg, border: `1px solid ${oc.border}`, color: oc.text }}>
-                            {selectedClaim.object.type === 'agent' ? '🤖' : '⚡'} {getAtomName(selectedClaim.object.label)}
+                          <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: oc.bg, border: `1px solid ${oc.border}`, color: oc.text }}>
+                            <AtomTypeIcon type={selectedClaim.object.type} color={oc.text} />
+                            {getAtomName(selectedClaim.object.label)}
                           </span>
                         </>)
                       })()}
