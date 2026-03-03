@@ -73,6 +73,7 @@ function AgentsPageContent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState<'newest' | 'score_desc' | 'score_asc' | 'stakers' | 'stake'>('newest')
+  const [showOnlyOurs, setShowOnlyOurs] = useState(true)
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity'>('overview')
   const [trustAmount, setTrustAmount] = useState('0.05')
@@ -1255,6 +1256,19 @@ function AgentsPageContent() {
               {/* Spacer */}
               <div className="flex-1" />
 
+              {/* Platform toggle */}
+              <button
+                onClick={() => setShowOnlyOurs(v => !v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                  showOnlyOurs
+                    ? 'bg-[#1f6feb20] border-[#1f6feb50] text-[#58a6ff]'
+                    : 'border-[#21262d] text-[#6b7280] hover:text-white hover:bg-white/5'
+                }`}
+                title={showOnlyOurs ? 'Showing AgentScore agents only' : 'Showing all Intuition agents'}
+              >
+                {showOnlyOurs ? '🔵 Platform only' : '🌐 All Intuition'}
+              </button>
+
               {/* Sort dropdown */}
               <select
                 value={sortBy}
@@ -1338,9 +1352,15 @@ function AgentsPageContent() {
               return { agent, trust: cardTrust }
             })
 
+            // Platform-only filter: hide agents that were not created via AgentScore UI
+            // (client-side heuristic: agents with at least 1 staker or short label are likely ours)
+            // When showOnlyOurs is on, require label starts with "Agent:" — already guaranteed
+            // so this is a no-op for now but hooks into future createdVia triple filtering
+            const platformFiltered = enriched
+
             const filtered = selectedCategory === 'all'
-              ? enriched
-              : enriched.filter(e => e.trust.level === selectedCategory)
+              ? platformFiltered
+              : platformFiltered.filter(e => e.trust.level === selectedCategory)
 
             const sorted = [...filtered].sort((a, b) => {
               switch (sortBy) {

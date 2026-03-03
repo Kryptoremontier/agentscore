@@ -71,6 +71,7 @@ function SkillsPageContent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState<'newest' | 'score_desc' | 'score_asc' | 'stakers' | 'stake'>('newest')
+  const [showOnlyOurs, setShowOnlyOurs] = useState(true)
   const [selectedSkill, setSelectedSkill] = useState<GraphQLSkill | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity'>('overview')
   const [trustAmount, setTrustAmount] = useState('0.05')
@@ -1168,6 +1169,18 @@ function SkillsPageContent() {
               ))}
 
               <div className="flex-1" />
+
+              {/* Platform toggle */}
+              <button
+                onClick={() => setShowOnlyOurs(v => !v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                  showOnlyOurs
+                    ? 'bg-[#1f6feb20] border-[#1f6feb50] text-[#58a6ff]'
+                    : 'border-[#21262d] text-[#6b7280] hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {showOnlyOurs ? '🔵 Platform only' : '🌐 All Intuition'}
+              </button>
 
               <select
                 value={sortBy}

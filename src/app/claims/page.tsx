@@ -8,6 +8,12 @@ import { parseEther, getAddress } from 'viem'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
+import {
+  createWriteConfig,
+  depositToVault,
+  redeemFromVault,
+  getVaultSupply,
+} from '@/lib/intuition'
 import { calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
 import { calculateWeightedTrust } from '@/lib/reputation-decay'
@@ -112,6 +118,7 @@ function ClaimsPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterValue, setFilterValue] = useState('all')
+  const [showOnlyOurs, setShowOnlyOurs] = useState(true)
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity'>('overview')
@@ -291,7 +298,6 @@ function ClaimsPageContent() {
       const posPromise = fetchAllPositions(termId, counterTermId)
       if (publicClient) {
         try {
-          const { getVaultSupply } = await import('@/lib/intuition')
           const [sup, opp] = await Promise.all([
             getVaultSupply(publicClient, termId),
             counterTermId ? getVaultSupply(publicClient, counterTermId) : Promise.resolve(0),
@@ -428,7 +434,6 @@ function ClaimsPageContent() {
       const { config: wagmiConfig } = await import('@/lib/wagmi')
       const freshWalletClient = walletClient ?? await getWalletClient(wagmiConfig)
       if (!freshWalletClient) throw new Error('Wallet client unavailable — please reconnect')
-      const { createWriteConfig, depositToVault, redeemFromVault } = await import('@/lib/intuition')
       const cfg = createWriteConfig(freshWalletClient, publicClient)
 
       if (pendingVote.type === 'redeem_trust' || pendingVote.type === 'redeem_distrust') {
@@ -444,17 +449,30 @@ function ClaimsPageContent() {
       } else if (pendingVote.type === 'trust') {
         await depositToVault(cfg, pendingVote.claim.term_id as `0x${string}`, parseAmount(pendingVote.amount))
       } else if (pendingVote.type === 'distrust') {
-        if (!pendingVote.counterTermId) {
-          // Need to create triple first (Oppose vault)
+        // For claim triples, the counter_term_id (Oppose vault) is created automatically
+        // by the protocol when the triple is created. Never call createTrustTriple here.
+        let counterTermId = pendingVote.counterTermId
+        if (!counterTermId) {
+          // Look up counter_term_id from the indexed triple data
           setCreatingTriple(true)
-          const { createWriteConfig: cwc, createTrustTriple } = await import('@/lib/intuition')
-          const triple = await createTrustTriple(pendingVote.claim.term_id as `0x${string}`, cfg)
-          setClaimTriple({ termId: triple.termId, counterTermId: triple.counterTermId, loading: false })
-          setCreatingTriple(false)
-          await depositToVault(cfg, triple.counterTermId, parseAmount(pendingVote.amount))
-        } else {
-          await depositToVault(cfg, pendingVote.counterTermId as `0x${string}`, parseAmount(pendingVote.amount))
+          try {
+            const res = await fetch(GRAPHQL_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                query: `query GetCounter($id: String!) { triples(where: { term_id: { _eq: $id } } limit: 1) { counter_term_id } }`,
+                variables: { id: pendingVote.claim.term_id },
+              }),
+            })
+            const data = await res.json()
+            counterTermId = data.data?.triples?.[0]?.counter_term_id ?? null
+          } catch { /* ignore */ } finally {
+            setCreatingTriple(false)
+          }
         }
+        if (!counterTermId) throw new Error('Oppose vault not found for this claim. The triple may still be indexing — please try again in a few seconds.')
+        setClaimTriple(prev => ({ ...prev, counterTermId }))
+        await depositToVault(cfg, counterTermId as `0x${string}`, parseAmount(pendingVote.amount))
       }
 
       setVoteStatus(prev => ({ ...prev, [key]: 'success' }))
@@ -526,7 +544,7 @@ function ClaimsPageContent() {
               placeholder="Search claims by subject..."
               className="w-full px-4 py-3 glass rounded-xl border border-white/10 focus:ring-2 focus:ring-primary outline-none bg-transparent"
             />
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               {CLAIM_FILTERS.map(f => (
                 <button
                   key={f.value}
@@ -541,6 +559,18 @@ function ClaimsPageContent() {
                   {f.label}
                 </button>
               ))}
+              <div className="flex-1" />
+              <button
+                onClick={() => setShowOnlyOurs(v => !v)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
+                  showOnlyOurs
+                    ? 'bg-[#1f6feb20] border-[#1f6feb50] text-[#58a6ff]'
+                    : 'border-white/10 text-slate-400 hover:text-white hover:bg-white/5'
+                )}
+              >
+                {showOnlyOurs ? '🔵 Platform only' : '🌐 All Intuition'}
+              </button>
             </div>
           </motion.div>
 
@@ -675,7 +705,12 @@ function ClaimsPageContent() {
                       })()}
                     </div>
                     <p className="text-xs text-slate-500">
-                      {selectedClaim.creator?.label ? `by ${selectedClaim.creator.label}` : 'Unknown creator'} · {new Date(selectedClaim.created_at).toLocaleDateString()}
+                      {selectedClaim.creator?.id ? (
+                        <><a href={`/profile/${selectedClaim.creator.id}`} className="hover:text-[#58a6ff] transition-colors">
+                          {selectedClaim.creator.label || selectedClaim.creator.id.slice(0, 10)}
+                        </a> · </>
+                      ) : selectedClaim.creator?.label ? `by ${selectedClaim.creator.label} · ` : ''}
+                      {new Date(selectedClaim.created_at).toLocaleDateString()}
                     </p>
                   </div>
                   <button onClick={() => setSelectedClaim(null)} className="ml-4 p-2 rounded-lg hover:bg-white/10 transition-colors shrink-0">
@@ -893,13 +928,18 @@ function ClaimsPageContent() {
                     ) : claimSignals.map((sig: any) => {
                       const delta = Number(sig.delta || '0')
                       const isPos = delta > 0
+                      const accountLabel = sig.account?.label || sig.account_id?.slice(0, 10) + '...'
                       return (
                         <div key={sig.id} className="flex items-center gap-3 p-3 glass rounded-lg text-xs">
                           <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0', isPos ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400')}>
                             {isPos ? '▲' : '▼'}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-slate-300 truncate">{sig.account?.label || sig.account_id?.slice(0, 10) + '...'}</p>
+                            {sig.account_id ? (
+                              <a href={`/profile/${sig.account_id}`} className="text-slate-300 hover:text-[#58a6ff] truncate block transition-colors">{accountLabel}</a>
+                            ) : (
+                              <p className="text-slate-300 truncate">{accountLabel}</p>
+                            )}
                             <p className="text-slate-500">{new Date(sig.created_at).toLocaleDateString()}</p>
                           </div>
                           <span className={cn('font-mono font-bold', isPos ? 'text-emerald-400' : 'text-red-400')}>

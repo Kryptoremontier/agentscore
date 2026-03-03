@@ -128,26 +128,11 @@ export async function createAgentAtom(
   metadata: AgentMetadata,
   initialDeposit?: bigint
 ) {
-  // For now, create a simple string atom with agent name
-  // This avoids IPFS pinning requirement
   const atomText = `Agent: ${metadata.name} - ${metadata.description}`
-
-  return await createAtomFromString(config, atomText, initialDeposit)
-
-  /* TODO: Re-enable when Pinata JWT is configured in .env.local
-  const thing = {
-    '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: metadata.name,
-    description: metadata.description,
-    applicationCategory: metadata.category,
-    ...(metadata.website && { url: metadata.website }),
-    ...(metadata.image && { image: metadata.image }),
-    ...(metadata.tags && { keywords: metadata.tags.join(', ') }),
-  }
-
-  return await createAtomFromThing(config, thing, initialDeposit)
-  */
+  const result = await createAtomFromString(config, atomText, initialDeposit)
+  const termId = result?.state?.termId
+  if (termId) void tagCreatedVia(config, termId)
+  return result
 }
 
 /**
@@ -162,7 +147,10 @@ export async function createSkillAtom(
   initialDeposit?: bigint
 ) {
   const atomText = `Skill: ${metadata.name} - ${metadata.description}`
-  return await createAtomFromString(config, atomText, initialDeposit)
+  const result = await createAtomFromString(config, atomText, initialDeposit)
+  const termId = result?.state?.termId
+  if (termId) void tagCreatedVia(config, termId)
+  return result
 }
 
 // ============================================================================
@@ -517,6 +505,69 @@ export async function distrustAgent(
 }
 
 // ============================================================================
+// App-Scoping — createdVia AgentScore
+// ============================================================================
+
+/**
+ * Platform identity atoms for app-scoping.
+ * Call bootstrapPlatformAtoms() once on first use, then these are cached.
+ * After first mainnet deploy, hardcode the resulting term_ids here.
+ */
+export let AGENTSCORE_ATOM_TERM_ID: string | null = null
+export let CREATED_VIA_TERM_ID: string | null = null
+
+const AGENTSCORE_PLATFORM_LABEL = 'AgentScore'
+const CREATED_VIA_PREDICATE_LABEL = 'createdVia'
+
+/**
+ * Bootstrap the platform identity atoms on Intuition.
+ * Creates "AgentScore" and "createdVia" atoms if they don't exist.
+ * Safe to call multiple times — idempotent.
+ */
+export async function bootstrapPlatformAtoms(cfg: WriteConfig): Promise<void> {
+  if (!AGENTSCORE_ATOM_TERM_ID) {
+    AGENTSCORE_ATOM_TERM_ID = await findOrCreateAtom(cfg, AGENTSCORE_PLATFORM_LABEL)
+  }
+  if (!CREATED_VIA_TERM_ID) {
+    CREATED_VIA_TERM_ID = await findOrCreateAtom(cfg, CREATED_VIA_PREDICATE_LABEL)
+  }
+}
+
+/**
+ * Tag a newly created atom or triple with [newTermId] — [createdVia] — [AgentScore].
+ * Fire-and-forget — never throws or blocks the main creation flow.
+ */
+async function tagCreatedVia(cfg: WriteConfig, newTermId: string): Promise<void> {
+  try {
+    if (!AGENTSCORE_ATOM_TERM_ID || !CREATED_VIA_TERM_ID) {
+      await bootstrapPlatformAtoms(cfg)
+    }
+    if (!AGENTSCORE_ATOM_TERM_ID || !CREATED_VIA_TERM_ID) return
+
+    // Check if tag already exists
+    const res = await fetch(INTUITION_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `{ triples(where: { subject_id: { _eq: "${newTermId}" }, predicate_id: { _eq: "${CREATED_VIA_TERM_ID}" }, object_id: { _eq: "${AGENTSCORE_ATOM_TERM_ID}" } }, limit: 1) { term_id } }`,
+      }),
+    })
+    const data = await res.json()
+    if (data.data?.triples?.length > 0) return // already tagged
+
+    await createTriple(
+      cfg,
+      newTermId as `0x${string}`,
+      CREATED_VIA_TERM_ID as `0x${string}`,
+      AGENTSCORE_ATOM_TERM_ID as `0x${string}`,
+      DEFAULT_ATOM_DEPOSIT
+    )
+  } catch (err) {
+    console.warn('[tagCreatedVia] Failed to tag atom — continuing:', err)
+  }
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 
@@ -686,10 +737,13 @@ export async function createTripleClaim(
     const data = await res.json()
     const triple = data.data?.triples?.[0]
     if (triple?.term_id) {
-      return {
+      const result = {
         termId: triple.term_id as `0x${string}`,
         counterTermId: triple.counter_term_id as `0x${string}`,
       }
+      // Tag the new triple as created via AgentScore (fire-and-forget)
+      void tagCreatedVia(cfg, triple.term_id)
+      return result
     }
   }
   throw new Error('Claim created on-chain but not yet indexed — please refresh in a few seconds')
