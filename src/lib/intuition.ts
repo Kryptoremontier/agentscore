@@ -6,26 +6,240 @@
 
 import {
   createAtomFromString,
-  createAtomFromThing,
   createAtomFromEthereumAccount,
-  createTripleStatement,
-  deposit,
-  redeem,
   getAtomDetails,
   getTripleDetails,
-  globalSearch,
   getMultiVaultAddressFromChainId,
-  type GlobalSearchOptions,
-  multiVaultDeposit,
-  multiVaultRedeem,
 } from '@0xintuition/sdk'
-import { type PublicClient, type WalletClient, parseEther } from 'viem'
+import { type PublicClient, type WalletClient, parseEther, toHex, parseEventLogs } from 'viem'
 import { intuitionTestnet, MultiVaultAbi } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
 import {
   TRIPLE_SUBJECT_OR_STR,
   TRIPLE_OBJECT_OR_STR,
 } from './gql-filters'
+
+// ============================================================================
+// Fee Proxy
+// ============================================================================
+
+/**
+ * IntuitionFeeProxy deployed on Intuition Testnet.
+ * Routes deposits through the proxy which collects platform fees atomically.
+ */
+const FEE_PROXY_ADDRESS = '0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41' as const
+
+// ============================================================================
+// MultiVault Approval for FeeProxy
+// ============================================================================
+
+/**
+ * MultiVault requires users to approve FeeProxy for DEPOSIT operations before
+ * any FeeProxy-routed deposit/createAtoms/createTriples call.
+ *
+ * ApprovalTypes enum: NONE=0, DEPOSIT=1, REDEMPTION=2, BOTH=3
+ *
+ * We cache the approval in localStorage per wallet address so the user only
+ * needs to sign once per browser/device.
+ */
+const LS_KEY_FEE_PROXY_APPROVED = 'agentscore_feeproxy_approved'
+
+function isFeeProxyApproved(userAddress: string): boolean {
+  if (typeof window === 'undefined') return false
+  return localStorage.getItem(`${LS_KEY_FEE_PROXY_APPROVED}_${userAddress.toLowerCase()}`) === '1'
+}
+
+function cacheFeeProxyApproved(userAddress: string): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`${LS_KEY_FEE_PROXY_APPROVED}_${userAddress.toLowerCase()}`, '1')
+  }
+}
+
+/**
+ * Ensure user has approved FeeProxy for DEPOSIT on MultiVault.
+ * Idempotent: no-op if already approved (cached in localStorage).
+ * Must be called before any FeeProxy operation that involves deposits.
+ */
+export async function ensureFeeProxyApproved(config: WriteConfig): Promise<void> {
+  const address = config.walletClient.account!.address
+  if (isFeeProxyApproved(address)) return
+
+  const hash = await config.walletClient.writeContract({
+    address: config.address, // MultiVault
+    abi: MultiVaultAbi,
+    functionName: 'approve',
+    args: [FEE_PROXY_ADDRESS, 1], // 1 = DEPOSIT approval
+    account: config.walletClient.account!,
+    chain: config.walletClient.chain ?? intuitionTestnet,
+  })
+
+  await config.publicClient.waitForTransactionReceipt({ hash })
+  cacheFeeProxyApproved(address)
+}
+
+/** Fixed fee per deposit in wei (matches contract deployment: 0.1 tTRUST) */
+const FEE_PROXY_FIXED_FEE = parseEther('0.1')
+
+/** Percentage fee in bps (matches contract deployment: 250 = 2.5%) */
+const FEE_PROXY_PERCENTAGE_BPS = 250n
+
+/** Full FeeProxy ABI covering all operations we use */
+const FeeProxyAbi = [
+  {
+    name: 'deposit',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'receiver', type: 'address' },
+      { name: 'termId', type: 'bytes32' },
+      { name: 'curveId', type: 'uint256' },
+      { name: 'minShares', type: 'uint256' },
+    ],
+    outputs: [{ name: 'shares', type: 'uint256' }],
+  },
+  {
+    name: 'createAtoms',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'receiver', type: 'address' },
+      { name: 'data', type: 'bytes[]' },
+      { name: 'assets', type: 'uint256[]' },
+      { name: 'curveId', type: 'uint256' },
+    ],
+    outputs: [{ name: 'atomIds', type: 'bytes32[]' }],
+  },
+  {
+    name: 'createTriples',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'receiver', type: 'address' },
+      { name: 'subjectIds', type: 'bytes32[]' },
+      { name: 'predicateIds', type: 'bytes32[]' },
+      { name: 'objectIds', type: 'bytes32[]' },
+      { name: 'assets', type: 'uint256[]' },
+      { name: 'curveId', type: 'uint256' },
+    ],
+    outputs: [{ name: 'tripleIds', type: 'bytes32[]' }],
+  },
+  {
+    name: 'getAtomCost',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'getTripleCost',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const
+
+/**
+ * Calculate total value to send to FeeProxy.deposit() so that exactly
+ * `depositAmount` reaches MultiVault after fees are deducted.
+ *
+ * Formula (inverse of proxy's fee extraction):
+ *   totalValue = depositAmount * (10000 + percentage) / 10000 + fixedFee
+ */
+function calcFeeProxyValue(depositAmount: bigint): bigint {
+  return (depositAmount * (10000n + FEE_PROXY_PERCENTAGE_BPS)) / 10000n + FEE_PROXY_FIXED_FEE
+}
+
+/**
+ * Calculate fee for FeeProxy.createAtoms / createTriples.
+ * Direct formula (not inverse): fixedFee * depositCount + totalDeposit * bps / 10000
+ */
+function calcCreationFee(depositCount: bigint, totalDeposit: bigint): bigint {
+  return FEE_PROXY_FIXED_FEE * depositCount + (totalDeposit * FEE_PROXY_PERCENTAGE_BPS) / 10000n
+}
+
+/**
+ * Internal: create a single atom via FeeProxy in one transaction.
+ * Returns { transactionHash, state: { termId } } matching the SDK shape.
+ *
+ * Requires prior MultiVault.approve(FEE_PROXY_ADDRESS, 1) — handled by
+ * ensureFeeProxyApproved() which must be called before this function.
+ */
+async function createAtomViaProxy(
+  config: WriteConfig,
+  label: string,
+  initialDeposit: bigint = DEFAULT_ATOM_DEPOSIT
+): Promise<{ transactionHash: `0x${string}`; state: { termId: `0x${string}` } }> {
+  const receiver = config.walletClient.account!.address
+  const atomData = toHex(label) // UTF-8 → hex bytes (same encoding as SDK)
+
+  const atomCost = await config.publicClient.readContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'getAtomCost',
+  }) as bigint
+
+  const depositCount = initialDeposit > 0n ? 1n : 0n
+  const fee = calcCreationFee(depositCount, initialDeposit)
+  const totalValue = atomCost + initialDeposit + fee
+
+  const hash = await config.walletClient.writeContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'createAtoms',
+    args: [receiver, [atomData], [initialDeposit], 1n],
+    value: totalValue,
+    account: config.walletClient.account!,
+    chain: config.walletClient.chain ?? intuitionTestnet,
+  })
+
+  const receipt = await config.publicClient.waitForTransactionReceipt({ hash })
+
+  if (receipt.status === 'reverted') {
+    throw new Error('Transaction reverted. Check your wallet balance and try again.')
+  }
+
+  const logs = parseEventLogs({ abi: MultiVaultAbi, eventName: 'AtomCreated', logs: receipt.logs, strict: false })
+  const termId = logs[0]?.args?.termId
+  if (!termId) throw new Error('Atom created but termId not found in logs')
+
+  return { transactionHash: hash, state: { termId: termId as `0x${string}` } }
+}
+
+/**
+ * Internal: create a single triple via FeeProxy in one transaction.
+ */
+async function createTripleViaProxy(
+  config: WriteConfig,
+  subjectId: `0x${string}`,
+  predicateId: `0x${string}`,
+  objectId: `0x${string}`,
+  depositAmount: bigint
+): Promise<void> {
+  const receiver = config.walletClient.account!.address
+
+  const tripleCost = await config.publicClient.readContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'getTripleCost',
+  }) as bigint
+
+  const depositCount = depositAmount > 0n ? 1n : 0n
+  const fee = calcCreationFee(depositCount, depositAmount)
+  const totalValue = tripleCost + depositAmount + fee
+
+  const hash = await config.walletClient.writeContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'createTriples',
+    args: [receiver, [subjectId], [predicateId], [objectId], [depositAmount], 1n],
+    value: totalValue,
+    account: config.walletClient.account!,
+    chain: config.walletClient.chain ?? intuitionTestnet,
+  })
+
+  await config.publicClient.waitForTransactionReceipt({ hash })
+}
 
 // ============================================================================
 // GraphQL API
@@ -123,47 +337,30 @@ export async function createAccountAtom(
 }
 
 /**
- * Create Agent Atom with full metadata
+ * Create Agent Atom with full metadata.
  *
- * TEMPORARY: Using createAtomFromString to avoid IPFS requirement
- * TODO: Switch to createAtomFromThing once Pinata JWT is configured
+ * Uses SDK directly — user is msg.sender → creator_id = user in Intuition indexer
+ * and Intuition Portal. No platform fee on registration; fees are collected on
+ * every staking operation (depositToVault via FeeProxy).
  */
 export async function createAgentAtom(
   config: WriteConfig,
   metadata: AgentMetadata,
-  initialDeposit?: bigint
 ) {
-  // Collect registration fee before the main tx
-  await collectPlatformFee(config, parseEther(APP_CONFIG.PLATFORM_REG_FEE))
-
-  // Label format uses the configured prefix so it matches the platform's filter
-  // and is scoped to the correct network/version (see NEXT_PUBLIC_AGENT_PREFIX).
   const atomText = `${APP_CONFIG.AGENT_PREFIX} ${metadata.name} - ${metadata.description}`
-  const result = await createAtomFromString(config, atomText, initialDeposit)
-  const termId = result?.state?.termId
-  if (termId) void tagCreatedVia(config, termId)
-  return result
+  return await createAtomFromString(config, atomText, DEFAULT_ATOM_DEPOSIT)
 }
 
 /**
- * Create Skill Atom
- *
- * Creates an on-chain Atom representing a reusable AI skill/capability.
+ * Create Skill Atom via SDK (user is creator, fee collected on staking).
  * Label format: "Skill: Name - description" (matches ILIKE 'Skill:%' filter)
  */
 export async function createSkillAtom(
   config: WriteConfig,
   metadata: { name: string; description: string; category: string; compatibilities: string[]; requiresApiKey?: boolean; pricing?: string; githubUrl?: string; installCommand?: string },
-  initialDeposit?: bigint
 ) {
-  // Collect registration fee before the main tx
-  await collectPlatformFee(config, parseEther(APP_CONFIG.PLATFORM_REG_FEE))
-
   const atomText = `${APP_CONFIG.SKILL_PREFIX} ${metadata.name} - ${metadata.description}`
-  const result = await createAtomFromString(config, atomText, initialDeposit)
-  const termId = result?.state?.termId
-  if (termId) void tagCreatedVia(config, termId)
-  return result
+  return await createAtomFromString(config, atomText, DEFAULT_ATOM_DEPOSIT)
 }
 
 // ============================================================================
@@ -180,18 +377,7 @@ export async function createTriple(
   objectId: `0x${string}`,
   depositAmount: bigint
 ) {
-  // Collect staking fee before the main tx
-  await collectPlatformFee(config, stakingFee(depositAmount))
-
-  return await createTripleStatement(config, {
-    args: [
-      [subjectId],
-      [predicateId],
-      [objectId],
-      [depositAmount],
-    ],
-    value: depositAmount,
-  })
+  await createTripleViaProxy(config, subjectId, predicateId, objectId, depositAmount)
 }
 
 // ============================================================================
@@ -217,22 +403,22 @@ export async function depositToVault(
     throw new Error('No account address available')
   }
 
-  // Collect staking fee before the main tx
-  await collectPlatformFee(config, stakingFee(amount))
+  await ensureFeeProxyApproved(config)
 
-  // Call MultiVault contract directly with value (msg.value)
-  // SDK deposit() doesn't support sending value - we bypass it
+  // Route through FeeProxy — fee is collected atomically in a single TX.
+  // FeeProxy.deposit() has the same signature as MultiVault.deposit().
+  const totalValue = calcFeeProxyValue(amount)
   const hash = await config.walletClient.writeContract({
-    address: config.address,
-    abi: MultiVaultAbi,
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
     functionName: 'deposit',
     args: [
       recipientAddress,
       vaultId,
-      1n,    // curveId = 1 (default bonding curve)
-      0n,    // minShares = 0 (accept any amount)
+      1n,  // curveId = 1 (default bonding curve)
+      0n,  // minShares = 0 (accept any amount)
     ],
-    value: amount,  // THIS IS THE KEY - send tTRUST as transaction value
+    value: totalValue,
     account: config.walletClient.account!,
     chain: config.walletClient.chain ?? intuitionTestnet,
   })
@@ -620,35 +806,6 @@ async function tagCreatedVia(cfg: WriteConfig, newTermId: string): Promise<void>
   }
 }
 
-// ============================================================================
-// Platform Fee Collection
-// ============================================================================
-
-/**
- * Collect a platform fee by sending tTRUST to the configured fee wallet.
- * No-op when PLATFORM_FEE_WALLET is unset or amount is 0.
- */
-async function collectPlatformFee(config: WriteConfig, amount: bigint): Promise<void> {
-  const wallet = APP_CONFIG.PLATFORM_FEE_WALLET
-  if (!wallet || amount === 0n) return
-  const hash = await config.walletClient.sendTransaction({
-    to: wallet,
-    value: amount,
-    account: config.walletClient.account!,
-    chain: config.walletClient.chain ?? intuitionTestnet,
-  })
-  await config.publicClient.waitForTransactionReceipt({ hash })
-  console.info(`[AgentScore] Platform fee collected: ${Number(amount) / 1e18} tTRUST → ${wallet}`)
-}
-
-/**
- * Calculate staking fee from amount and configured BPS.
- */
-function stakingFee(amount: bigint): bigint {
-  const bps = APP_CONFIG.PLATFORM_STAKE_FEE_BPS
-  if (!bps || bps <= 0) return 0n
-  return (amount * BigInt(bps)) / 10000n
-}
 
 // ============================================================================
 // Constants
@@ -820,13 +977,10 @@ export async function createTripleClaim(
     const data = await res.json()
     const triple = data.data?.triples?.[0]
     if (triple?.term_id) {
-      const result = {
+      return {
         termId: triple.term_id as `0x${string}`,
         counterTermId: triple.counter_term_id as `0x${string}`,
       }
-      // Tag the new triple as created via AgentScore (fire-and-forget)
-      void tagCreatedVia(cfg, triple.term_id)
-      return result
     }
   }
   throw new Error('Claim created on-chain but not yet indexed — please refresh in a few seconds')
@@ -955,12 +1109,8 @@ async function findOrCreateAtom(
   const existing = data?.data?.atoms?.[0]?.term_id
   if (existing) return existing as `0x${string}`
 
-  const atomResult = await createAtomFromString(cfg, label, parseEther('0.001'))
-  const termId = atomResult?.state?.termId
-  if (!termId) {
-    throw new Error(`Failed to create atom "${label}"`)
-  }
-  return termId as `0x${string}`
+  const atomResult = await createAtomViaProxy(cfg, label, parseEther('0.001'))
+  return atomResult.state.termId
 }
 
 /**

@@ -157,7 +157,7 @@ export function useCreateAgent() {
       deposit?: bigint
     }) => {
       if (!config) throw new Error('Wallet not connected')
-      return await createAgentAtom(config, metadata, deposit || DEFAULT_ATOM_DEPOSIT)
+      return await createAgentAtom(config, metadata)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['atoms'] })

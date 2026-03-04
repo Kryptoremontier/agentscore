@@ -77,9 +77,11 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
 
   const [currentStep, setCurrentStep] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [loadingStep, setLoadingStep] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [atomId, setAtomId] = useState<string | null>(null)
+  const [agreed, setAgreed] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -195,12 +197,14 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
     }
 
     setLoading(true)
+    setLoadingStep(null)
     setError(null)
     setTxHash(null)
 
     try {
       const config = createWriteConfig(walletClient, publicClient)
 
+      setLoadingStep('Registering agent on-chain...')
       const result = await createAgentAtom(config, {
         name: formData.name,
         description: formData.description,
@@ -667,16 +671,24 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
               <div className="glass rounded-lg p-4 border border-primary/20">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Registration Fee</p>
-                    <p className="text-sm text-text-muted">One-time Atom creation</p>
+                    <p className="font-medium">Registration Cost</p>
+                    <p className="text-sm text-text-muted">On-chain atom creation + initial stake</p>
                   </div>
-                  <p className="text-2xl font-bold font-mono">0.01 tTRUST</p>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold font-mono">~0.002 tTRUST</p>
+                    <p className="text-xs text-text-muted">atom cost + 0.001 initial deposit + gas</p>
+                  </div>
                 </div>
               </div>
 
               {/* Terms */}
               <div className="flex items-start gap-3">
-                <input type="checkbox" className="mt-1" />
+                <input
+                  type="checkbox"
+                  className="mt-1 cursor-pointer"
+                  checked={agreed}
+                  onChange={e => setAgreed(e.target.checked)}
+                />
                 <p className="text-sm text-text-secondary">
                   I confirm that this agent complies with AgentScore guidelines and I understand
                   that malicious agents may be delisted and stakes slashed.
@@ -820,7 +832,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={(mounted && !isConnected) || loading}
+              disabled={(mounted && !isConnected) || loading || !agreed}
               className="flex-1 glow-blue"
             >
               {mounted && !isConnected ? (
@@ -828,7 +840,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
               ) : loading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  ⏳ Registering on-chain...
+                  {loadingStep ?? '⏳ Registering on-chain...'}
                 </>
               ) : (
                 <>
