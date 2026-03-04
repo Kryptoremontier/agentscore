@@ -27,6 +27,8 @@ export interface RegisteredAgent {
 
 export interface UserStats {
   totalAgentsRegistered: number
+  totalSkillsRegistered: number
+  totalClaimsCreated: number
   totalTrustStaked: bigint
   totalAttestations: number
   trustReceived: bigint

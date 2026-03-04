@@ -23,6 +23,10 @@ function staked(stats: UserStats): number {
   return stats.tTrustStakedNum
 }
 
+function totalEntities(stats: UserStats): number {
+  return stats.totalAgentsRegistered + stats.totalSkillsRegistered + stats.totalClaimsCreated
+}
+
 export const BADGE_DEFINITIONS: BadgeDefinition[] = [
   // ── TIER 1: Newcomer — first week of activity ────────────
   {
@@ -35,7 +39,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     tierLabel: 'Tier 1 · Entry',
     requirements: [
       { label: 'On-chain signals', check: s => s.totalSignals >= 5, current: s => s.totalSignals, target: 5 },
-      { label: 'Agents registered', check: s => s.totalAgentsRegistered >= 1, current: s => s.totalAgentsRegistered, target: 1 },
+      { label: 'Entities registered', check: s => totalEntities(s) >= 1, current: s => totalEntities(s), target: 1 },
       { label: 'Staking positions', check: s => s.totalPositions >= 2, current: s => s.totalPositions, target: 2 },
       { label: 'Days active', check: s => s.daysActive >= 3, current: s => s.daysActive, target: 3, unit: 'days' },
     ],
@@ -51,7 +55,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     tier: 2,
     tierLabel: 'Tier 2 · Bronze',
     requirements: [
-      { label: 'Agents registered', check: s => s.totalAgentsRegistered >= 3, current: s => s.totalAgentsRegistered, target: 3 },
+      { label: 'Entities registered', check: s => totalEntities(s) >= 3, current: s => totalEntities(s), target: 3 },
       { label: 'On-chain signals', check: s => s.totalSignals >= 25, current: s => s.totalSignals, target: 25 },
       { label: 'Staking positions', check: s => s.totalPositions >= 5, current: s => s.totalPositions, target: 5 },
       { label: 'tTRUST staked', check: s => staked(s) >= 0.05, current: s => staked(s), target: 0.05, unit: 'tTRUST' },
@@ -78,13 +82,14 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     id: 'builder',
     name: 'Builder',
-    description: 'Prolific agent creator actively shaping the network',
+    description: 'Prolific entity creator actively shaping the network',
     icon: 'Blocks',
     color: 'indigo',
     tier: 3,
     tierLabel: 'Tier 3 · Silver',
     requirements: [
-      { label: 'Agents registered', check: s => s.totalAgentsRegistered >= 8, current: s => s.totalAgentsRegistered, target: 8 },
+      { label: 'Entities registered', check: s => totalEntities(s) >= 8, current: s => totalEntities(s), target: 8 },
+      { label: 'Claims created', check: s => s.totalClaimsCreated >= 3, current: s => s.totalClaimsCreated, target: 3 },
       { label: 'On-chain signals', check: s => s.totalSignals >= 75, current: s => s.totalSignals, target: 75 },
       { label: 'tTRUST staked', check: s => staked(s) >= 0.5, current: s => staked(s), target: 0.5, unit: 'tTRUST' },
       { label: 'Total positions', check: s => s.totalPositions >= 10, current: s => s.totalPositions, target: 10 },
@@ -118,7 +123,8 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     tier: 4,
     tierLabel: 'Tier 4 · Gold',
     requirements: [
-      { label: 'Agents registered', check: s => s.totalAgentsRegistered >= 15, current: s => s.totalAgentsRegistered, target: 15 },
+      { label: 'Entities registered', check: s => totalEntities(s) >= 15, current: s => totalEntities(s), target: 15 },
+      { label: 'Claims created', check: s => s.totalClaimsCreated >= 8, current: s => s.totalClaimsCreated, target: 8 },
       { label: 'On-chain signals', check: s => s.totalSignals >= 200, current: s => s.totalSignals, target: 200 },
       { label: 'Total positions', check: s => s.totalPositions >= 25, current: s => s.totalPositions, target: 25 },
       { label: 'tTRUST staked', check: s => staked(s) >= 2.5, current: s => staked(s), target: 2.5, unit: 'tTRUST' },
@@ -135,7 +141,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     tierLabel: 'Tier 4 · Gold',
     requirements: [
       { label: 'Reports submitted', check: s => s.reportsSubmitted >= 5, current: s => s.reportsSubmitted, target: 5 },
-      { label: 'Agents registered', check: s => s.totalAgentsRegistered >= 10, current: s => s.totalAgentsRegistered, target: 10 },
+      { label: 'Entities registered', check: s => totalEntities(s) >= 10, current: s => totalEntities(s), target: 10 },
       { label: 'On-chain signals', check: s => s.totalSignals >= 150, current: s => s.totalSignals, target: 150 },
       { label: 'Total positions', check: s => s.totalPositions >= 20, current: s => s.totalPositions, target: 20 },
       { label: 'Days active', check: s => s.daysActive >= 30, current: s => s.daysActive, target: 30, unit: 'days' },
@@ -155,7 +161,8 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
       { label: 'tTRUST staked', check: s => staked(s) >= 10, current: s => staked(s), target: 10, unit: 'tTRUST' },
       { label: 'On-chain signals', check: s => s.totalSignals >= 500, current: s => s.totalSignals, target: 500 },
       { label: 'Total positions', check: s => s.totalPositions >= 40, current: s => s.totalPositions, target: 40 },
-      { label: 'Agents registered', check: s => s.totalAgentsRegistered >= 20, current: s => s.totalAgentsRegistered, target: 20 },
+      { label: 'Entities registered', check: s => totalEntities(s) >= 20, current: s => totalEntities(s), target: 20 },
+      { label: 'Skills registered', check: s => s.totalSkillsRegistered >= 5, current: s => s.totalSkillsRegistered, target: 5 },
       { label: 'Days active', check: s => s.daysActive >= 90, current: s => s.daysActive, target: 90, unit: 'days' },
     ],
   },
@@ -170,10 +177,10 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     requirements: [
       { label: 'Days active', check: s => s.daysActive >= 120, current: s => s.daysActive, target: 120, unit: 'days' },
       { label: 'On-chain signals', check: s => s.totalSignals >= 400, current: s => s.totalSignals, target: 400 },
-      { label: 'Agents registered', check: s => s.totalAgentsRegistered >= 15, current: s => s.totalAgentsRegistered, target: 15 },
+      { label: 'Entities registered', check: s => totalEntities(s) >= 15, current: s => totalEntities(s), target: 15 },
+      { label: 'Claims created', check: s => s.totalClaimsCreated >= 12, current: s => s.totalClaimsCreated, target: 12 },
       { label: 'Total positions', check: s => s.totalPositions >= 35, current: s => s.totalPositions, target: 35 },
       { label: 'tTRUST staked', check: s => staked(s) >= 5, current: s => staked(s), target: 5, unit: 'tTRUST' },
-      { label: 'Reports submitted', check: s => s.reportsSubmitted >= 3, current: s => s.reportsSubmitted, target: 3 },
     ],
   },
 
@@ -187,7 +194,8 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     tier: 6,
     tierLabel: 'Tier 6 · Diamond',
     requirements: [
-      { label: 'Agents registered', check: s => s.totalAgentsRegistered >= 30, current: s => s.totalAgentsRegistered, target: 30 },
+      { label: 'Entities registered', check: s => totalEntities(s) >= 30, current: s => totalEntities(s), target: 30 },
+      { label: 'Claims created', check: s => s.totalClaimsCreated >= 20, current: s => s.totalClaimsCreated, target: 20 },
       { label: 'On-chain signals', check: s => s.totalSignals >= 1000, current: s => s.totalSignals, target: 1000 },
       { label: 'Total positions', check: s => s.totalPositions >= 75, current: s => s.totalPositions, target: 75 },
       { label: 'tTRUST staked', check: s => staked(s) >= 25, current: s => staked(s), target: 25, unit: 'tTRUST' },

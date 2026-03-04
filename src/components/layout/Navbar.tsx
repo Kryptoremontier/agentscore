@@ -14,6 +14,7 @@ import {
   Bot,
   Zap,
   MessageSquare,
+  Trophy,
 } from 'lucide-react'
 import { WalletButton } from '@/components/wallet/WalletButton'
 import { SearchModal } from '@/components/shared/SearchModal'
@@ -28,7 +29,7 @@ function ExploreDropdown() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const isActive = pathname?.startsWith('/agents') || pathname?.startsWith('/skills') || pathname?.startsWith('/claims')
+  const isActive = pathname?.startsWith('/agents') || pathname?.startsWith('/skills') || pathname?.startsWith('/claims') || pathname?.startsWith('/leaderboard')
 
   // Click outside to close
   useEffect(() => {
@@ -130,6 +131,28 @@ function ExploreDropdown() {
                 <div>
                   <p className="font-medium text-sm">Claims</p>
                   <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Agent-Skill relationship claims</p>
+                </div>
+              </Link>
+
+              <div className="my-1 h-px bg-white/5" />
+
+              <Link
+                href="/leaderboard"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group',
+                  pathname?.startsWith('/leaderboard')
+                    ? 'bg-[#C8963C]/10 text-[#C8963C]'
+                    : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
+                )}
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(200,150,60,0.10)', border: '1px solid rgba(200,150,60,0.22)', boxShadow: '0 0 10px rgba(200,150,60,0.12)' }}>
+                  <Trophy className="w-4 h-4" style={{ color: '#C8963C' }} />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Leaderboard</p>
+                  <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Top contributors on-chain</p>
                 </div>
               </Link>
             </div>
@@ -342,6 +365,18 @@ export function Navbar() {
                   )}
                 >
                   <MessageSquare className="w-5 h-5 text-[#38B6FF]" /> Claims
+                </Link>
+                <Link
+                  href="/leaderboard"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    pathname?.startsWith('/leaderboard')
+                      ? 'text-[#C8963C] bg-[#C8963C]/10'
+                      : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  <Trophy className="w-5 h-5 text-[#C8963C]" /> Leaderboard
                 </Link>
                 {navLinks.map((link) => (
                   <Link

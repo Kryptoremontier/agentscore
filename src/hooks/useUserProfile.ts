@@ -78,6 +78,8 @@ interface GqlProfileData {
     created_at: string
     positions_aggregate: { aggregate: { count: number; sum: { shares: string } | null } }
   }>
+  mySkills: { aggregate: { count: number } }
+  myClaims: { aggregate: { count: number } }
   myPositions: GqlPosition[]
   mySignals: { aggregate: { count: number } }
   myReports: { aggregate: { count: number } }
@@ -133,6 +135,27 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
             }
           }
         }
+      }
+
+      mySkills: atoms_aggregate(
+        where: {
+          label: { _ilike: "Skill:%" }
+          creator_id: { _eq: $address }
+        }
+      ) {
+        aggregate { count }
+      }
+
+      myClaims: triples_aggregate(
+        where: {
+          creator_id: { _eq: $address }
+          _or: [
+            { subject: { label: { _ilike: "Agent:%" } } }
+            { subject: { label: { _ilike: "Skill:%" } } }
+          ]
+        }
+      ) {
+        aggregate { count }
       }
 
       mySignals: signals_aggregate(
@@ -214,6 +237,8 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   const reportsSubmitted = data.myReports?.aggregate?.count || 0
   const totalPositions = (data.myPositions || []).filter(p => BigInt(p.shares || '0') > 0n).length
   const tTrustStakedNum = Number(totalStaked) / 1e18
+  const totalSkillsRegistered = data.mySkills?.aggregate?.count || 0
+  const totalClaimsCreated = data.myClaims?.aggregate?.count || 0
 
   const earliestDate = [
     ...registeredAgents.map(a => a.createdAt),
@@ -229,6 +254,8 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
 
   const stats: UserStats = {
     totalAgentsRegistered: registeredAgents.length,
+    totalSkillsRegistered,
+    totalClaimsCreated,
     totalTrustStaked: totalStaked,
     totalAttestations,
     trustReceived: BigInt(0),
@@ -277,6 +304,8 @@ const emptyProfile = (address: `0x${string}`): UserProfile => ({
   address,
   stats: {
     totalAgentsRegistered: 0,
+    totalSkillsRegistered: 0,
+    totalClaimsCreated: 0,
     totalTrustStaked: BigInt(0),
     totalAttestations: 0,
     trustReceived: BigInt(0),
