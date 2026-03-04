@@ -1417,6 +1417,12 @@ function ClaimsPageContent() {
                           </button>
                         )}
 
+                        {tradeAction === 'sell' && (
+                          <p className="text-[10px] text-[#4A5260] text-center mt-2 leading-relaxed">
+                            Proceeds shown are UI estimates. Actual tTRUST received is determined by the Intuition MultiVault contract on-chain.
+                          </p>
+                        )}
+
                       </>
                     )}
                   </>
