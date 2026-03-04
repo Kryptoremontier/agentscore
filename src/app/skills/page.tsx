@@ -36,6 +36,7 @@ interface GraphQLSkill {
   emoji?: string
   creator?: { label: string; id?: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+  as_subject_triples?: Array<{ counter_term_id: string }> | null
 }
 
 export default function SkillsPage() {
@@ -95,9 +96,12 @@ function SkillsPageContent() {
     amount: string
     claim: string
     claimAtomId: string | null
+    knownShares?: string
     counterTermId?: string | null
     tripleTermId?: string | null
+    sellReason?: string | null
   } | null>(null)
+  const [showDistrustCta, setShowDistrustCta] = useState<GraphQLSkill | null>(null)
   const [userPosition, setUserPosition] = useState<{
     forShares: string | null
     againstShares: string | null
@@ -181,6 +185,10 @@ function SkillsPageContent() {
                     sum { shares }
                   }
                 }
+                as_subject_triples(
+                  where: { predicate_id: { _eq: "0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba" } }
+                  limit: 1
+                ) { counter_term_id }
               }
             }
           `
@@ -188,7 +196,36 @@ function SkillsPageContent() {
       })
       const data = await response.json()
       if (data.errors) throw new Error(data.errors[0].message)
-      setSkills(data.data.atoms || [])
+      const atoms: GraphQLSkill[] = data.data.atoms || []
+
+      // Batch-fetch oppose vault shares for accurate card Trust Score
+      const counterTermIds = atoms
+        .map(a => a.as_subject_triples?.[0]?.counter_term_id)
+        .filter(Boolean) as string[]
+      if (counterTermIds.length > 0) {
+        try {
+          const opposeRes = await fetch(GRAPHQL_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
+            })
+          })
+          const opposeData = await opposeRes.json()
+          const opposeMap = new Map<string, bigint>()
+          for (const pos of opposeData.data?.positions ?? []) {
+            const prev = opposeMap.get(pos.term_id) || 0n
+            try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
+          }
+          for (const atom of atoms) {
+            const ctid = atom.as_subject_triples?.[0]?.counter_term_id
+            if (ctid && opposeMap.has(ctid)) {
+              ;(atom as any).__opposeWei = opposeMap.get(ctid) || 0n
+            }
+          }
+        } catch { /* non-critical, cards fall back to opposeWei=0 */ }
+      }
+      setSkills(atoms)
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -305,28 +342,32 @@ function SkillsPageContent() {
 
   const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
     try {
-      const queryAddress = getAddress(userAddress).toLowerCase()
+      // Do NOT filter by account_id in GraphQL — the DB may store checksummed address
+      // while we pass lowercase, causing _eq to return 0 results. Filter in JS instead.
+      const normalizedAddress = userAddress.toLowerCase()
       const res = await fetch(GRAPHQL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: `
-            query GetVaultPosition($termId: String!, $address: String!) {
+            query GetVaultPositions($termId: String!) {
               positions(
-                where: { term_id: { _eq: $termId }, account_id: { _eq: $address } }
-                limit: 1
+                where: { term_id: { _eq: $termId } }
               ) {
+                account_id
                 shares
               }
             }
           `,
-          variables: { termId, address: queryAddress },
+          variables: { termId },
         }),
       })
       const data = await res.json()
-      const shares = data?.data?.positions?.[0]?.shares
+      const pos = data?.data?.positions?.find(
+        (p: any) => p.account_id?.toLowerCase() === normalizedAddress
+      )
       let sharesBigInt = 0n
-      try { sharesBigInt = shares ? BigInt(shares) : 0n } catch { sharesBigInt = 0n }
+      try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
       return sharesBigInt
     } catch (err) {
       console.warn('fetchVaultSharesForUser failed:', err)
@@ -374,6 +415,12 @@ function SkillsPageContent() {
       return { positions: [], uniqueCount: 0 }
     }
   }
+
+  // Lock body scroll when skill modal is open
+  useEffect(() => {
+    document.body.style.overflow = selectedSkill ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [selectedSkill])
 
   useEffect(() => {
     if (!selectedSkill) {
@@ -595,8 +642,12 @@ function SkillsPageContent() {
 
         if (pendingVote.type === 'redeem_trust') {
           redeemVaultId = agent.term_id as `0x${string}`
-          const freshPos2 = await fetchUserPosition(agent.term_id, address!)
-          freshSharesRaw = freshPos2.rawPositions[0]?.shares ?? '0'
+          // Primary: shares captured at click time (before modal closed and cleared state)
+          freshSharesRaw = pendingVote.knownShares ?? '0'
+          // Fallback: direct on-chain vault query
+          if (!freshSharesRaw || freshSharesRaw === '0') {
+            freshSharesRaw = (await fetchVaultSharesForUser(agent.term_id, address!)).toString()
+          }
         } else {
           const counterTermId = pendingVote.counterTermId
           if (!counterTermId) {
@@ -604,8 +655,10 @@ function SkillsPageContent() {
             return
           }
           redeemVaultId = counterTermId as `0x${string}`
-          const freshPos2 = await fetchUserPosition(agent.term_id, address!, counterTermId)
-          freshSharesRaw = freshPos2.againstRawPositions[0]?.shares ?? '0'
+          freshSharesRaw = pendingVote.knownShares ?? '0'
+          if (!freshSharesRaw || freshSharesRaw === '0') {
+            freshSharesRaw = (await fetchVaultSharesForUser(counterTermId, address!)).toString()
+          }
         }
 
         const freshShares = BigInt(freshSharesRaw)
@@ -636,8 +689,14 @@ function SkillsPageContent() {
 
         const updated = await fetchUserPosition(agent.term_id, address!, pendingVote.counterTermId)
         setUserPosition(updated)
-        setToast(`Redeemed ${(Number(sharesToRedeem) / 1e18).toFixed(4)} shares!`)
-        setTimeout(() => setToast(null), 4000)
+
+        if (pendingVote.sellReason === 'distrust' && pendingVote.type === 'redeem_trust') {
+          // "Lost Trust" sell → prompt user to register distrust on-chain via Oppose vault
+          setShowDistrustCta(agent as unknown as GraphQLSkill)
+        } else {
+          setToast(`Redeemed ${(Number(sharesToRedeem) / 1e18).toFixed(4)} shares!`)
+          setTimeout(() => setToast(null), 4000)
+        }
 
       } else if (pendingVote.type === 'trust') {
         await depositToVault(cfg, agent.term_id as `0x${string}`, parseEther(pendingVote.amount))
@@ -654,25 +713,44 @@ function SkillsPageContent() {
         console.log('distrust counterTermId:', counterTermId)
         console.log('distrust tripleTermId:', tripleTermId)
 
-        const existingForShares = address
-          ? await fetchVaultSharesForUser(tripleTermId, address)
+        // MultiVault_HasCounterStake: must clear ALL support positions before depositing Oppose
+        // Support shares live in the ATOM vault (agent.term_id), not in tripleTermId
+        const existingAtomShares = address
+          ? await fetchVaultSharesForUser(agent.term_id, address)
           : 0n
 
-        if (existingForShares > 0n) {
-          console.log(`Redeeming ${existingForShares} FOR shares from triple vault before AGAINST deposit...`)
+        if (existingAtomShares > 0n) {
+          console.log(`[Oppose] Clearing ${existingAtomShares} support shares from atom vault before Oppose deposit...`)
           try {
             await redeemFromVault(
               cfg,
-              tripleTermId as `0x${string}`,
-              existingForShares,
+              agent.term_id as `0x${string}`,
+              existingAtomShares,
               address as `0x${string}`
             )
-            console.log('✅ FOR shares redeemed — clear to deposit into AGAINST')
+            console.log('✅ Atom vault cleared — proceeding to Oppose deposit')
           } catch (redeemErr: any) {
-            console.error('❌ Failed to redeem FOR shares:', redeemErr)
+            console.error('❌ Failed to clear atom vault:', redeemErr)
             throw new Error(
-              `Must clear FOR position before Opposing. Redeem failed: ${redeemErr?.message || 'unknown'}`
+              `MultiVault requires clearing all Support shares before Opposing. Sell failed: ${redeemErr?.message || 'unknown'}`
             )
+          }
+        }
+
+        // Also clear triple FOR vault if it has shares (safety check)
+        if (tripleTermId) {
+          const existingTripleShares = address
+            ? await fetchVaultSharesForUser(tripleTermId, address)
+            : 0n
+          if (existingTripleShares > 0n) {
+            console.log(`[Oppose] Clearing ${existingTripleShares} shares from triple FOR vault...`)
+            try {
+              await redeemFromVault(cfg, tripleTermId as `0x${string}`, existingTripleShares, address as `0x${string}`)
+              console.log('✅ Triple FOR vault cleared')
+            } catch (redeemErr: any) {
+              console.error('❌ Failed to clear triple FOR vault:', redeemErr)
+              throw new Error(`Failed to clear triple FOR shares: ${redeemErr?.message || 'unknown'}`)
+            }
           }
         }
 
@@ -1302,7 +1380,8 @@ function SkillsPageContent() {
             const enriched = skills.map(skill => {
               let supportWei = 0n
               try { supportWei = BigInt(skill.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
-              const cardTrust = calculateTrustScoreFromStakes(supportWei, BigInt(0))
+              const opposeWei: bigint = (skill as any).__opposeWei ?? 0n
+              const cardTrust = calculateTrustScoreFromStakes(supportWei, opposeWei)
               return { skill, trust: cardTrust }
             })
 
@@ -1515,7 +1594,7 @@ function SkillsPageContent() {
 
       {/* Skill Detail Modal */}
       {selectedSkill && (
-        <div className="fixed inset-0 top-[64px] bg-black/80 backdrop-blur-sm z-40 overflow-y-auto">
+        <div className="fixed inset-0 top-[64px] bg-black/70 z-[55] overflow-y-auto">
           <div className="min-h-full p-4 flex items-start justify-center">
             <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
 
@@ -1896,7 +1975,7 @@ function SkillsPageContent() {
                       <div style={{ marginTop: '12px', marginBottom: '12px' }}>
                         <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)', marginBottom:'8px', fontWeight:500 }}>
                           Why are you selling?
-                          <span style={{ color:'rgba(255,255,255,0.2)', fontWeight:400, marginLeft:'4px' }}>(affects trust impact)</span>
+                          <span style={{ color:'rgba(255,255,255,0.2)', fontWeight:400, marginLeft:'4px' }}>(optional — contextual info)</span>
                         </div>
                         <div style={{ display:'flex', flexWrap:'wrap', gap:'6px' }}>
                           {SELL_REASONS.map((reason) => {
@@ -1916,17 +1995,26 @@ function SkillsPageContent() {
                           })}
                         </div>
                         {sellReason && (() => {
-                          const cfg = getSellReasonConfig(sellReason)
-                          const color = cfg.trustImpact <= 0.3 ? '#22c55e' : cfg.trustImpact >= 0.8 ? '#ef4444' : '#eab308'
-                          const label = cfg.trustImpact <= 0.3 ? '● Low' : cfg.trustImpact >= 0.8 ? '● High' : '● Medium'
+                          const isDistrust = sellReason === 'distrust'
                           return (
                             <div style={{ marginTop:'8px', padding:'8px 12px', borderRadius:'8px',
-                              background: `${color}14`, border: `1px solid ${color}33`, fontSize:'11px' }}>
-                              <div style={{ display:'flex', justifyContent:'space-between' }}>
-                                <span style={{ color:'rgba(255,255,255,0.5)' }}>Trust impact</span>
-                                <span style={{ fontWeight:600, color }}>{label}</span>
-                              </div>
-                              {cfg.description && <div style={{ color:'rgba(255,255,255,0.3)', marginTop:'4px' }}>{cfg.description}</div>}
+                              background: isDistrust ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.03)',
+                              border: isDistrust ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(255,255,255,0.08)',
+                              fontSize:'11px' }}>
+                              {isDistrust ? (
+                                <>
+                                  <div style={{ display:'flex', alignItems:'center', gap:'6px', color:'#ef4444', fontWeight:600, marginBottom:'4px' }}>
+                                    <span>⚠️</span><span>Distrust not yet on-chain</span>
+                                  </div>
+                                  <div style={{ color:'rgba(255,255,255,0.4)', lineHeight:'1.5' }}>
+                                    Selling removes your stake. To <strong style={{ color:'rgba(255,255,255,0.7)' }}>permanently record distrust</strong> in the Intuition Protocol, you will be prompted to buy <strong style={{ color:'#ef4444' }}>Oppose shares</strong> after this transaction.
+                                  </div>
+                                </>
+                              ) : (
+                                <div style={{ color:'rgba(255,255,255,0.35)' }}>
+                                  {getSellReasonConfig(sellReason).description}
+                                </div>
+                              )}
                             </div>
                           )
                         })()}
@@ -2046,6 +2134,9 @@ function SkillsPageContent() {
                           setShowConfirm(true)
                         } else {
                           const type = signalSide === 'support' ? 'redeem_trust' : 'redeem_distrust'
+                          const knownShares = signalSide === 'support'
+                            ? userPosition.forShares ?? undefined
+                            : userPosition.againstShares ?? undefined
                           setPendingVote({
                             type,
                             agent: selectedSkill,
@@ -2053,6 +2144,8 @@ function SkillsPageContent() {
                             claim: '',
                             claimAtomId: null,
                             counterTermId: skillTriple.counterTermId,
+                            knownShares,
+                            sellReason: sellReason ?? null,
                           })
                           setSelectedSkill(null)
                           setShowConfirm(true)
@@ -3539,6 +3632,54 @@ function SkillsPageContent() {
               <path d="M20 6L9 17l-5-5" stroke="#34a872" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <span className="text-white text-sm font-medium">{toast}</span>
+          </div>
+        </div>
+      )}
+
+      {/* "Lost Trust" CTA — prompt to register distrust on-chain via Oppose vault */}
+      {showDistrustCta && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-[#0F1113] border border-[#ef4444]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-[#ef4444]/10 border border-[#ef4444]/30 flex items-center justify-center mx-auto mb-4">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="text-white text-lg font-bold text-center mb-1">Register Distrust On-Chain?</h3>
+            <p className="text-[#B5BDC6] text-sm text-center mb-2">
+              You sold your support shares citing <span className="text-[#ef4444] font-semibold">Lost Trust</span>.
+            </p>
+            <p className="text-[#7A838D] text-xs text-center mb-4 leading-relaxed">
+              To permanently record your distrust in the Intuition Protocol, buy <strong className="text-white">Oppose shares</strong>. This registers a negative signal on-chain and directly lowers the Trust Score.
+            </p>
+            <div className="flex items-start gap-2 p-3 bg-[#C8963C]/5 border border-[#C8963C]/20 rounded-xl mb-5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
+                <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2"/>
+                <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              <p className="text-[#C8963C] text-xs leading-relaxed">
+                If you still have remaining Support shares, the protocol will <strong>automatically clear them</strong> before depositing Oppose (may require an extra wallet confirmation).
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDistrustCta(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-white/10 text-[#7A838D] hover:text-white hover:border-white/20 transition-colors"
+              >
+                Skip
+              </button>
+              <button
+                onClick={() => {
+                  setShowDistrustCta(null)
+                  setSelectedSkill(showDistrustCta)
+                  setSignalSide('oppose')
+                  setTradeAction('buy')
+                }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#ef4444]/10 border border-[#ef4444]/40 text-[#ef4444] hover:bg-[#ef4444]/20 transition-colors"
+              >
+                Buy Oppose Shares →
+              </button>
+            </div>
           </div>
         </div>
       )}

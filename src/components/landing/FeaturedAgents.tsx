@@ -19,6 +19,7 @@ interface FeaturedItem {
   created_at: string
   creator?: { label: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+  as_subject_triples?: Array<{ counter_term_id: string }> | null
 }
 
 interface FeaturedClaim {
@@ -57,17 +58,16 @@ export function FeaturedAgents() {
     setLoading(true)
     try {
       if (tab === 'claims') {
+        const hasScope = TRIPLE_SUBJECT_OR_STR && TRIPLE_OBJECT_OR_STR
+        const whereClause = hasScope
+          ? `where: { _and: [ { ${TRIPLE_SUBJECT_OR_STR} }, { ${TRIPLE_OBJECT_OR_STR} } ] }`
+          : 'where: {}'
         const res = await fetch(GRAPHQL_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: `{
             triples(
-              where: {
-                _and: [
-                  { ${TRIPLE_SUBJECT_OR_STR} }
-                  { ${TRIPLE_OBJECT_OR_STR} }
-                ]
-              }
+              ${whereClause}
               limit: 8
               order_by: { created_at: desc }
             ) {
@@ -95,11 +95,44 @@ export function FeaturedAgents() {
               term_id label created_at
               creator { label }
               positions_aggregate { aggregate { count sum { shares } } }
+              as_subject_triples(
+                where: { predicate_id: { _eq: "0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba" } }
+                limit: 1
+              ) { counter_term_id }
             }
           }` }),
         })
         const d = await res.json()
-        setItems(d.data?.atoms || [])
+        const atoms: FeaturedItem[] = d.data?.atoms || []
+
+        // Batch-fetch oppose vault shares for accurate card Trust Score
+        const counterTermIds = atoms
+          .map(a => a.as_subject_triples?.[0]?.counter_term_id)
+          .filter(Boolean) as string[]
+        if (counterTermIds.length > 0) {
+          try {
+            const opposeRes = await fetch(GRAPHQL_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                query: `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
+              })
+            })
+            const opposeData = await opposeRes.json()
+            const opposeMap = new Map<string, bigint>()
+            for (const pos of opposeData.data?.positions ?? []) {
+              const prev = opposeMap.get(pos.term_id) || 0n
+              try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
+            }
+            for (const atom of atoms) {
+              const ctid = atom.as_subject_triples?.[0]?.counter_term_id
+              if (ctid && opposeMap.has(ctid)) {
+                ;(atom as any).__opposeWei = opposeMap.get(ctid) || 0n
+              }
+            }
+          } catch { /* non-critical, falls back to opposeWei=0 */ }
+        }
+        setItems(atoms)
         setClaims([])
       }
     } catch { setItems([]); setClaims([]) }
@@ -303,7 +336,8 @@ export function FeaturedAgents() {
                         const stakers = item.positions_aggregate?.aggregate?.count || 0
                         const sharesWei = BigInt(item.positions_aggregate?.aggregate?.sum?.shares || '0')
                         const totalStaked = Number(sharesWei) / 1e18
-                        const trust = calculateTrustScoreFromStakes(sharesWei, 0n)
+                        const opposeWei: bigint = (item as any).__opposeWei ?? 0n
+                        const trust = calculateTrustScoreFromStakes(sharesWei, opposeWei)
                         const scoreColor = trust.score >= 70 ? '#2ECC71' : trust.score >= 50 ? '#EAB308' : '#EF4444'
                         const IconComp = cfg.icon
                         return (

@@ -181,6 +181,7 @@ function ClaimsPageContent() {
   const [pendingVote, setPendingVote] = useState<any>(null)
   const [voteStatus, setVoteStatus] = useState<Record<string, string>>({})
   const [creatingTriple, setCreatingTriple] = useState(false)
+  const [showDistrustCta, setShowDistrustCta] = useState<any>(null)
   const isExecutingRef = useRef(false)
 
   // ── Fetch claims ──
@@ -303,6 +304,33 @@ function ClaimsPageContent() {
     } catch { return { forShares: null, againstShares: null, rawPositions: [], againstRawPositions: [] } }
   }
 
+  // Fetches shares for a specific user in a vault.
+  // Does NOT filter by account_id in GraphQL (DB may store checksummed address,
+  // causing _eq to return 0 on lowercase input). Filters in JS instead.
+  const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
+    try {
+      const normalizedAddress = userAddress.toLowerCase()
+      const res = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `query GetVaultPositions($termId: String!) { positions(where: { term_id: { _eq: $termId } }) { account_id shares } }`,
+          variables: { termId },
+        }),
+      })
+      const data = await res.json()
+      const pos = data?.data?.positions?.find(
+        (p: any) => p.account_id?.toLowerCase() === normalizedAddress
+      )
+      let sharesBigInt = 0n
+      try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
+      return sharesBigInt
+    } catch (err) {
+      console.warn('fetchVaultSharesForUser failed:', err)
+      return 0n
+    }
+  }
+
   const fetchAllPositions = async (termId: string, counterTermId?: string | null) => {
     try {
       const termIds = [termId]; if (counterTermId) termIds.push(counterTermId)
@@ -360,6 +388,12 @@ function ClaimsPageContent() {
       setAllPositions(positions); setCombinedStakerCount(uniqueCount)
     } finally { if (showLoading) setPositionsLoading(false) }
   }
+
+  // Lock body scroll when claim modal is open
+  useEffect(() => {
+    document.body.style.overflow = selectedClaim ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [selectedClaim])
 
   // When claim modal opens
   useEffect(() => {
@@ -541,20 +575,28 @@ function ClaimsPageContent() {
         const redeemVaultId = isDistrust ? pendingVote.counterTermId : pendingVote.claim.term_id
         if (!redeemVaultId) { alert('Vault not found'); return }
 
-        // Try fresh fetch first; fall back to current userPosition state if fetch returns 0
-        const freshPos = await fetchUserPosition(pendingVote.claim.term_id, address!, isDistrust ? redeemVaultId : null)
-        const rawPos = isDistrust ? freshPos.againstRawPositions : freshPos.rawPositions
-        let freshSharesRaw = rawPos[0]?.shares ?? '0'
+        // Primary: use already-loaded allPositions (same source as POSITIONS tab — most reliable)
+        const qAddr = address!.toLowerCase()
+        const targetVaultId = redeemVaultId.toLowerCase()
+        const localPos = allPositions.find(
+          (p: any) => p.account_id?.toLowerCase() === qAddr && p.term_id?.toLowerCase() === targetVaultId
+        )
+        let freshSharesRaw = localPos?.shares ?? '0'
         let freshSharesBig = 0n
         try { freshSharesBig = BigInt(freshSharesRaw) } catch { freshSharesBig = 0n }
 
-        // Fallback: use shares from userPosition state (derived from allPositions — most reliable source)
+        // Fallback 1: userPosition state
         if (freshSharesBig === 0n) {
           const fallbackRaw = isDistrust ? userPosition.againstShares : userPosition.forShares
           if (fallbackRaw) {
             freshSharesRaw = fallbackRaw
             try { freshSharesBig = BigInt(freshSharesRaw) } catch { freshSharesBig = 0n }
           }
+        }
+        // Fallback 2: direct vault query
+        if (freshSharesBig === 0n) {
+          freshSharesRaw = (await fetchVaultSharesForUser(redeemVaultId, address!)).toString()
+          try { freshSharesBig = BigInt(freshSharesRaw) } catch { freshSharesBig = 0n }
         }
 
         if (freshSharesBig === 0n) {
@@ -600,12 +642,33 @@ function ClaimsPageContent() {
         if (!counterTermId) throw new Error('Oppose vault not found for this claim. The triple may still be indexing — please try again in a few seconds.')
         resolvedCounterTermId = counterTermId
         setClaimTriple(prev => ({ ...prev, counterTermId }))
+
+        // MultiVault_HasCounterStake: must clear support position in the triple's FOR vault
+        // before depositing into the AGAINST (counter) vault
+        const existingAtomShares = address
+          ? await fetchVaultSharesForUser(pendingVote.claim.term_id, address)
+          : 0n
+        if (existingAtomShares > 0n) {
+          console.log(`[Oppose/Claim] Clearing ${existingAtomShares} support shares before Oppose deposit...`)
+          try {
+            await redeemFromVault(cfg, pendingVote.claim.term_id as `0x${string}`, existingAtomShares, address as `0x${string}`)
+            console.log('✅ Claim FOR vault cleared — proceeding to Oppose deposit')
+          } catch (redeemErr: any) {
+            throw new Error(`MultiVault requires clearing all Support shares before Opposing. Sell failed: ${redeemErr?.message || 'unknown'}`)
+          }
+        }
+
         await depositToVault(cfg, counterTermId as `0x${string}`, parseAmount(pendingVote.amount))
       }
 
       setVoteStatus(prev => ({ ...prev, [key]: 'success' }))
-      setToast('Transaction confirmed! Refreshing...')
-      setTimeout(() => setToast(null), 4000)
+
+      if (pendingVote?.sellReason === 'distrust' && pendingVote?.type === 'redeem_trust') {
+        setShowDistrustCta(pendingVote.claim)
+      } else {
+        setToast('Transaction confirmed! Refreshing...')
+        setTimeout(() => setToast(null), 4000)
+      }
 
       // Refetch all data — called twice (2s + 5s) to handle indexer lag
       // Uses resolvedCounterTermId which is correct even for first-time Oppose tx
@@ -987,7 +1050,7 @@ function ClaimsPageContent() {
       <AnimatePresence>
         {showCreateModal && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCreateModal(false)} className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCreateModal(false)} className="fixed inset-0 z-40 bg-black/70" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-x-4 top-[5%] bottom-[5%] md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl z-50 overflow-y-auto">
               <div className="min-h-full flex items-start pt-8 pb-8">
                 <div className="w-full">
@@ -1013,7 +1076,7 @@ function ClaimsPageContent() {
 
       {/* ── Claim Detail Modal ── */}
       {selectedClaim && (
-        <div className="fixed inset-0 top-[64px] bg-black/80 backdrop-blur-sm z-40 overflow-y-auto">
+        <div className="fixed inset-0 top-[64px] bg-black/70 z-[55] overflow-y-auto">
           <div className="min-h-full p-4 flex items-start justify-center">
             <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
 
@@ -1276,7 +1339,7 @@ function ClaimsPageContent() {
                           <div style={{ marginTop:'12px', marginBottom:'12px' }}>
                             <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)', marginBottom:'8px', fontWeight:500 }}>
                               Why are you selling?
-                              <span style={{ color:'rgba(255,255,255,0.2)', fontWeight:400, marginLeft:'4px' }}>(affects trust impact)</span>
+                              <span style={{ color:'rgba(255,255,255,0.2)', fontWeight:400, marginLeft:'4px' }}>(optional — contextual info)</span>
                             </div>
                             <div style={{ display:'flex', flexWrap:'wrap', gap:'6px' }}>
                               {SELL_REASONS.map(reason => {
@@ -1290,16 +1353,26 @@ function ClaimsPageContent() {
                               })}
                             </div>
                             {sellReason && (() => {
-                              const cfg = getSellReasonConfig(sellReason)
-                              const color = cfg.trustImpact <= 0.3 ? '#22c55e' : cfg.trustImpact >= 0.8 ? '#ef4444' : '#eab308'
-                              const label = cfg.trustImpact <= 0.3 ? '● Low' : cfg.trustImpact >= 0.8 ? '● High' : '● Medium'
+                              const isDistrust = sellReason === 'distrust'
                               return (
-                                <div style={{ marginTop:'8px', padding:'8px 12px', borderRadius:'8px', background:`${color}14`, border:`1px solid ${color}33`, fontSize:'11px' }}>
-                                  <div style={{ display:'flex', justifyContent:'space-between' }}>
-                                    <span style={{ color:'rgba(255,255,255,0.5)' }}>Trust impact</span>
-                                    <span style={{ fontWeight:600, color }}>{label}</span>
-                                  </div>
-                                  {cfg.description && <div style={{ color:'rgba(255,255,255,0.3)', marginTop:'4px' }}>{cfg.description}</div>}
+                                <div style={{ marginTop:'8px', padding:'8px 12px', borderRadius:'8px',
+                                  background: isDistrust ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.03)',
+                                  border: isDistrust ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(255,255,255,0.08)',
+                                  fontSize:'11px' }}>
+                                  {isDistrust ? (
+                                    <>
+                                      <div style={{ display:'flex', alignItems:'center', gap:'6px', color:'#ef4444', fontWeight:600, marginBottom:'4px' }}>
+                                        <span>⚠️</span><span>Distrust not yet on-chain</span>
+                                      </div>
+                                      <div style={{ color:'rgba(255,255,255,0.4)', lineHeight:'1.5' }}>
+                                        Selling removes your stake. To <strong style={{ color:'rgba(255,255,255,0.7)' }}>permanently record distrust</strong> in the Intuition Protocol, you will be prompted to buy <strong style={{ color:'#ef4444' }}>Oppose shares</strong> after this transaction.
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div style={{ color:'rgba(255,255,255,0.35)' }}>
+                                      {getSellReasonConfig(sellReason).description}
+                                    </div>
+                                  )}
                                 </div>
                               )
                             })()}
@@ -1404,7 +1477,7 @@ function ClaimsPageContent() {
                         ) : (
                           <button
                             onClick={() => {
-                              setPendingVote({ type: signalSide === 'support' ? 'redeem_trust' : 'redeem_distrust', claim: selectedClaim, amount: redeemShares, counterTermId: claimTriple.counterTermId })
+                              setPendingVote({ type: signalSide === 'support' ? 'redeem_trust' : 'redeem_distrust', claim: selectedClaim, amount: redeemShares, counterTermId: claimTriple.counterTermId, sellReason: sellReason ?? null })
                               setShowConfirm(true)
                             }}
                             disabled={!parseFloat(redeemShares) || parseFloat(redeemShares) <= 0}
@@ -2096,7 +2169,7 @@ function ClaimsPageContent() {
       <AnimatePresence>
         {showConfirm && pendingVote && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/60" onClick={() => setShowConfirm(false)} />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/70" onClick={() => setShowConfirm(false)} />
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-x-4 top-1/2 -translate-y-1/2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-96 z-[61]">
               <div className="glass-card rounded-2xl p-6">
                 <h3 className="text-lg font-bold mb-4">Confirm Transaction</h3>
@@ -2133,6 +2206,54 @@ function ClaimsPageContent() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Distrust CTA — prompt to buy Oppose shares after "Lost Trust" sell ── */}
+      {showDistrustCta && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+          <div className="bg-[#0F1113] border border-[#ef4444]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-[#ef4444]/10 border border-[#ef4444]/30 flex items-center justify-center mx-auto mb-4">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="text-white text-lg font-bold text-center mb-1">Register Distrust On-Chain?</h3>
+            <p className="text-[#B5BDC6] text-sm text-center mb-2">
+              You sold your support shares citing <span className="text-[#ef4444] font-semibold">Lost Trust</span>.
+            </p>
+            <p className="text-[#7A838D] text-xs text-center mb-4 leading-relaxed">
+              To permanently record your distrust in the Intuition Protocol, buy <strong className="text-white">Oppose shares</strong>. This registers a negative signal on-chain and directly lowers the Trust Score.
+            </p>
+            <div className="flex items-start gap-2 p-3 bg-[#C8963C]/5 border border-[#C8963C]/20 rounded-xl mb-5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
+                <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2"/>
+                <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              <p className="text-[#C8963C] text-xs leading-relaxed">
+                If you still have remaining Support shares, the protocol will <strong>automatically clear them</strong> before depositing Oppose (may require an extra wallet confirmation).
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDistrustCta(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-white/10 text-[#7A838D] hover:text-white hover:border-white/20 transition-colors"
+              >
+                Skip
+              </button>
+              <button
+                onClick={() => {
+                  setShowDistrustCta(null)
+                  setSelectedClaim(showDistrustCta)
+                  setSignalSide('oppose')
+                  setTradeAction('buy')
+                }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#ef4444]/10 border border-[#ef4444]/40 text-[#ef4444] hover:bg-[#ef4444]/20 transition-colors"
+              >
+                Buy Oppose Shares →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageBackground>
   )
 }

@@ -3,9 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useAccount } from 'wagmi'
 import { useRouter, useSearchParams } from 'next/navigation'
-import {
-  Settings, Shield, TrendingUp, Award
-} from 'lucide-react'
+import { Settings, Bot, TrendingUp, Award } from 'lucide-react'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { ProfileHeader } from '@/components/profile/ProfileHeader'
 import { ProfileStats } from '@/components/profile/ProfileStats'
@@ -13,8 +11,15 @@ import { MyAgents } from '@/components/profile/MyAgents'
 import { MySupportedAgents } from '@/components/profile/MySupportedAgents'
 import { MyBadges } from '@/components/profile/MyBadges'
 import { ProfileSettings } from '@/components/profile/ProfileSettings'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/cn'
 import { useUserProfile } from '@/hooks/useUserProfile'
+
+const PROFILE_TABS = [
+  { id: 'agents',     label: 'My Agents',  icon: Bot,        color: '#C8963C' },
+  { id: 'supporting', label: 'Supporting', icon: TrendingUp, color: '#4ADE80' },
+  { id: 'badges',     label: 'Badges',     icon: Award,      color: '#A78BFA' },
+  { id: 'settings',   label: 'Settings',   icon: Settings,   color: '#7A838D' },
+] as const
 
 export default function ProfilePage() {
   return (
@@ -33,9 +38,11 @@ function ProfilePageContent() {
 
   const defaultTab = useMemo(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['agents', 'supporting', 'badges', 'settings'].includes(tab)) return tab
-    return 'agents'
+    if (tab && ['agents', 'supporting', 'badges', 'settings'].includes(tab)) return tab as typeof PROFILE_TABS[number]['id']
+    return 'agents' as typeof PROFILE_TABS[number]['id']
   }, [searchParams])
+
+  const [activeTab, setActiveTab] = useState<typeof PROFILE_TABS[number]['id']>(defaultTab)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -65,42 +72,35 @@ function ProfilePageContent() {
         <ProfileHeader profile={profile} onUpdate={handleProfileUpdate} />
         <ProfileStats stats={profile.stats} badges={profile.badges} />
 
-        <Tabs defaultValue={defaultTab} className="mt-8">
-          <TabsList className="glass p-1 mb-6">
-            <TabsTrigger value="agents" className="data-[state=active]:bg-white/10">
-              <Shield className="w-4 h-4 mr-2" />
-              My Agents
-            </TabsTrigger>
-            <TabsTrigger value="supporting" className="data-[state=active]:bg-white/10">
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Supporting
-            </TabsTrigger>
-            <TabsTrigger value="badges" className="data-[state=active]:bg-white/10">
-              <Award className="w-4 h-4 mr-2" />
-              Badges
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-white/10">
-              <Settings className="w-4 h-4 mr-2" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
+        {/* Tab bar */}
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+          {PROFILE_TABS.map(tab => {
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
+                  isActive ? 'text-white' : 'text-[#7A838D] hover:text-[#B5BDC6]'
+                )}
+                style={isActive
+                  ? { background: `${tab.color}18`, border: `1px solid ${tab.color}40`, color: tab.color }
+                  : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }
+                }
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
 
-          <TabsContent value="agents">
-            <MyAgents agents={profile.registeredAgents} />
-          </TabsContent>
-
-          <TabsContent value="supporting">
-            <MySupportedAgents supports={profile.supportedAgents} />
-          </TabsContent>
-
-          <TabsContent value="badges">
-            <MyBadges badges={profile.badges} expertLevel={profile.expertLevel} stats={profile.stats} />
-          </TabsContent>
-
-          <TabsContent value="settings">
-            <ProfileSettings profile={profile} onUpdate={handleProfileUpdate} />
-          </TabsContent>
-        </Tabs>
+        {/* Tab content */}
+        {activeTab === 'agents' && <MyAgents agents={profile.registeredAgents} />}
+        {activeTab === 'supporting' && <MySupportedAgents supports={profile.supportedAgents} />}
+        {activeTab === 'badges' && <MyBadges badges={profile.badges} expertLevel={profile.expertLevel} stats={profile.stats} />}
+        {activeTab === 'settings' && <ProfileSettings profile={profile} onUpdate={handleProfileUpdate} />}
         </div>
       </div>
     </PageBackground>
@@ -112,20 +112,22 @@ function ProfileSkeleton() {
     <PageBackground image="wave" opacity={0.25}>
       <div className="pt-24 pb-16">
         <div className="max-w-6xl mx-auto px-4 animate-pulse">
-        <div className="glass-card p-8 mb-8">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 rounded-full bg-white/10" />
-            <div className="space-y-3 flex-1">
-              <div className="h-8 w-48 bg-white/10 rounded" />
-              <div className="h-4 w-32 bg-white/10 rounded" />
-            </div>
+          <div className="rounded-2xl p-6 mb-6 h-32"
+            style={{ background: 'rgba(15,17,19,0.8)', border: '1px solid rgba(200,150,60,0.15)' }} />
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-8">
+            {[1,2,3,4,5,6].map(i => (
+              <div key={i} className="rounded-2xl h-20"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
+            ))}
           </div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => (
-            <div key={i} className="glass-card p-6 h-28 bg-white/5 rounded-xl" />
-          ))}
-        </div>
+          <div className="flex gap-2 mb-6">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="h-10 w-28 rounded-xl"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
+            ))}
+          </div>
+          <div className="rounded-2xl h-64"
+            style={{ background: 'rgba(15,17,19,0.8)', border: '1px solid rgba(255,255,255,0.08)' }} />
         </div>
       </div>
     </PageBackground>

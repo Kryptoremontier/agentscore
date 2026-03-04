@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import Link from 'next/link'
 import {
   Trophy, Medal, Users, TrendingUp, Zap, Blocks,
-  RefreshCw, Crown, Bot, MessageSquare, Star,
+  Crown, Bot, MessageSquare, Star, Loader2,
 } from 'lucide-react'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { cn } from '@/lib/cn'
@@ -193,22 +193,13 @@ export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<SortKey>('score')
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await fetchLeaderboardData()
-      setEntries(data)
-      setLastUpdated(new Date())
-    } catch (e) {
-      console.error('Leaderboard fetch error:', e)
-    } finally {
-      setLoading(false)
-    }
+  useEffect(() => {
+    fetchLeaderboardData()
+      .then(setEntries)
+      .catch(e => console.error('Leaderboard fetch error:', e))
+      .finally(() => setLoading(false))
   }, [])
-
-  useEffect(() => { load() }, [load])
 
   const sorted = [...entries].sort((a, b) => {
     if (tab === 'entities') return b.totalEntities - a.totalEntities
@@ -279,16 +270,12 @@ export default function LeaderboardPage() {
               </button>
             ))}
 
-            {/* Refresh */}
-            <button
-              onClick={load}
-              disabled={loading}
-              className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-[#7A838D] hover:text-[#B5BDC6] transition-colors"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-            >
-              <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-              {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Loading'}
-            </button>
+            {loading && (
+              <div className="ml-auto flex items-center gap-1.5 px-3 py-2 text-xs text-[#7A838D]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Loading…
+              </div>
+            )}
           </div>
 
           {/* Table */}
@@ -308,7 +295,7 @@ export default function LeaderboardPage() {
 
             {loading ? (
               <div className="py-20 text-center text-[#7A838D]">
-                <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3 opacity-40" />
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 opacity-40" />
                 Fetching on-chain data…
               </div>
             ) : sorted.length === 0 ? (

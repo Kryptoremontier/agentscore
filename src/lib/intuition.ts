@@ -150,7 +150,7 @@ export async function createAgentAtom(
  */
 export async function createSkillAtom(
   config: WriteConfig,
-  metadata: { name: string; description: string; category: string; compatibilities: string[] },
+  metadata: { name: string; description: string; category: string; compatibilities: string[]; requiresApiKey?: boolean; pricing?: string; githubUrl?: string; installCommand?: string },
   initialDeposit?: bigint
 ) {
   const atomText = `${APP_CONFIG.SKILL_PREFIX} ${metadata.name} - ${metadata.description}`
@@ -517,26 +517,60 @@ export async function distrustAgent(
 
 /**
  * Platform identity atoms for app-scoping.
- * Call bootstrapPlatformAtoms() once on first use, then these are cached.
- * After first mainnet deploy, hardcode the resulting term_ids here.
+ *
+ * Priority order for loading the IDs (fastest to slowest):
+ *  1. env vars NEXT_PUBLIC_AGENTSCORE_ATOM_ID / NEXT_PUBLIC_CREATED_VIA_ATOM_ID  (set once after first deploy)
+ *  2. localStorage cache (persisted from previous session)
+ *  3. GraphQL lookup (query — no tx cost if atoms exist)
+ *  4. on-chain creation (only on very first ever bootstrap)
+ *
+ * After the first registration on a new testnet, open the browser console and
+ * copy the logged IDs into .env.local to avoid bootstrap txs completely:
+ *   NEXT_PUBLIC_AGENTSCORE_ATOM_ID=0x…
+ *   NEXT_PUBLIC_CREATED_VIA_ATOM_ID=0x…
  */
-export let AGENTSCORE_ATOM_TERM_ID: string | null = null
-export let CREATED_VIA_TERM_ID: string | null = null
+const LS_KEY_AGENTSCORE = 'agentscore_platform_atom_id'
+const LS_KEY_CREATED_VIA = 'agentscore_created_via_atom_id'
+
+function loadFromCache(envKey: string, lsKey: string): string | null {
+  // env var takes precedence (set by admin for production/stable testnet)
+  const fromEnv = process.env[envKey]
+  if (fromEnv) return fromEnv
+  // fallback to localStorage (auto-populated after first bootstrap)
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(lsKey)
+  }
+  return null
+}
+
+export let AGENTSCORE_ATOM_TERM_ID: string | null = loadFromCache('NEXT_PUBLIC_AGENTSCORE_ATOM_ID', LS_KEY_AGENTSCORE)
+export let CREATED_VIA_TERM_ID: string | null = loadFromCache('NEXT_PUBLIC_CREATED_VIA_ATOM_ID', LS_KEY_CREATED_VIA)
 
 const AGENTSCORE_PLATFORM_LABEL = 'AgentScore'
 const CREATED_VIA_PREDICATE_LABEL = 'createdVia'
 
 /**
  * Bootstrap the platform identity atoms on Intuition.
- * Creates "AgentScore" and "createdVia" atoms if they don't exist.
+ * Finds or creates "AgentScore" and "createdVia" atoms.
+ * After resolving, caches IDs in localStorage and logs them to console.
  * Safe to call multiple times — idempotent.
  */
 export async function bootstrapPlatformAtoms(cfg: WriteConfig): Promise<void> {
   if (!AGENTSCORE_ATOM_TERM_ID) {
     AGENTSCORE_ATOM_TERM_ID = await findOrCreateAtom(cfg, AGENTSCORE_PLATFORM_LABEL)
+    if (AGENTSCORE_ATOM_TERM_ID && typeof window !== 'undefined') {
+      localStorage.setItem(LS_KEY_AGENTSCORE, AGENTSCORE_ATOM_TERM_ID)
+      console.info('[AgentScore] AGENTSCORE_ATOM_TERM_ID resolved:', AGENTSCORE_ATOM_TERM_ID)
+      console.info('  → Add to .env.local: NEXT_PUBLIC_AGENTSCORE_ATOM_ID=' + AGENTSCORE_ATOM_TERM_ID)
+    }
   }
   if (!CREATED_VIA_TERM_ID) {
     CREATED_VIA_TERM_ID = await findOrCreateAtom(cfg, CREATED_VIA_PREDICATE_LABEL)
+    if (CREATED_VIA_TERM_ID && typeof window !== 'undefined') {
+      localStorage.setItem(LS_KEY_CREATED_VIA, CREATED_VIA_TERM_ID)
+      console.info('[AgentScore] CREATED_VIA_TERM_ID resolved:', CREATED_VIA_TERM_ID)
+      console.info('  → Add to .env.local: NEXT_PUBLIC_CREATED_VIA_ATOM_ID=' + CREATED_VIA_TERM_ID)
+    }
   }
 }
 
