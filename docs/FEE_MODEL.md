@@ -8,7 +8,7 @@
 
 ## Philosophy
 
-Registration is free — we don't charge to list an agent. Platform revenue comes from staking activity, which is where real economic signal is created. This aligns incentives: we earn when the ecosystem is actively used, not just when someone signs up.
+Registration is free — we don't charge to list an agent. Staking goes directly to MultiVault so shares are correctly attributed to the user. Platform revenue via FeeProxy is planned for a future iteration once Intuition exposes a way to route deposits without changing `msg.sender`.
 
 ---
 
@@ -29,38 +29,26 @@ Registration goes directly through Intuition's MultiVault SDK. No platform fee i
 
 ### Staking (Trust / Distrust signals)
 
-Every deposit into an agent's or skill's vault is routed through `IntuitionFeeProxy`:
+Staking currently calls MultiVault directly (no FeeProxy). This ensures shares are credited to the user's wallet.
 
 | Fee type | Amount |
 |----------|--------|
-| Fixed fee per deposit | **0.1 tTRUST** |
-| Percentage fee | **2.5%** of deposit amount |
-| **Example: stake 1 tTRUST** | user sends ~1.126 tTRUST, 1 tTRUST reaches vault |
+| **Platform fee** | **0 (current — direct MultiVault)** |
+| MultiVault protocol fee | built into bonding curve |
 
-**Formula (what user sends):**
-```
-totalValue = depositAmount × 1.025 + 0.1 tTRUST
-```
-
-The fixed + percentage fee is sent to `feeRecipient` atomically in the same transaction. The remaining amount is forwarded to MultiVault as the actual stake.
+> **Why not FeeProxy for staking?**
+> `MultiVault.deposit()` credits shares to `msg.sender`. When FeeProxy calls it, FeeProxy
+> becomes the share owner — the user's funds are locked and trust scores are unaffected.
+> FeeProxy would only work if MultiVault exposed a `depositFor(receiver)` variant.
 
 ---
 
 ## Transaction Flow
 
-### First-time user (new wallet)
+### Staking (any user)
 
 ```
-1. MultiVault.approve(FeeProxy, DEPOSIT)   ← one-time, cached in localStorage
-2. FeeProxy.deposit(receiver, vaultId, ...) ← fee collected + stake recorded
-```
-
-2 MetaMask confirmations. After this, every subsequent stake is 1 confirmation.
-
-### Returning user
-
-```
-1. FeeProxy.deposit(receiver, vaultId, ...) ← fee collected + stake recorded
+1. MultiVault.deposit(receiver, vaultId, ...) ← shares go to msg.sender = user ✓
 ```
 
 1 MetaMask confirmation.
@@ -75,21 +63,9 @@ The fixed + percentage fee is sent to `feeRecipient` atomically in the same tran
 
 ---
 
-## Revenue Projections (Testnet Reference)
-
-| Scenario | Stakes/day | Avg stake | Daily revenue |
-|----------|-----------|-----------|---------------|
-| Early traction | 50 | 1 tTRUST | ~7.25 tTRUST |
-| Growth | 500 | 2 tTRUST | ~145 tTRUST |
-| Scale | 5,000 | 5 tTRUST | ~1,812 tTRUST |
-
-Revenue = `n × (0.1 + deposit × 0.025)`
-
----
-
 ## Technical Implementation
 
-### FeeProxy Contract
+### FeeProxy Contract (deployed, not used for staking yet)
 
 - **Source:** `/d/VIBE-CODING/FEE_PROXY/src/IntuitionFeeProxy.sol`
 - **Template:** [intuition-box/Fee-Proxy-Template](https://github.com/0xIntuition/intuition-box)
@@ -110,24 +86,28 @@ FeeProxy.setWhitelistedAdmin(address admin, bool status)
 
 ### Frontend Integration
 
-- `src/lib/intuition.ts` — `depositToVault()`, `ensureFeeProxyApproved()`
-- `calcFeeProxyValue(depositAmount)` — calculates exact `msg.value` to send
-- Approval cached per wallet in `localStorage` under key `agentscore_feeproxy_approved_0x...`
+- `src/lib/intuition.ts` — `depositToVault()` calls MultiVault directly
 
 ---
 
-## Why Not Charge on Registration?
+## Future Fee Model
 
-1. **Lower friction for early adopters** — 1 TX to register vs 2-3 TX
-2. **User is atom creator** — registration via SDK means `creator_id = user address`, visible in Intuition Portal on mainnet
-3. **Aligned incentives** — if someone registers an agent, they'll stake on it anyway (that's how Trust Score gets built)
-4. **Industry standard** — most DeFi protocols charge on transactions, not on account creation
+When Intuition adds a `depositFor(address receiver, ...)` function to MultiVault:
+
+| Fee type | Planned Amount |
+|----------|----------------|
+| Fixed fee per deposit | 0.1 tTRUST |
+| Percentage fee | 2.5% of deposit amount |
+| **Example: stake 1 tTRUST** | user sends ~1.126 tTRUST, 1 tTRUST reaches vault |
+
+```
+totalValue = depositAmount × 1.025 + 0.1 tTRUST
+```
 
 ---
 
 ## Mainnet Considerations
 
-- Same FeeProxy pattern applies on Intuition Mainnet
+- FeeProxy pattern ready to activate when MultiVault supports `depositFor`
 - `feeRecipient` should be changed to a multisig before mainnet launch
 - Fee amounts may be adjusted via `setDepositFixedFee` / `setDepositPercentageFee`
-- Consider lowering fixed fee on mainnet where tTRUST has real value

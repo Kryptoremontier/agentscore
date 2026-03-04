@@ -403,14 +403,12 @@ export async function depositToVault(
     throw new Error('No account address available')
   }
 
-  await ensureFeeProxyApproved(config)
-
-  // Route through FeeProxy — fee is collected atomically in a single TX.
-  // FeeProxy.deposit() has the same signature as MultiVault.deposit().
-  const totalValue = calcFeeProxyValue(amount)
+  // Call MultiVault directly so msg.sender = user → shares credited to user.
+  // NOTE: FeeProxy.deposit() credits shares to msg.sender (FeeProxy), not
+  // the receiver param, so we bypass it here to avoid locking user funds.
   const hash = await config.walletClient.writeContract({
-    address: FEE_PROXY_ADDRESS,
-    abi: FeeProxyAbi,
+    address: config.address, // MultiVault
+    abi: MultiVaultAbi,
     functionName: 'deposit',
     args: [
       recipientAddress,
@@ -418,12 +416,11 @@ export async function depositToVault(
       1n,  // curveId = 1 (default bonding curve)
       0n,  // minShares = 0 (accept any amount)
     ],
-    value: totalValue,
+    value: amount,
     account: config.walletClient.account!,
     chain: config.walletClient.chain ?? intuitionTestnet,
   })
 
-  // Wait for transaction receipt
   const receipt = await config.publicClient.waitForTransactionReceipt({ hash })
 
   return {
