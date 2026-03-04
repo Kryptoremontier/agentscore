@@ -262,11 +262,13 @@ We believe infrastructure should be sustainable without being extractive.
 
 ### What We Will NEVER Do
 
-- ❌ Take percentage of user stakes
 - ❌ Sell user data
 - ❌ Pay-to-win trust scores
 - ❌ Require tokens to use basic features
 - ❌ Lock trust data behind paywalls
+- ❌ Take fees that distort trust signal quality
+
+> **Note:** A small platform fee is collected on staking operations (0.1 tTRUST fixed + 2.5%) to sustain platform development. See [FEE_MODEL.md](FEE_MODEL.md) for details.
 
 ---
 
