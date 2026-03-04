@@ -23,7 +23,10 @@ import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
 import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { SKILL_WHERE_STR } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface GraphQLSkill {
   term_id: string
@@ -147,9 +150,7 @@ function SkillsPageContent() {
     setLoading(true)
     setError(null)
     try {
-      const whereConditions = [
-        `{ label: { _ilike: "Skill:%"} }`
-      ]
+      const whereConditions = [SKILL_WHERE_STR]
       if (search) {
         whereConditions.push(`{ label: { _ilike: "%${search}%" } }`)
       }

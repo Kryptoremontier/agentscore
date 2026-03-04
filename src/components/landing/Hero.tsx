@@ -6,7 +6,10 @@ import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { AGENT_WHERE_STR } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface PlatformStats {
   agents: number
@@ -79,7 +82,7 @@ export function Hero() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             query: `{
-              agents: atoms(where: { label: { _ilike: "Agent:%" } }) {
+              agents: atoms(where: ${AGENT_WHERE_STR}) {
                 term_id
                 positions_aggregate {
                   aggregate { count sum { shares } }

@@ -6,7 +6,10 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { AGENT_WHERE_STR } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 export function CTA() {
   const [agentCount, setAgentCount] = useState(0)
@@ -18,7 +21,7 @@ export function CTA() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: `{
-          agents: atoms(where: { label: { _ilike: "Agent:%" } }) {
+          agents: atoms(where: ${AGENT_WHERE_STR}) {
             positions_aggregate {
               aggregate { count }
             }

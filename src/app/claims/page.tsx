@@ -55,7 +55,10 @@ function AtomTypeIcon({ type, color }: { type: 'agent' | 'skill' | 'unknown'; co
   return <Layers className="w-3 h-3 inline-block mr-1 align-middle" style={{ color: color ?? '#7A838D' }} />
 }
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface GraphQLTriple {
   term_id: string
@@ -197,14 +200,8 @@ function ClaimsPageContent() {
               triples(
                 where: {
                   _and: [
-                    { _or: [
-                      { subject: { label: { _ilike: "Agent:%" } } }
-                      { subject: { label: { _ilike: "Skill:%" } } }
-                    ]}
-                    { _or: [
-                      { object: { label: { _ilike: "Agent:%" } } }
-                      { object: { label: { _ilike: "Skill:%" } } }
-                    ]}
+                    { ${TRIPLE_SUBJECT_OR_STR} }
+                    { ${TRIPLE_OBJECT_OR_STR} }
                   ]
                   ${searchFilter}
                 }

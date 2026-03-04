@@ -5,7 +5,10 @@ import { useRef, useEffect, useState } from 'react'
 import { Users, Shield, DollarSign, Activity } from 'lucide-react'
 import { GlassCard } from '@/components/shared/GlassCard'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { AGENT_WHERE_STR } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface AnimatedCounterProps {
   value: number
@@ -63,7 +66,7 @@ export function Stats() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             query: `{
-              agents: atoms(where: { label: { _ilike: "Agent:%" } }) {
+              agents: atoms(where: ${AGENT_WHERE_STR}) {
                 term_id
                 positions_aggregate {
                   aggregate { count sum { shares } }

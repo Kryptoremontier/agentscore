@@ -8,7 +8,10 @@ import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface FeaturedItem {
   term_id: string
@@ -30,8 +33,8 @@ interface FeaturedClaim {
 type Tab = 'agents' | 'skills' | 'claims'
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; accentRgb: string; accentHex: string; prefix: string }[] = [
-  { id: 'agents', label: 'Agents', icon: Bot,          accentRgb: '200,150,60',  accentHex: '#C8963C', prefix: 'Agent:' },
-  { id: 'skills', label: 'Skills', icon: Zap,          accentRgb: '46,230,214',  accentHex: '#2EE6D6', prefix: 'Skill:' },
+  { id: 'agents', label: 'Agents', icon: Bot,          accentRgb: '200,150,60',  accentHex: '#C8963C', prefix: AGENT_PREFIX },
+  { id: 'skills', label: 'Skills', icon: Zap,          accentRgb: '46,230,214',  accentHex: '#2EE6D6', prefix: SKILL_PREFIX },
   { id: 'claims', label: 'Claims', icon: MessageSquare, accentRgb: '56,182,255', accentHex: '#38B6FF', prefix: '' },
 ]
 
@@ -61,14 +64,8 @@ export function FeaturedAgents() {
             triples(
               where: {
                 _and: [
-                  { _or: [
-                    { subject: { label: { _ilike: "Agent:%" } } }
-                    { subject: { label: { _ilike: "Skill:%" } } }
-                  ]}
-                  { _or: [
-                    { object: { label: { _ilike: "Agent:%" } } }
-                    { object: { label: { _ilike: "Skill:%" } } }
-                  ]}
+                  { ${TRIPLE_SUBJECT_OR_STR} }
+                  { ${TRIPLE_OBJECT_OR_STR} }
                 ]
               }
               limit: 8

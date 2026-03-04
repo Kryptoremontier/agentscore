@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { PREDICATES, type PredicateConfig, getAtomName, getAtomType } from '@/types/claim'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface AtomResult {
   term_id: string
@@ -19,7 +21,8 @@ interface AtomResult {
 }
 
 async function fetchAtoms(prefix: 'Agent' | 'Skill', search = ''): Promise<AtomResult[]> {
-  const conditions = [`{ label: { _ilike: "${prefix}:%" } }`]
+  const resolvedPrefix = prefix === 'Agent' ? APP_CONFIG.AGENT_PREFIX : APP_CONFIG.SKILL_PREFIX
+  const conditions = [`{ label: { _ilike: "${resolvedPrefix}%" } }`]
   if (search.trim()) conditions.push(`{ label: { _ilike: "%${search.trim()}%" } }`)
   const res = await fetch(GRAPHQL_URL, {
     method: 'POST',

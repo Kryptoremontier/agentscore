@@ -6,7 +6,10 @@ import { Search, X, ArrowRight, Shield, Zap, MessageSquare } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/cn'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { AGENT_WHERE_STR, TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface AgentResult {
   term_id: string
@@ -16,7 +19,7 @@ interface AgentResult {
 }
 
 async function fetchFromIntuition(search: string): Promise<AgentResult[]> {
-  const whereConditions = [`{ label: { _ilike: "Agent:%" } }`]
+  const whereConditions = [AGENT_WHERE_STR]
   if (search.trim()) {
     whereConditions.push(`{ label: { _ilike: "%${search.trim()}%" } }`)
   }
@@ -71,14 +74,8 @@ async function fetchClaimsFromIntuition(search: string): Promise<ClaimResult[]> 
           triples(
             where: {
               _and: [
-                { _or: [
-                  { subject: { label: { _ilike: "Agent:%" } } }
-                  { subject: { label: { _ilike: "Skill:%" } } }
-                ]}
-                { _or: [
-                  { object: { label: { _ilike: "Agent:%" } } }
-                  { object: { label: { _ilike: "Skill:%" } } }
-                ]}
+                { ${TRIPLE_SUBJECT_OR_STR} }
+                { ${TRIPLE_OBJECT_OR_STR} }
               ]
               ${searchFilter}
             }

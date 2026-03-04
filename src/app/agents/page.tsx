@@ -24,8 +24,10 @@ import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
 import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 
-// Real agents loaded from Intuition testnet via GraphQL
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { AGENT_WHERE_STR } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface GraphQLAgent {
   term_id: string
@@ -150,12 +152,7 @@ function AgentsPageContent() {
     setLoading(true)
     setError(null)
     try {
-      // Build where clause: always filter by "Agent:" prefix
-      const whereConditions = [
-        `{ label: { _ilike: "Agent:%"} }`
-      ]
-
-      // Add search filter if provided
+      const whereConditions = [AGENT_WHERE_STR]
       if (search) {
         whereConditions.push(`{ label: { _ilike: "%${search}%" } }`)
       }

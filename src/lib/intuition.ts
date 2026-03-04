@@ -21,12 +21,17 @@ import {
 } from '@0xintuition/sdk'
 import { type PublicClient, type WalletClient, parseEther } from 'viem'
 import { intuitionTestnet, MultiVaultAbi } from '@0xintuition/protocol'
+import { APP_CONFIG } from './app-config'
+import {
+  TRIPLE_SUBJECT_OR_STR,
+  TRIPLE_OBJECT_OR_STR,
+} from './gql-filters'
 
 // ============================================================================
 // GraphQL API
 // ============================================================================
 
-const INTUITION_GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+const INTUITION_GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 // ============================================================================
 // Types
@@ -128,7 +133,9 @@ export async function createAgentAtom(
   metadata: AgentMetadata,
   initialDeposit?: bigint
 ) {
-  const atomText = `Agent: ${metadata.name} - ${metadata.description}`
+  // Label format uses the configured prefix so it matches the platform's filter
+  // and is scoped to the correct network/version (see NEXT_PUBLIC_AGENT_PREFIX).
+  const atomText = `${APP_CONFIG.AGENT_PREFIX} ${metadata.name} - ${metadata.description}`
   const result = await createAtomFromString(config, atomText, initialDeposit)
   const termId = result?.state?.termId
   if (termId) void tagCreatedVia(config, termId)
@@ -146,7 +153,7 @@ export async function createSkillAtom(
   metadata: { name: string; description: string; category: string; compatibilities: string[] },
   initialDeposit?: bigint
 ) {
-  const atomText = `Skill: ${metadata.name} - ${metadata.description}`
+  const atomText = `${APP_CONFIG.SKILL_PREFIX} ${metadata.name} - ${metadata.description}`
   const result = await createAtomFromString(config, atomText, initialDeposit)
   const termId = result?.state?.termId
   if (termId) void tagCreatedVia(config, termId)
@@ -770,16 +777,10 @@ export async function fetchTripleClaims(search = ''): Promise<any[]> {
             where: {
               _and: [
                 {
-                  _or: [
-                    { subject: { label: { _ilike: "Agent:%" } } }
-                    { subject: { label: { _ilike: "Skill:%" } } }
-                  ]
+                  ${TRIPLE_SUBJECT_OR_STR}
                 }
                 {
-                  _or: [
-                    { object: { label: { _ilike: "Agent:%" } } }
-                    { object: { label: { _ilike: "Skill:%" } } }
-                  ]
+                  ${TRIPLE_OBJECT_OR_STR}
                 }
               ]
               ${searchFilter}

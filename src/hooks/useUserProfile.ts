@@ -4,8 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { UserProfile, RegisteredAgent, AgentSupport, UserStats } from '@/types/user'
 import { calculateExpertLevel, autoBuildBadges } from '@/lib/badges'
 import { getAddress } from 'viem'
+import { APP_CONFIG } from '@/lib/app-config'
+import { AGENT_WHERE_OBJ, SKILL_WHERE_OBJ } from '@/lib/gql-filters'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 const PROFILE_STORAGE_KEY = 'agent_score_profiles'
 
@@ -92,7 +94,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     query ProfileData($address: String!) {
       myAgents: atoms(
         where: {
-          label: { _ilike: "Agent:%" }
+          label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" }
           creator_id: { _eq: $address }
         }
         order_by: { created_at: desc }
@@ -139,7 +141,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
 
       mySkills: atoms_aggregate(
         where: {
-          label: { _ilike: "Skill:%" }
+          label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" }
           creator_id: { _eq: $address }
         }
       ) {
@@ -150,8 +152,8 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
         where: {
           creator_id: { _eq: $address }
           _or: [
-            { subject: { label: { _ilike: "Agent:%" } } }
-            { subject: { label: { _ilike: "Skill:%" } } }
+            { subject: { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } } }
+            { subject: { label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" } } }
           ]
         }
       ) {

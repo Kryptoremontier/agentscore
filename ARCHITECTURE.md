@@ -183,6 +183,72 @@ but read-only — no edit controls shown.
 
 ---
 
+---
+
+## App-Scoping & Network Configuration
+
+All GraphQL filters and atom-label prefixes are driven by environment variables.
+This allows zero-code migrations to new networks and clean data namespacing.
+
+### Configuration files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/app-config.ts` | Reads all `NEXT_PUBLIC_` env vars into a typed `APP_CONFIG` object |
+| `src/lib/gql-filters.ts` | Exports pre-built filter strings/objects used in every GraphQL query |
+| `.env.local.example` | Full reference with descriptions of every env variable |
+| `.env.local` | Your local overrides (gitignored — never commit) |
+
+### How it works
+
+```
+.env.local
+  └─ NEXT_PUBLIC_AGENT_PREFIX=Agent:alpha:
+       │
+       ▼
+  app-config.ts  →  APP_CONFIG.AGENT_PREFIX = "Agent:alpha:"
+       │
+       ▼
+  gql-filters.ts →  AGENT_WHERE_STR = '{ label: { _ilike: "Agent:alpha:%" } }'
+       │                               AGENT_PREFIX = "Agent:alpha:"
+       │
+       ├─► intuition.ts   createAtomFromString("Agent:alpha: My Bot - ...")
+       ├─► agents/page    atoms(where: ${AGENT_WHERE_STR})
+       ├─► leaderboard    atoms(where: { label: { _ilike: "${AGENT_PREFIX}%" } })
+       └─► all other GQL  same pattern
+```
+
+### Scenarios
+
+**Current testnet (default)**
+```env
+NEXT_PUBLIC_AGENT_PREFIX=Agent:
+NEXT_PUBLIC_SKILL_PREFIX=Skill:
+NEXT_PUBLIC_APP_SCOPE=true
+```
+
+**Fresh alpha testnet — clean slate with new tag**
+```env
+NEXT_PUBLIC_AGENT_PREFIX=Agent:alpha:
+NEXT_PUBLIC_SKILL_PREFIX=Skill:alpha:
+NEXT_PUBLIC_APP_SCOPE=true
+NEXT_PUBLIC_ALPHA_DATE=2025-06-01T00:00:00Z
+```
+→ All new registrations will be labeled `Agent:alpha: Name`.
+→ Queries will only return atoms with that prefix AND created after the date.
+→ Old testnet data is invisible.
+
+**Mainnet — show all Intuition community content**
+```env
+NEXT_PUBLIC_GRAPHQL_URL=https://prod.intuition.sh/v1/graphql
+NEXT_PUBLIC_APP_SCOPE=false
+# Leave ALPHA_DATE empty
+```
+→ Label filter is removed. All atoms/triples on the network are visible.
+→ AgentScore still creates atoms with its own prefixes, but reads everything.
+
+---
+
 ## Key Files
 
 | File | Purpose |

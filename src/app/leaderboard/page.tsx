@@ -10,7 +10,10 @@ import {
 import { PageBackground } from '@/components/shared/PageBackground'
 import { cn } from '@/lib/cn'
 
-const GRAPHQL_URL = 'https://testnet.intuition.sh/v1/graphql'
+import { APP_CONFIG } from '@/lib/app-config'
+import { AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+
+const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface LeaderboardEntry {
   address: string
@@ -49,37 +52,73 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
     agents: Array<{ creator_id: string }>
     skills: Array<{ creator_id: string }>
     claims: Array<{ creator_id: string }>
-    positions: Array<{ account_id: string; shares: string }>
-    signals: Array<{ account_id: string }>
+    agentPositions: Array<{ account_id: string; shares: string }>
+    skillPositions: Array<{ account_id: string; shares: string }>
+    claimPositions: Array<{ account_id: string; shares: string }>
+    agentSignals: Array<{ account_id: string }>
+    skillSignals: Array<{ account_id: string }>
+    claimSignals: Array<{ account_id: string }>
   }>(`
     query LeaderboardData {
       agents: atoms(
-        where: { label: { _ilike: "Agent:%" } }
+        where: { label: { _ilike: "${AGENT_PREFIX}%" } }
         limit: 500
       ) { creator_id }
 
       skills: atoms(
-        where: { label: { _ilike: "Skill:%" } }
+        where: { label: { _ilike: "${SKILL_PREFIX}%" } }
         limit: 500
       ) { creator_id }
 
       claims: triples(
         where: {
           _or: [
-            { subject: { label: { _ilike: "Agent:%" } } }
-            { subject: { label: { _ilike: "Skill:%" } } }
+            { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } }
+            { subject: { label: { _ilike: "${SKILL_PREFIX}%" } } }
           ]
         }
         limit: 500
       ) { creator_id }
 
-      positions(
-        where: { shares: { _gt: "0" } }
-        limit: 2000
+      agentPositions: positions(
+        where: {
+          shares: { _gt: "0" }
+          vault: { term: { atom: { label: { _ilike: "${AGENT_PREFIX}%" } } } }
+        }
+        limit: 1000
       ) { account_id shares }
 
-      signals(
-        limit: 5000
+      skillPositions: positions(
+        where: {
+          shares: { _gt: "0" }
+          vault: { term: { atom: { label: { _ilike: "${SKILL_PREFIX}%" } } } }
+        }
+        limit: 1000
+      ) { account_id shares }
+
+      claimPositions: positions(
+        where: {
+          shares: { _gt: "0" }
+          vault: { term: { triple: { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } } } }
+        }
+        limit: 1000
+      ) { account_id shares }
+
+      agentSignals: signals(
+        where: { vault: { term: { atom: { label: { _ilike: "${AGENT_PREFIX}%" } } } } }
+        limit: 3000
+        order_by: { created_at: desc }
+      ) { account_id }
+
+      skillSignals: signals(
+        where: { vault: { term: { atom: { label: { _ilike: "${SKILL_PREFIX}%" } } } } }
+        limit: 1000
+        order_by: { created_at: desc }
+      ) { account_id }
+
+      claimSignals: signals(
+        where: { vault: { term: { triple: { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } } } } }
+        limit: 1000
         order_by: { created_at: desc }
       ) { account_id }
     }
@@ -99,14 +138,25 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
   for (const s of data.skills || []) { if (s.creator_id) ensure(s.creator_id).skillsRegistered++ }
   for (const c of data.claims || []) { if (c.creator_id) ensure(c.creator_id).claimsCreated++ }
 
-  for (const p of data.positions || []) {
+  const allPositions = [
+    ...(data.agentPositions || []),
+    ...(data.skillPositions || []),
+    ...(data.claimPositions || []),
+  ]
+  for (const p of allPositions) {
     if (p.account_id) {
       const e = ensure(p.account_id)
       e.totalPositions++
       e.tTrustStaked += Number(p.shares) / 1e18
     }
   }
-  for (const sig of data.signals || []) {
+
+  const allSignals = [
+    ...(data.agentSignals || []),
+    ...(data.skillSignals || []),
+    ...(data.claimSignals || []),
+  ]
+  for (const sig of allSignals) {
     if (sig.account_id) ensure(sig.account_id).totalSignals++
   }
 
