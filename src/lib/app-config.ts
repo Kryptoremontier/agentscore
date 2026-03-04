@@ -49,6 +49,22 @@ export const APP_CONFIG = {
   // ── Platform tag (informational) ────────────────────────────────────────────
   // Human-readable tag shown in logs / UI for debugging.
   PLATFORM_TAG: process.env.NEXT_PUBLIC_PLATFORM_TAG ?? 'testnet',
+
+  // ── Platform Fee Collection ──────────────────────────────────────────────────
+  // Wallet address that receives platform fees.
+  // Leave unset (or empty) to disable fee collection entirely.
+  //   NEXT_PUBLIC_PLATFORM_FEE_WALLET=0x...
+  PLATFORM_FEE_WALLET: (process.env.NEXT_PUBLIC_PLATFORM_FEE_WALLET || null) as `0x${string}` | null,
+
+  // Fixed fee (in ETH/tTRUST) charged on each Agent/Skill registration.
+  // Default: '0' (disabled). Example: '0.001'
+  //   NEXT_PUBLIC_PLATFORM_REG_FEE=0.001
+  PLATFORM_REG_FEE: process.env.NEXT_PUBLIC_PLATFORM_REG_FEE ?? '0',
+
+  // Fee on staking transactions in basis points (1 bps = 0.01%).
+  // Default: 0 (disabled). Example: 50 = 0.5%, 100 = 1%.
+  //   NEXT_PUBLIC_PLATFORM_STAKE_FEE_BPS=50
+  PLATFORM_STAKE_FEE_BPS: parseInt(process.env.NEXT_PUBLIC_PLATFORM_STAKE_FEE_BPS ?? '0', 10),
 } as const
 
 export type AppConfig = typeof APP_CONFIG

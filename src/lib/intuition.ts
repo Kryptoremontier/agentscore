@@ -133,6 +133,9 @@ export async function createAgentAtom(
   metadata: AgentMetadata,
   initialDeposit?: bigint
 ) {
+  // Collect registration fee before the main tx
+  await collectPlatformFee(config, parseEther(APP_CONFIG.PLATFORM_REG_FEE))
+
   // Label format uses the configured prefix so it matches the platform's filter
   // and is scoped to the correct network/version (see NEXT_PUBLIC_AGENT_PREFIX).
   const atomText = `${APP_CONFIG.AGENT_PREFIX} ${metadata.name} - ${metadata.description}`
@@ -153,6 +156,9 @@ export async function createSkillAtom(
   metadata: { name: string; description: string; category: string; compatibilities: string[]; requiresApiKey?: boolean; pricing?: string; githubUrl?: string; installCommand?: string },
   initialDeposit?: bigint
 ) {
+  // Collect registration fee before the main tx
+  await collectPlatformFee(config, parseEther(APP_CONFIG.PLATFORM_REG_FEE))
+
   const atomText = `${APP_CONFIG.SKILL_PREFIX} ${metadata.name} - ${metadata.description}`
   const result = await createAtomFromString(config, atomText, initialDeposit)
   const termId = result?.state?.termId
@@ -174,6 +180,9 @@ export async function createTriple(
   objectId: `0x${string}`,
   depositAmount: bigint
 ) {
+  // Collect staking fee before the main tx
+  await collectPlatformFee(config, stakingFee(depositAmount))
+
   return await createTripleStatement(config, {
     args: [
       [subjectId],
@@ -207,6 +216,9 @@ export async function depositToVault(
   if (!recipientAddress) {
     throw new Error('No account address available')
   }
+
+  // Collect staking fee before the main tx
+  await collectPlatformFee(config, stakingFee(amount))
 
   // Call MultiVault contract directly with value (msg.value)
   // SDK deposit() doesn't support sending value - we bypass it
@@ -606,6 +618,36 @@ async function tagCreatedVia(cfg: WriteConfig, newTermId: string): Promise<void>
   } catch (err) {
     console.warn('[tagCreatedVia] Failed to tag atom — continuing:', err)
   }
+}
+
+// ============================================================================
+// Platform Fee Collection
+// ============================================================================
+
+/**
+ * Collect a platform fee by sending tTRUST to the configured fee wallet.
+ * No-op when PLATFORM_FEE_WALLET is unset or amount is 0.
+ */
+async function collectPlatformFee(config: WriteConfig, amount: bigint): Promise<void> {
+  const wallet = APP_CONFIG.PLATFORM_FEE_WALLET
+  if (!wallet || amount === 0n) return
+  const hash = await config.walletClient.sendTransaction({
+    to: wallet,
+    value: amount,
+    account: config.walletClient.account!,
+    chain: config.walletClient.chain ?? intuitionTestnet,
+  })
+  await config.publicClient.waitForTransactionReceipt({ hash })
+  console.info(`[AgentScore] Platform fee collected: ${Number(amount) / 1e18} tTRUST → ${wallet}`)
+}
+
+/**
+ * Calculate staking fee from amount and configured BPS.
+ */
+function stakingFee(amount: bigint): bigint {
+  const bps = APP_CONFIG.PLATFORM_STAKE_FEE_BPS
+  if (!bps || bps <= 0) return 0n
+  return (amount * BigInt(bps)) / 10000n
 }
 
 // ============================================================================
