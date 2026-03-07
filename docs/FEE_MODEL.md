@@ -1,14 +1,20 @@
-# AgentScore — Fee Model
+# AgentScore — Fee Model (Hybrid)
 
-> **Status:** Live on Intuition Testnet (Chain ID 13579)
+> **Status:** Active on Intuition Testnet (Chain ID 13579)
 > **Contract:** IntuitionFeeProxy `0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41`
 > **Fee recipient:** `0x57246adCD446809c4DB1b04046E731954985bea2`
 
 ---
 
-## Philosophy
+## Overview
 
-Registration is free — we don't charge to list an agent. Staking goes directly to MultiVault so shares are correctly attributed to the user. Platform revenue via FeeProxy is planned for a future iteration once Intuition exposes a way to route deposits without changing `msg.sender`.
+AgentScore uses a **hybrid fee model**:
+
+- **Registration (createAtom, createTriple)** — goes directly through Intuition MultiVault SDK. No platform fee. The registering wallet becomes the on-chain creator (`msg.sender` = user).
+- **Staking (deposit)** — routes through IntuitionFeeProxy. Platform fee collected atomically. Shares credited to user via `receiver` parameter.
+- **Redeem/withdraw** — direct MultiVault. No proxy, no platform fee.
+
+**Why hybrid?** `createAtom` records `msg.sender` as the creator. Routing through FeeProxy would set the proxy address as creator instead of the user, breaking ownership in Intuition Portal and our app.
 
 ---
 
@@ -16,62 +22,126 @@ Registration is free — we don't charge to list an agent. Staking goes directly
 
 ### Agent / Skill Registration
 
-| Item | Cost |
-|------|------|
-| Atom creation (Intuition protocol fee) | ~0.001 tTRUST |
-| Initial deposit into vault | 0.001 tTRUST |
-| **Platform fee** | **0** |
-| **Total** | **~0.002 tTRUST + gas** |
+```
+Registration goes directly through Intuition MultiVault SDK.
+No platform fee is charged.
+The registering wallet becomes the creator of the on-chain Atom.
+Cost: ~0.002 tTRUST (Intuition protocol fee + initial deposit)
+Transactions: 1 TX (MetaMask confirmation)
+```
 
-Registration goes directly through Intuition's MultiVault SDK. No platform fee is charged. The registering wallet becomes the `creator` of the on-chain Atom — visible in Intuition Portal and our app.
+### Triple Creation
 
----
+```
+Triple creation goes directly through Intuition MultiVault SDK.
+No platform fee is charged.
+Cost: ~0.002 tTRUST (Intuition protocol fee)
+Transactions: 1 TX
+```
 
 ### Staking (Trust / Distrust signals)
 
-Staking currently calls MultiVault directly (no FeeProxy). This ensures shares are credited to the user's wallet.
+Fee parameters are read from the FeeProxy contract on-chain. Admin can update via `setDepositFixedFee()` / `setDepositPercentageFee()`.
 
 | Fee type | Amount |
 |----------|--------|
-| **Platform fee** | **0 (current — direct MultiVault)** |
-| MultiVault protocol fee | built into bonding curve |
+| Fixed fee per deposit | Configured on-chain (contract: `depositFixedFee()`) |
+| Percentage fee | Configured on-chain (contract: `depositPercentageFee()`) |
 
-> **Why not FeeProxy for staking?**
-> `MultiVault.deposit()` credits shares to `msg.sender`. When FeeProxy calls it, FeeProxy
-> becomes the share owner — the user's funds are locked and trust scores are unaffected.
-> FeeProxy would only work if MultiVault exposed a `depositFor(receiver)` variant.
+```
+Staking routes through FeeProxy contract.
+Platform fee: 0.001 tTRUST fixed + 2.5% of deposit amount.
+Shares are correctly credited to the user's wallet (receiver parameter).
+First-time users need one additional approve TX (one-time, cached).
+Transactions: 1 TX (or 2 TX first time with approve)
+
+Example: Stake 1 tTRUST
+- User sends: 1.026 tTRUST
+- Platform fee: 0.026 tTRUST -> feeRecipient
+- Deposited: 1.0 tTRUST -> MultiVault (shares to user)
+```
+
+Formula:
+```
+totalCost = depositAmount + (depositAmount * bps / 10000) + fixedFee
+```
+
+### Redeem / Withdraw
+
+```
+Redeem goes directly through MultiVault. No proxy. No platform fee.
+```
+
+---
+
+## User Approval (One-Time)
+
+Before the first staking operation, each user must approve the proxy on MultiVault:
+
+```
+MultiVault.approve(FEE_PROXY_ADDRESS, 1)  // 1 = DEPOSIT approval type
+```
+
+This is a one-time transaction per wallet. The frontend handles it automatically (cached in localStorage after first approval). Not required for registration or triple creation (those bypass the proxy).
 
 ---
 
 ## Transaction Flow
 
-### Staking (any user)
-
-```
-1. MultiVault.deposit(receiver, vaultId, ...) ← shares go to msg.sender = user ✓
-```
-
-1 MetaMask confirmation.
-
 ### Registration (any user)
 
 ```
-1. MultiVault.createAtoms(data, assets)    ← SDK direct call, user is creator
+1. SDK.createAtomFromString(config, label, deposit) -> MultiVault.createAtoms()
+   -> msg.sender = user -> creator_id = user
+   -> No platform fee
 ```
 
-1 MetaMask confirmation. No platform fee.
+### Triple Creation (any user)
+
+```
+1. MultiVault.createTriples(subjectIds, predicateIds, objectIds, assets)
+   -> msg.sender = user -> creator_id = user
+   -> No platform fee
+```
+
+### Staking (any user)
+
+```
+1. [one-time] MultiVault.approve(FeeProxy, DEPOSIT)
+2. FeeProxy.deposit(receiver=user, vaultId, curveId, minShares) { value: deposit+fee }
+   -> FeeProxy takes fee -> feeRecipient
+   -> FeeProxy forwards rest -> MultiVault.deposit(receiver=user, ...)
+   -> Shares credited to user
+```
+
+### Redeem (any user)
+
+```
+1. MultiVault.redeem(receiver, vaultId, curveId, shares, minAssets) <- direct, no proxy
+```
 
 ---
 
 ## Technical Implementation
 
-### FeeProxy Contract (deployed, not used for staking yet)
+### FeeProxy Contract
 
 - **Source:** `/d/VIBE-CODING/FEE_PROXY/src/IntuitionFeeProxy.sol`
-- **Template:** [intuition-box/Fee-Proxy-Template](https://github.com/0xIntuition/intuition-box)
-- **Deployed by:** AgentScore team
-- **Immutable fields:** `ethMultiVault` address (cannot be changed post-deploy)
-- **Mutable fields:** `depositFixedFee`, `depositPercentageFee`, `feeRecipient` (admin only)
+- **Template:** [0xIntuition/Intuition-Fee-Proxy-Template](https://github.com/0xIntuition/Intuition-Fee-Proxy-Template)
+- **Immutable:** `ethMultiVault` address
+- **Mutable (admin only):** `depositFixedFee`, `depositPercentageFee`, `feeRecipient`
+
+### Frontend Integration
+
+- `src/lib/intuition.ts`:
+  - `createAgentAtom()` / `createSkillAtom()` / `createSimpleAtom()` -> SDK `createAtomFromString()` (direct)
+  - `createAccountAtom()` -> SDK `createAtomFromEthereumAccount()` (direct)
+  - `createTriple()` -> MultiVault.createTriples() (direct)
+  - `depositToVault()` -> FeeProxy.deposit() (with fee)
+  - `redeemFromVault()` -> MultiVault.redeem() (direct)
+  - `ensureFeeProxyApproved()` -> MultiVault.approve() (one-time, for staking only)
+  - `getFeeConfig()` -> reads fee params from contract (cached)
+  - `getFeeBreakdown()` -> calculates fee breakdown for staking UI
 
 ### Admin Functions
 
@@ -84,30 +154,10 @@ FeeProxy.setDepositPercentageFee(uint256 newFee)  // base 10000, e.g. 250 = 2.5%
 FeeProxy.setWhitelistedAdmin(address admin, bool status)
 ```
 
-### Frontend Integration
-
-- `src/lib/intuition.ts` — `depositToVault()` calls MultiVault directly
-
----
-
-## Future Fee Model
-
-When Intuition adds a `depositFor(address receiver, ...)` function to MultiVault:
-
-| Fee type | Planned Amount |
-|----------|----------------|
-| Fixed fee per deposit | 0.1 tTRUST |
-| Percentage fee | 2.5% of deposit amount |
-| **Example: stake 1 tTRUST** | user sends ~1.126 tTRUST, 1 tTRUST reaches vault |
-
-```
-totalValue = depositAmount × 1.025 + 0.1 tTRUST
-```
-
 ---
 
 ## Mainnet Considerations
 
-- FeeProxy pattern ready to activate when MultiVault supports `depositFor`
-- `feeRecipient` should be changed to a multisig before mainnet launch
-- Fee amounts may be adjusted via `setDepositFixedFee` / `setDepositPercentageFee`
+- `feeRecipient` should be changed to a multisig (Gnosis Safe) before mainnet
+- Fee amounts should be reviewed and set via admin functions
+- Approval flow is production-ready (one-time per user, only needed for staking)

@@ -134,6 +134,15 @@ function AgentsPageContent() {
   const [opposeSupply, setOpposeSupply] = useState(0)
   const [pageError, setPageError] = useState<string | null>(null)
   const [sellReason, setSellReason] = useState<SellReason | null>(null)
+  const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
+
+  // Load platform fee config from FeeProxy contract (once per session)
+  useEffect(() => {
+    if (!publicClient) return
+    import('@/lib/intuition').then(({ getFeeConfig }) => {
+      getFeeConfig(publicClient).then(setPlatformFee).catch(() => {})
+    })
+  }, [publicClient])
 
   // Catch unhandled errors client-side and surface them visibly (dev only)
   useEffect(() => {
@@ -2133,9 +2142,15 @@ function AgentsPageContent() {
                             {inputAmt > 0 && (
                               <>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Fee (5%)</span>
+                                  <span className="text-[#7A838D] text-[10px]">Protocol fee (5%)</span>
                                   <span className="text-[#7A838D] text-[10px]">{preview.fee.toFixed(4)} tTRUST</span>
                                 </div>
+                                {platformFee && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#7A838D] text-[10px]">Platform fee ({Number(platformFee.bps) / 100}% + {(Number(platformFee.fixedFee) / 1e18).toFixed(4)})</span>
+                                    <span className="text-[#7A838D] text-[10px]">{((inputAmt * Number(platformFee.bps) / 10000) + Number(platformFee.fixedFee) / 1e18).toFixed(4)} tTRUST</span>
+                                  </div>
+                                )}
                                 <div className="flex items-center justify-between">
                                   <span className="text-[#7A838D] text-[10px]">Avg price</span>
                                   <span className="text-[#7A838D] text-[10px]">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
@@ -2144,6 +2159,12 @@ function AgentsPageContent() {
                                   <span className="text-[#7A838D] text-[10px]">Price after</span>
                                   <span className="text-[#7A838D] text-[10px]">{preview.newPrice.toFixed(4)} tTRUST/share</span>
                                 </div>
+                                {platformFee && (
+                                  <div className="flex items-center justify-between mt-1 pt-1 border-t border-[#1E2229]">
+                                    <span className="text-[#B5BDC6] text-[10px] font-medium">Total cost</span>
+                                    <span className="text-white text-[10px] font-semibold">{(inputAmt + inputAmt * Number(platformFee.bps) / 10000 + Number(platformFee.fixedFee) / 1e18).toFixed(4)} tTRUST</span>
+                                  </div>
+                                )}
                               </>
                             )}
                           </div>
@@ -2169,7 +2190,7 @@ function AgentsPageContent() {
                             {validShares && (
                               <>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Fee (5%)</span>
+                                  <span className="text-[#7A838D] text-[10px]">Protocol fee (5%)</span>
                                   <span className="text-[#f85149] text-[10px] font-mono">-{preview.fee.toFixed(6)} tTRUST</span>
                                 </div>
                                 <div className="h-px bg-[#1E2229] my-1" />
