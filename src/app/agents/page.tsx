@@ -1242,6 +1242,15 @@ function AgentsPageContent() {
     }
   }, [selectedAgent, combinedStakerCount, agentTrust, compositeTrust])
 
+  // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
+  const agentAvatar = useMemo(() => {
+    if (!selectedAgent?.term_id) return null
+    if (typeof window === 'undefined') return null
+    try {
+      return localStorage.getItem(`agentscore_avatar_${selectedAgent.term_id}`) || null
+    } catch { return null }
+  }, [selectedAgent?.term_id])
+
   // ─── Pozycje posortowane chronologicznie z rank ───
   const enrichedPositions = useMemo(() => {
     try {
@@ -1705,21 +1714,27 @@ function AgentsPageContent() {
               {/* === TOP CARD: Agent Header === */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                 <div className="flex items-start gap-4 mb-4">
-                  {/* Icon */}
+                  {/* Icon / Avatar */}
                   <div
-                    className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
+                    className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden"
                     style={{
                       backgroundColor: getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares) + '20',
                       border: `2px solid ${getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares)}50`
                     }}
                   >
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
-                        stroke={getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares)}
-                        strokeWidth="2"
-                        fill={getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares) + '30'}
-                      />
-                    </svg>
+                    {agentAvatar ? (
+                      <img src={agentAvatar} alt={getAgentName(selectedAgent.label)} className="w-full h-full object-cover" />
+                    ) : selectedAgent.emoji ? (
+                      <span className="text-2xl">{selectedAgent.emoji}</span>
+                    ) : (
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+                          stroke={getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares)}
+                          strokeWidth="2"
+                          fill={getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares) + '30'}
+                        />
+                      </svg>
+                    )}
                   </div>
 
                   {/* Name + meta */}

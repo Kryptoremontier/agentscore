@@ -216,6 +216,13 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
       setTxHash(result.transactionHash)
       setAtomId(result.state.termId)
 
+      // Persist avatar in localStorage so the modal can display it
+      if (formData.avatar && result.state.termId) {
+        try {
+          localStorage.setItem(`agentscore_avatar_${result.state.termId}`, formData.avatar)
+        } catch { /* quota exceeded — non-critical */ }
+      }
+
       onSuccess?.(result.state.termId)
 
     } catch (e: any) {

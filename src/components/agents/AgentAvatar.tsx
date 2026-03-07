@@ -39,11 +39,7 @@ export function AgentAvatar({
 
     setIsUploading(true)
     try {
-      // TODO: Upload to IPFS
-      // const ipfsHash = await uploadToIPFS(file)
-      // await onAvatarChange(`ipfs://${ipfsHash}`)
-
-      // Tymczasowo: data URL
+      // Convert to data URL (IPFS upload planned for mainnet)
       const reader = new FileReader()
       reader.onload = async (event) => {
         await onAvatarChange(event.target?.result as string)

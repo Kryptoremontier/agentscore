@@ -20,7 +20,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-3.0.0-C8963C?style=flat-square" alt="Version" />
-  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/license-Proprietary-red?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/built%20on-Intuition%20Protocol-8A63D2?style=flat-square" alt="Built on Intuition" />
   <img src="https://img.shields.io/badge/network-Intuition%20Testnet-blue?style=flat-square" alt="Network" />
   <img src="https://img.shields.io/badge/status-testnet%20alpha-orange?style=flat-square" alt="Status" />
@@ -155,17 +155,10 @@ Claims are also stakeable — support or oppose any statement with real tTRUST.
 Every vault (Support or Oppose) runs an independent bonding curve:
 
 ```
-Price per share = basePrice × totalSupply^1.5
+Price per share = basePrice + slope × totalSupply   (linear bonding curve)
 
-Early supporter example:
-┌──────────────────────────────────────────────────────┐
-│  Staker A (early):  100 tTRUST → 100 shares @ 1.0   │
-│  Staker B:          100 tTRUST →  63 shares @ 1.58  │
-│  Staker C:          100 tTRUST →  45 shares @ 2.22  │
-│  ────────────────────────────────────────────────    │
-│  Total staked: 300 tTRUST                            │
-│  Staker A value: 100 × 2.22 = 222 tTRUST (+122%)    │
-└──────────────────────────────────────────────────────┘
+Early believers get more shares per tTRUST.
+As supply grows, price rises — rewarding early supporters.
 ```
 
 Early believers are rewarded. Bad agents lose stake value as holders exit.
@@ -283,7 +276,7 @@ git push origin feature/your-feature
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+Proprietary — see [LICENSE](LICENSE) for details.
 
 ---
 
