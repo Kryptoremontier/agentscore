@@ -13,7 +13,7 @@ import { useAccount, useWalletClient, usePublicClient, useSwitchChain } from 'wa
 import { intuitionTestnet } from '@0xintuition/protocol'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
-import { createWriteConfig, createSkillAtom } from '@/lib/intuition'
+import { createWriteConfig, createSkillAtom, getFeeConfig } from '@/lib/intuition'
 import { SKILL_CATEGORIES, SKILL_COMPATIBILITIES, type SkillCategory, type SkillCompatibility } from '@/types/skill'
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -70,8 +70,14 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [mounted, setMounted] = useState(false)
+  const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
 
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    setMounted(true)
+    if (publicClient) {
+      getFeeConfig(publicClient).then(setPlatformFee).catch(() => {})
+    }
+  }, [publicClient])
 
   const validateStep = () => {
     const newErrors: Record<string, string> = {}
@@ -596,14 +602,34 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
               </div>
 
               {/* Registration Fee */}
-              <div className="glass rounded-lg p-4 border border-primary/20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Registration Fee</p>
-                    <p className="text-sm text-text-muted">One-time Atom creation</p>
-                  </div>
-                  <p className="text-2xl font-bold font-mono">0.01 tTRUST</p>
-                </div>
+              <div className="glass rounded-lg p-4 border border-primary/20 space-y-2">
+                <p className="font-medium">Registration Fee</p>
+                {platformFee ? (() => {
+                  const depositAmt = 0.001
+                  const pctFee = depositAmt * Number(platformFee.bps) / 10000
+                  const fixedFee = Number(platformFee.fixedFee) / 1e18
+                  const protocolCost = 0.001
+                  return (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-text-muted">
+                        <span>Protocol cost</span><span>~{protocolCost.toFixed(3)} tTRUST</span>
+                      </div>
+                      <div className="flex justify-between text-text-muted">
+                        <span>Initial deposit</span><span>{depositAmt.toFixed(3)} tTRUST</span>
+                      </div>
+                      <div className="flex justify-between text-text-muted">
+                        <span>Platform fee ({Number(platformFee.bps)/100}% + {fixedFee.toFixed(3)})</span>
+                        <span>{(pctFee + fixedFee).toFixed(4)} tTRUST</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-base border-t border-white/10 pt-1">
+                        <span>Total</span>
+                        <span className="font-mono">{(protocolCost + depositAmt + pctFee + fixedFee).toFixed(4)} tTRUST</span>
+                      </div>
+                    </div>
+                  )
+                })() : (
+                  <p className="text-sm text-text-muted">~0.21 tTRUST (protocol + deposit + fee)</p>
+                )}
               </div>
 
               {/* Terms */}

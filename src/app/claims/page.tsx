@@ -1060,7 +1060,7 @@ function ClaimsPageContent() {
       <AnimatePresence>
         {showCreateModal && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCreateModal(false)} className="fixed inset-0 z-40 bg-black/70" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCreateModal(false)} className="fixed inset-0 z-40 bg-black/90" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="fixed inset-x-4 top-[5%] bottom-[5%] md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl z-50 overflow-y-auto">
               <div className="min-h-full flex items-start pt-8 pb-8">
                 <div className="w-full">
@@ -1086,20 +1086,24 @@ function ClaimsPageContent() {
 
       {/* ── Claim Detail Modal ── */}
       {selectedClaim && (
-        <div className="fixed inset-0 top-[64px] bg-black/70 z-[55] overflow-y-auto">
+        <div
+          className="fixed inset-0 top-[64px] z-[55] overflow-y-auto"
+          style={{
+            backgroundColor: '#0A0C0E',
+            backgroundImage: "linear-gradient(rgba(10,10,15,0.75), rgba(10,10,15,0.75)), url('/images/brand/gold/background.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center top',
+            backgroundAttachment: 'fixed',
+            backgroundRepeat: 'no-repeat',
+          }}
+          onClick={() => setSelectedClaim(null)}
+        >
           <div className="min-h-full p-4 flex items-start justify-center">
             <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
 
               {/* === TOP CARD: Claim Header === */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                 <div className="flex items-start gap-4 mb-4">
-                  {/* Triple icon */}
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 bg-[#C8963C]/10 border-2 border-[#C8963C]/30">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                      <path d="M10 3H6a2 2 0 00-2 2v14c0 1.1.9 2 2 2h4M16 17l5-5-5-5M21 12H9" stroke="#C8963C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-
                   {/* Triple chips + meta */}
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap gap-1.5 mb-2">
@@ -1122,13 +1126,7 @@ function ClaimsPageContent() {
                       })()}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
-                      {selectedClaim.creator?.id ? (
-                        <a href={`/profile/${selectedClaim.creator.id}`} className="bg-[#1E2229] px-2 py-0.5 rounded text-xs hover:bg-[#252B33] hover:text-white transition-colors">
-                          {selectedClaim.creator.label || selectedClaim.creator.id.slice(0, 10)}
-                        </a>
-                      ) : selectedClaim.creator?.label ? (
-                        <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs">{selectedClaim.creator.label}</span>
-                      ) : null}
+                      <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs text-[#7A838D]">via AgentScore</span>
                       <span>·</span>
                       <span>{new Date(selectedClaim.created_at).toLocaleDateString('pl-PL')}</span>
                     </div>
@@ -1946,7 +1944,7 @@ function ClaimsPageContent() {
                                     const walletLabel = pos.account?.label || pos.account_id
                                     const isENS = walletLabel?.includes('.eth')
                                     const displayWallet = isENS ? walletLabel : walletLabel?.length > 14 ? walletLabel.slice(0, 8) + '...' + walletLabel.slice(-4) : walletLabel
-                                    const isCreator = selectedClaim.creator?.id && pos.account_id?.toLowerCase() === selectedClaim.creator.id.toLowerCase()
+                                    const isCreator = false // creator = FeeProxy address when routing via proxy
                                     return (
                                       <tr key={`${pos.account_id}-${pos.term_id}-${i}`} className="border-b border-[#C8963C]/12/50 hover:bg-[#0F1113]">
                                         <td className="py-2">
@@ -2019,12 +2017,8 @@ function ClaimsPageContent() {
                         <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Details</p>
                         <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                           <div>
-                            <p className="text-[#7A838D] text-[10px] mb-0.5">Creator</p>
-                            {selectedClaim.creator?.id ? (
-                              <Link href={`/profile/${selectedClaim.creator.id}`} className="text-[#C8963C] text-xs font-medium hover:underline">
-                                {selectedClaim.creator.label?.replace('.eth','') || selectedClaim.creator.id.slice(0,10)}
-                              </Link>
-                            ) : <p className="text-white text-xs font-medium">{selectedClaim.creator?.label || 'unknown'}</p>}
+                            <p className="text-[#7A838D] text-[10px] mb-0.5">Platform</p>
+                            <p className="text-white text-xs font-medium">AgentScore</p>
                           </div>
                           {[
                             { label: 'Claim Age', value: ageLabel },
@@ -2132,10 +2126,7 @@ function ClaimsPageContent() {
                       <div className="flex-1 min-w-0">
                         <p className="text-white text-xs font-medium">Claim Created</p>
                         <p className="text-[#7A838D] text-[10px] mt-0.5">
-                          by {selectedClaim.creator?.id
-                            ? <Link href={`/profile/${selectedClaim.creator.id}`} className="text-[#C8963C] hover:underline">{selectedClaim.creator.label || selectedClaim.creator.id.slice(0,10)}</Link>
-                            : (selectedClaim.creator?.label || 'unknown')}
-                          {' · '}{new Date(selectedClaim.created_at).toLocaleDateString('pl-PL')}
+                          via AgentScore{' · '}{new Date(selectedClaim.created_at).toLocaleDateString('pl-PL')}
                         </p>
                       </div>
                     </div>
@@ -2145,7 +2136,8 @@ function ClaimsPageContent() {
                       const isDeposit = !!sig.deposit_id
                       const isOppose = claimTriple.counterTermId && sig.term_id === claimTriple.counterTermId
                       const delta = Math.abs(Number(sig.delta || 0)) / 1e18
-                      const walletLabel = sig.account?.label || sig.account_id?.slice(0,8) + '...'
+                      const isFeeProxy = sig.account_id?.toLowerCase() === '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41'
+                      const walletLabel = isFeeProxy ? 'via AgentScore' : (sig.account?.label || sig.account_id?.slice(0,8) + '...')
                       return (
                         <div key={sig.id} className="flex items-start gap-3 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm ${
@@ -2159,9 +2151,9 @@ function ClaimsPageContent() {
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-white text-xs font-medium">{isDeposit ? (isOppose ? 'Oppose Stake' : 'Support Stake') : 'Redeem'}</span>
                               <span className="text-[#7A838D] text-[10px]">by</span>
-                              {sig.account_id
+                              {sig.account_id && !isFeeProxy
                                 ? <Link href={`/profile/${sig.account_id}`} className="text-[#C8963C] text-[10px] hover:underline">{walletLabel}</Link>
-                                : <span className="text-[#B5BDC6] text-[10px]">{walletLabel}</span>}
+                                : <span className="text-[#7A838D] text-[10px]">{walletLabel}</span>}
                             </div>
                             <p className="text-[#7A838D] text-[10px] mt-0.5">{new Date(sig.created_at).toLocaleDateString('pl-PL')}</p>
                           </div>
@@ -2231,7 +2223,7 @@ function ClaimsPageContent() {
 
       {/* ── Distrust CTA — prompt to buy Oppose shares after "Lost Trust" sell ── */}
       {showDistrustCta && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4">
           <div className="bg-[#0F1113] border border-[#ef4444]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <div className="w-12 h-12 rounded-full bg-[#ef4444]/10 border border-[#ef4444]/30 flex items-center justify-center mx-auto mb-4">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

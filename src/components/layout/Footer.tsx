@@ -191,6 +191,27 @@ export function Footer() {
                 Intuition Protocol
               </a>
             </span>
+            <span className="hidden sm:block opacity-40">·</span>
+            <span className="flex items-center gap-2">
+              <span className="text-[#4A5260]">Contracts:</span>
+              <a
+                href="https://testnet.explorer.intuition.systems/address/0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#4A5260] hover:text-[#7A838D] transition-colors"
+              >
+                FeeProxy ↗
+              </a>
+              <span className="opacity-40">|</span>
+              <a
+                href="https://testnet.explorer.intuition.systems/address/0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#4A5260] hover:text-[#7A838D] transition-colors"
+              >
+                MultiVault ↗
+              </a>
+            </span>
           </div>
 
           <div className="flex items-center gap-4">

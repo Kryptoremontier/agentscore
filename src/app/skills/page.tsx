@@ -16,8 +16,8 @@ import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/tru
 import { calculateWeightedTrust } from '@/lib/reputation-decay'
 import {
   calculateCompositeTrust, calculateStableDays, findPeakPrice,
-  getMaxDailySell, getSellReasonConfig, getLoyaltyMultiplier,
-  SELL_REASONS, COMPOSITE_WEIGHTS, type SellReason, type CompositeResult,
+  getLoyaltyMultiplier,
+  COMPOSITE_WEIGHTS, type CompositeResult,
 } from '@/lib/composite-trust'
 import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
 import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
@@ -99,9 +99,7 @@ function SkillsPageContent() {
     knownShares?: string
     counterTermId?: string | null
     tripleTermId?: string | null
-    sellReason?: string | null
   } | null>(null)
-  const [showDistrustCta, setShowDistrustCta] = useState<GraphQLSkill | null>(null)
   const [userPosition, setUserPosition] = useState<{
     forShares: string | null
     againstShares: string | null
@@ -132,7 +130,6 @@ function SkillsPageContent() {
   const [supportSupply, setSupportSupply] = useState(0)
   const [opposeSupply, setOpposeSupply] = useState(0)
   const [pageError, setPageError] = useState<string | null>(null)
-  const [sellReason, setSellReason] = useState<SellReason | null>(null)
   const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
 
   // Load platform fee config from FeeProxy contract (once per session)
@@ -610,7 +607,6 @@ function SkillsPageContent() {
 
     isExecutingRef.current = true
     setShowConfirm(false)
-    setSellReason(null)
     const key = pendingVote.agent.term_id
     setVoteStatus(prev => ({ ...prev, [key]: 'pending' }))
 
@@ -699,13 +695,8 @@ function SkillsPageContent() {
         const updated = await fetchUserPosition(agent.term_id, address!, pendingVote.counterTermId)
         setUserPosition(updated)
 
-        if (pendingVote.sellReason === 'distrust' && pendingVote.type === 'redeem_trust') {
-          // "Lost Trust" sell → prompt user to register distrust on-chain via Oppose vault
-          setShowDistrustCta(agent as unknown as GraphQLSkill)
-        } else {
-          setToast(`Redeemed ${(Number(sharesToRedeem) / 1e18).toFixed(4)} shares!`)
-          setTimeout(() => setToast(null), 4000)
-        }
+        setToast(`Redeemed ${(Number(sharesToRedeem) / 1e18).toFixed(4)} shares!`)
+        setTimeout(() => setToast(null), 4000)
 
       } else if (pendingVote.type === 'trust') {
         await depositToVault(cfg, agent.term_id as `0x${string}`, parseEther(pendingVote.amount))
@@ -1111,19 +1102,6 @@ function SkillsPageContent() {
     }
   }, [skillSignals, skillTriple.counterTermId])
 
-  const exitLimit = useMemo(() => {
-    try {
-      if (!userPosition || !signalSide) return null
-      const userSharesRaw = signalSide === 'support' ? userPosition.forShares : userPosition.againstShares
-      if (!userSharesRaw) return null
-      const userShares = Number(userSharesRaw) / 1e18
-      const totalSupply = signalSide === 'support' ? supportSupply : opposeSupply
-      return getMaxDailySell(userShares, totalSupply)
-    } catch (e) {
-      console.error('[exitLimit]', e)
-      return null
-    }
-  }, [userPosition, signalSide, supportSupply, opposeSupply])
 
   const compositeTrust = useMemo((): CompositeResult | null => {
     try {
@@ -1516,7 +1494,7 @@ function SkillsPageContent() {
                               {(() => { try { return <TrustTierBadge tier={calculateTier(stakers, Number(skill.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18, 50, skill.created_at ? getAgentAgeDays(skill.created_at) : 0)} size="sm" /> } catch { return null } })()}
                             </div>
                             <span className="text-xs text-[#7A838D] bg-[#1e2028] px-2 py-0.5 rounded inline-block">
-                              {creator.replace('.eth', '')}
+                              via AgentScore
                             </span>
                           </div>
                         </div>
@@ -1584,7 +1562,7 @@ function SkillsPageContent() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-white truncate">{name}</p>
-                        <p className="text-[11px] text-[#7A838D] truncate">{creator.replace('.eth', '')}</p>
+                        {/* creator hidden */}
                       </div>
                       <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{stakes}</span>
                       <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{stakers}</span>
@@ -1603,30 +1581,24 @@ function SkillsPageContent() {
 
       {/* Skill Detail Modal */}
       {selectedSkill && (
-        <div className="fixed inset-0 top-[64px] bg-black/70 z-[55] overflow-y-auto">
+        <div
+          className="fixed inset-0 top-[64px] z-[55] overflow-y-auto"
+          style={{
+            backgroundColor: '#0A0C0E',
+            backgroundImage: "linear-gradient(rgba(10,10,15,0.75), rgba(10,10,15,0.75)), url('/images/brand/gold/background.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center top',
+            backgroundAttachment: 'fixed',
+            backgroundRepeat: 'no-repeat',
+          }}
+          onClick={() => setSelectedSkill(null)}
+        >
           <div className="min-h-full p-4 flex items-start justify-center">
             <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
 
               {/* === TOP CARD: Skill Header === */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                 <div className="flex items-start gap-4 mb-4">
-                  {/* Icon */}
-                  <div
-                    className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{
-                      backgroundColor: getTrustStateColor(selectedSkill.positions_aggregate?.aggregate?.sum?.shares) + '20',
-                      border: `2px solid ${getTrustStateColor(selectedSkill.positions_aggregate?.aggregate?.sum?.shares)}50`
-                    }}
-                  >
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
-                        stroke={getTrustStateColor(selectedSkill.positions_aggregate?.aggregate?.sum?.shares)}
-                        strokeWidth="2"
-                        fill={getTrustStateColor(selectedSkill.positions_aggregate?.aggregate?.sum?.shares) + '30'}
-                      />
-                    </svg>
-                  </div>
-
                   {/* Name + meta */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -1641,18 +1613,7 @@ function SkillsPageContent() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
-                      {selectedSkill.creator?.id ? (
-                        <Link
-                          href={`/profile/${selectedSkill.creator.id}`}
-                          className="bg-[#1E2229] px-2 py-0.5 rounded text-xs hover:bg-[#252B33] hover:text-white transition-colors"
-                        >
-                          {selectedSkill.creator.label?.replace('.eth','') || selectedSkill.creator.id.slice(0, 10)}
-                        </Link>
-                      ) : (
-                        <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs">
-                          {selectedSkill.creator?.label?.replace('.eth','') || 'unknown'}
-                        </span>
-                      )}
+                      <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs text-[#7A838D]">via AgentScore</span>
                       <span>·</span>
                       <span>Registered {new Date(selectedSkill.created_at).toLocaleDateString('pl-PL')}</span>
                     </div>
@@ -1676,23 +1637,8 @@ function SkillsPageContent() {
                     : 'AI Skill registered on Intuition Protocol.'}
                 </p>
 
-                {/* Wallet + Atom ID */}
+                {/* Atom ID */}
                 <div className="space-y-2 mb-5">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-[#B5BDC6] w-16 flex-shrink-0">Wallet:</span>
-                    {selectedSkill.creator?.id ? (
-                      <Link
-                        href={`/profile/${selectedSkill.creator.id}`}
-                        className="text-[#C8963C] text-xs font-mono hover:underline"
-                      >
-                        {selectedSkill.creator.label || selectedSkill.creator.id}
-                      </Link>
-                    ) : (
-                      <code className="text-[#C8963C] text-xs font-mono">
-                        {selectedSkill.creator?.label || '0x???'}
-                      </code>
-                    )}
-                  </div>
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-[#B5BDC6] w-16 flex-shrink-0">Atom ID:</span>
                     <code className="text-[#B5BDC6] text-xs font-mono">
@@ -1726,72 +1672,45 @@ function SkillsPageContent() {
                 </div>
               </div>
 
-              {/* === ACTION SECTION: Support / Oppose / Buy / Sell === */}
+              {/* === ACTION SECTION: Stake on Skill === */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
-                <p className="text-[#B5BDC6] text-xs font-semibold mb-1">Bonding Curve Market</p>
+                <p className="text-[#B5BDC6] text-xs font-semibold mb-1">Buy / Sell Shares</p>
                 <p className="text-[#7A838D] text-xs mb-3">
-                  One market: choose side (Support/Oppose) and action (Buy/Sell).
+                  Buy shares to back this skill — early buyers get more shares per tTRUST. Price rises as demand grows.
                 </p>
 
                 {isConnected ? (
                   <>
-                    {/* Support / Oppose tabs */}
-                    <div className="flex rounded-xl overflow-hidden border border-[#C8963C]/12 mb-3">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setSignalSide('support'); setTradeAction('buy') }}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors ${
-                          signalSide === 'support'
-                            ? 'bg-[#2d7a5f] text-white'
-                            : 'bg-transparent text-[#B5BDC6] hover:text-white'
-                        }`}
-                      >
-                        Support
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setSignalSide('oppose'); setTradeAction('buy') }}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors ${
-                          signalSide === 'oppose'
-                            ? 'bg-[#8b3a3a] text-white'
-                            : 'bg-transparent text-[#B5BDC6] hover:text-white'
-                        }`}
-                      >
-                        Oppose
-                      </button>
-                    </div>
-
-                    {/* Oppose tab: show "Create Vault" panel if no triple exists yet */}
-                    {signalSide === 'oppose' && !skillTriple.loading && !skillTriple.counterTermId ? (
-                      <div className="bg-[#1a1018] border border-[#8b3a3a40] rounded-xl p-4 text-center">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="mx-auto mb-2 opacity-60">
-                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-                            stroke="#c45454" strokeWidth="2" fill="#c4545415"/>
-                          <path d="M15 9l-6 6M9 9l6 6" stroke="#c45454" strokeWidth="1.5" strokeLinecap="round"/>
-                        </svg>
-                        <p className="text-[#c45454] text-xs font-semibold mb-1">Oppose Vault Not Set Up</p>
-                        <p className="text-[#B5BDC6] text-xs mb-3 leading-relaxed">
-                          Opposing requires a Trust Triple on-chain.<br/>
-                          One transaction to activate Oppose for this skill.
+                    {/* Legacy Oppose position — show sell button if user has against shares */}
+                    {userPosition.againstShares && Number(userPosition.againstShares) > 0 && (
+                      <div className="mb-3 p-3 rounded-xl bg-[#8b3a3a15] border border-[#8b3a3a30]">
+                        <p className="text-[#c45454] text-xs font-semibold mb-1">Legacy Oppose Position</p>
+                        <p className="text-[#B5BDC6] text-[10px] mb-2">
+                          You have {(Number(userPosition.againstShares) / 1e18).toFixed(4)} AGAINST shares. Opposing skills is now handled per-Claim.
                         </p>
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleCreateTrustTriple() }}
-                          disabled={creatingTriple}
-                          className="px-5 py-2 bg-[#8b3a3a] hover:bg-[#c45454] disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPendingVote({
+                              type: 'redeem_distrust',
+                              agent: selectedSkill,
+                              amount: (Number(userPosition.againstShares) / 1e18).toString(),
+                              claim: '',
+                              claimAtomId: null,
+                              counterTermId: skillTriple.counterTermId,
+                              knownShares: userPosition.againstShares ?? undefined,
+                            })
+                            setSelectedSkill(null)
+                            setShowConfirm(true)
+                          }}
+                          className="px-3 py-1.5 bg-[#8b3a3a] hover:bg-[#c45454] text-white text-xs font-semibold rounded-lg transition-colors"
                         >
-                          {creatingTriple ? (
-                            <span className="flex items-center gap-2">
-                              <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin inline-block" />
-                              Creating Vault...
-                            </span>
-                          ) : 'Activate Oppose Vault →'}
+                          Sell Oppose Shares →
                         </button>
                       </div>
-                    ) : skillTriple.loading && signalSide === 'oppose' ? (
-                      <div className="flex items-center justify-center gap-2 py-6 text-[#B5BDC6] text-xs">
-                        <span className="w-3 h-3 border border-[#8b949e] border-t-transparent rounded-full animate-spin" />
-                        Checking Oppose vault...
-                      </div>
-                    ) : (
-                      <>
+                    )}
+
+                    <>
                     {/* Buy / Sell tabs */}
                     <div className="flex rounded-xl overflow-hidden border border-[#C8963C]/12 mb-3">
                       <button
@@ -1819,36 +1738,26 @@ function SkillsPageContent() {
                     {/* Curve info */}
                     <div className="flex items-center justify-between mb-3 px-1">
                       <div>
-                        <p className="text-white text-xs font-semibold">Bonding Curve</p>
+                        <p className="text-white text-xs font-semibold">
+                          Bonding Curve
+                          <span className="ml-1.5 text-[#C8963C] text-[10px] font-normal">
+                            {tradeAction === 'buy' ? '↑ price rises with each buy' : '↓ price drops with each sell'}
+                          </span>
+                        </p>
                         <p className="text-[#B5BDC6] text-xs">
-                          Current price: {getCurrentPrice(signalSide === 'support' ? supportSupply : opposeSupply).toFixed(4)} tTRUST/share
+                          Current: <span className="text-white font-mono font-semibold">{getCurrentPrice(supportSupply).toFixed(4)}</span> tTRUST/share
+                          <span className="text-[#7A838D] ml-1.5">· supply: {supportSupply.toFixed(2)}</span>
                         </p>
                       </div>
-                      <span className="text-[10px] px-2 py-1 rounded-full border border-[#C8963C]/25 text-[#B5BDC6]">
-                        Active
+                      <span className="text-[10px] px-2 py-1 rounded-full border border-[#C8963C]/25 text-[#C8963C] bg-[#C8963C]/8">
+                        Live
                       </span>
                     </div>
 
-                    {/* First Oppose Buy hint */}
-                    {signalSide === 'oppose' && tradeAction === 'buy' && skillTriple.counterTermId && (
-                      <div className="flex items-start gap-2 p-2.5 mb-3 bg-[#b8860b10] border border-[#b8860b20] rounded-lg">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                          <circle cx="12" cy="12" r="9" stroke="#b8860b" strokeWidth="2"/>
-                          <path d="M12 8v4m0 4h.01" stroke="#b8860b" strokeWidth="2" strokeLinecap="round"/>
-                        </svg>
-                        <p className="text-[#b8860b] text-[10px] leading-relaxed">
-                          First Oppose Buy may require 2 confirmations: one to clear the activation deposit (FOR), then the actual Oppose deposit.
-                          Subsequent buys need only 1 confirmation.
-                        </p>
-                      </div>
-                    )}
-
                     {/* Your shares info — visible in Sell mode */}
                     {tradeAction === 'sell' && (() => {
-                      const ownedShares = signalSide === 'support'
-                        ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
-                        : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
-                      const currentSupply = signalSide === 'support' ? supportSupply : opposeSupply
+                      const ownedShares = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
+                      const currentSupply = supportSupply
                       return ownedShares > 0 ? (
                         <div className="mb-3 p-3 rounded-xl bg-[#171A1D] border border-[#C8963C]/12">
                           <div className="flex justify-between items-center">
@@ -1866,7 +1775,7 @@ function SkillsPageContent() {
                         </div>
                       ) : (
                         <div className="mb-3 p-3 rounded-xl bg-[#171A1D] border border-[#C8963C]/12 text-center">
-                          <p className="text-[#7A838D] text-xs">No {signalSide} shares to sell</p>
+                          <p className="text-[#7A838D] text-xs">No stake shares to sell</p>
                         </div>
                       )
                     })()}
@@ -1887,11 +1796,8 @@ function SkillsPageContent() {
                         {tradeAction === 'buy' ? (
                           <input
                             type="number"
-                            value={signalSide === 'support' ? voteAmount : untrustAmount}
-                            onChange={(e) => {
-                              if (signalSide === 'support') setVoteAmount(e.target.value)
-                              else setUntrustAmount(e.target.value)
-                            }}
+                            value={voteAmount}
+                            onChange={(e) => setVoteAmount(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             min="0.001"
                             step="0.001"
@@ -1903,15 +1809,10 @@ function SkillsPageContent() {
                             type="number"
                             value={redeemShares}
                             onChange={(e) => {
-                              const maxShares = signalSide === 'support'
-                                ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
-                                : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                              const maxShares = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
                               const val = parseFloat(e.target.value)
-                              const effectiveMax = exitLimit?.isLimited
-                                ? Math.min(exitLimit.maxSellShares, maxShares)
-                                : maxShares
-                              if (!isNaN(val) && val > effectiveMax) {
-                                setRedeemShares(effectiveMax.toFixed(6))
+                              if (!isNaN(val) && val > maxShares) {
+                                setRedeemShares(maxShares.toFixed(6))
                               } else {
                                 setRedeemShares(e.target.value)
                               }
@@ -1930,15 +1831,10 @@ function SkillsPageContent() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              const maxRaw = signalSide === 'support'
-                                ? userPosition.forShares
-                                : userPosition.againstShares
+                              const maxRaw = userPosition.forShares
                               if (maxRaw) {
                                 const maxShares = Number(maxRaw) / 1e18
-                                const effectiveMax = exitLimit?.isLimited
-                                  ? Math.min(exitLimit.maxSellShares, maxShares)
-                                  : maxShares
-                                setRedeemShares(effectiveMax.toFixed(6))
+                                setRedeemShares(maxShares.toFixed(6))
                               }
                             }}
                             className="text-[10px] px-1.5 py-0.5 rounded bg-[#C8963C]/12 text-[#C8963C] hover:bg-[rgba(200,150,60,0.20)] transition-colors font-bold"
@@ -1949,9 +1845,7 @@ function SkillsPageContent() {
                       </div>
                       {/* Percentage slider — sell mode only */}
                       {tradeAction === 'sell' && (() => {
-                        const maxShares = signalSide === 'support'
-                          ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
-                          : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                        const maxShares = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
                         if (maxShares <= 0) return null
                         return (
                           <div className="mt-2">
@@ -1979,62 +1873,11 @@ function SkillsPageContent() {
                       })()}
                     </div>
 
-                    {/* Sell Reason selector */}
-                    {tradeAction === 'sell' && parseFloat(redeemShares || '0') > 0 && (
-                      <div style={{ marginTop: '12px', marginBottom: '12px' }}>
-                        <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.4)', marginBottom:'8px', fontWeight:500 }}>
-                          Why are you selling?
-                          <span style={{ color:'rgba(255,255,255,0.2)', fontWeight:400, marginLeft:'4px' }}>(optional — contextual info)</span>
-                        </div>
-                        <div style={{ display:'flex', flexWrap:'wrap', gap:'6px' }}>
-                          {SELL_REASONS.map((reason) => {
-                            const isSelected = sellReason === reason.id
-                            return (
-                              <button key={reason.id} onClick={(e) => { e.stopPropagation(); setSellReason(isSelected ? null : reason.id) }}
-                                style={{
-                                  padding:'6px 12px', borderRadius:'8px',
-                                  border: isSelected ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                                  background: isSelected ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)',
-                                  color: isSelected ? '#a5b4fc' : 'rgba(255,255,255,0.5)',
-                                  fontSize:'11px', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px',
-                                }}>
-                                <span>{reason.icon}</span><span>{reason.label}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                        {sellReason && (() => {
-                          const isDistrust = sellReason === 'distrust'
-                          return (
-                            <div style={{ marginTop:'8px', padding:'8px 12px', borderRadius:'8px',
-                              background: isDistrust ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.03)',
-                              border: isDistrust ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(255,255,255,0.08)',
-                              fontSize:'11px' }}>
-                              {isDistrust ? (
-                                <>
-                                  <div style={{ display:'flex', alignItems:'center', gap:'6px', color:'#ef4444', fontWeight:600, marginBottom:'4px' }}>
-                                    <span>⚠️</span><span>Distrust not yet on-chain</span>
-                                  </div>
-                                  <div style={{ color:'rgba(255,255,255,0.4)', lineHeight:'1.5' }}>
-                                    Selling removes your stake. To <strong style={{ color:'rgba(255,255,255,0.7)' }}>permanently record distrust</strong> in the Intuition Protocol, you will be prompted to buy <strong style={{ color:'#ef4444' }}>Oppose shares</strong> after this transaction.
-                                  </div>
-                                </>
-                              ) : (
-                                <div style={{ color:'rgba(255,255,255,0.35)' }}>
-                                  {getSellReasonConfig(sellReason).description}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    )}
-
                     {/* Buy/Sell preview */}
                     {(() => {
-                      const currentSupply = signalSide === 'support' ? supportSupply : opposeSupply
+                      const currentSupply = supportSupply
                       if (tradeAction === 'buy') {
-                        const inputAmt = Number(signalSide === 'support' ? voteAmount : untrustAmount) || 0
+                        const inputAmt = Number(voteAmount) || 0
                         const preview = calculateBuy(inputAmt, currentSupply)
                         return (
                           <div className="space-y-1 mb-3 px-1">
@@ -2057,12 +1900,15 @@ function SkillsPageContent() {
                                   </div>
                                 )}
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Avg price</span>
-                                  <span className="text-[#7A838D] text-[10px]">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
+                                  <span className="text-[#7A838D] text-[10px]">Avg price paid</span>
+                                  <span className="text-[#7A838D] text-[10px] font-mono">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Price after</span>
-                                  <span className="text-[#7A838D] text-[10px]">{preview.newPrice.toFixed(4)} tTRUST/share</span>
+                                  <span className="text-[#7A838D] text-[10px]">Price impact</span>
+                                  <span className="text-[#C8963C] text-[10px] font-mono">
+                                    {getCurrentPrice(currentSupply).toFixed(4)} → {preview.newPrice.toFixed(4)}
+                                    {' '}(+{(((preview.newPrice - getCurrentPrice(currentSupply)) / Math.max(getCurrentPrice(currentSupply), 0.0001)) * 100).toFixed(1)}%)
+                                  </span>
                                 </div>
                                 {platformFee && (
                                   <div className="flex items-center justify-between mt-1 pt-1 border-t border-[#1E2229]">
@@ -2076,9 +1922,7 @@ function SkillsPageContent() {
                         )
                       } else {
                         const inputShares = Number(redeemShares) || 0
-                        const maxOwned = signalSide === 'support'
-                          ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
-                          : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
+                        const maxOwned = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
                         const validShares = inputShares > 0 && inputShares <= maxOwned
                         const preview = calculateSell(inputShares, currentSupply)
                         return (
@@ -2104,12 +1948,15 @@ function SkillsPageContent() {
                                   <span className="text-white text-xs font-bold font-mono">{preview.netProceeds.toFixed(6)} tTRUST</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Price per share</span>
+                                  <span className="text-[#7A838D] text-[10px]">Avg price/share</span>
                                   <span className="text-[#7A838D] text-[10px] font-mono">{(preview.grossProceeds / inputShares).toFixed(6)} tTRUST</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Price after sell</span>
-                                  <span className="text-[#f85149] text-[10px] font-mono">{preview.newPrice.toFixed(6)} tTRUST/share</span>
+                                  <span className="text-[#7A838D] text-[10px]">Price impact</span>
+                                  <span className="text-[#f85149] text-[10px] font-mono">
+                                    {getCurrentPrice(currentSupply).toFixed(4)} → {preview.newPrice.toFixed(4)}
+                                    {' '}({(((preview.newPrice - getCurrentPrice(currentSupply)) / Math.max(getCurrentPrice(currentSupply), 0.0001)) * 100).toFixed(1)}%)
+                                  </span>
                                 </div>
                               </>
                             )}
@@ -2118,83 +1965,49 @@ function SkillsPageContent() {
                       }
                     })()}
 
-                    {/* Gradual Exit warning */}
-                    {tradeAction === 'sell' && exitLimit?.isLimited && (
-                      <div style={{ marginBottom:'12px', padding:'10px 14px', borderRadius:'10px',
-                        background:'rgba(234,179,8,0.08)', border:'1px solid rgba(234,179,8,0.2)',
-                        fontSize:'11px', color:'#eab308', display:'flex', alignItems:'flex-start', gap:'8px' }}>
-                        <span style={{ fontSize:'14px', flexShrink:0, marginTop:'1px' }}>⚠️</span>
-                        <div>
-                          <div style={{ fontWeight:600, marginBottom:'2px' }}>Gradual exit limit active</div>
-                          <div style={{ color:'rgba(234,179,8,0.7)' }}>{exitLimit.reason}</div>
-                          <div style={{ marginTop:'4px', color:'rgba(255,255,255,0.4)' }}>
-                            Max today: <span style={{ color:'#eab308', fontFamily:'monospace', fontWeight:600 }}>
-                              {exitLimit.maxSellShares.toFixed(4)} shares
-                            </span> ({exitLimit.maxSellPercent}% of your position)
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Action button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         if (tradeAction === 'buy') {
-                          const isSupportBuy = signalSide === 'support'
                           setPendingVote({
-                            type: isSupportBuy ? 'trust' : 'distrust',
+                            type: 'trust',
                             agent: selectedSkill,
-                            amount: isSupportBuy ? voteAmount : untrustAmount,
+                            amount: voteAmount,
                             claim: '',
                             claimAtomId: null,
-                            counterTermId: skillTriple.counterTermId,
-                            tripleTermId: skillTriple.termId,
+                            counterTermId: null,
+                            tripleTermId: null,
                           })
                           setSelectedSkill(null)
                           setShowConfirm(true)
                         } else {
-                          const type = signalSide === 'support' ? 'redeem_trust' : 'redeem_distrust'
-                          const knownShares = signalSide === 'support'
-                            ? userPosition.forShares ?? undefined
-                            : userPosition.againstShares ?? undefined
                           setPendingVote({
-                            type,
+                            type: 'redeem_trust',
                             agent: selectedSkill,
                             amount: redeemShares,
                             claim: '',
                             claimAtomId: null,
-                            counterTermId: skillTriple.counterTermId,
-                            knownShares,
-                            sellReason: sellReason ?? null,
+                            counterTermId: null,
+                            knownShares: userPosition.forShares ?? undefined,
                           })
                           setSelectedSkill(null)
                           setShowConfirm(true)
                         }
                       }}
                       disabled={
-                        (tradeAction === 'buy' && (
-                          Number(signalSide === 'support' ? voteAmount : untrustAmount) <= 0
-                        )) || (
-                          tradeAction === 'sell' && (() => {
-                            const shares = Number(redeemShares) || 0
-                            const maxOwned = signalSide === 'support'
-                              ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
-                              : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
-                            return shares <= 0 || shares > maxOwned || maxOwned <= 0
-                          })()
-                        )
+                        (tradeAction === 'buy' && Number(voteAmount) <= 0) ||
+                        (tradeAction === 'sell' && (() => {
+                          const shares = Number(redeemShares) || 0
+                          const maxOwned = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
+                          return shares <= 0 || shares > maxOwned || maxOwned <= 0
+                        })())
                       }
-                      className={`w-full py-3 rounded-xl text-sm font-bold text-white transition-colors
-                        disabled:opacity-40 disabled:cursor-not-allowed
-                        ${signalSide === 'support'
-                          ? 'bg-[#2d7a5f] hover:bg-[#34a872]'
-                          : 'bg-[#8b3a3a] hover:bg-[#c45454]'
-                        }`}
+                      className="w-full py-3 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#2d7a5f] hover:bg-[#34a872]"
                     >
                       {tradeAction === 'buy'
-                        ? `${signalSide === 'support' ? 'Support' : 'Oppose'} → Get Shares`
-                        : `Sell ${Number(redeemShares) > 0 ? Number(redeemShares).toFixed(4) : '0'} shares → tTRUST`
+                        ? `Buy Shares${Number(voteAmount) > 0 ? ` · get ~${calculateBuy(Number(voteAmount), supportSupply).sharesReceived.toFixed(3)}` : ''}`
+                        : `Sell ${Number(redeemShares) > 0 ? Number(redeemShares).toFixed(4) : '0'} Shares`
                       }
                     </button>
                     {tradeAction === 'sell' && (
@@ -2202,13 +2015,12 @@ function SkillsPageContent() {
                         Proceeds shown are UI estimates. Actual tTRUST received is determined by the Intuition MultiVault contract on-chain.
                       </p>
                     )}
-                      </>
-                    )}
+                    </>
 
                   </>
                 ) : (
                   <div className="p-4 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl text-center">
-                    <p className="text-[#B5BDC6] font-semibold mb-1">Connect wallet to vote</p>
+                    <p className="text-[#B5BDC6] font-semibold mb-1">Connect wallet to stake</p>
                     <p className="text-xs text-[#7A838D]">Intuition Testnet · Chain ID 13579</p>
                   </div>
                 )}
@@ -2235,8 +2047,8 @@ function SkillsPageContent() {
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-[#34a872] flex-shrink-0" />
                             <div>
-                              <p className="text-[#34a872] text-xs font-semibold">Support</p>
-                              <p className="text-[#7A838D] text-[10px]">FOR vault</p>
+                              <p className="text-[#34a872] text-xs font-semibold">Stake</p>
+                              <p className="text-[#7A838D] text-[10px]">Atom vault</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -2250,8 +2062,8 @@ function SkillsPageContent() {
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-[#c45454] flex-shrink-0" />
                             <div>
-                              <p className="text-[#c45454] text-xs font-semibold">Oppose</p>
-                              <p className="text-[#7A838D] text-[10px]">AGAINST vault</p>
+                              <p className="text-[#c45454] text-xs font-semibold">Legacy Oppose</p>
+                              <p className="text-[#7A838D] text-[10px]">AGAINST vault (use Claims)</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -2963,14 +2775,8 @@ function SkillsPageContent() {
                       <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Details</p>
                       <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                         <div>
-                          <p className="text-[#7A838D] text-[10px] mb-0.5">Creator</p>
-                          {selectedSkill.creator?.id ? (
-                            <Link href={`/profile/${selectedSkill.creator.id}`} className="text-[#C8963C] text-xs font-medium hover:underline">
-                              {selectedSkill.creator.label?.replace('.eth', '') || selectedSkill.creator.id.slice(0, 10)}
-                            </Link>
-                          ) : (
-                            <p className="text-white text-xs font-medium">{selectedSkill.creator?.label || 'unknown'}</p>
-                          )}
+                          <p className="text-[#7A838D] text-[10px] mb-0.5">Platform</p>
+                          <p className="text-white text-xs font-medium">AgentScore</p>
                         </div>
                         {[
                           { label: 'Skill Age', value: ageLabel },
@@ -3184,7 +2990,8 @@ function SkillsPageContent() {
                             : false
                           const delta = Number(signal.delta || 0)
                           const sharesDisplay = (delta / 1e18).toFixed(4)
-                          const accountLabel = signal.account?.label || signal.account_id?.slice(0, 10) || '?'
+                          const isFeeProxy = signal.account_id?.toLowerCase() === '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41'
+                          const accountLabel = isFeeProxy ? 'via AgentScore' : (signal.account?.label || signal.account_id?.slice(0, 10) || '?')
                           const isLast = i === skillSignals.length - 1
 
                           const actionLabel = !isDeposit
@@ -3217,12 +3024,12 @@ function SkillsPageContent() {
                                 <p className="text-white text-sm font-medium">
                                   {actionLabel}
                                   <span className="text-[#B5BDC6] font-normal ml-1.5">by </span>
-                                  {signal.account_id ? (
+                                  {signal.account_id && !isFeeProxy ? (
                                     <Link href={`/profile/${signal.account_id}`} className="text-[#C8963C] font-normal hover:underline">
                                       {accountLabel}
                                     </Link>
                                   ) : (
-                                    <span className="text-[#B5BDC6] font-normal">{accountLabel}</span>
+                                    <span className="text-[#7A838D] font-normal">{accountLabel}</span>
                                   )}
                                 </p>
                                 <p style={{ color: dotColor }} className="text-xs font-medium mt-0.5">
@@ -3289,7 +3096,7 @@ function SkillsPageContent() {
 
       {/* Report Modal */}
       {showReportModal && selectedSkill && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
             <div className="flex items-start justify-between mb-5">
               <div>
@@ -3397,7 +3204,7 @@ function SkillsPageContent() {
 
       {/* Claim Selection Modal */}
       {showClaimSelect && pendingVote && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
             <div className="mb-5">
               <h2 className="text-xl font-bold text-white mb-1">Select a Claim</h2>
@@ -3511,7 +3318,7 @@ function SkillsPageContent() {
 
       {/* Confirmation Modal */}
       {showConfirm && pendingVote && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <div className="flex justify-center mb-5">
               <div
@@ -3623,7 +3430,7 @@ function SkillsPageContent() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => { setShowConfirm(false); setPendingVote(null); setSellReason(null) }}
+                onClick={() => { setShowConfirm(false); setPendingVote(null) }}
                 className="flex-1 py-3 bg-[#1E2229] hover:bg-[#252B33] rounded-xl text-[#B5BDC6] hover:text-white font-semibold text-sm transition-colors"
               >
                 Cancel
@@ -3657,53 +3464,6 @@ function SkillsPageContent() {
         </div>
       )}
 
-      {/* "Lost Trust" CTA — prompt to register distrust on-chain via Oppose vault */}
-      {showDistrustCta && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-[#0F1113] border border-[#ef4444]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <div className="w-12 h-12 rounded-full bg-[#ef4444]/10 border border-[#ef4444]/30 flex items-center justify-center mx-auto mb-4">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <h3 className="text-white text-lg font-bold text-center mb-1">Register Distrust On-Chain?</h3>
-            <p className="text-[#B5BDC6] text-sm text-center mb-2">
-              You sold your support shares citing <span className="text-[#ef4444] font-semibold">Lost Trust</span>.
-            </p>
-            <p className="text-[#7A838D] text-xs text-center mb-4 leading-relaxed">
-              To permanently record your distrust in the Intuition Protocol, buy <strong className="text-white">Oppose shares</strong>. This registers a negative signal on-chain and directly lowers the Trust Score.
-            </p>
-            <div className="flex items-start gap-2 p-3 bg-[#C8963C]/5 border border-[#C8963C]/20 rounded-xl mb-5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2"/>
-                <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-              <p className="text-[#C8963C] text-xs leading-relaxed">
-                If you still have remaining Support shares, the protocol will <strong>automatically clear them</strong> before depositing Oppose (may require an extra wallet confirmation).
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDistrustCta(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-white/10 text-[#7A838D] hover:text-white hover:border-white/20 transition-colors"
-              >
-                Skip
-              </button>
-              <button
-                onClick={() => {
-                  setShowDistrustCta(null)
-                  setSelectedSkill(showDistrustCta)
-                  setSignalSide('oppose')
-                  setTradeAction('buy')
-                }}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#ef4444]/10 border border-[#ef4444]/40 text-[#ef4444] hover:bg-[#ef4444]/20 transition-colors"
-              >
-                Buy Oppose Shares →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </PageBackground>
   )
 }

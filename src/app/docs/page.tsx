@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { PageBackground } from '@/components/shared/PageBackground'
-import { Bot, Zap, MessageSquare, TrendingUp, ShieldCheck, Database, GitBranch, Users, Layers, ScanLine, ChevronRight } from 'lucide-react'
+import { Bot, Zap, MessageSquare, TrendingUp, ShieldCheck, Database, GitBranch, Users, Layers, ScanLine, ChevronRight, DollarSign } from 'lucide-react'
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -249,6 +249,78 @@ export default function DocsPage() {
                   Your holdings and proceeds are visible in the <strong className="text-white">Your Holdings</strong> panel inside each entity's detail view
                 </li>
               </ul>
+            </DocCard>
+
+
+            {/* ── Fee Model ── */}
+            <DocCard>
+              <SectionTitle icon={DollarSign} color="#2ECC71" label="Platform Fees" />
+              <p className="text-[#9BA5B0] text-sm leading-relaxed mb-5">
+                All write operations (registration, staking, claims) route through our FeeProxy contract.
+                A platform fee is collected atomically on every operation. Reading data is always free.
+              </p>
+
+              <div className="rounded-xl overflow-hidden mb-5"
+                style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                      <th className="text-left px-4 py-2.5 text-[#7A838D] font-semibold text-xs uppercase tracking-wider">Operation</th>
+                      <th className="text-right px-4 py-2.5 text-[#7A838D] font-semibold text-xs uppercase tracking-wider">Fee</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { op: 'Agent registration (createAtom)', fee: '0.1 tTRUST + 2.5%', color: '#C8963C' },
+                      { op: 'Skill registration (createAtom)', fee: '0.1 tTRUST + 2.5%', color: '#2EE6D6' },
+                      { op: 'Claim / Triple creation', fee: '0.1 tTRUST + 2.5%', color: '#38B6FF' },
+                      { op: 'Staking Support / Oppose', fee: '0.1 tTRUST + 2.5%', color: '#C8963C' },
+                      { op: 'Redeem / Sell shares', fee: 'FREE', color: '#2ECC71' },
+                      { op: 'Reading data', fee: 'FREE', color: '#2ECC71' },
+                    ].map((row, i) => (
+                      <tr key={row.op} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                        <td className="px-4 py-2.5 text-[#9BA5B0]">{row.op}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-xs" style={{ color: row.color }}>{row.fee}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="rounded-xl p-4 mb-4"
+                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="text-xs font-bold text-[#B5BDC6] mb-2">Example: Staking 1 tTRUST</div>
+                <div className="space-y-1 text-xs text-[#9BA5B0]">
+                  <div className="flex justify-between"><span>You send</span><span className="text-white">~1.126 tTRUST</span></div>
+                  <div className="flex justify-between"><span>Platform fee</span><span className="text-[#C8963C]">~0.126 tTRUST</span></div>
+                  <div className="flex justify-between"><span>Deposited to vault</span><span className="text-[#2ECC71]">1.0 tTRUST</span></div>
+                </div>
+              </div>
+
+              <div className="text-xs text-[#6B7480] space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#7A838D]">FeeProxy:</span>
+                  <a
+                    href="https://testnet.explorer.intuition.systems/address/0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[#38B6FF] hover:text-[#2EE6D6] transition-colors"
+                  >
+                    0x2f76…c41 ↗
+                  </a>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#7A838D]">MultiVault:</span>
+                  <a
+                    href="https://testnet.explorer.intuition.systems/address/0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[#38B6FF] hover:text-[#2EE6D6] transition-colors"
+                  >
+                    0x2Ece…91 ↗
+                  </a>
+                </div>
+              </div>
             </DocCard>
 
             {/* ── Getting started ── */}

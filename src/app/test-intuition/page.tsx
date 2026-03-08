@@ -1,5 +1,7 @@
 'use client'
 
+import { notFound } from 'next/navigation'
+
 import { useState } from 'react'
 import { useIntuition, useAtom, useSearchAtoms, useUserPositions, useCreatorAtoms } from '@/hooks/useIntuition'
 import { parseEther } from 'viem'
@@ -15,6 +17,9 @@ interface CreatedAtom {
 }
 
 export default function TestIntuitionPage() {
+  if (process.env.NEXT_PUBLIC_ENABLE_TEST_PAGE !== 'true') {
+    notFound()
+  }
   const [testAtomId, setTestAtomId] = useState<`0x${string}`>()
   const [searchQuery, setSearchQuery] = useState('')
   const [testText, setTestText] = useState('Hello Intuition')

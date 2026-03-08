@@ -47,10 +47,12 @@ async function gql<T>(query: string): Promise<T> {
   return json.data as T
 }
 
+const FEE_PROXY_LC = '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41'
+
 async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
   const data = await gql<{
-    agents: Array<{ creator_id: string }>
-    skills: Array<{ creator_id: string }>
+    agents: Array<{ positions: Array<{ account_id: string }> }>
+    skills: Array<{ positions: Array<{ account_id: string }> }>
     claims: Array<{ creator_id: string }>
     agentPositions: Array<{ account_id: string; shares: string }>
     skillPositions: Array<{ account_id: string; shares: string }>
@@ -63,15 +65,20 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
       agents: atoms(
         where: { label: { _ilike: "${AGENT_PREFIX}%" } }
         limit: 500
-      ) { creator_id }
+      ) {
+        positions(order_by: { created_at: asc }, limit: 1) { account_id }
+      }
 
       skills: atoms(
         where: { label: { _ilike: "${SKILL_PREFIX}%" } }
         limit: 500
-      ) { creator_id }
+      ) {
+        positions(order_by: { created_at: asc }, limit: 1) { account_id }
+      }
 
       claims: triples(
         where: {
+          creator_id: { _neq: "${FEE_PROXY_LC}" }
           _or: [
             { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } }
             { subject: { label: { _ilike: "${SKILL_PREFIX}%" } } }
@@ -134,8 +141,16 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
     return map.get(addr)!
   }
 
-  for (const a of data.agents || []) { if (a.creator_id) ensure(a.creator_id).agentsRegistered++ }
-  for (const s of data.skills || []) { if (s.creator_id) ensure(s.creator_id).skillsRegistered++ }
+  // Użyj pierwszego position holdera jako registranta (FeeProxy jako receiver = user jest first holder)
+  for (const a of data.agents || []) {
+    const holder = a.positions?.[0]?.account_id
+    if (holder && holder.toLowerCase() !== FEE_PROXY_LC) ensure(holder).agentsRegistered++
+  }
+  for (const s of data.skills || []) {
+    const holder = s.positions?.[0]?.account_id
+    if (holder && holder.toLowerCase() !== FEE_PROXY_LC) ensure(holder).skillsRegistered++
+  }
+  // Claims: creator_id (legacy, FeeProxy odfiltrowany w query) + TODO: localStorage per-user
   for (const c of data.claims || []) { if (c.creator_id) ensure(c.creator_id).claimsCreated++ }
 
   const allPositions = [
@@ -157,7 +172,9 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
     ...(data.claimSignals || []),
   ]
   for (const sig of allSignals) {
-    if (sig.account_id) ensure(sig.account_id).totalSignals++
+    if (sig.account_id && sig.account_id.toLowerCase() !== FEE_PROXY_LC) {
+      ensure(sig.account_id).totalSignals++
+    }
   }
 
   return Array.from(map.values())

@@ -5,15 +5,15 @@
  */
 
 import {
-  createAtomFromString,
-  createAtomFromEthereumAccount,
   getAtomDetails,
   getTripleDetails,
   getMultiVaultAddressFromChainId,
 } from '@0xintuition/sdk'
-import { type PublicClient, type WalletClient, parseEther } from 'viem'
+import { calculateBuy } from './bonding-curve'
+import { type PublicClient, type WalletClient, parseEther, stringToHex } from 'viem'
 import { intuitionTestnet, MultiVaultAbi } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
+import { saveRegistration } from './registrant-store'
 import {
   TRIPLE_SUBJECT_OR_STR,
   TRIPLE_OBJECT_OR_STR,
@@ -120,8 +120,34 @@ export function getFeeBreakdown(
   }
 }
 
-/** FeeProxy ABI — only deposit and fee-reading functions (hybrid model) */
+/** FeeProxy ABI — all write and fee-reading functions */
 const FeeProxyAbi = [
+  {
+    name: 'createAtoms',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'receiver', type: 'address' },
+      { name: 'data', type: 'bytes[]' },
+      { name: 'assets', type: 'uint256[]' },
+      { name: 'curveId', type: 'uint256' },
+    ],
+    outputs: [{ name: 'atomIds', type: 'bytes32[]' }],
+  },
+  {
+    name: 'createTriples',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'receiver', type: 'address' },
+      { name: 'subjectIds', type: 'bytes32[]' },
+      { name: 'predicateIds', type: 'bytes32[]' },
+      { name: 'objectIds', type: 'bytes32[]' },
+      { name: 'assets', type: 'uint256[]' },
+      { name: 'curveId', type: 'uint256' },
+    ],
+    outputs: [{ name: 'tripleIds', type: 'bytes32[]' }],
+  },
   {
     name: 'deposit',
     type: 'function',
@@ -148,6 +174,38 @@ const FeeProxyAbi = [
     inputs: [],
     outputs: [{ name: '', type: 'uint256' }],
   },
+  {
+    name: 'getAtomCost',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'getTripleCost',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'getTotalCreationCost',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'depositCount', type: 'uint256' },
+      { name: 'totalDeposit', type: 'uint256' },
+      { name: 'multiVaultCost', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'calculateAtomId',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [{ name: 'data', type: 'bytes' }],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
 ] as const
 
 /**
@@ -161,9 +219,66 @@ function calcFeeProxyValue(depositAmount: bigint, fees: { fixedFee: bigint; bps:
   return (depositAmount * (10000n + fees.bps)) / 10000n + fees.fixedFee
 }
 
-// createAtomViaProxy and createTripleViaProxy removed — hybrid model:
-// Atom/Triple creation goes directly through SDK/MultiVault (user = creator).
-// Only staking (depositToVault) routes through FeeProxy.
+/**
+ * Internal helper: create a single Atom via FeeProxy (full model).
+ * All write operations route through FeeProxy.
+ * Returns { termId, transactionHash, state: { termId } }
+ */
+async function createAtomViaProxy(
+  config: WriteConfig,
+  atomText: string,
+  depositAmount: bigint
+): Promise<{ termId: `0x${string}`; transactionHash: `0x${string}`; state: { termId: `0x${string}` } }> {
+  await ensureFeeProxyApproved(config)
+
+  const recipientAddress = config.walletClient.account?.address
+  if (!recipientAddress) throw new Error('No account address available')
+
+  // Encode atom text as UTF-8 bytes for FeeProxy
+  const atomData = stringToHex(atomText)
+
+  // Pre-compute termId deterministically (pure view — no gas, no tx needed)
+  const termId = await config.publicClient.readContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'calculateAtomId',
+    args: [atomData],
+  }) as `0x${string}`
+
+  // Get protocol atom cost — fee must be calculated on (atomCost + depositAmount),
+  // because FeeProxy forwards (msg.value - fee) to MultiVault which needs both.
+  const atomCost = await config.publicClient.readContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'getAtomCost',
+  }) as bigint
+
+  const baseCost = atomCost + depositAmount
+  const fees = await getFeeConfig(config.publicClient)
+  const totalValue = calcFeeProxyValue(baseCost, fees)
+
+  console.log('createAtom fee debug:', {
+    atomCost: atomCost.toString(),
+    depositAmount: depositAmount.toString(),
+    baseCost: baseCost.toString(),
+    fixedFee: fees.fixedFee.toString(),
+    bps: fees.bps.toString(),
+    totalValue: totalValue.toString(),
+  })
+
+  const hash = await config.walletClient.writeContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'createAtoms',
+    args: [recipientAddress, [atomData], [depositAmount], 1n],
+    value: totalValue,
+    account: config.walletClient.account!,
+    chain: config.walletClient.chain ?? intuitionTestnet,
+  })
+
+  await config.publicClient.waitForTransactionReceipt({ hash })
+  return { termId, transactionHash: hash, state: { termId } }
+}
 
 // ============================================================================
 // GraphQL API
@@ -239,41 +354,45 @@ export function createReadConfig(publicClient: PublicClient): ReadConfig {
 // ============================================================================
 
 /**
- * Create simple text Atom via SDK (direct MultiVault — user is creator).
+ * Create simple text Atom via FeeProxy.
  */
 export async function createSimpleAtom(
   config: WriteConfig,
   text: string,
   initialDeposit?: bigint
 ) {
-  return await createAtomFromString(config, text, initialDeposit)
+  return await createAtomViaProxy(config, text, initialDeposit ?? DEFAULT_ATOM_DEPOSIT)
 }
 
 /**
- * Create Atom from Ethereum account via SDK (direct MultiVault — user is creator).
+ * Create Atom from Ethereum account via FeeProxy.
+ * Atom data = lowercased address as UTF-8 bytes (Intuition URI format).
  */
 export async function createAccountAtom(
   config: WriteConfig,
   address: `0x${string}`,
   initialDeposit?: bigint
 ) {
-  return await createAtomFromEthereumAccount(config, address, initialDeposit)
+  return await createAtomViaProxy(config, address.toLowerCase(), initialDeposit ?? DEFAULT_ATOM_DEPOSIT)
 }
 
 /**
- * Create Agent Atom with full metadata via SDK (direct MultiVault — user is creator).
- * No platform fee on registration; fees are collected on staking (depositToVault).
+ * Create Agent Atom with full metadata via FeeProxy.
+ * Platform fee applies (collected on registration).
  */
 export async function createAgentAtom(
   config: WriteConfig,
   metadata: AgentMetadata,
 ) {
   const atomText = `${APP_CONFIG.AGENT_PREFIX} ${metadata.name} - ${metadata.description}`
-  return await createAtomFromString(config, atomText, DEFAULT_ATOM_DEPOSIT)
+  const result = await createAtomViaProxy(config, atomText, DEFAULT_ATOM_DEPOSIT)
+  const userAddress = config.walletClient.account?.address
+  if (userAddress) saveRegistration(result.termId, userAddress, 'agent')
+  return result
 }
 
 /**
- * Create Skill Atom via SDK (direct MultiVault — user is creator).
+ * Create Skill Atom via FeeProxy.
  * Label format: "Skill: Name - description" (matches ILIKE 'Skill:%' filter)
  */
 export async function createSkillAtom(
@@ -281,7 +400,10 @@ export async function createSkillAtom(
   metadata: { name: string; description: string; category: string; compatibilities: string[]; requiresApiKey?: boolean; pricing?: string; githubUrl?: string; installCommand?: string },
 ) {
   const atomText = `${APP_CONFIG.SKILL_PREFIX} ${metadata.name} - ${metadata.description}`
-  return await createAtomFromString(config, atomText, DEFAULT_ATOM_DEPOSIT)
+  const result = await createAtomViaProxy(config, atomText, DEFAULT_ATOM_DEPOSIT)
+  const userAddress = config.walletClient.account?.address
+  if (userAddress) saveRegistration(result.termId, userAddress, 'skill')
+  return result
 }
 
 // ============================================================================
@@ -289,8 +411,8 @@ export async function createSkillAtom(
 // ============================================================================
 
 /**
- * Create Triple statement (subject-predicate-object) via direct MultiVault.
- * User is msg.sender — creator_id = user in Intuition indexer.
+ * Create Triple statement (subject-predicate-object) via FeeProxy.
+ * Platform fee applies. Receiver = msg.sender = user (shares go to user).
  */
 export async function createTriple(
   config: WriteConfig,
@@ -299,30 +421,43 @@ export async function createTriple(
   objectId: `0x${string}`,
   depositAmount: bigint
 ) {
+  await ensureFeeProxyApproved(config)
+
+  const recipientAddress = config.walletClient.account?.address
+  if (!recipientAddress) throw new Error('No account address available')
+
+  // Get triple protocol cost — fee on (tripleCost + depositAmount), same fix as createAtom
   const tripleCost = await config.publicClient.readContract({
-    address: config.address,
-    abi: MultiVaultAbi,
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
     functionName: 'getTripleCost',
   }) as bigint
 
-  const totalValue = tripleCost + depositAmount
+  const baseCost = tripleCost + depositAmount
+  const fees = await getFeeConfig(config.publicClient)
+  const totalValue = calcFeeProxyValue(baseCost, fees)
+
+  console.log('createTriple fee debug:', {
+    tripleCost: tripleCost.toString(),
+    depositAmount: depositAmount.toString(),
+    baseCost: baseCost.toString(),
+    fixedFee: fees.fixedFee.toString(),
+    bps: fees.bps.toString(),
+    totalValue: totalValue.toString(),
+  })
 
   const hash = await config.walletClient.writeContract({
-    address: config.address,
-    abi: MultiVaultAbi,
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
     functionName: 'createTriples',
-    args: [
-      [subjectId],
-      [predicateId],
-      [objectId],
-      [depositAmount],
-    ],
+    args: [recipientAddress, [subjectId], [predicateId], [objectId], [depositAmount], 1n],
     value: totalValue,
     account: config.walletClient.account!,
     chain: config.walletClient.chain ?? intuitionTestnet,
   })
 
   await config.publicClient.waitForTransactionReceipt({ hash })
+  return { transactionHash: hash }
 }
 
 // ============================================================================
@@ -358,6 +493,10 @@ export async function depositToVault(
   const fees = await getFeeConfig(config.publicClient)
   const totalValue = calcFeeProxyValue(amount, fees)
 
+  // TODO: Slippage protection disabled — local bonding curve approximation diverges
+  // from on-chain curve. Re-enable with on-chain quote when available.
+  const minShares = 0n
+
   const hash = await config.walletClient.writeContract({
     address: FEE_PROXY_ADDRESS,
     abi: FeeProxyAbi,
@@ -366,7 +505,7 @@ export async function depositToVault(
       recipientAddress,
       vaultId,
       1n,  // curveId = 1 (default bonding curve)
-      0n,  // minShares = 0 (accept any amount)
+      minShares,
     ],
     value: totalValue,
     account: config.walletClient.account!,
@@ -866,7 +1005,11 @@ export async function createTrustTriple(
   for (let i = 0; i < 12; i++) {
     await new Promise(r => setTimeout(r, 2500))
     const triple = await findTrustTriple(agentTermId)
-    if (triple) return triple
+    if (triple) {
+      const userAddress = cfg.walletClient.account?.address
+      if (userAddress) saveRegistration(triple.termId, userAddress, 'claim')
+      return triple
+    }
   }
   throw new Error('Triple created on-chain but not yet indexed — please refresh in a few seconds')
 }
@@ -926,6 +1069,8 @@ export async function createTripleClaim(
     const data = await res.json()
     const triple = data.data?.triples?.[0]
     if (triple?.term_id) {
+      const userAddress = cfg.walletClient.account?.address
+      if (userAddress) saveRegistration(triple.term_id, userAddress, 'claim')
       return {
         termId: triple.term_id as `0x${string}`,
         counterTermId: triple.counter_term_id as `0x${string}`,
@@ -1058,8 +1203,8 @@ async function findOrCreateAtom(
   const existing = data?.data?.atoms?.[0]?.term_id
   if (existing) return existing as `0x${string}`
 
-  const atomResult = await createAtomFromString(cfg, label, parseEther('0.001'))
-  return atomResult.state.termId as `0x${string}`
+  const atomResult = await createAtomViaProxy(cfg, label, parseEther('0.001'))
+  return atomResult.termId
 }
 
 /**

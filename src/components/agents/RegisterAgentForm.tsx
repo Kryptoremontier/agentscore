@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { AgentAvatar } from '@/components/agents/AgentAvatar'
 import { PlatformIcon } from '@/components/agents/PlatformIcon'
 import { cn } from '@/lib/cn'
-import { createWriteConfig, createAgentAtom } from '@/lib/intuition'
+import { createWriteConfig, createAgentAtom, getFeeConfig } from '@/lib/intuition'
 import type { AgentPlatform, VerificationLevel } from '@/types/agent'
 
 interface RegisterAgentFormProps {
@@ -100,8 +100,14 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
   const [walletSigned, setWalletSigned] = useState(false)
   const [signatureHash, setSignatureHash] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
 
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    setMounted(true)
+    if (publicClient) {
+      getFeeConfig(publicClient).then(setPlatformFee).catch(() => {})
+    }
+  }, [publicClient])
 
   const validateStep = () => {
     const newErrors: Record<string, string> = {}
@@ -675,17 +681,34 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
               )}
 
               {/* Registration Fee */}
-              <div className="glass rounded-lg p-4 border border-primary/20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Registration Cost</p>
-                    <p className="text-sm text-text-muted">On-chain atom creation + initial stake</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold font-mono">~0.002 tTRUST</p>
-                    <p className="text-xs text-text-muted">atom cost + 0.001 initial deposit + gas</p>
-                  </div>
-                </div>
+              <div className="glass rounded-lg p-4 border border-primary/20 space-y-2">
+                <p className="font-medium">Registration Cost</p>
+                {platformFee ? (() => {
+                  const depositAmt = 0.001
+                  const pctFee = depositAmt * Number(platformFee.bps) / 10000
+                  const fixedFee = Number(platformFee.fixedFee) / 1e18
+                  const protocolCost = 0.001 // atom creation protocol cost
+                  return (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-text-muted">
+                        <span>Protocol cost</span><span>~{protocolCost.toFixed(3)} tTRUST</span>
+                      </div>
+                      <div className="flex justify-between text-text-muted">
+                        <span>Initial deposit</span><span>{depositAmt.toFixed(3)} tTRUST</span>
+                      </div>
+                      <div className="flex justify-between text-text-muted">
+                        <span>Platform fee ({Number(platformFee.bps)/100}% + {fixedFee.toFixed(3)})</span>
+                        <span>{(pctFee + fixedFee).toFixed(4)} tTRUST</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-base border-t border-white/10 pt-1">
+                        <span>Total</span>
+                        <span className="font-mono">{(protocolCost + depositAmt + pctFee + fixedFee).toFixed(4)} tTRUST</span>
+                      </div>
+                    </div>
+                  )
+                })() : (
+                  <p className="text-sm text-text-muted">~0.21 tTRUST (protocol + deposit + fee)</p>
+                )}
               </div>
 
               {/* Terms */}

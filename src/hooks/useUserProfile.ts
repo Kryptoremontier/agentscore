@@ -6,6 +6,7 @@ import { calculateExpertLevel, autoBuildBadges } from '@/lib/badges'
 import { getAddress } from 'viem'
 import { APP_CONFIG } from '@/lib/app-config'
 import { AGENT_WHERE_OBJ, SKILL_WHERE_OBJ } from '@/lib/gql-filters'
+import { getUserRegistrationsByType } from '@/lib/registrant-store'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -72,14 +73,23 @@ interface GqlPosition {
   }
 }
 
+interface GqlAtomData {
+  term_id: string
+  label: string
+  emoji: string | null
+  created_at: string
+  positions_aggregate: { aggregate: { count: number; sum: { shares: string } | null } }
+}
+
+interface GqlAtomDataWithFirstPos extends GqlAtomData {
+  firstPosition: { account_id: string }[]
+}
+
 interface GqlProfileData {
-  myAgents: Array<{
-    term_id: string
-    label: string
-    emoji: string | null
-    created_at: string
-    positions_aggregate: { aggregate: { count: number; sum: { shares: string } | null } }
-  }>
+  myAgents: GqlAtomData[]
+  ownedAgentAtoms: GqlAtomDataWithFirstPos[]
+  mySkillAtoms: GqlAtomData[]
+  ownedSkillAtoms: GqlAtomDataWithFirstPos[]
   mySkills: { aggregate: { count: number } }
   myClaims: { aggregate: { count: number } }
   myPositions: GqlPosition[]
@@ -89,6 +99,10 @@ interface GqlProfileData {
 
 async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   const checksummed = getAddress(address)
+  const addrLc = address.toLowerCase()
+
+  // localStorage count for claims (triples are harder to detect via positions)
+  const localClaimsCount = getUserRegistrationsByType(address, 'claim').length
 
   const data = await gql<GqlProfileData>(`
     query ProfileData($address: String!) {
@@ -99,15 +113,46 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
         }
         order_by: { created_at: desc }
       ) {
-        term_id
-        label
-        emoji
-        created_at
-        positions_aggregate {
-          aggregate {
-            count
-            sum { shares }
-          }
+        term_id label emoji created_at
+        positions_aggregate { aggregate { count sum { shares } } }
+      }
+
+      ownedAgentAtoms: atoms(
+        where: {
+          label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" }
+          positions: { account_id: { _eq: $address } }
+        }
+        order_by: { created_at: desc }
+      ) {
+        term_id label emoji created_at
+        positions_aggregate { aggregate { count sum { shares } } }
+        firstPosition: positions(order_by: { created_at: asc }, limit: 1) {
+          account_id
+        }
+      }
+
+      mySkillAtoms: atoms(
+        where: {
+          label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" }
+          creator_id: { _eq: $address }
+        }
+        order_by: { created_at: desc }
+      ) {
+        term_id label emoji created_at
+        positions_aggregate { aggregate { count sum { shares } } }
+      }
+
+      ownedSkillAtoms: atoms(
+        where: {
+          label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" }
+          positions: { account_id: { _eq: $address } }
+        }
+        order_by: { created_at: desc }
+      ) {
+        term_id label emoji created_at
+        positions_aggregate { aggregate { count sum { shares } } }
+        firstPosition: positions(order_by: { created_at: asc }, limit: 1) {
+          account_id
         }
       }
 
@@ -118,19 +163,14 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
         }
         order_by: { updated_at: desc }
       ) {
-        term_id
-        shares
-        updated_at
+        term_id shares updated_at
         vault {
-          term_id
-          total_shares
+          term_id total_shares
           term {
-            id
-            type
+            id type
             atom { term_id label emoji }
             triple {
-              term_id
-              counter_term_id
+              term_id counter_term_id
               subject { term_id label emoji }
               predicate { label }
               object { label }
@@ -144,9 +184,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
           label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" }
           creator_id: { _eq: $address }
         }
-      ) {
-        aggregate { count }
-      }
+      ) { aggregate { count } }
 
       myClaims: triples_aggregate(
         where: {
@@ -156,28 +194,41 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
             { subject: { label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" } } }
           ]
         }
-      ) {
-        aggregate { count }
-      }
+      ) { aggregate { count } }
 
       mySignals: signals_aggregate(
         where: { account_id: { _eq: $address } }
-      ) {
-        aggregate { count }
-      }
+      ) { aggregate { count } }
 
       myReports: triples_aggregate(
         where: {
           creator_id: { _eq: $address }
           predicate: { label: { _ilike: "reported_for_%" } }
         }
-      ) {
-        aggregate { count }
-      }
+      ) { aggregate { count } }
     }
   `, { address: checksummed })
 
-  const registeredAgents: RegisteredAgent[] = (data.myAgents || []).map(a => ({
+  // Merge sources, deduplicate by term_id:
+  // 1. myAgents: legacy (creator_id = user, pre-FeeProxy)
+  // 2. ownedAgentAtoms filtered to first-position-holder = user (FeeProxy registrations)
+  const firstPositionAgents = (data.ownedAgentAtoms || []).filter(
+    a => a.firstPosition?.[0]?.account_id?.toLowerCase() === addrLc
+  )
+  const agentMap = new Map<string, GqlAtomData>()
+  for (const a of [...(data.myAgents || []), ...firstPositionAgents]) {
+    if (!agentMap.has(a.term_id)) agentMap.set(a.term_id, a)
+  }
+
+  const firstPositionSkills = (data.ownedSkillAtoms || []).filter(
+    a => a.firstPosition?.[0]?.account_id?.toLowerCase() === addrLc
+  )
+  const skillMap = new Map<string, GqlAtomData>()
+  for (const a of [...(data.mySkillAtoms || []), ...firstPositionSkills]) {
+    if (!skillMap.has(a.term_id)) skillMap.set(a.term_id, a)
+  }
+
+  const registeredAgents: RegisteredAgent[] = Array.from(agentMap.values()).map(a => ({
     termId: a.term_id,
     label: a.label,
     emoji: a.emoji || undefined,
@@ -239,8 +290,13 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   const reportsSubmitted = data.myReports?.aggregate?.count || 0
   const totalPositions = (data.myPositions || []).filter(p => BigInt(p.shares || '0') > 0n).length
   const tTrustStakedNum = Number(totalStaked) / 1e18
-  const totalSkillsRegistered = data.mySkills?.aggregate?.count || 0
-  const totalClaimsCreated = data.myClaims?.aggregate?.count || 0
+
+  // Warstwa 1+2: skills i claims łączą creator_id (legacy) z localStorage (FeeProxy)
+  const legacySkillsCount = data.mySkills?.aggregate?.count || 0
+  const totalSkillsRegistered = Math.max(legacySkillsCount, skillMap.size)
+
+  const legacyClaimsCount = data.myClaims?.aggregate?.count || 0
+  const totalClaimsCreated = Math.max(legacyClaimsCount, localClaimsCount)
 
   const earliestDate = [
     ...registeredAgents.map(a => a.createdAt),
@@ -255,7 +311,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     : 0
 
   const stats: UserStats = {
-    totalAgentsRegistered: registeredAgents.length,
+    totalAgentsRegistered: agentMap.size,
     totalSkillsRegistered,
     totalClaimsCreated,
     totalTrustStaked: totalStaked,
