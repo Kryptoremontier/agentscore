@@ -11,6 +11,7 @@ export interface UserProfile {
   expertLevel: ExpertLevel
   registeredAgents: RegisteredAgent[]
   supportedAgents: AgentSupport[]
+  pnlPositions: PnLPosition[]
   joinedAt: Date
   lastActiveAt: Date
 }
@@ -39,6 +40,22 @@ export interface UserStats {
   reportsSubmitted: number
   daysActive: number
   tTrustStakedNum: number
+}
+
+export interface PnLPosition {
+  termId: string          // position term_id
+  vaultTermId: string     // vault term_id
+  label: string           // human-readable name
+  emoji?: string
+  type: 'agent' | 'skill' | 'claim'
+  side: 'for' | 'against'
+  shares: string          // raw wei string (18 decimals)
+  totalShares: string     // vault total_shares raw wei string
+  updatedAt: string
+  // claim-specific
+  claimSubject?: string
+  claimPredicate?: string
+  claimObject?: string
 }
 
 export interface AgentSupport {

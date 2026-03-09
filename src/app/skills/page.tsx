@@ -1051,7 +1051,7 @@ function SkillsPageContent() {
   }
 
   const getSkillName = (label: string): string => {
-    let name = label.replace(/^Skill:\s*/i, '')
+    let name = label.replace(/^Skill:(?:\w+:)?\s*/i, '')
     if (name.includes(' - ')) name = name.split(' - ')[0]
     return name.trim()
   }
@@ -3355,7 +3355,7 @@ function SkillsPageContent() {
                 <span className="text-[#B5BDC6] text-sm">Skill</span>
                 <span className="text-white text-sm font-semibold text-right max-w-[180px] truncate">
                   {pendingVote.agent.label
-                    .replace(/^Skill:\s*/i, '')
+                    .replace(/^Skill:(?:\w+:)?\s*/i, '')
                     .split(' - ')[0]
                     .replace(/\s*from\s+Kryptoremont.*/i, '')
                     .trim()

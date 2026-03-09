@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useAccount } from 'wagmi'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Settings, Bot, TrendingUp, Award } from 'lucide-react'
+import { Settings, Bot, TrendingUp, Award, BarChart2 } from 'lucide-react'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { ProfileHeader } from '@/components/profile/ProfileHeader'
 import { ProfileStats } from '@/components/profile/ProfileStats'
@@ -11,12 +11,14 @@ import { MyAgents } from '@/components/profile/MyAgents'
 import { MySupportedAgents } from '@/components/profile/MySupportedAgents'
 import { MyBadges } from '@/components/profile/MyBadges'
 import { ProfileSettings } from '@/components/profile/ProfileSettings'
+import { PnLTab } from '@/components/profile/PnLTab'
 import { cn } from '@/lib/cn'
 import { useUserProfile } from '@/hooks/useUserProfile'
 
 const PROFILE_TABS = [
   { id: 'agents',     label: 'My Agents',  icon: Bot,        color: '#C8963C' },
   { id: 'supporting', label: 'Supporting', icon: TrendingUp, color: '#4ADE80' },
+  { id: 'pnl',        label: 'P&L',        icon: BarChart2,  color: '#38BDF8' },
   { id: 'badges',     label: 'Badges',     icon: Award,      color: '#A78BFA' },
   { id: 'settings',   label: 'Settings',   icon: Settings,   color: '#7A838D' },
 ] as const
@@ -38,7 +40,7 @@ function ProfilePageContent() {
 
   const defaultTab = useMemo(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['agents', 'supporting', 'badges', 'settings'].includes(tab)) return tab as typeof PROFILE_TABS[number]['id']
+    if (tab && ['agents', 'supporting', 'pnl', 'badges', 'settings'].includes(tab)) return tab as typeof PROFILE_TABS[number]['id']
     return 'agents' as typeof PROFILE_TABS[number]['id']
   }, [searchParams])
 
@@ -52,11 +54,7 @@ function ProfilePageContent() {
     }
   }, [mounted, isConnected, router])
 
-  if (!mounted || isLoading) {
-    return <ProfileSkeleton />
-  }
-
-  if (!isConnected) {
+  if (!mounted || !isConnected) {
     return <ProfileSkeleton />
   }
 
@@ -96,14 +94,44 @@ function ProfilePageContent() {
           })}
         </div>
 
-        {/* Tab content */}
-        {activeTab === 'agents' && <MyAgents agents={profile.registeredAgents} />}
-        {activeTab === 'supporting' && <MySupportedAgents supports={profile.supportedAgents} />}
-        {activeTab === 'badges' && <MyBadges badges={profile.badges} expertLevel={profile.expertLevel} stats={profile.stats} />}
-        {activeTab === 'settings' && <ProfileSettings profile={profile} onUpdate={handleProfileUpdate} />}
+        {/* Tab content — show skeleton per-section while loading */}
+        {activeTab === 'agents' && (
+          isLoading
+            ? <TabSkeleton />
+            : <MyAgents agents={profile.registeredAgents} />
+        )}
+        {activeTab === 'supporting' && (
+          isLoading
+            ? <TabSkeleton />
+            : <MySupportedAgents supports={profile.supportedAgents} />
+        )}
+        {activeTab === 'pnl' && (
+          isLoading
+            ? <TabSkeleton />
+            : <PnLTab positions={profile.pnlPositions} />
+        )}
+        {activeTab === 'badges' && (
+          isLoading
+            ? <TabSkeleton />
+            : <MyBadges badges={profile.badges} expertLevel={profile.expertLevel} stats={profile.stats} />
+        )}
+        {activeTab === 'settings' && (
+          <ProfileSettings profile={profile} onUpdate={handleProfileUpdate} />
+        )}
         </div>
       </div>
     </PageBackground>
+  )
+}
+
+function TabSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="rounded-2xl h-20"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
+      ))}
+    </div>
   )
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { UserProfile, RegisteredAgent, AgentSupport, UserStats } from '@/types/user'
+import type { UserProfile, RegisteredAgent, AgentSupport, UserStats, PnLPosition } from '@/types/user'
 import { calculateExpertLevel, autoBuildBadges } from '@/lib/badges'
 import { getAddress } from 'viem'
 import { APP_CONFIG } from '@/lib/app-config'
@@ -162,6 +162,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
           shares: { _gt: "0" }
         }
         order_by: { updated_at: desc }
+        limit: 200
       ) {
         term_id shares updated_at
         vault {
@@ -238,6 +239,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     totalStaked: a.positions_aggregate?.aggregate?.sum?.shares || '0',
   }))
 
+  const pnlPositions: PnLPosition[] = []
   const agentPositions: AgentSupport[] = []
   const seenKeys = new Set<string>()
   let totalStaked = BigInt(0)
@@ -245,12 +247,23 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   for (const pos of (data.myPositions || [])) {
     const shares = BigInt(pos.shares || '0')
     if (shares <= 0n) continue
-    totalStaked += shares
 
     const term = pos.vault?.term
     if (!term) continue
 
-    if (term.atom && term.atom.label?.startsWith('Agent:')) {
+    // Check if this position belongs to an INTU-scoped entity
+    const atomLabel = term.atom?.label || ''
+    const tripleSubjectLabel = term.triple?.subject?.label || ''
+    const isIntuScoped =
+      atomLabel.startsWith(APP_CONFIG.AGENT_PREFIX) ||
+      atomLabel.startsWith(APP_CONFIG.SKILL_PREFIX) ||
+      tripleSubjectLabel.startsWith(APP_CONFIG.AGENT_PREFIX) ||
+      tripleSubjectLabel.startsWith(APP_CONFIG.SKILL_PREFIX)
+
+    if (!isIntuScoped) continue
+    totalStaked += shares
+
+    if (term.atom && term.atom.label?.startsWith(APP_CONFIG.AGENT_PREFIX)) {
       const key = `atom-${term.atom.term_id}`
       if (!seenKeys.has(key)) {
         seenKeys.add(key)
@@ -265,7 +278,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
       }
     }
 
-    if (term.triple && term.triple.subject?.label?.startsWith('Agent:')) {
+    if (term.triple && term.triple.subject?.label?.startsWith(APP_CONFIG.AGENT_PREFIX)) {
       const t = term.triple
       const isForVault = t.term_id === pos.vault.term_id
       const side = isForVault ? 'for' : 'against'
@@ -283,12 +296,59 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
         })
       }
     }
+
+    // P&L: collect all positions with totalShares for bonding curve calc
+    {
+      const totalShares = pos.vault?.total_shares || '0'
+      if (term.atom) {
+        const label = term.atom.label || ''
+        const type = label.startsWith(APP_CONFIG.AGENT_PREFIX)
+          ? 'agent'
+          : label.startsWith(APP_CONFIG.SKILL_PREFIX)
+            ? 'skill'
+            : null
+        if (type) {
+          pnlPositions.push({
+            termId: pos.term_id,
+            vaultTermId: pos.vault.term_id,
+            label,
+            emoji: term.atom.emoji || undefined,
+            type,
+            side: 'for',
+            shares: pos.shares,
+            totalShares,
+            updatedAt: pos.updated_at,
+          })
+        }
+      } else if (term.triple) {
+        const t = term.triple
+        const subjectLabel = t.subject?.label || ''
+        // Only include claims where subject is an INTU-tagged entity
+        if (subjectLabel.startsWith(APP_CONFIG.AGENT_PREFIX) || subjectLabel.startsWith(APP_CONFIG.SKILL_PREFIX)) {
+          const isForVault = t.term_id === pos.vault.term_id
+          const side = isForVault ? 'for' : 'against'
+          pnlPositions.push({
+            termId: pos.term_id,
+            vaultTermId: pos.vault.term_id,
+            label: `${subjectLabel} ${t.predicate?.label || ''} ${t.object?.label || ''}`.trim(),
+            type: 'claim',
+            side,
+            shares: pos.shares,
+            totalShares,
+            updatedAt: pos.updated_at,
+            claimSubject: subjectLabel,
+            claimPredicate: t.predicate?.label,
+            claimObject: t.object?.label,
+          })
+        }
+      }
+    }
   }
 
   const totalSignals = data.mySignals?.aggregate?.count || 0
   const totalAttestations = agentPositions.length
   const reportsSubmitted = data.myReports?.aggregate?.count || 0
-  const totalPositions = (data.myPositions || []).filter(p => BigInt(p.shares || '0') > 0n).length
+  const totalPositions = agentPositions.length + pnlPositions.filter(p => p.type !== 'agent').length
   const tTrustStakedNum = Number(totalStaked) / 1e18
 
   // Warstwa 1+2: skills i claims łączą creator_id (legacy) z localStorage (FeeProxy)
@@ -353,6 +413,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     expertLevel,
     registeredAgents,
     supportedAgents: agentPositions,
+    pnlPositions,
     joinedAt: earliestDate ? new Date(earliestDate) : new Date(),
     lastActiveAt: new Date(),
   }
@@ -379,6 +440,7 @@ const emptyProfile = (address: `0x${string}`): UserProfile => ({
   expertLevel: 'newcomer',
   registeredAgents: [],
   supportedAgents: [],
+  pnlPositions: [],
   joinedAt: new Date(),
   lastActiveAt: new Date(),
 })
@@ -390,7 +452,8 @@ export function useUserProfile(address?: `0x${string}`) {
     queryKey: ['userProfile', address],
     queryFn: () => fetchProfileData(address!),
     enabled: !!address,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
   })
 

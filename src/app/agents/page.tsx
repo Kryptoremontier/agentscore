@@ -1111,7 +1111,7 @@ function AgentsPageContent() {
 
   // Helper: clean agent name (remove "Agent: " prefix and description)
   const getAgentName = (label: string): string => {
-    let name = label.replace(/^Agent:\s*/i, '')
+    let name = label.replace(/^Agent:(?:\w+:)?\s*/i, '')
     if (name.includes(' - ')) name = name.split(' - ')[0]
     return name.trim()
   }
@@ -3540,7 +3540,7 @@ function AgentsPageContent() {
                 <span className="text-[#B5BDC6] text-sm">Agent</span>
                 <span className="text-white text-sm font-semibold text-right max-w-[180px] truncate">
                   {pendingVote.agent.label
-                    .replace(/^Agent:\s*/i, '')
+                    .replace(/^Agent:(?:\w+:)?\s*/i, '')
                     .split(' - ')[0]
                     .replace(/\s*from\s+Kryptoremont.*/i, '')
                     .trim()

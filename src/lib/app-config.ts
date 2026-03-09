@@ -22,8 +22,8 @@ export const APP_CONFIG = {
   //   NEXT_PUBLIC_AGENT_PREFIX=Agent:          → "Agent: My Bot"       (default)
   //   NEXT_PUBLIC_AGENT_PREFIX=Agent:alpha:    → "Agent:alpha: My Bot" (alpha tag)
   //   NEXT_PUBLIC_AGENT_PREFIX=Agent:v2:       → "Agent:v2: My Bot"    (version tag)
-  AGENT_PREFIX: process.env.NEXT_PUBLIC_AGENT_PREFIX ?? 'Agent:',
-  SKILL_PREFIX: process.env.NEXT_PUBLIC_SKILL_PREFIX ?? 'Skill:',
+  AGENT_PREFIX: process.env.NEXT_PUBLIC_AGENT_PREFIX ?? 'Agent:INTU:',
+  SKILL_PREFIX: process.env.NEXT_PUBLIC_SKILL_PREFIX ?? 'Skill:INTU:',
 
   // ── App-scoping ─────────────────────────────────────────────────────────────
   // When true (default): only show data created via the AgentScore platform.

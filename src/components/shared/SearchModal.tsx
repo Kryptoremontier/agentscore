@@ -133,11 +133,11 @@ async function fetchSkillsFromIntuition(search: string): Promise<AgentResult[]> 
 }
 
 function agentName(label: string) {
-  return label.replace(/^Agent:\s*/i, '').split(' - ')[0].trim()
+  return label.replace(/^Agent:(?:\w+:)?\s*/i, '').split(' - ')[0].trim()
 }
 
 function skillName(label: string) {
-  return label.replace(/^Skill:\s*/i, '').split(' - ')[0].trim()
+  return label.replace(/^Skill:(?:\w+:)?\s*/i, '').split(' - ')[0].trim()
 }
 
 function itemScore(item: AgentResult): number {

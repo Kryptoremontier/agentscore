@@ -305,7 +305,7 @@ export function FeaturedAgents() {
                                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
                                     style={{ background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.28)', color: '#C8963C' }}>
                                     <Bot className="w-3 h-3" />
-                                    {subjectLabel.replace(/^Agent:\s*/i, '').split(' - ')[0].slice(0, 18)}
+                                    {subjectLabel.replace(/^Agent:(?:\w+:)?\s*/i, '').split(' - ')[0].slice(0, 18)}
                                   </span>
                                   <span className="flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold"
                                     style={{ background: 'rgba(46,230,214,0.10)', border: '1px solid rgba(46,230,214,0.25)', color: '#2EE6D6' }}>

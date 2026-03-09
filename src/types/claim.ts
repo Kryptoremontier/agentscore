@@ -192,8 +192,8 @@ export function getAtomType(label: string): 'agent' | 'skill' | 'unknown' {
 
 export function getAtomName(label: string): string {
   return label
-    .replace(/^Agent:\s*/i, '')
-    .replace(/^Skill:\s*/i, '')
+    .replace(/^Agent:(?:\w+:)?\s*/i, '')
+    .replace(/^Skill:(?:\w+:)?\s*/i, '')
     .split(' - ')[0]
     .trim()
 }
