@@ -8,9 +8,10 @@ import {
   getAtomDetails,
   getTripleDetails,
   getMultiVaultAddressFromChainId,
+  calculateAtomId as sdkCalculateAtomId,
 } from '@0xintuition/sdk'
 import { calculateBuy } from './bonding-curve'
-import { type PublicClient, type WalletClient, parseEther, stringToHex } from 'viem'
+import { type PublicClient, type WalletClient, parseEther, stringToHex, type Hex } from 'viem'
 import { intuitionTestnet, MultiVaultAbi } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
 import { saveRegistration } from './registrant-store'
@@ -237,13 +238,8 @@ async function createAtomViaProxy(
   // Encode atom text as UTF-8 bytes for FeeProxy
   const atomData = stringToHex(atomText)
 
-  // Pre-compute termId deterministically (pure view — no gas, no tx needed)
-  const termId = await config.publicClient.readContract({
-    address: FEE_PROXY_ADDRESS,
-    abi: FeeProxyAbi,
-    functionName: 'calculateAtomId',
-    args: [atomData],
-  }) as `0x${string}`
+  // Pre-compute termId using SDK (correct salt + double keccak256)
+  const termId = sdkCalculateAtomId(atomData as Hex) as `0x${string}`
 
   // Get protocol atom cost — fee must be calculated on (atomCost + depositAmount),
   // because FeeProxy forwards (msg.value - fee) to MultiVault which needs both.
@@ -1035,55 +1031,64 @@ export async function createTripleClaim(
   subjectTermId: `0x${string}`,
   predicateLabel: string,
   objectTermId: `0x${string}`,
+  onProgress?: (step: string) => void,
 ): Promise<{ termId: `0x${string}`; counterTermId: `0x${string}` }> {
-  // 1. Find or create the predicate atom
-  const predicateTermId = await findOrCreateAtom(cfg, predicateLabel)
+  // 1. Find or create the predicate atom (on-chain check, no indexer dependency)
+  onProgress?.('Checking predicate atom...')
+  const predicateTermId = await findOrCreateAtom(cfg, predicateLabel, onProgress)
 
-  // Short delay for indexer
-  await new Promise(r => setTimeout(r, 1500))
-
-  // 2. Create the Triple
+  // 2. Create the Triple — no artificial delay needed, atom is confirmed on-chain
+  onProgress?.('Creating triple on-chain...')
   const CLAIM_DEPOSIT = parseEther('0.01')
   await createTriple(cfg, subjectTermId, predicateTermId, objectTermId, CLAIM_DEPOSIT)
 
-  // 3. Poll until indexed (typically 2–5s)
-  for (let i = 0; i < 12; i++) {
-    await new Promise(r => setTimeout(r, 2500))
-    const res = await fetch(INTUITION_GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query FindClaimTriple($subjectId: String!, $predicateId: String!, $objectId: String!) {
-            triples(
-              where: {
-                subject_id: { _eq: $subjectId }
-                predicate_id: { _eq: $predicateId }
-                object_id: { _eq: $objectId }
-              }
-              limit: 1
-            ) { term_id counter_term_id }
-          }
-        `,
-        variables: {
-          subjectId: subjectTermId,
-          predicateId: predicateTermId,
-          objectId: objectTermId,
-        },
-      }),
-    })
-    const data = await res.json()
-    const triple = data.data?.triples?.[0]
-    if (triple?.term_id) {
-      const userAddress = cfg.walletClient.account?.address
-      if (userAddress) saveRegistration(triple.term_id, userAddress, 'claim')
-      return {
-        termId: triple.term_id as `0x${string}`,
-        counterTermId: triple.counter_term_id as `0x${string}`,
+  // 3. Triple confirmed on-chain — try a quick indexer poll (best-effort, not blocking)
+  const userAddress = cfg.walletClient.account?.address
+  for (let i = 0; i < 4; i++) {
+    await new Promise(r => setTimeout(r, 2000))
+    try {
+      const res = await fetch(INTUITION_GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `
+            query FindClaimTriple($subjectId: String!, $predicateId: String!, $objectId: String!) {
+              triples(
+                where: {
+                  subject_id: { _eq: $subjectId }
+                  predicate_id: { _eq: $predicateId }
+                  object_id: { _eq: $objectId }
+                }
+                limit: 1
+              ) { term_id counter_term_id }
+            }
+          `,
+          variables: {
+            subjectId: subjectTermId,
+            predicateId: predicateTermId,
+            objectId: objectTermId,
+          },
+        }),
+      })
+      const data = await res.json()
+      const triple = data.data?.triples?.[0]
+      if (triple?.term_id) {
+        if (userAddress) saveRegistration(triple.term_id, userAddress, 'claim')
+        return {
+          termId: triple.term_id as `0x${string}`,
+          counterTermId: triple.counter_term_id as `0x${string}`,
+        }
       }
-    }
+    } catch { /* indexer unavailable — continue */ }
   }
-  throw new Error('Claim created on-chain but not yet indexed — please refresh in a few seconds')
+
+  // Triple IS on-chain (tx receipt confirmed) — indexer just hasn't caught up.
+  // Return success with placeholder; the claims list will pick it up on next refresh.
+  console.log('[createTripleClaim] Triple confirmed on-chain, indexer still catching up')
+  return {
+    termId: '0x0' as `0x${string}`,
+    counterTermId: '0x0' as `0x${string}`,
+  }
 }
 
 /**
@@ -1196,19 +1201,46 @@ const REPORT_PREDICATE_LABELS: Record<ReportCategory, string> = {
  */
 async function findOrCreateAtom(
   cfg: WriteConfig,
-  label: string
+  label: string,
+  onProgress?: (step: string) => void,
 ): Promise<`0x${string}`> {
-  const res = await fetch(INTUITION_GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `{ atoms(where: { label: { _eq: "${label}" } }, limit: 1) { term_id } }`,
-    }),
-  })
-  const data = await res.json()
-  const existing = data?.data?.atoms?.[0]?.term_id
-  if (existing) return existing as `0x${string}`
+  // 1. Compute the correct atom ID using Intuition SDK (salt + double keccak256)
+  const atomData = stringToHex(label) as Hex
+  const predictedTermId = sdkCalculateAtomId(atomData) as `0x${string}`
 
+  // 2. Check on-chain if the atom already exists (direct contract read, no indexer lag)
+  const mvAddress = getMultiVaultAddress(cfg.publicClient.chain?.id)
+  try {
+    const exists = await cfg.publicClient.readContract({
+      address: mvAddress,
+      abi: MultiVaultAbi,
+      functionName: 'isTermCreated',
+      args: [predictedTermId],
+    }) as boolean
+    if (exists) {
+      console.log(`[findOrCreateAtom] "${label}" already exists on-chain: ${predictedTermId}`)
+      return predictedTermId
+    }
+  } catch (e) {
+    console.warn(`[findOrCreateAtom] isTermCreated check failed, trying GraphQL fallback`, e)
+    // Fallback: try GraphQL lookup
+    try {
+      const res = await fetch(INTUITION_GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `{ atoms(where: { label: { _eq: "${label}" } }, limit: 1) { term_id } }`,
+        }),
+      })
+      const data = await res.json()
+      const existing = data?.data?.atoms?.[0]?.term_id
+      if (existing) return existing as `0x${string}`
+    } catch { /* GraphQL also failed */ }
+  }
+
+  // 3. Atom doesn't exist — create it (this is a wallet tx)
+  onProgress?.(`Creating predicate atom "${label}"...`)
+  console.log(`[findOrCreateAtom] Creating atom "${label}"...`)
   const atomResult = await createAtomViaProxy(cfg, label, parseEther('0.001'))
   return atomResult.termId
 }
@@ -1227,13 +1259,7 @@ export async function submitReport(
   const objectLabel = reason.trim() || `${category} report`
 
   const predicateTermId = await findOrCreateAtom(cfg, predicateLabel)
-
-  // Short delay so indexer catches up
-  await new Promise(r => setTimeout(r, 2000))
-
   const objectTermId = await findOrCreateAtom(cfg, objectLabel)
-
-  await new Promise(r => setTimeout(r, 2000))
 
   const REPORT_DEPOSIT = parseEther('0.01')
   await createTriple(cfg, agentTermId, predicateTermId, objectTermId, REPORT_DEPOSIT)
