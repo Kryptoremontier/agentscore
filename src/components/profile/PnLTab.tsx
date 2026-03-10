@@ -1,16 +1,16 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   TrendingUp, TrendingDown, Minus, BarChart2,
   ArrowUpDown, LayoutGrid, List, Wallet, Search,
 } from 'lucide-react'
 import Link from 'next/link'
+import { usePublicClient } from 'wagmi'
 import type { PnLPosition } from '@/types/user'
 import { getBuyCost, getSellProceeds, getCurrentPrice } from '@/lib/bonding-curve'
 import { cn } from '@/lib/cn'
-import { APP_CONFIG } from '@/lib/app-config'
 
 interface Props {
   positions: PnLPosition[]
@@ -118,6 +118,37 @@ export function PnLTab({ positions }: Props) {
   const [filter, setFilter] = useState<FilterType>('all')
   const [sortBy, setSortBy] = useState<SortKey>('value')
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+  const pub = usePublicClient()
+
+  // Fetch on-chain share prices for all unique vaults
+  const [onChainPrices, setOnChainPrices] = useState<Record<string, number>>({})
+  useEffect(() => {
+    if (!pub || positions.length === 0) return
+    const vaultIds = [...new Set(positions.map(p => p.vaultTermId))]
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { getSharePriceFloat } = await import('@/lib/on-chain-pricing')
+        const prices: Record<string, number> = {}
+        // Batch fetch in parallel (max 10 concurrent)
+        for (let i = 0; i < vaultIds.length; i += 10) {
+          const batch = vaultIds.slice(i, i + 10)
+          const results = await Promise.allSettled(
+            batch.map(async id => {
+              const hex = id.startsWith('0x') ? id as `0x${string}` : `0x${id}` as `0x${string}`
+              const price = await getSharePriceFloat(pub, hex)
+              return { id, price }
+            })
+          )
+          for (const r of results) {
+            if (r.status === 'fulfilled') prices[r.value.id] = r.value.price
+          }
+        }
+        if (!cancelled) setOnChainPrices(prices)
+      } catch { /* silent — fallback to local model */ }
+    })()
+    return () => { cancelled = true }
+  }, [pub, positions])
 
   const enriched = useMemo<EnrichedPosition[]>(() => {
     return positions.map(pos => {
@@ -126,12 +157,15 @@ export function PnLTab({ positions }: Props) {
       try { sharesNum = Number(BigInt(pos.shares)) / 1e18 } catch { /* noop */ }
       try { supplyNum = Number(BigInt(pos.totalShares)) / 1e18 } catch { /* noop */ }
 
-      const currentValue = getSellProceeds(sharesNum, supplyNum)
+      const onChainPrice = onChainPrices[pos.vaultTermId]
+      const currentValue = onChainPrice != null
+        ? sharesNum * onChainPrice
+        : getSellProceeds(sharesNum, supplyNum)
       const supplyBefore = Math.max(0, supplyNum - sharesNum)
       const estimatedCost = getBuyCost(sharesNum, supplyBefore)
       const pnl = currentValue - estimatedCost
       const pnlPct = estimatedCost > 0 ? (pnl / estimatedCost) * 100 : 0
-      const sharePrice = getCurrentPrice(supplyNum)
+      const sharePrice = onChainPrice ?? getCurrentPrice(supplyNum)
 
       return {
         ...pos,
@@ -146,7 +180,7 @@ export function PnLTab({ positions }: Props) {
         href: getHref(pos),
       }
     })
-  }, [positions])
+  }, [positions, onChainPrices])
 
   const filtered = useMemo(() => {
     let list = enriched
@@ -248,15 +282,15 @@ export function PnLTab({ positions }: Props) {
         </div>
 
         {/* Disclaimer */}
-        <div className="text-[#4A5260] text-[10px] mt-3 leading-relaxed">
-          P&L estimated via bonding curve model. Cost basis assumes worst-case entry. Early buyers' actual profit is likely higher.
+        <div className="text-[#3A3F47] text-[10px] mt-3 leading-relaxed italic">
+          Values from on-chain share price. Cost basis estimated (no purchase history on-chain).
         </div>
       </div>
 
-      {/* Controls: filter + sort + view */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Controls */}
+      <div className="space-y-2.5">
         {/* Filter pills */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {FILTER_PILLS.map(pill => {
             const isActive = filter === pill.id
             const count = pill.id === 'all' ? enriched.length : typeCounts[pill.id as keyof typeof typeCounts]
@@ -280,8 +314,8 @@ export function PnLTab({ positions }: Props) {
           })}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Sort */}
+        {/* Sort + View */}
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 rounded-lg px-1 py-0.5"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <ArrowUpDown className="w-3 h-3 text-[#7A838D] ml-1" />
@@ -299,7 +333,6 @@ export function PnLTab({ positions }: Props) {
             ))}
           </div>
 
-          {/* View toggle */}
           <div className="flex items-center rounded-lg overflow-hidden"
             style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.04)' }}>
             <button
@@ -376,25 +409,26 @@ export function PnLTab({ positions }: Props) {
                   </div>
 
                   {/* Stats row */}
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div className="rounded-xl px-3 py-2"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                      <div className="text-sm font-bold text-white">{formatTrust(pos.currentValue)}</div>
-                      <div className="text-[10px] text-[#4A5260]">Value (tTRUST)</div>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="rounded-lg px-2.5 py-2"
+                      style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <div className="text-[10px] text-[#4A5260] mb-0.5">Value</div>
+                      <div className="text-sm font-bold text-white font-mono truncate">{formatTrust(pos.currentValue)}</div>
                     </div>
-                    <div className="rounded-xl px-3 py-2"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                      <div className="text-sm font-bold text-[#B5BDC6]">{formatShares(pos.sharesNum)}</div>
-                      <div className="text-[10px] text-[#4A5260]">Shares</div>
+                    <div className="rounded-lg px-2.5 py-2"
+                      style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <div className="text-[10px] text-[#4A5260] mb-0.5">Shares</div>
+                      <div className="text-sm font-bold text-[#B5BDC6] font-mono truncate">{formatShares(pos.sharesNum)}</div>
+                    </div>
+                    <div className="rounded-lg px-2.5 py-2"
+                      style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <div className="text-[10px] text-[#4A5260] mb-0.5">Est. Cost</div>
+                      <div className="text-sm font-bold text-[#7A838D] font-mono truncate">{formatTrust(pos.estimatedCost)}</div>
                     </div>
                   </div>
 
                   {/* P&L footer */}
-                  <div className="flex items-center justify-between pt-3"
-                    style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <span className="text-[10px] text-[#4A5260]">
-                      est. cost {formatTrust(pos.estimatedCost)}
-                    </span>
+                  <div className="flex items-center justify-end">
                     <PnLBadge value={pos.pnl} pct={pos.pnlPct} />
                   </div>
                 </div>
@@ -403,80 +437,73 @@ export function PnLTab({ positions }: Props) {
           ))}
         </div>
       ) : (
-        /* LIST view */
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          {/* Header row */}
-          <div
-            className="grid grid-cols-[1fr_85px_85px_110px] gap-3 px-5 py-2.5 text-[11px] font-medium text-[#7A838D] uppercase tracking-wider"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}
-          >
-            <span className="flex items-center gap-1.5"><BarChart2 className="w-3 h-3 text-[#38BDF8]" /> Position</span>
-            <span className="text-right">Shares</span>
-            <span className="text-right">Value</span>
-            <span className="text-right">P&L</span>
-          </div>
-
+        /* LIST view — card-row hybrid, no overlapping columns */
+        <div className="space-y-2">
           {filtered.map((pos, i) => (
             <motion.div
               key={`${pos.vaultTermId}-${pos.side}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
             >
               <Link href={pos.href}>
                 <div
-                  className="group grid grid-cols-[1fr_85px_85px_110px] gap-3 px-5 py-3 transition-colors cursor-pointer hover:bg-white/[0.03]"
-                  style={{ borderBottom: i < filtered.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}
+                  className="group rounded-xl px-4 py-3.5 transition-all cursor-pointer hover:bg-white/[0.03]"
+                  style={{ background: 'rgba(15,17,19,0.85)', border: `1px solid ${typeBorder(pos.type)}` }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = typeColor(pos.type) + '50')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = typeBorder(pos.type))}
                 >
-                  {/* Position cell */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm"
-                      style={{ background: typeBg(pos.type), border: `1px solid ${typeBorder(pos.type)}` }}
-                    >
-                      {pos.emoji || (pos.type === 'agent' ? 'A' : pos.type === 'skill' ? 'S' : 'C')}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium text-[#E8E8E8] truncate group-hover:text-white transition-colors">
+                  {/* Top: name + P&L badge */}
+                  <div className="flex items-center justify-between gap-3 mb-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm"
+                        style={{ background: typeBg(pos.type), border: `1px solid ${typeBorder(pos.type)}` }}
+                      >
+                        {pos.emoji || (pos.type === 'agent' ? 'A' : pos.type === 'skill' ? 'S' : 'C')}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-[#E8E8E8] truncate block group-hover:text-white transition-colors">
                           {pos.displayName}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span
-                          className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                          style={{ background: typeBg(pos.type), color: typeColor(pos.type) }}
-                        >
-                          {pos.type.toUpperCase()}
-                        </span>
-                        {pos.side === 'against' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                            style={{ background: 'rgba(248,113,113,0.08)', color: '#F87171' }}>
-                            AGAINST
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                            style={{ background: typeBg(pos.type), color: typeColor(pos.type) }}
+                          >
+                            {pos.type.toUpperCase()}
                           </span>
-                        )}
+                          {pos.side === 'against' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                              style={{ background: 'rgba(248,113,113,0.08)', color: '#F87171' }}>
+                              AGAINST
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    </div>
+                    <div className="shrink-0">
+                      <PnLBadge value={pos.pnl} pct={pos.pnlPct} />
                     </div>
                   </div>
 
-                  {/* Shares */}
-                  <div className="text-right self-center">
-                    <div className="text-sm font-medium text-[#B5BDC6] font-mono">{formatShares(pos.sharesNum)}</div>
-                    <div className="text-[10px] text-[#4A5260]">@{pos.sharePrice.toFixed(4)}</div>
-                  </div>
-
-                  {/* Value */}
-                  <div className="text-right self-center">
-                    <div className="text-sm font-semibold text-white">{formatTrust(pos.currentValue)}</div>
-                    <div className="text-[10px] text-[#4A5260]">cost {formatTrust(pos.estimatedCost)}</div>
-                  </div>
-
-                  {/* P&L */}
-                  <div className="flex items-center justify-end">
-                    <PnLBadge value={pos.pnl} pct={pos.pnlPct} />
+                  {/* Bottom: 3 stat cells in a row */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg px-2.5 py-1.5" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <div className="text-[10px] text-[#4A5260] mb-0.5">Shares</div>
+                      <div className="text-xs font-semibold text-[#B5BDC6] font-mono">{formatShares(pos.sharesNum)}</div>
+                      <div className="text-[9px] text-[#3A3F47] font-mono">@{pos.sharePrice.toFixed(4)}</div>
+                    </div>
+                    <div className="rounded-lg px-2.5 py-1.5" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <div className="text-[10px] text-[#4A5260] mb-0.5">Value</div>
+                      <div className="text-xs font-semibold text-white font-mono">{formatTrust(pos.currentValue)}</div>
+                      <div className="text-[9px] text-[#3A3F47]">tTRUST</div>
+                    </div>
+                    <div className="rounded-lg px-2.5 py-1.5" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <div className="text-[10px] text-[#4A5260] mb-0.5">Est. Cost</div>
+                      <div className="text-xs font-semibold text-[#7A838D] font-mono">{formatTrust(pos.estimatedCost)}</div>
+                      <div className="text-[9px] text-[#3A3F47]">tTRUST</div>
+                    </div>
                   </div>
                 </div>
               </Link>

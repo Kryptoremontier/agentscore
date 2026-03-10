@@ -1,8 +1,16 @@
 /**
- * Bonding Curve Math — UI preview only.
+ * Bonding Curve Math — LOCAL APPROXIMATION ONLY.
  *
  * Linear model: price = BASE_PRICE + SLOPE * supply
- * Real execution still goes through Intuition's MultiVault contract.
+ * These constants DO NOT match the real on-chain Intuition bonding curve.
+ *
+ * Usage:
+ * - Chart visualization (generateCurveData) — shows curve shape
+ * - Fallback when on-chain price is unavailable
+ * - Cost-basis estimation (no historical purchase data available)
+ *
+ * For authoritative pricing, use src/lib/on-chain-pricing.ts which reads
+ * directly from the MultiVault contract (currentSharePrice, previewDeposit, etc.)
  */
 
 export const BONDING_CURVE_CONFIG = {

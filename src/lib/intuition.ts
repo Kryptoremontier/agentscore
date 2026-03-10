@@ -493,9 +493,15 @@ export async function depositToVault(
   const fees = await getFeeConfig(config.publicClient)
   const totalValue = calcFeeProxyValue(amount, fees)
 
-  // TODO: Slippage protection disabled — local bonding curve approximation diverges
-  // from on-chain curve. Re-enable with on-chain quote when available.
-  const minShares = 0n
+  // Slippage protection: on-chain preview → 2% tolerance
+  let minShares = 0n
+  try {
+    const { previewDeposit } = await import('./on-chain-pricing')
+    const preview = await previewDeposit(config.publicClient, vaultId, amount)
+    minShares = preview.shares * 98n / 100n // 2% slippage tolerance
+  } catch {
+    // RPC failure — proceed without slippage guard (same as before)
+  }
 
   const hash = await config.walletClient.writeContract({
     address: FEE_PROXY_ADDRESS,

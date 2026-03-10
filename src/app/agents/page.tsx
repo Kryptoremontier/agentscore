@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 // Categories unused — filter now uses trust levels directly
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
+import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
 import { calculateWeightedTrust } from '@/lib/reputation-decay'
 import {
@@ -130,8 +131,21 @@ function AgentsPageContent() {
   const [positionsLoading, setPositionsLoading] = useState(false)
   const [supportSupply, setSupportSupply] = useState(0)
   const [opposeSupply, setOpposeSupply] = useState(0)
+  const [onChainPrice, setOnChainPrice] = useState<number | null>(null)
+  const [peakOnChainPrice, setPeakOnChainPrice] = useState<number | null>(null)
   const [pageError, setPageError] = useState<string | null>(null)
   const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
+
+  // On-chain buy/sell previews (replace fictional local bonding curve)
+  const activeVaultId = selectedAgent?.term_id || undefined
+  const buyPreviewOC = useBuyPreview(
+    tradeAction === 'buy' ? activeVaultId : undefined,
+    tradeAction === 'buy' ? (Number(voteAmount) || 0) : undefined,
+  )
+  const sellPreviewOC = useSellPreview(
+    tradeAction === 'sell' ? activeVaultId : undefined,
+    tradeAction === 'sell' ? (Number(redeemShares) || 0) : undefined,
+  )
 
   // Load platform fee config from FeeProxy contract (once per session)
   useEffect(() => {
@@ -516,12 +530,19 @@ function AgentsPageContent() {
       if (publicClient) {
         try {
           const { getVaultSupply } = await import('@/lib/intuition')
-          const [supShares, oppShares] = await Promise.all([
+          const { getSharePriceFloat } = await import('@/lib/on-chain-pricing')
+          const hex = termId.startsWith('0x') ? termId as `0x${string}` : `0x${termId}` as `0x${string}`
+          const [supShares, oppShares, sharePrice] = await Promise.all([
             getVaultSupply(publicClient, termId),
             counterTermId ? getVaultSupply(publicClient, counterTermId) : Promise.resolve(0),
+            getSharePriceFloat(publicClient, hex).catch(() => null),
           ])
           setSupportSupply(supShares)
           setOpposeSupply(oppShares)
+          if (sharePrice !== null) {
+            setOnChainPrice(sharePrice)
+            setPeakOnChainPrice(prev => prev !== null ? Math.max(prev, sharePrice) : sharePrice)
+          }
         } catch (e) {
           console.warn('[supply] Contract read failed, falling back to indexer sum:', e)
           // Fallback computed below after positions resolve
@@ -560,6 +581,8 @@ function AgentsPageContent() {
       setCombinedStakerCount(0)
       setSupportSupply(0)
       setOpposeSupply(0)
+      setOnChainPrice(null)
+      setPeakOnChainPrice(null)
       return
     }
 
@@ -1180,8 +1203,9 @@ function AgentsPageContent() {
         shares: Math.abs(Number(sig.shares_delta || sig.shares || 0)) / 1e18,
       }))
       const stableDays = calculateStableDays(mappedSignals)
-      const currentPrice = BONDING_CURVE_CONFIG.BASE_PRICE + BONDING_CURVE_CONFIG.SLOPE * supportSupply
-      const peakPrice = findPeakPrice(
+      // Use on-chain share price when available, fallback to local approximation
+      const currentPrice = onChainPrice ?? (BONDING_CURVE_CONFIG.BASE_PRICE + BONDING_CURVE_CONFIG.SLOPE * supportSupply)
+      const peakPrice = peakOnChainPrice ?? findPeakPrice(
         mappedSignals.filter(s => s.side === 'support'),
         BONDING_CURVE_CONFIG.BASE_PRICE,
         BONDING_CURVE_CONFIG.SLOPE
@@ -1198,7 +1222,7 @@ function AgentsPageContent() {
       console.error('[compositeTrust]', e)
       return null
     }
-  }, [agentSignals, weightedTrust, supportSupply, combinedStakerCount, agentTriple.counterTermId])
+  }, [agentSignals, weightedTrust, supportSupply, combinedStakerCount, agentTriple.counterTermId, onChainPrice, peakOnChainPrice])
 
   // ─── Trust Tier dla wybranego agenta ───
   const agentTrustTier = useMemo(() => {
@@ -1869,7 +1893,7 @@ function AgentsPageContent() {
                           </span>
                         </p>
                         <p className="text-[#B5BDC6] text-xs">
-                          Current: <span className="text-white font-mono font-semibold">{getCurrentPrice(supportSupply).toFixed(4)}</span> tTRUST/share
+                          Current: <span className="text-white font-mono font-semibold">{(onChainPrice ?? getCurrentPrice(supportSupply)).toFixed(4)}</span> tTRUST/share
                           <span className="text-[#7A838D] ml-1.5">· supply: {supportSupply.toFixed(2)}</span>
                         </p>
                       </div>
@@ -1894,7 +1918,7 @@ function AgentsPageContent() {
                           <div className="flex justify-between items-center mt-1">
                             <span className="text-[#7A838D] text-[10px]">Current value</span>
                             <span className="text-[#7A838D] text-[10px] font-mono">
-                              {getSellProceeds(ownedShares, currentSupply).toFixed(6)} tTRUST
+                              {onChainPrice ? (ownedShares * onChainPrice).toFixed(6) : getSellProceeds(ownedShares, currentSupply).toFixed(6)} tTRUST
                             </span>
                           </div>
                         </div>
@@ -1998,25 +2022,27 @@ function AgentsPageContent() {
                       })()}
                     </div>
 
-                    {/* Buy/Sell preview */}
+                    {/* Buy/Sell preview — on-chain */}
                     {(() => {
-                      const currentSupply = supportSupply
                       if (tradeAction === 'buy') {
                         const inputAmt = Number(voteAmount) || 0
-                        const preview = calculateBuy(inputAmt, currentSupply)
+                        const hasOC = buyPreviewOC.sharesFloat > 0 && !buyPreviewOC.loading
+                        const sharesDisplay = hasOC ? buyPreviewOC.sharesFloat : calculateBuy(inputAmt, supportSupply).sharesReceived
+                        const avgPrice = hasOC ? buyPreviewOC.avgPrice : (sharesDisplay > 0 ? inputAmt / sharesDisplay : 0)
+                        const feeDisplay = hasOC ? buyPreviewOC.fee : (inputAmt * 0.05)
                         return (
                           <div className="space-y-1 mb-3 px-1">
                             <div className="flex items-center justify-between">
                               <span className="text-[#B5BDC6] text-xs">You receive</span>
                               <span className="text-white text-xs font-semibold">
-                                {inputAmt > 0 ? `${preview.sharesReceived.toFixed(4)} shares` : '—'}
+                                {buyPreviewOC.loading ? '...' : inputAmt > 0 ? `${sharesDisplay.toFixed(4)} shares` : '—'}
                               </span>
                             </div>
-                            {inputAmt > 0 && (
+                            {inputAmt > 0 && !buyPreviewOC.loading && (
                               <>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Protocol fee (5%)</span>
-                                  <span className="text-[#7A838D] text-[10px]">{preview.fee.toFixed(4)} tTRUST</span>
+                                  <span className="text-[#7A838D] text-[10px]">Protocol fee</span>
+                                  <span className="text-[#7A838D] text-[10px]">{feeDisplay.toFixed(4)} tTRUST</span>
                                 </div>
                                 {platformFee && (
                                   <div className="flex items-center justify-between">
@@ -2024,17 +2050,23 @@ function AgentsPageContent() {
                                     <span className="text-[#7A838D] text-[10px]">{((inputAmt * Number(platformFee.bps) / 10000) + Number(platformFee.fixedFee) / 1e18).toFixed(4)} tTRUST</span>
                                   </div>
                                 )}
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Avg price paid</span>
-                                  <span className="text-[#7A838D] text-[10px] font-mono">{preview.avgPricePerShare.toFixed(4)} tTRUST/share</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Price impact</span>
-                                  <span className="text-[#C8963C] text-[10px] font-mono">
-                                    {getCurrentPrice(currentSupply).toFixed(4)} → {preview.newPrice.toFixed(4)}
-                                    {' '}(+{(((preview.newPrice - getCurrentPrice(currentSupply)) / Math.max(getCurrentPrice(currentSupply), 0.0001)) * 100).toFixed(1)}%)
-                                  </span>
-                                </div>
+                                {sharesDisplay > 0 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#7A838D] text-[10px]">Avg price paid</span>
+                                    <span className="text-[#7A838D] text-[10px] font-mono">{avgPrice.toFixed(6)} tTRUST/share</span>
+                                  </div>
+                                )}
+                                {onChainPrice != null && sharesDisplay > 0 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#7A838D] text-[10px]">Price impact</span>
+                                    <span className="text-[#C8963C] text-[10px] font-mono">
+                                      {Math.abs(((avgPrice - onChainPrice) / Math.max(onChainPrice, 0.0001)) * 100) < 0.1
+                                        ? '< 0.1%'
+                                        : `${(((avgPrice - onChainPrice) / Math.max(onChainPrice, 0.0001)) * 100).toFixed(1)}%`
+                                      }
+                                    </span>
+                                  </div>
+                                )}
                                 {platformFee && (
                                   <div className="flex items-center justify-between mt-1 pt-1 border-t border-[#1E2229]">
                                     <span className="text-[#B5BDC6] text-[10px] font-medium">Total cost</span>
@@ -2049,40 +2081,38 @@ function AgentsPageContent() {
                         const inputShares = Number(redeemShares) || 0
                         const maxOwned = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
                         const validShares = inputShares > 0 && inputShares <= maxOwned
-                        const preview = calculateSell(inputShares, currentSupply)
+                        const hasOC = sellPreviewOC.assetsFloat > 0 && !sellPreviewOC.loading
+                        const netProceeds = hasOC ? sellPreviewOC.assetsFloat : calculateSell(inputShares, supportSupply).netProceeds
                         return (
                           <div className="space-y-1 mb-3 px-1">
                             {inputShares > maxOwned && maxOwned > 0 && (
                               <p className="text-[#f85149] text-[10px] mb-1">Exceeds owned shares ({maxOwned.toFixed(4)})</p>
                             )}
                             <div className="flex items-center justify-between">
-                              <span className="text-[#B5BDC6] text-xs">Gross proceeds</span>
-                              <span className="text-[#B5BDC6] text-xs font-mono">
-                                {validShares ? `${preview.grossProceeds.toFixed(6)} tTRUST` : '—'}
+                              <span className="text-[#B5BDC6] text-xs">You receive</span>
+                              <span className="text-white text-xs font-bold font-mono">
+                                {sellPreviewOC.loading ? '...' : validShares ? `${netProceeds.toFixed(6)} tTRUST` : '—'}
                               </span>
                             </div>
-                            {validShares && (
+                            {validShares && !sellPreviewOC.loading && (
                               <>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Protocol fee (5%)</span>
-                                  <span className="text-[#f85149] text-[10px] font-mono">-{preview.fee.toFixed(6)} tTRUST</span>
-                                </div>
-                                <div className="h-px bg-[#1E2229] my-1" />
-                                <div className="flex items-center justify-between">
-                                  <span className="text-white text-xs font-medium">You receive</span>
-                                  <span className="text-white text-xs font-bold font-mono">{preview.netProceeds.toFixed(6)} tTRUST</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Avg price/share</span>
-                                  <span className="text-[#7A838D] text-[10px] font-mono">{(preview.grossProceeds / inputShares).toFixed(6)} tTRUST</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[#7A838D] text-[10px]">Price impact</span>
-                                  <span className="text-[#f85149] text-[10px] font-mono">
-                                    {getCurrentPrice(currentSupply).toFixed(4)} → {preview.newPrice.toFixed(4)}
-                                    {' '}({(((preview.newPrice - getCurrentPrice(currentSupply)) / Math.max(getCurrentPrice(currentSupply), 0.0001)) * 100).toFixed(1)}%)
-                                  </span>
-                                </div>
+                                {inputShares > 0 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#7A838D] text-[10px]">Avg price/share</span>
+                                    <span className="text-[#7A838D] text-[10px] font-mono">{(netProceeds / inputShares).toFixed(6)} tTRUST</span>
+                                  </div>
+                                )}
+                                {onChainPrice != null && inputShares > 0 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[#7A838D] text-[10px]">Price impact</span>
+                                    <span className="text-[#f85149] text-[10px] font-mono">
+                                      {Math.abs(((netProceeds / inputShares - onChainPrice) / Math.max(onChainPrice, 0.0001)) * 100) < 0.1
+                                        ? '< 0.1%'
+                                        : `${(((netProceeds / inputShares - onChainPrice) / Math.max(onChainPrice, 0.0001)) * 100).toFixed(1)}%`
+                                      }
+                                    </span>
+                                  </div>
+                                )}
                               </>
                             )}
                           </div>
@@ -2131,7 +2161,7 @@ function AgentsPageContent() {
                       className="w-full py-3 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#2d7a5f] hover:bg-[#34a872]"
                     >
                       {tradeAction === 'buy'
-                        ? `Buy Shares${Number(voteAmount) > 0 ? ` · get ~${calculateBuy(Number(voteAmount), supportSupply).sharesReceived.toFixed(3)}` : ''}`
+                        ? `Buy Shares${Number(voteAmount) > 0 && buyPreviewOC.sharesFloat > 0 ? ` · get ~${buyPreviewOC.sharesFloat.toFixed(3)}` : ''}`
                         : `Sell ${Number(redeemShares) > 0 ? Number(redeemShares).toFixed(4) : '0'} Shares`
                       }
                     </button>
@@ -2155,7 +2185,7 @@ function AgentsPageContent() {
               {isConnected && (userPosition.forShares || userPosition.againstShares) && (() => {
                 const forSf = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
                 const agaSf = userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0
-                const forVal = forSf > 0 ? getSellProceeds(forSf, supportSupply) : 0
+                const forVal = forSf > 0 ? (onChainPrice ? forSf * onChainPrice : getSellProceeds(forSf, supportSupply)) : 0
                 const agaVal = agaSf > 0 ? getSellProceeds(agaSf, opposeSupply) : 0
                 const totalVal = forVal + agaVal
                 return (
@@ -2592,7 +2622,8 @@ function AgentsPageContent() {
                         {/* Support curve */}
                         {(() => {
                           const data = generateCurveData(supportSupply)
-                          const currentPrice = getCurrentPrice(supportSupply)
+                          const localPrice = getCurrentPrice(supportSupply)
+                          const chartPrice = onChainPrice ?? localPrice
                           return (
                             <div>
                               <p className="text-[#34a872] text-[10px] font-bold mb-2 uppercase">Support</p>
@@ -2615,19 +2646,33 @@ function AgentsPageContent() {
                                     />
                                     <Area type="monotone" dataKey="price" stroke="#34a872" fillOpacity={1} fill="url(#supportCurveGrad)" strokeWidth={2} />
                                     {supportSupply > 0 && (
-                                      <ReferenceDot x={parseFloat(supportSupply.toFixed(4))} y={parseFloat(currentPrice.toFixed(6))} r={5} fill="#34a872" stroke="#fff" strokeWidth={2} />
+                                      <ReferenceDot x={parseFloat(supportSupply.toFixed(4))} y={parseFloat(localPrice.toFixed(6))} r={5} fill="#34a872" stroke="#fff" strokeWidth={2} />
+                                    )}
+                                    {onChainPrice && supportSupply > 0 && (
+                                      <ReferenceLine y={onChainPrice} stroke="#f59e0b" strokeDasharray="4 4" strokeWidth={1} label={{ value: 'On-chain', fill: '#f59e0b', fontSize: 9, position: 'right' }} />
                                     )}
                                   </AreaChart>
                                 </ResponsiveContainer>
                               </div>
-                              <p className="text-[#7A838D] text-[10px] mt-1">Supply: {supportSupply.toFixed(2)} · Price: {currentPrice.toFixed(4)}</p>
+                              <p className="text-[#7A838D] text-[10px] mt-1">Supply: {supportSupply.toFixed(2)} · Price: {chartPrice.toFixed(4)}{onChainPrice ? ' (on-chain)' : ''}</p>
                             </div>
                           )
                         })()}
                         {/* Oppose curve */}
                         {(() => {
+                          if (opposeSupply <= 0) {
+                            return (
+                              <div>
+                                <p className="text-[#c45454] text-[10px] font-bold mb-2 uppercase">Oppose</p>
+                                <div className="h-32 flex items-center justify-center rounded-lg" style={{ background: 'rgba(196,84,84,0.04)', border: '1px solid rgba(196,84,84,0.12)' }}>
+                                  <p className="text-[#7A838D] text-[10px]">No oppose activity yet</p>
+                                </div>
+                                <p className="text-[#7A838D] text-[10px] mt-1">Supply: 0 · Price: —</p>
+                              </div>
+                            )
+                          }
                           const data = generateCurveData(opposeSupply)
-                          const currentPrice = getCurrentPrice(opposeSupply)
+                          const opposePrice = getCurrentPrice(opposeSupply)
                           return (
                             <div>
                               <p className="text-[#c45454] text-[10px] font-bold mb-2 uppercase">Oppose</p>
@@ -2650,12 +2695,12 @@ function AgentsPageContent() {
                                     />
                                     <Area type="monotone" dataKey="price" stroke="#c45454" fillOpacity={1} fill="url(#opposeCurveGrad)" strokeWidth={2} />
                                     {opposeSupply > 0 && (
-                                      <ReferenceDot x={parseFloat(opposeSupply.toFixed(4))} y={parseFloat(currentPrice.toFixed(6))} r={5} fill="#c45454" stroke="#fff" strokeWidth={2} />
+                                      <ReferenceDot x={parseFloat(opposeSupply.toFixed(4))} y={parseFloat(opposePrice.toFixed(6))} r={5} fill="#c45454" stroke="#fff" strokeWidth={2} />
                                     )}
                                   </AreaChart>
                                 </ResponsiveContainer>
                               </div>
-                              <p className="text-[#7A838D] text-[10px] mt-1">Supply: {opposeSupply.toFixed(2)} · Price: {currentPrice.toFixed(4)}</p>
+                              <p className="text-[#7A838D] text-[10px] mt-1">Supply: {opposeSupply.toFixed(2)} · Price: {opposePrice.toFixed(4)}</p>
                             </div>
                           )
                         })()}
@@ -2771,10 +2816,10 @@ function AgentsPageContent() {
                                         {(Number(shares) / 1e18).toFixed(4)}
                                       </td>
                                       <td className="py-2 text-right text-[#B5BDC6]">
-                                        {getSellProceeds(
-                                          Number(shares) / 1e18,
-                                          isOppose ? opposeSupply : supportSupply
-                                        ).toFixed(4)}
+                                        {(!isOppose && onChainPrice)
+                                          ? ((Number(shares) / 1e18) * onChainPrice).toFixed(4)
+                                          : getSellProceeds(Number(shares) / 1e18, isOppose ? opposeSupply : supportSupply).toFixed(4)
+                                        }
                                       </td>
                                       <td className="py-2 text-right text-[#B5BDC6]">
                                         {pct.toFixed(1)}%
@@ -2815,7 +2860,7 @@ function AgentsPageContent() {
                           <div className="space-y-2">
                             {userPosition.forShares && Number(userPosition.forShares) > 0 && (() => {
                               const sharesFloat = Number(userPosition.forShares) / 1e18
-                              const value = getSellProceeds(sharesFloat, supportSupply)
+                              const value = onChainPrice ? sharesFloat * onChainPrice : getSellProceeds(sharesFloat, supportSupply)
                               return (
                               <div className="bg-[#2d7a5f15] border border-[#2d7a5f30] rounded-lg px-3 py-2">
                                 <div className="flex items-center justify-between">
@@ -2836,7 +2881,7 @@ function AgentsPageContent() {
                             })()}
                             {userPosition.againstShares && Number(userPosition.againstShares) > 0 && (() => {
                               const sharesFloat = Number(userPosition.againstShares) / 1e18
-                              const value = getSellProceeds(sharesFloat, opposeSupply)
+                              const value = getSellProceeds(sharesFloat, opposeSupply) // oppose vault — no on-chain price yet
                               return (
                               <div className="bg-[#8b3a3a15] border border-[#8b3a3a30] rounded-lg px-3 py-2">
                                 <div className="flex items-center justify-between">
