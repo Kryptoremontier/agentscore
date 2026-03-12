@@ -48,6 +48,16 @@ function ProfilePageContent() {
 
   useEffect(() => { setMounted(true) }, [])
 
+  // Sync activeTab when URL changes (e.g. /profile?tab=pnl)
+  useEffect(() => {
+    setActiveTab(defaultTab)
+  }, [defaultTab])
+
+  const handleTabClick = (tabId: typeof PROFILE_TABS[number]['id']) => {
+    setActiveTab(tabId)
+    router.replace(`/profile?tab=${tabId}`, { scroll: false })
+  }
+
   useEffect(() => {
     if (mounted && !isConnected) {
       router.push('/')
@@ -77,7 +87,7 @@ function ProfilePageContent() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabClick(tab.id)}
                 className={cn(
                   'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
                   isActive ? 'text-white' : 'text-[#7A838D] hover:text-[#B5BDC6]'

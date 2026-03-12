@@ -21,9 +21,91 @@ import { SearchModal } from '@/components/shared/SearchModal'
 import { cn } from '@/lib/cn'
 
 const navLinks = [
-  { href: '/register', label: 'Register' },
   { href: '/docs', label: 'Docs' },
 ]
+
+function RegisterDropdown() {
+  const pathname = usePathname()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const isActive = pathname?.startsWith('/register')
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={cn(
+          'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+          'bg-white/5 border border-white/10 hover:bg-white/10',
+          isActive && 'border-[#C8963C]/30 text-[#C8963C]'
+        )}
+      >
+        <Plus className="w-4 h-4" />
+        <span>Register</span>
+        <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-200', open && 'rotate-180')} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full right-0 mt-1 w-48 z-[45]"
+          >
+            <div className="bg-[#0F1113] border border-[#C8963C]/20 rounded-xl shadow-2xl shadow-black/40 overflow-hidden p-1.5">
+              <Link
+                href="/register"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group hover:bg-white/5 text-[#B5BDC6] hover:text-white"
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.25)' }}>
+                  <Bot className="w-4 h-4" style={{ color: '#C8963C' }} />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Agent</p>
+                  <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Register AI agent</p>
+                </div>
+              </Link>
+
+              <Link
+                href="/register?tab=skill"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group hover:bg-white/5 text-[#B5BDC6] hover:text-white"
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(46,230,214,0.10)', border: '1px solid rgba(46,230,214,0.22)' }}>
+                  <Zap className="w-4 h-4" style={{ color: '#2EE6D6' }} />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Skill</p>
+                  <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Register AI skill</p>
+                </div>
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 function ExploreDropdown() {
   const pathname = usePathname()
@@ -293,9 +375,9 @@ export function Navbar() {
                 </span>
               </button>
 
-              {/* Add Agent Button */}
+              {/* Create Claim Button */}
               <Link
-                href="/register"
+                href="/claims?create=true"
                 className={cn(
                   'hidden md:flex items-center gap-2 px-4 py-2 rounded-xl',
                   'bg-white/5 border border-white/10 hover:bg-white/10',
@@ -303,8 +385,13 @@ export function Navbar() {
                 )}
               >
                 <Plus className="w-4 h-4" />
-                <span>Register</span>
+                <span>Create Claim</span>
               </Link>
+
+              {/* Register Dropdown */}
+              <div className="hidden md:block">
+                <RegisterDropdown />
+              </div>
 
               {/* Wallet Button */}
               <WalletButton />
@@ -377,6 +464,32 @@ export function Navbar() {
                   )}
                 >
                   <Trophy className="w-5 h-5 text-[#C8963C]" /> Leaderboard
+                </Link>
+                <Link
+                  href="/claims?create=true"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all text-[#B5BDC6] hover:text-white hover:bg-white/5"
+                >
+                  <Plus className="w-5 h-5" /> Create Claim
+                </Link>
+                <Link
+                  href="/register"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    pathname === '/register' && !pathname.includes('tab=skill')
+                      ? 'text-[#C8963C] bg-[#C8963C]/10'
+                      : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  <Bot className="w-5 h-5 text-[#C8963C]" /> Register Agent
+                </Link>
+                <Link
+                  href="/register?tab=skill"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all text-[#B5BDC6] hover:text-white hover:bg-white/5"
+                >
+                  <Zap className="w-5 h-5 text-[#2EE6D6]" /> Register Skill
                 </Link>
                 {navLinks.map((link) => (
                   <Link

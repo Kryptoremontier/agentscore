@@ -158,7 +158,7 @@ export default function DocsPage() {
               <ul className="space-y-2 text-sm text-[#9BA5B0]">
                 <li className="flex items-start gap-2">
                   <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C8963C] shrink-0" />
-                  Score range <strong className="text-white">0–100</strong>, anchored at 50 until sufficient stake accumulates
+                  Score range <strong className="text-white">0–100</strong>, anchored at 50 until sufficient stake accumulates (Confidence model)
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C8963C] shrink-0" />
@@ -166,7 +166,7 @@ export default function DocsPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C8963C] shrink-0" />
-                  <strong className="text-white">Time decay</strong> — older signals decay gradually (half-life ~90 days)
+                  <strong className="text-white">Momentum</strong> — short-term Buy/Sell activity nudges the score up or down (±8 pts max, 24h/7d blend)
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C8963C] shrink-0" />
@@ -271,10 +271,10 @@ export default function DocsPage() {
                   </thead>
                   <tbody>
                     {[
-                      { op: 'Agent registration (createAtom)', fee: '0.1 tTRUST + 2.5%', color: '#C8963C' },
-                      { op: 'Skill registration (createAtom)', fee: '0.1 tTRUST + 2.5%', color: '#2EE6D6' },
-                      { op: 'Claim / Triple creation', fee: '0.1 tTRUST + 2.5%', color: '#38B6FF' },
-                      { op: 'Staking Support / Oppose', fee: '0.1 tTRUST + 2.5%', color: '#C8963C' },
+                      { op: 'Agent registration (createAtom)', fee: '~0.002 tTRUST (protocol)', color: '#C8963C' },
+                      { op: 'Skill registration (createAtom)', fee: '~0.002 tTRUST (protocol)', color: '#2EE6D6' },
+                      { op: 'Claim / Triple creation', fee: '~0.002 tTRUST (protocol)', color: '#38B6FF' },
+                      { op: 'Staking Support / Oppose', fee: '0.001 tTRUST + 2.5%', color: '#C8963C' },
                       { op: 'Redeem / Sell shares', fee: 'FREE', color: '#2ECC71' },
                       { op: 'Reading data', fee: 'FREE', color: '#2ECC71' },
                     ].map((row, i) => (
@@ -291,8 +291,8 @@ export default function DocsPage() {
                 style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="text-xs font-bold text-[#B5BDC6] mb-2">Example: Staking 1 tTRUST</div>
                 <div className="space-y-1 text-xs text-[#9BA5B0]">
-                  <div className="flex justify-between"><span>You send</span><span className="text-white">~1.126 tTRUST</span></div>
-                  <div className="flex justify-between"><span>Platform fee</span><span className="text-[#C8963C]">~0.126 tTRUST</span></div>
+                  <div className="flex justify-between"><span>You send</span><span className="text-white">~1.026 tTRUST</span></div>
+                  <div className="flex justify-between"><span>Platform fee</span><span className="text-[#C8963C]">~0.026 tTRUST</span></div>
                   <div className="flex justify-between"><span>Deposited to vault</span><span className="text-[#2ECC71]">1.0 tTRUST</span></div>
                 </div>
               </div>
@@ -331,12 +331,12 @@ export default function DocsPage() {
               </p>
               <div className="grid sm:grid-cols-3 gap-3">
                 {[
-                  { label: 'Browse Agents',  href: '/agents',   rgb: '200,150,60',  hex: '#C8963C' },
-                  { label: 'Browse Skills',  href: '/skills',   rgb: '46,230,214',  hex: '#2EE6D6' },
-                  { label: 'Browse Claims',  href: '/claims',   rgb: '56,182,255',  hex: '#38B6FF' },
-                  { label: 'Register Agent', href: '/register', rgb: '200,150,60',  hex: '#C8963C' },
-                  { label: 'Register Skill', href: '/register', rgb: '46,230,214',  hex: '#2EE6D6' },
-                  { label: 'Create Claim',   href: '/claims',   rgb: '56,182,255',  hex: '#38B6FF' },
+                  { label: 'Browse Agents',  href: '/agents',             rgb: '200,150,60',  hex: '#C8963C' },
+                  { label: 'Browse Skills',  href: '/skills',             rgb: '46,230,214',  hex: '#2EE6D6' },
+                  { label: 'Browse Claims',  href: '/claims',             rgb: '56,182,255',  hex: '#38B6FF' },
+                  { label: 'Register Agent', href: '/register',           rgb: '200,150,60',  hex: '#C8963C' },
+                  { label: 'Register Skill', href: '/register?tab=skill', rgb: '46,230,214',  hex: '#2EE6D6' },
+                  { label: 'Create Claim',   href: '/claims?create=true', rgb: '56,182,255',  hex: '#38B6FF' },
                 ].map(btn => (
                   <Link key={btn.label} href={btn.href}
                     className="flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5"

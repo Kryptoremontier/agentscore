@@ -269,6 +269,13 @@ function ClaimsPageContent() {
     }
   }, [claims, searchParams])
 
+  // Auto-open Create modal from URL ?create=true
+  useEffect(() => {
+    if (searchParams.get('create') === 'true') {
+      setShowCreateModal(true)
+    }
+  }, [searchParams])
+
   // ── Positions helpers ──
   // Matches agents/page.tsx fetchUserPosition exactly — same variable names, same format
   const fetchUserPosition = async (termId: string, userAddr: string, counterTermId?: string | null) => {

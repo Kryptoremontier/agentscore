@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { Sparkles, CheckCircle, ArrowRight, Shield, Users, TrendingUp, Bot, Zap } from 'lucide-react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { RegisterAgentForm } from '@/components/agents/RegisterAgentForm'
 import { RegisterSkillForm } from '@/components/skills/RegisterSkillForm'
@@ -13,10 +14,17 @@ import { cn } from '@/lib/cn'
 
 type RegisterTab = 'agent' | 'skill'
 
-export default function RegisterPage() {
+function RegisterContent() {
+  const searchParams = useSearchParams()
   const [success, setSuccess] = useState(false)
   const [agentId, setAgentId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<RegisterTab>('agent')
+
+  useEffect(() => {
+    if (searchParams.get('tab') === 'skill') {
+      setActiveTab('skill')
+    }
+  }, [searchParams])
 
   const handleSuccess = (id: string) => {
     setAgentId(id)
@@ -291,5 +299,19 @@ export default function RegisterPage() {
         </div>
       </div>
     </PageBackground>
+  )
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <PageBackground image="diagonal" opacity={0.3}>
+        <div className="pt-24 pb-16 flex items-center justify-center min-h-[50vh]">
+          <div className="text-[#7A838D] text-sm">Loading…</div>
+        </div>
+      </PageBackground>
+    }>
+      <RegisterContent />
+    </Suspense>
   )
 }

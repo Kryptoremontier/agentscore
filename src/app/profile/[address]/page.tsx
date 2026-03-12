@@ -7,7 +7,7 @@ import { isAddress, getAddress } from 'viem'
 import { motion } from 'framer-motion'
 import {
   Shield, TrendingUp, Award, Copy, Check, ExternalLink,
-  ArrowLeft, Calendar, Zap
+  ArrowLeft, Calendar, Zap, BarChart2
 } from 'lucide-react'
 import Link from 'next/link'
 import { PageBackground } from '@/components/shared/PageBackground'
@@ -15,6 +15,7 @@ import { ProfileStats } from '@/components/profile/ProfileStats'
 import { MyAgents } from '@/components/profile/MyAgents'
 import { MySupportedAgents } from '@/components/profile/MySupportedAgents'
 import { MyBadges } from '@/components/profile/MyBadges'
+import { PnLTab } from '@/components/profile/PnLTab'
 import { BadgeDisplay } from '@/components/profile/BadgeDisplay'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useUserProfile } from '@/hooks/useUserProfile'
@@ -97,6 +98,10 @@ export default function PublicProfilePage() {
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Supporting
               </TabsTrigger>
+              <TabsTrigger value="pnl" className="data-[state=active]:bg-white/10">
+                <BarChart2 className="w-4 h-4 mr-2" />
+                P&L
+              </TabsTrigger>
               <TabsTrigger value="badges" className="data-[state=active]:bg-white/10">
                 <Award className="w-4 h-4 mr-2" />
                 Badges
@@ -108,6 +113,9 @@ export default function PublicProfilePage() {
             </TabsContent>
             <TabsContent value="supporting">
               <MySupportedAgents supports={profile.supportedAgents} />
+            </TabsContent>
+            <TabsContent value="pnl">
+              <PnLTab positions={profile.pnlPositions} />
             </TabsContent>
             <TabsContent value="badges">
               <MyBadges badges={profile.badges} expertLevel={profile.expertLevel} stats={profile.stats} />

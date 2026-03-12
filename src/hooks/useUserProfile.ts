@@ -104,8 +104,10 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   // localStorage count for claims (triples are harder to detect via positions)
   const localClaimsCount = getUserRegistrationsByType(address, 'claim').length
 
+  // Use both checksummed and lowercase — indexer may store account_id in either format
+  const addrLcForQuery = checksummed.toLowerCase()
   const data = await gql<GqlProfileData>(`
-    query ProfileData($address: String!) {
+    query ProfileData($address: String!, $addressLc: String!) {
       myAgents: atoms(
         where: {
           label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" }
@@ -158,8 +160,13 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
 
       myPositions: positions(
         where: {
-          account_id: { _eq: $address }
-          shares: { _gt: "0" }
+          _and: [
+            { shares: { _gt: "0" } },
+            { _or: [
+              { account_id: { _eq: $address } },
+              { account_id: { _eq: $addressLc } }
+            ]}
+          ]
         }
         order_by: { updated_at: desc }
         limit: 200
@@ -208,7 +215,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
         }
       ) { aggregate { count } }
     }
-  `, { address: checksummed })
+  `, { address: checksummed, addressLc: addrLcForQuery })
 
   // Merge sources, deduplicate by term_id:
   // 1. myAgents: legacy (creator_id = user, pre-FeeProxy)
@@ -348,7 +355,8 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   const totalSignals = data.mySignals?.aggregate?.count || 0
   const totalAttestations = agentPositions.length
   const reportsSubmitted = data.myReports?.aggregate?.count || 0
-  const totalPositions = agentPositions.length + pnlPositions.filter(p => p.type !== 'agent').length
+  // Distinct vault positions (agents, skills, claims) — avoid double-counting
+  const totalPositions = pnlPositions.length
   const tTrustStakedNum = Number(totalStaked) / 1e18
 
   // Warstwa 1+2: skills i claims łączą creator_id (legacy) z localStorage (FeeProxy)

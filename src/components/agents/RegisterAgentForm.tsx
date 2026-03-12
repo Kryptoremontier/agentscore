@@ -13,6 +13,7 @@ import { AgentAvatar } from '@/components/agents/AgentAvatar'
 import { PlatformIcon } from '@/components/agents/PlatformIcon'
 import { cn } from '@/lib/cn'
 import { createWriteConfig, createAgentAtom, getFeeConfig } from '@/lib/intuition'
+import { parseEther } from 'viem'
 import type { AgentPlatform, VerificationLevel } from '@/types/agent'
 
 interface RegisterAgentFormProps {
@@ -92,6 +93,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
     tags: [] as string[],
     website: '',
     documentation: '',
+    initialStake: '', // optional, e.g. "0.01" = extra auto-stake beyond minimum 0.001
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -125,6 +127,12 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
       case 2: // Wallet
         if (formData["walletAddress"] && !formData["walletAddress"].match(/^0x[a-fA-F0-9]{40}$/)) {
           newErrors["walletAddress"] = 'Invalid wallet address'
+        }
+        break
+      case 3: // Review
+        if (formData.initialStake) {
+          const n = parseFloat(formData.initialStake)
+          if (isNaN(n) || n < 0.001) newErrors["initialStake"] = 'Minimum 0.001 tTRUST'
         }
         break
     }
@@ -211,13 +219,16 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
       const config = createWriteConfig(walletClient, publicClient)
 
       setLoadingStep('Registering agent on-chain...')
+      const initialDeposit = formData.initialStake
+        ? parseEther(formData.initialStake)
+        : undefined
       const result = await createAgentAtom(config, {
         name: formData.name,
         description: formData.description,
         category: formData.platforms[0] || 'general',
         website: formData.website || undefined,
         tags: formData.tags,
-      })
+      }, initialDeposit)
 
       setTxHash(result.transactionHash)
       setAtomId(result.state.termId)
@@ -680,11 +691,30 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
                 </div>
               )}
 
+              {/* Initial Stake (optional auto-stake beyond minimum) */}
+              <div className="glass rounded-lg p-4 space-y-2">
+                <label className="font-medium block">Initial stake (optional)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.001 (minimum)"
+                  value={formData.initialStake}
+                  onChange={e => setFormData({ ...formData, initialStake: e.target.value.replace(/[^0-9.]/g, '') })}
+                  className="w-full px-4 py-2 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none font-mono"
+                />
+                <p className="text-xs text-text-muted">
+                  Minimum 0.001 tTRUST to create. Add more to auto-stake your agent (shows in P&amp;L).
+                </p>
+                {errors["initialStake"] && (
+                  <p className="text-sm text-trust-critical">{errors["initialStake"]}</p>
+                )}
+              </div>
+
               {/* Registration Fee */}
               <div className="glass rounded-lg p-4 border border-primary/20 space-y-2">
                 <p className="font-medium">Registration Cost</p>
                 {platformFee ? (() => {
-                  const depositAmt = 0.001
+                  const depositAmt = formData.initialStake ? parseFloat(formData.initialStake) || 0.001 : 0.001
                   const pctFee = depositAmt * Number(platformFee.bps) / 10000
                   const fixedFee = Number(platformFee.fixedFee) / 1e18
                   const protocolCost = 0.001 // atom creation protocol cost

@@ -375,13 +375,16 @@ export async function createAccountAtom(
 /**
  * Create Agent Atom with full metadata via FeeProxy.
  * Platform fee applies (collected on registration).
+ * @param initialDeposit — optional; defaults to 0.001 tTRUST (minimum to create). Pass more to auto-stake.
  */
 export async function createAgentAtom(
   config: WriteConfig,
   metadata: AgentMetadata,
+  initialDeposit?: bigint
 ) {
   const atomText = `${APP_CONFIG.AGENT_PREFIX} ${metadata.name} - ${metadata.description}`
-  const result = await createAtomViaProxy(config, atomText, DEFAULT_ATOM_DEPOSIT)
+  const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
+  const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
   if (userAddress) saveRegistration(result.termId, userAddress, 'agent')
   return result
@@ -390,13 +393,16 @@ export async function createAgentAtom(
 /**
  * Create Skill Atom via FeeProxy.
  * Label format: "Skill: Name - description" (matches ILIKE 'Skill:%' filter)
+ * @param initialDeposit — optional; defaults to 0.001 tTRUST. Pass more to auto-stake.
  */
 export async function createSkillAtom(
   config: WriteConfig,
   metadata: { name: string; description: string; category: string; compatibilities: string[]; requiresApiKey?: boolean; pricing?: string; githubUrl?: string; installCommand?: string },
+  initialDeposit?: bigint
 ) {
   const atomText = `${APP_CONFIG.SKILL_PREFIX} ${metadata.name} - ${metadata.description}`
-  const result = await createAtomViaProxy(config, atomText, DEFAULT_ATOM_DEPOSIT)
+  const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
+  const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
   if (userAddress) saveRegistration(result.termId, userAddress, 'skill')
   return result
