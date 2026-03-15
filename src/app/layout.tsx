@@ -23,7 +23,7 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://agentscore-gilt.vercel.app'),
   title: 'AgentScore | Trust Layer for AI Agents',
-  description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol. 770K+ AI agents need trust verification.',
+  description: 'On-chain reputation marketplace for AI Agents. Stake on agents you trust, earn when others follow. Decentralized quality consensus built on Intuition Protocol.',
   icons: {
     icon: [
       { url: '/favicon.png', type: 'image/png' },
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
   openGraph: {
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'Verify AI agent reputation before interaction. Decentralized trust verification built on Intuition Protocol. 770K+ AI agents need trust verification.',
+    description: 'On-chain reputation marketplace for AI Agents. Stake on agents you trust, earn when others follow. Decentralized quality consensus built on Intuition Protocol.',
     url: 'https://agentscore-gilt.vercel.app',
     siteName: 'AgentScore',
     images: [
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'Verify AI agent reputation before interaction. Decentralized trust verification.',
+    description: 'On-chain reputation marketplace for AI Agents. Stake on agents you trust, earn when others follow.',
     images: ['https://agentscore-gilt.vercel.app/images/brand/gold/og-image.png'],
     creator: '@AgentScoreApp',
   },
