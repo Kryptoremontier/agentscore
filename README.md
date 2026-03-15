@@ -24,6 +24,8 @@
   <img src="https://img.shields.io/badge/built%20on-Intuition%20Protocol-8A63D2?style=flat-square" alt="Built on Intuition" />
   <img src="https://img.shields.io/badge/network-Intuition%20Testnet-blue?style=flat-square" alt="Network" />
   <img src="https://img.shields.io/badge/status-testnet%20alpha-orange?style=flat-square" alt="Status" />
+  <img src="https://img.shields.io/badge/FeeProxy-Active-green?style=flat-square" alt="FeeProxy" />
+  <img src="https://img.shields.io/badge/pricing-on--chain-blue?style=flat-square" alt="On-chain Pricing" />
 </p>
 
 ---
@@ -38,6 +40,16 @@ We live in an era of **AI agents operating everywhere** — coding, trading, cre
 
 AgentScore is the answer. An open, on-chain reputation system where **anyone can stake tTRUST tokens** to signal confidence in an AI agent or skill. Every signal is permanent, transparent, and economically meaningful — no fake reviews, no platform bias.
 
+### Where We're Going
+
+AgentScore is evolving beyond a human marketplace:
+
+1. **Today** — Humans register agents and stake on trust
+2. **Tomorrow** — AI agents query trust scores to pick collaborators
+3. **Next** — Agents evaluate each other — trust grows autonomously
+
+We're building the first Intuition dApp where AI is both the producer and consumer of trust data.
+
 ---
 
 ## What's on the Platform
@@ -45,7 +57,7 @@ AgentScore is the answer. An open, on-chain reputation system where **anyone can
 AgentScore handles three types of on-chain entities, all powered by Intuition Protocol atoms and triples:
 
 ### 🤖 Agents
-AI agent identities registered as Intuition **Atoms**. Each agent gets a unique on-chain ID, a live Trust Score (0–100), and two staking vaults (Support / Oppose). Anyone can stake tTRUST to signal confidence.
+AI agent identities registered as Intuition **Atoms**. Each agent gets a unique on-chain ID, a live Trust Score (0–100), and a staking vault. Anyone can stake tTRUST to back agents they believe in. Early stakers get more shares per tTRUST — bonding curve economics reward conviction.
 
 ### ⚡ Skills
 Specific capabilities exposed by an agent (e.g. *Code Generation*, *RAG Search*, *Image Analysis*). Registered as Atoms and scored independently — a skilled agent should be backed at both the agent level and skill level.
@@ -62,120 +74,214 @@ Claims are also stakeable — support or oppose any statement with real tTRUST.
 
 ## How Trust Scores Work
 
+AgentScore uses a **Hybrid Trust Score** combining economic confidence with multi-dimensional quality metrics:
+
+### AGENTSCORE (Main Score)
 ```
-  User A stakes 100 tTRUST  ──────▶  Agent X  ◀──────  User B stakes 50 tTRUST
-  "I trust this agent"                  │               "I trust this agent"
-                                        │
-                              ┌─────────▼──────────┐
-                              │   Trust Score: 87   │
-                              │   ████████████░░    │
-                              │   Tier: Trusted ✓   │
-                              └─────────────────────┘
+Hybrid Score = 60% × Trust Score + 40% × Composite Score
 ```
 
-| Signal | Effect |
-|--------|--------|
-| **Support** — stake in the support vault | Raises Trust Score |
-| **Oppose** — stake in the counter vault | Lowers Trust Score |
+With **minimum gate**: if support ratio < 30%, score is capped regardless of other metrics. An agent with 10% support can never score above 8/100.
 
-- Score range **0–100**, anchored at 50 until sufficient stake accumulates
-- **Bonding curves** — price per share rises as more stake enters a vault
-- **Time decay** — older signals gradually lose weight (half-life ~90 days)
-- Positions can be **redeemed (sold)** at any time at the current curve price
+### Trust Score (Economic Confidence)
+```
+base = supportRatio
+confidence = 1 - e^(-totalStake / tau)
+anchoredScore = 50 + (base - 50) × confidence
+```
+Anchored at 50 until sufficient economic stake accumulates. More stake = higher confidence = score moves further from 50.
+
+### Composite Trust Score (Quality Metrics)
+
+| Component | Weight | What it measures |
+|-----------|--------|-----------------|
+| Signal Ratio | 40% | Time-weighted support ratio (90-day half-life decay) |
+| Staker Diversity | 20% | Unique stakers count (whale resistance) |
+| Sustained Stability | 25% | Days maintaining >50% trust ratio |
+| Price Retention | 15% | Current on-chain share price vs ATH |
+
+All pricing data read directly from MultiVault contract — no local approximations.
 
 ### Trust Tiers
 
 | Tier | Threshold | Description |
 |------|-----------|-------------|
 | ○ **Unverified** | 0 stakers | No signals yet |
-| ◐ **Sandbox** | 3+ stakers | Early community activity |
-| ✓ **Trusted** | 10+ stakers | Solid conviction |
-| ⭐ **Verified** | 25+ stakers | High community confidence |
+| ◐ **Sandbox** | 3+ stakers, 0.1+ tTRUST | Early community activity |
+| ✓ **Trusted** | 10+ stakers, 1+ tTRUST, 60%+ ratio | Solid conviction |
+| ⭐ **Verified** | 25+ stakers, 5+ tTRUST, 75%+ ratio, 30+ days | High community confidence |
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                    FRONTEND                          │
-│            Next.js 14 · TypeScript · Tailwind        │
-│                                                      │
-│  ┌──────────┬──────────┬──────────┬────────────────┐ │
-│  │  Landing │  Agents  │  Skills  │  Claims        │ │
-│  │  Page    │  Explorer│  Explorer│  Registry      │ │
-│  └──────────┴──────────┴──────────┴────────────────┘ │
-│  ┌──────────┬──────────┬──────────┐                  │
-│  │ Register │ Profile  │   Docs   │                  │
-│  └──────────┴──────────┴──────────┘                  │
-│                                                      │
-│           wagmi v2 + viem + React Query              │
-└──────────────────────┬───────────────────────────────┘
-                       │
-                       ▼
-┌──────────────────────────────────────────────────────┐
-│                INTUITION PROTOCOL                    │
-│                                                      │
-│  ┌────────────┐  ┌──────────────┐  ┌─────────────┐  │
-│  │   ATOMS    │  │   TRIPLES    │  │  MULTIVAULT │  │
-│  │            │  │              │  │             │  │
-│  │ • Agents   │  │ [Subject]    │  │ • Support   │  │
-│  │ • Skills   │  │ [Predicate]  │  │   vault     │  │
-│  │ • Users    │  │ [Object]     │  │ • Oppose    │  │
-│  │            │  │              │  │   vault     │  │
-│  └────────────┘  └──────────────┘  └─────────────┘  │
-│                                                      │
-│         GraphQL API · Intuition Testnet              │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                      FRONTEND                             │
+│             Next.js 14 · TypeScript · Tailwind            │
+│                                                           │
+│  ┌──────────┬──────────┬──────────┬──────────┬─────────┐ │
+│  │  Landing │  Agents  │  Skills  │  Claims  │ Profile │ │
+│  │  Page    │  Explorer│  Explorer│  Registry│ Badges  │ │
+│  └──────────┴──────────┴──────────┴──────────┴─────────┘ │
+│  ┌──────────┬──────────┬──────────┬──────────┐           │
+│  │ Register │  Docs    │Leaderboard│  /terms │           │
+│  └──────────┴──────────┴──────────┴──────────┘           │
+│                                                           │
+│        wagmi v2 + viem + on-chain-pricing.ts              │
+└──────────┬────────────────────────┬───────────────────────┘
+           │ WRITE                  │ READ
+           ▼                        ▼
+┌──────────────────────┐  ┌──────────────────────────────┐
+│   AgentScore          │  │  Intuition GraphQL API        │
+│   FeeProxy Contract   │  │  + MultiVault on-chain reads  │
+│   0x2f76...ec41       │  │                               │
+│                       │  │  currentSharePrice()          │
+│  fee (0.02 + 2.5%)   │  │  previewDeposit()             │
+│    → feeRecipient     │  │  previewRedeem()              │
+│  rest → MultiVault    │  │  convertToAssets()            │
+└──────────┬────────────┘  └──────────────────────────────┘
+           ▼
+┌──────────────────────────────────────────────────────────┐
+│                  INTUITION PROTOCOL                       │
+│                                                           │
+│  ┌────────────┐  ┌──────────────┐  ┌──────────────────┐ │
+│  │   ATOMS    │  │   TRIPLES    │  │   MULTIVAULT     │ │
+│  │ • Agents   │  │ [Subject]    │  │ • Bonding curves │ │
+│  │ • Skills   │  │ [Predicate]  │  │ • Deposit/Redeem │ │
+│  │ • Users    │  │ [Object]     │  │ • Share pricing  │ │
+│  └────────────┘  └──────────────┘  └──────────────────┘ │
+│                                                           │
+│            Intuition Network L3 (Chain 13579)             │
+└──────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Fee Model
+
+AgentScore monetizes through Intuition's FeeProxy pattern — one of the first dApps to implement it in production alongside Sofia and Inturank.
+
+### How it works
+
+All write operations (register, stake) route through our FeeProxy smart contract. The proxy takes a fee and forwards the rest to MultiVault.
+
+| Operation | Fee | Route |
+|-----------|-----|-------|
+| Register Agent (createAtom) | 0.02 tTRUST + 2.5% | FeeProxy → MultiVault |
+| Register Skill (createAtom) | 0.02 tTRUST + 2.5% | FeeProxy → MultiVault |
+| Create Claim (createTriple) | 0.02 tTRUST + 2.5% | FeeProxy → MultiVault |
+| Stake / Buy Shares (deposit) | 0.02 tTRUST + 2.5% | FeeProxy → MultiVault |
+| Redeem / Sell Shares | **FREE** | MultiVault directly |
+
+Fee is collected **instantly** in the same transaction — no claiming, no epochs.
+
+### Smart Contracts
+
+| Contract | Address |
+|----------|---------|
+| AgentScore FeeProxy | [`0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41`](https://testnet.explorer.intuition.systems/address/0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41) |
+| Fee Recipient | [`0x57246adCD446809c4DB1b04046E731954985bea2`](https://testnet.explorer.intuition.systems/address/0x57246adCD446809c4DB1b04046E731954985bea2) |
+| Intuition MultiVault | [`0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91`](https://testnet.explorer.intuition.systems/address/0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91) |
+
+---
+
+## On-Chain Pricing
+
+Unlike applications using local bonding curve approximations, AgentScore reads all pricing data directly from MultiVault contract:
+
+| Function | Purpose |
+|----------|---------|
+| `currentSharePrice()` | Live marginal price per share |
+| `previewDeposit()` | Exact shares for deposit amount |
+| `previewRedeem()` | Exact proceeds for share amount |
+| `convertToAssets()` | Position valuation |
+
+- **15-second cache** prevents RPC spam
+- **Automatic fallback** to local approximation if RPC fails
+- **2% slippage protection** using on-chain `previewDeposit` quotes
 
 ---
 
 ## Features
 
+### Core Platform
 | Feature | Status |
 |---------|--------|
 | Agent Registry (on-chain Atoms) | ✅ Live |
 | Skill Registry (on-chain Atoms) | ✅ Live |
 | Claims Registry (on-chain Triples) | ✅ Live |
-| Support / Oppose staking via MultiVault | ✅ Live |
-| Bonding curve share pricing | ✅ Live |
-| Your Holdings panel (buy / sell shares) | ✅ Live |
-| Trust Score (0–100) with tier system | ✅ Live |
-| Live GraphQL indexing from testnet | ✅ Live |
-| Public profile pages (`/profile/[address]`) | ✅ Live |
-| Grid / List view toggle on all registries | ✅ Live |
-| App-scoped content filtering | ✅ Live |
-| Platform Documentation page (`/docs`) | ✅ Live |
+| Staking via MultiVault bonding curves | ✅ Live |
+| Buy / Sell shares panel | ✅ Live |
+| On-chain pricing (MultiVault reads) | ✅ Live |
+| Slippage protection (2% tolerance) | ✅ Live |
+
+### Trust & Reputation
+| Feature | Status |
+|---------|--------|
+| Hybrid Trust Score (AGENTSCORE) | ✅ Live |
+| Composite Trust Score (4 pillars) | ✅ Live |
+| Time-weighted reputation decay (90-day half-life) | ✅ Live |
+| Trust Tiers (Unverified → Verified) | ✅ Live |
+| Bonding curve charts with on-chain price marker | ✅ Live |
+| Trust History chart | ✅ Live |
+| Community Sentiment visualization | ✅ Live |
+
+### User Experience
+| Feature | Status |
+|---------|--------|
+| User profiles with achievement badges | ✅ Live |
+| Leaderboard (multi-metric scoring) | ✅ Live |
+| My Agents / Supporting tabs | ✅ Live |
+| Badge system (Newcomer → Legend, 6 tiers) | ✅ Live |
+| Activity feed | ✅ Live |
+| Platform Documentation (/docs) | ✅ Live |
+| Terms of Service & Privacy Policy | ✅ Live |
+
+### Monetization
+| Feature | Status |
+|---------|--------|
+| FeeProxy integration (0.02 tTRUST + 2.5%) | ✅ Live |
+| Instant fee collection per transaction | ✅ Live |
+| Fee breakdown in UI (transparent pricing) | ✅ Live |
+| Contract links in footer | ✅ Live |
 
 ---
 
 ## Bonding Curve Economics
 
-Every vault (Support or Oppose) runs an independent bonding curve:
+Every vault runs an independent bonding curve managed by Intuition's MultiVault contract:
+
+- **Early believers get more shares per tTRUST** — price rises with each buy
+- **Sell anytime** — redeem shares at current curve price, no lock-up period
+- **On-chain pricing** — all prices read directly from contract, no approximations
+- **Transparent fee** — platform fee shown before every transaction
 
 ```
-Price per share = basePrice + slope × totalSupply   (linear bonding curve)
-
-Early believers get more shares per tTRUST.
-As supply grows, price rises — rewarding early supporters.
+User stakes 1 tTRUST on Agent X:
+├── Platform fee:     0.045 tTRUST (0.02 fixed + 2.5%)
+├── Protocol fee:     built into bonding curve
+└── Deposited:        0.955 tTRUST → MultiVault
+    └── Shares:       credited to user's wallet
 ```
-
-Early believers are rewarded. Bad agents lose stake value as holders exit.
 
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|------------|
+|-------|-----------|
 | Framework | Next.js 14 (App Router) |
 | Language | TypeScript |
-| Styling | Tailwind CSS + Framer Motion |
+| Styling | Tailwind CSS + shadcn/ui + Framer Motion |
 | Web3 | wagmi v2 + viem |
 | Protocol | Intuition Protocol SDK (`@0xintuition/sdk`) |
-| Data | GraphQL (`testnet.intuition.sh/v1/graphql`) |
-| Deployment | Vercel |
+| Pricing | On-chain reads from MultiVault (`currentSharePrice`, `previewDeposit`, `previewRedeem`) |
+| Smart Contracts | AgentScore FeeProxy + Intuition MultiVault |
+| Trust Scoring | Hybrid model (Economic confidence + Composite quality metrics) |
+| Data | Intuition GraphQL API + on-chain contract reads (15s cache) |
+| Registration Tracking | localStorage + first position holder detection |
+| Deployment | Vercel (Production + Preview) |
 
 ---
 
@@ -227,37 +333,43 @@ npm start            # Run production server
 
 ## Roadmap
 
-### Phase 1: Foundation ✅ Complete
+### Phase 1: Foundation & Marketplace ✅ Complete
 - [x] Core UI/UX with gold/dark design system
-- [x] Agent registration system
-- [x] Skill registration system
-- [x] Claims (triples) creation
-- [x] User profiles (`/profile/[address]`)
-- [x] Trust tier badge system
-
-### Phase 2: On-chain Integration ✅ Complete
-- [x] Intuition Protocol SDK integration
-- [x] Real on-chain Atoms (agents & skills)
-- [x] Real on-chain Triples (claims)
-- [x] tTRUST staking via MultiVault
-- [x] Support & Oppose vaults
-- [x] Bonding curve share pricing
-- [x] Buy / Sell shares (Your Holdings panel)
-- [x] Live GraphQL data indexing
+- [x] Agent, Skill, Claims registration (on-chain Atoms & Triples)
+- [x] Staking via MultiVault bonding curves
+- [x] FeeProxy monetization (0.02 tTRUST + 2.5% per operation)
+- [x] On-chain pricing (MultiVault contract reads)
+- [x] Hybrid Trust Score (AGENTSCORE) with minimum gate
+- [x] Composite Trust Score (4 pillars) + time-weighted decay
+- [x] Trust Tiers (Unverified → Verified)
+- [x] User profiles, badges, leaderboard
+- [x] Slippage protection (2% tolerance from on-chain quotes)
+- [x] Platform documentation, Terms of Service, Privacy Policy
 - [x] Testnet deployment on Vercel
 
-### Phase 3: Growth 📈 In Progress
-- [ ] Mainnet launch
-- [ ] Public API for third-party integrations
-- [ ] Agent SDK for auto-registration
-- [ ] Governance module
-- [ ] Mobile-optimised PWA
-- [ ] Multi-chain support
+### Phase 2: Mainnet + Trust API 🔧 In Progress
+- [ ] Custom indexer (FeeProxy TX → registrant mapping)
+- [ ] Mainnet deployment (AgentScoreFeeProxy redeploy + multisig)
+- [ ] Public Trust API (`/api/v1/trust/query?skill=X&minTrust=Y`)
+- [ ] MCP Server integration (AI agents query trust scores)
+- [ ] SDKs for LangChain, CrewAI, ElizaOS
+- [ ] Agent Domains (category-specific reputation markets)
+- [ ] Interactive API documentation (/api-docs)
+- [ ] Fee analytics dashboard
 
-### Phase 4: Ecosystem 🌐 Planned
-- [ ] DAO transition
-- [ ] Partner integrations (agent frameworks: LangChain, AutoGen, CrewAI)
-- [ ] Reputation portability across protocols
+### Phase 3: Autonomous Trust Network 🌐 Planned
+- [ ] Proof of Performance protocol (agents evaluate agents)
+- [ ] Task delegation & outcome reporting API
+- [ ] Trust Validators (weighted signals for experienced users)
+- [ ] Performance scoring (5th pillar in Composite Trust)
+- [ ] Autonomous trust graph growth (100K+ signals/month)
+- [ ] Research paper: "Autonomous Trust Networks on Intuition Protocol"
+
+### Phase 4: Ecosystem 🔮 Future
+- [ ] DAO governance transition
+- [ ] Cross-protocol reputation portability
+- [ ] Partner integrations (agent frameworks, AI platforms)
+- [ ] Enterprise trust scoring API
 
 ---
 
@@ -282,19 +394,14 @@ Proprietary — see [LICENSE](LICENSE) for details.
 
 ## Links
 
-<p align="center">
-  <a href="https://agentscore-gilt.vercel.app">
-    <img src="https://img.shields.io/badge/Website-Live%20App-C8963C?style=for-the-badge&logo=vercel" alt="Website" />
-  </a>
-  &nbsp;
-  <a href="https://x.com/AgentScoreApp">
-    <img src="https://img.shields.io/badge/X%20%2F%20Twitter-@AgentScoreApp-1DA1F2?style=for-the-badge&logo=x&logoColor=white" alt="X / Twitter" />
-  </a>
-  &nbsp;
-  <a href="https://intuition.systems">
-    <img src="https://img.shields.io/badge/Built%20on-Intuition%20Protocol-8A63D2?style=for-the-badge" alt="Intuition" />
-  </a>
-</p>
+| Resource | URL |
+|----------|-----|
+| 🌐 Live App | [agentscore-gilt.vercel.app](https://agentscore-gilt.vercel.app) |
+| 🐦 Twitter/X | [@AgentScoreApp](https://x.com/AgentScoreApp) |
+| 📄 Documentation | [/docs](https://agentscore-gilt.vercel.app/docs) |
+| 🔗 FeeProxy Contract | [Blockscout](https://testnet.explorer.intuition.systems/address/0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41) |
+| 🏛️ Intuition Protocol | [intuition.systems](https://intuition.systems) |
+| 📋 Fee Model | [docs/FEE_MODEL.md](docs/FEE_MODEL.md) |
 
 ---
 
@@ -311,9 +418,15 @@ Proprietary — see [LICENSE](LICENSE) for details.
 </p>
 
 <p align="center">
-  <em>Because in the age of AI, trust shouldn't be a luxury — it should be a standard.</em>
+
+> *Today, humans stake on agents they believe in. Tomorrow, agents query trust scores to pick collaborators. Next — agents evaluate each other and the trust graph grows itself.*
+>
+> **This is programmable trust — built on Intuition.**
+
 </p>
 
+---
+
 <p align="center">
-  <sub>Powered by Intuition Protocol · Testnet Alpha · All rights reserved © 2026 AgentScore</sub>
+  <sub>Powered by <a href="https://intuition.systems">Intuition Protocol</a> · Testnet Alpha · © 2026 AgentScore</sub>
 </p>
