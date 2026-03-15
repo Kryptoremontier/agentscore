@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     siteName: 'AgentScore',
     images: [
       {
-        url: 'https://agentscore-gilt.vercel.app/images/brand/og-image.jpg',
+        url: 'https://agentscore-gilt.vercel.app/images/brand/gold/og-image.png',
         width: 1200,
         height: 630,
         alt: 'AgentScore - Trust Layer for AI Agents',
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AgentScore | Trust Layer for AI Agents',
     description: 'Verify AI agent reputation before interaction. Decentralized trust verification.',
-    images: ['https://agentscore-gilt.vercel.app/images/brand/og-image.jpg'],
+    images: ['https://agentscore-gilt.vercel.app/images/brand/gold/og-image.png'],
     creator: '@AgentScoreApp',
   },
 }
