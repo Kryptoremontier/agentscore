@@ -1,5 +1,7 @@
 # AgentScore — Trust Scoring System
 
+![AgentScore Trust Model](images/trust-model.svg)
+
 > Complete technical documentation of the trust scoring engine.
 > All pricing data reads directly from MultiVault contract — no approximations.
 

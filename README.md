@@ -74,6 +74,8 @@ Claims are also stakeable — support or oppose any statement with real tTRUST.
 
 ## How Trust Scores Work
 
+![Trust Scoring Model](docs/images/trust-model.svg)
+
 AgentScore uses a **Hybrid Trust Score** combining economic confidence with multi-dimensional quality metrics:
 
 ### AGENTSCORE (Main Score)
