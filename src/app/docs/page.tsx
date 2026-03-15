@@ -135,67 +135,139 @@ export default function DocsPage() {
 
             {/* ── How trust scores work ── */}
             <DocCard>
-              <SectionTitle icon={TrendingUp} color="#2ECC71" label="How Trust Scores work" />
+              <SectionTitle icon={TrendingUp} color="#2ECC71" label="How Trust Scores Work" />
+
+              {/* AGENTSCORE formula */}
+              <div className="rounded-xl p-4 mb-5 font-mono text-sm"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="text-[#6B7480] text-xs uppercase tracking-wider mb-2">AGENTSCORE formula</div>
+                <div className="text-white">
+                  AGENTSCORE = <span className="text-[#C8963C]">(Trust Score × 0.60</span>{' '}
+                  + <span className="text-[#2ECC71]">Composite Score × 0.40)</span>{' '}
+                  × <span className="text-[#38B6FF]">soft_gate</span>
+                </div>
+              </div>
+
+              {/* Two top-level components */}
               <div className="grid sm:grid-cols-2 gap-4 mb-5">
                 <div className="rounded-xl p-4"
-                  style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.2)' }}>
-                  <div className="text-sm font-bold text-[#2ECC71] mb-1.5">Support — Boost the score</div>
-                  <p className="text-[#9BA5B0] text-sm leading-relaxed">
-                    Stake tTRUST in favour of an entity. Raises its Trust Score.
-                    Your position is recorded in the <strong className="text-white">support vault</strong> and earns
-                    proportional shares of the bonding curve.
+                  style={{ background: 'rgba(200,150,60,0.06)', border: '1px solid rgba(200,150,60,0.2)' }}>
+                  <div className="text-sm font-bold text-[#C8963C] mb-1.5">Trust Score — 60%</div>
+                  <p className="text-[#9BA5B0] text-xs leading-relaxed">
+                    Economic confidence. Anchored at 50 when stake is small, moves toward the true
+                    support/oppose ratio as total stake grows. Includes a momentum component (±5 pts)
+                    for 24h activity.
                   </p>
                 </div>
                 <div className="rounded-xl p-4"
-                  style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <div className="text-sm font-bold text-red-400 mb-1.5">Oppose — Lower the score</div>
-                  <p className="text-[#9BA5B0] text-sm leading-relaxed">
-                    Stake tTRUST against an entity. Lowers its Trust Score.
-                    Recorded in the <strong className="text-white">counter vault</strong> — equally tradeable.
+                  style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.2)' }}>
+                  <div className="text-sm font-bold text-[#2ECC71] mb-1.5">Composite Score — 40%</div>
+                  <p className="text-[#9BA5B0] text-xs leading-relaxed">
+                    Multi-dimensional quality metrics: time-decayed signal ratio, staker diversity,
+                    stability duration, and price retention. Resistant to whale manipulation.
                   </p>
                 </div>
               </div>
-              <ul className="space-y-2 text-sm text-[#9BA5B0]">
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C8963C] shrink-0" />
-                  Score range <strong className="text-white">0–100</strong>, anchored at 50 until sufficient stake accumulates (Confidence model)
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C8963C] shrink-0" />
-                  <strong className="text-white">Bonding curves</strong> — price per share rises as more stake enters a vault
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C8963C] shrink-0" />
-                  <strong className="text-white">Momentum</strong> — short-term Buy/Sell activity nudges the score up or down (±8 pts max, 24h/7d blend)
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C8963C] shrink-0" />
-                  Positions can be <strong className="text-white">sold (redeemed)</strong> at any time at current curve price
-                </li>
-              </ul>
-            </DocCard>
 
-            {/* ── Trust tiers ── */}
-            <DocCard>
-              <SectionTitle icon={ShieldCheck} color="#38B6FF" label="Trust Tiers" />
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-                {[
-                  { tier: 'Unverified', icon: '○', rgb: '120,131,141', desc: 'No signals yet',  detail: '0 stakers' },
-                  { tier: 'Sandbox',    icon: '◐', rgb: '200,150,60',  desc: 'Early activity',  detail: '3+ stakers' },
-                  { tier: 'Trusted',    icon: '✓', rgb: '46,204,113',  desc: 'Solid community', detail: '10+ stakers' },
-                  { tier: 'Verified',   icon: '⭐', rgb: '232,184,75',  desc: 'High conviction', detail: '25+ stakers' },
-                ].map(t => (
-                  <div key={t.tier} className="rounded-xl p-4 text-center"
-                    style={{ background: `rgba(${t.rgb},0.06)`, border: `1px solid rgba(${t.rgb},0.2)` }}>
-                    <div className="text-2xl mb-2" style={{ color: `rgb(${t.rgb})` }}>{t.icon}</div>
-                    <div className="font-bold text-white text-sm mb-0.5">{t.tier}</div>
-                    <div className="text-[#6B7480] text-xs">{t.detail}</div>
-                  </div>
-                ))}
+              {/* 4 pillars table */}
+              <div className="text-xs font-bold text-[#B5BDC6] uppercase tracking-wider mb-3">
+                Composite Score — 4 Pillars
               </div>
-              <p className="text-[#6B7480] text-xs">
-                Tier thresholds apply to all entity types: Agents, Skills, and Claims.
-              </p>
+              <div className="rounded-xl overflow-hidden mb-5"
+                style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                      <th className="text-left px-4 py-2.5 text-[#7A838D] font-semibold uppercase tracking-wider">Pillar</th>
+                      <th className="text-right px-4 py-2.5 text-[#7A838D] font-semibold uppercase tracking-wider">Weight</th>
+                      <th className="text-left px-4 py-2.5 text-[#7A838D] font-semibold uppercase tracking-wider hidden sm:table-cell">What it measures</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { pillar: 'Signal Ratio', weight: '40%', desc: 'Time-decayed support/oppose ratio — half-life 90d, freshness bonus ×1.5 for 7d', color: '#C8963C' },
+                      { pillar: 'Staker Diversity', weight: '25%', desc: 'Log₂ scale of qualified stakers (≥ 0.1 tTRUST) — anti-sybil, caps at 100 stakers', color: '#2ECC71' },
+                      { pillar: 'Stability', weight: '25%', desc: 'Days above 50% trust ratio, penalised for high daily variance', color: '#2EE6D6' },
+                      { pillar: 'Price Retention', weight: '10%', desc: 'Current on-chain share price vs all-time high — from MultiVault', color: '#38B6FF' },
+                    ].map((row, i) => (
+                      <tr key={row.pillar} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                        <td className="px-4 py-2.5 font-semibold" style={{ color: row.color }}>{row.pillar}</td>
+                        <td className="px-4 py-2.5 text-right font-bold text-white">{row.weight}</td>
+                        <td className="px-4 py-2.5 text-[#7A838D] hidden sm:table-cell">{row.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Soft gate + anti-manipulation */}
+              <div className="grid sm:grid-cols-2 gap-4 mb-5">
+                <div className="rounded-xl p-4"
+                  style={{ background: 'rgba(56,182,255,0.06)', border: '1px solid rgba(56,182,255,0.18)' }}>
+                  <div className="text-xs font-bold text-[#38B6FF] mb-2 uppercase tracking-wider">Soft Gate</div>
+                  <p className="text-[#9BA5B0] text-xs leading-relaxed">
+                    Agents with less than 50% support have their score proportionally reduced
+                    (e.g. 30% support → score × 0.60). No hard cliff — smooth continuous scaling.
+                  </p>
+                </div>
+                <div className="rounded-xl p-4"
+                  style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.18)' }}>
+                  <div className="text-xs font-bold text-red-400 mb-2 uppercase tracking-wider">Anti-Manipulation</div>
+                  <ul className="space-y-1 text-[#9BA5B0] text-xs">
+                    <li>• Soft gate — caps unpopular agents</li>
+                    <li>• Log₂ diversity — whales can&apos;t inflate alone</li>
+                    <li>• Min 0.1 tTRUST — sybil dust ignored</li>
+                    <li>• Variance penalty — no oscillation gaming</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Trust Tiers inline */}
+              <div className="text-xs font-bold text-[#B5BDC6] uppercase tracking-wider mb-3">
+                Trust Tiers — all criteria must be met
+              </div>
+              <div className="rounded-xl overflow-hidden mb-5"
+                style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                      {['Tier', 'Min Stakers', 'Min Stake', 'Min Ratio', 'Min Days'].map(h => (
+                        <th key={h} className="text-left px-3 py-2 text-[#7A838D] font-semibold uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { icon: '○', tier: 'Unverified', stakers: '0', stake: '—', ratio: '—', days: '0', rgb: '120,131,141' },
+                      { icon: '◐', tier: 'Sandbox', stakers: '3+', stake: '0.1 tTRUST', ratio: 'any', days: '0', rgb: '200,150,60' },
+                      { icon: '✓', tier: 'Trusted', stakers: '10+', stake: '1 tTRUST', ratio: '60%', days: '7', rgb: '46,204,113' },
+                      { icon: '⭐', tier: 'Verified', stakers: '25+', stake: '5 tTRUST', ratio: '75%', days: '30', rgb: '232,184,75' },
+                    ].map((row, i) => (
+                      <tr key={row.tier} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                        <td className="px-3 py-2 font-bold" style={{ color: `rgb(${row.rgb})` }}>{row.icon} {row.tier}</td>
+                        <td className="px-3 py-2 text-[#9BA5B0]">{row.stakers}</td>
+                        <td className="px-3 py-2 text-[#9BA5B0]">{row.stake}</td>
+                        <td className="px-3 py-2 text-[#9BA5B0]">{row.ratio}</td>
+                        <td className="px-3 py-2 text-[#9BA5B0]">{row.days}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Link to full docs */}
+              <div className="flex items-center gap-2 text-xs text-[#6B7480]">
+                <ScanLine className="w-3.5 h-3.5 text-[#C8963C]" />
+                Full technical documentation:{' '}
+                <a
+                  href="https://github.com/Kryptoremontier/agentscore/blob/main/docs/TRUST_SCORING.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#38B6FF] hover:text-[#2EE6D6] transition-colors font-mono"
+                >
+                  TRUST_SCORING.md ↗
+                </a>
+              </div>
             </DocCard>
 
             {/* ── Claims (triples) ── */}

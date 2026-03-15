@@ -8,8 +8,8 @@ import type { TrustLevel } from '@/types/agent'
  * with multi-dimensional quality (Composite Trust Score).
  *
  * Formula: 60% Trust Score + 40% Composite Score
- * Minimum gate: if support ratio < 30%, score is capped at supportRatio * 0.8
- * (prevents high scores for unsupported agents with 10% support but good diversity)
+ * Soft gate: if support ratio < 50%, score is scaled linearly 0→1
+ * (smooth penalty vs hard cut — avoids cliff-edge at 30%)
  */
 export function calculateHybridScore(
   trustScore: number,      // 0-100, from calculateTrustScore()
@@ -18,10 +18,10 @@ export function calculateHybridScore(
 ): number {
   const hybridRaw = trustScore * 0.6 + compositeScore * 0.4
 
-  // Minimum gate: low support ratio caps the entire score
-  if (supportRatio < 30) {
-    const cap = supportRatio * 0.8
-    return Math.round(Math.min(hybridRaw, cap) * 10) / 10
+  // Soft gate: low support ratio scales the entire score down smoothly
+  if (supportRatio < 50) {
+    const scaleFactor = supportRatio / 50  // 0.0 → 1.0 as ratio goes 0 → 50%
+    return Math.round(hybridRaw * scaleFactor * 10) / 10
   }
 
   return Math.round(hybridRaw * 10) / 10

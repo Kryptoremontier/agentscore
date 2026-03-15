@@ -62,9 +62,9 @@ export interface CompositeResult {
 
 export const COMPOSITE_WEIGHTS = {
   SIGNAL_RATIO: 0.40,    // 40% — weighted signal ratio (time-decayed)
-  STAKERS: 0.20,         // 20% — unique staker diversity
+  STAKERS: 0.25,         // 25% — unique staker diversity (up from 20%)
   STABILITY: 0.25,       // 25% — sustained trust stability
-  PRICE_RETENTION: 0.15, // 15% — price vs historical peak
+  PRICE_RETENTION: 0.10, // 10% — price vs historical peak (down from 15%)
 } as const
 
 // ─── Core ───
@@ -89,11 +89,18 @@ export function calculateCompositeTrust(input: CompositeTrustInput): CompositeRe
   // 1. Signal ratio (already time-decayed by caller)
   const signalScore = Math.max(0, Math.min(100, weightedSignalRatio))
 
-  // 2. Staker diversity — diminishing returns above 20 stakers
-  const stakerScore = Math.min(100, (uniqueStakers / 20) * 100)
+  // 2. Staker diversity — log2 scale (diminishing returns, cap at 100 stakers)
+  //    Anti-sybil: caller must pre-filter stakers with >= MIN_STAKE_FOR_DIVERSITY tTRUST
+  const MAX_STAKERS = 100
+  const stakerScore = uniqueStakers <= 1
+    ? 0
+    : Math.min(100, (Math.log2(uniqueStakers) / Math.log2(MAX_STAKERS)) * 100)
 
   // 3. Stability — days without trust score dropping below 50%
-  const stabilityScore = Math.min(100, (stableDays / 30) * 100)
+  const baseStability = Math.min(100, (stableDays / 30) * 100)
+  // TODO: variance penalty from dailyRatios — disabled until daily ratio data available
+  const variancePenalty = 1.0
+  const stabilityScore = Math.round(baseStability * variancePenalty * 10) / 10
 
   // 4. Price retention vs all-time peak
   const priceRetentionRatio = peakPrice > 0 ? Math.min(1, currentPrice / peakPrice) : 1

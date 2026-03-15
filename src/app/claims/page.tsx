@@ -548,9 +548,20 @@ function ClaimsPageContent() {
         BONDING_CURVE_CONFIG.BASE_PRICE,
         BONDING_CURVE_CONFIG.SLOPE,
       )
+      // Anti-sybil: count only stakers with net deposit >= 0.1 tTRUST
+      const MIN_STAKE = 0.1 // tTRUST
+      const walletNetStake = new Map<string, number>()
+      for (const sig of claimSignals) {
+        const wallet = sig.account_id
+        if (!wallet) continue
+        const delta = Number(sig.delta || 0) / 1e18
+        walletNetStake.set(wallet, (walletNetStake.get(wallet) ?? 0) + delta)
+      }
+      const qualifiedStakers = [...walletNetStake.values()].filter(v => v >= MIN_STAKE).length
+
       return calculateCompositeTrust({
         weightedSignalRatio: weightedTrust.weightedRatio,
-        uniqueStakers: combinedStakerCount,
+        uniqueStakers: qualifiedStakers,
         stableDays,
         currentPrice,
         peakPrice: Math.max(peakPrice, currentPrice),
