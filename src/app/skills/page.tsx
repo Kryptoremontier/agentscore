@@ -11,6 +11,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
+import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
@@ -1158,6 +1159,21 @@ function SkillsPageContent() {
     }
   }, [skillSignals, weightedTrust, supportSupply, combinedStakerCount, skillTriple.counterTermId, onChainPrice, peakOnChainPrice])
 
+  // ─── Hybrid Score (AGENTSCORE = 60% economic confidence + 40% quality metrics) ───
+  const hybridScore = useMemo((): number | null => {
+    try {
+      if (!skillTrust || !compositeTrust) return null
+      const supportWei = skillTrust.supportStake
+      const opposeWei = skillTrust.opposeStake
+      const totalWei = supportWei + opposeWei
+      const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
+      return calculateHybridScore(skillTrust.score, compositeTrust.score, supportRatio)
+    } catch (e) {
+      console.error('[hybridScore]', e)
+      return null
+    }
+  }, [skillTrust, compositeTrust])
+
   const skillTrustTier = useMemo(() => {
     try {
       if (!selectedSkill) return null
@@ -1167,7 +1183,7 @@ function SkillsPageContent() {
       const totalWei = supportWei + opposeWei
       const totalStake = Number(totalWei) / 1e18
       const rawTrustRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
-      const trustRatio = compositeTrust?.score ?? rawTrustRatio
+      const trustRatio = hybridScore ?? compositeTrust?.score ?? rawTrustRatio
       const ageDays = selectedSkill.created_at ? getAgentAgeDays(selectedSkill.created_at) : 0
       const tier = calculateTier(stakers, totalStake, trustRatio, ageDays)
       const progress = calculateTierProgress(stakers, totalStake, trustRatio, ageDays)
@@ -1176,7 +1192,7 @@ function SkillsPageContent() {
       console.error('[skillTrustTier]', e)
       return null
     }
-  }, [selectedSkill, combinedStakerCount, skillTrust, compositeTrust])
+  }, [selectedSkill, combinedStakerCount, skillTrust, compositeTrust, hybridScore])
 
   const enrichedPositions = useMemo(() => {
     try {
@@ -1481,11 +1497,11 @@ function SkillsPageContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ skill, trust: cardTrust }) => {
                   const trustScore = cardTrust.score
+                  const stakers = skill.positions_aggregate?.aggregate?.count || 0
                   const color = cardTrust.level === 'excellent' ? '#2ECC71'
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
-                  const stakers = skill.positions_aggregate?.aggregate?.count || 0
                   const stakes = formatStakes(skill.positions_aggregate?.aggregate?.sum?.shares)
                   const name = getSkillName(skill.label)
                   const creator = skill.creator?.label || 'unknown'
@@ -1549,11 +1565,11 @@ function SkillsPageContent() {
                 </div>
                 {sorted.map(({ skill, trust: cardTrust }, i) => {
                   const trustScore = cardTrust.score
+                  const stakers = skill.positions_aggregate?.aggregate?.count || 0
                   const color = cardTrust.level === 'excellent' ? '#2ECC71'
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
-                  const stakers = skill.positions_aggregate?.aggregate?.count || 0
                   const stakes = formatStakes(skill.positions_aggregate?.aggregate?.sum?.shares)
                   const name = getSkillName(skill.label)
                   const creator = skill.creator?.label || 'unknown'
@@ -2107,11 +2123,11 @@ function SkillsPageContent() {
               })()}
 
 
-              {/* === TRUST SCORE + STAKE BREAKDOWN === */}
+              {/* === AGENTSCORE + STAKE BREAKDOWN === */}
               {(() => {
                 const t = skillTrust
-                const score = t?.score ?? 50
-                const level = t?.level ?? 'moderate'
+                const score = hybridScore ?? t?.score ?? 50
+                const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
                 const confidence = t?.confidence ?? 0
                 const momentum = t?.momentum ?? 0
                 const supportWei = t?.supportStake ?? BigInt(0)
@@ -2258,8 +2274,9 @@ function SkillsPageContent() {
 
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (() => {
-                  const score = skillTrust?.score ?? 50
-                  const level = skillTrust?.level ?? 'moderate'
+                  const rawScore = skillTrust?.score ?? 50
+                  const score = hybridScore ?? rawScore
+                  const level = hybridScore != null ? getHybridLevel(hybridScore) : (skillTrust?.level ?? 'moderate')
                   const confidence = skillTrust?.confidence ?? 0
                   const momentum = skillTrust?.momentum ?? 0
                   const supportWei = skillTrust?.supportStake ?? BigInt(0)
@@ -2283,7 +2300,7 @@ function SkillsPageContent() {
 
                   return (
                   <div className="p-5 space-y-5">
-                    {/* Trust Score Visual */}
+                    {/* AGENTSCORE Visual */}
                     <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
@@ -2295,7 +2312,7 @@ function SkillsPageContent() {
                         </span>
                       </div>
                       <div className="flex items-end gap-4 mb-3">
-                        <p className="text-4xl font-bold text-white leading-none">{score}</p>
+                        <p className="text-4xl font-bold text-white leading-none">{typeof score === 'number' ? score.toFixed(1) : score}</p>
                         <p className="text-[#B5BDC6] text-xs pb-1">/100</p>
                         {momentum !== 0 && (
                           <span className={`text-xs font-medium pb-1 ${momentum > 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
@@ -2319,6 +2336,21 @@ function SkillsPageContent() {
                         <span>Good</span>
                         <span>Excellent</span>
                       </div>
+
+                      {/* Components breakdown (only when hybridScore available) */}
+                      {hybridScore != null && skillTrust && compositeTrust && (
+                        <div className="mt-3 pt-3 border-t border-[#C8963C]/10 space-y-1.5">
+                          <p className="text-[#7A838D] text-[10px] uppercase tracking-wider mb-1">Components</p>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-[#B5BDC6]">Economic confidence</span>
+                            <span className="text-white font-semibold">{skillTrust.score}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-[#B5BDC6]">Quality metrics</span>
+                            <span className="text-white font-semibold">{compositeTrust.score.toFixed(1)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Weighted Trust (time-decayed) */}
@@ -2368,12 +2400,12 @@ function SkillsPageContent() {
                       </div>
                     )}
 
-                    {/* Composite Trust Score */}
+                    {/* Quality Metrics (Composite) */}
                     {compositeTrust && (
                       <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">
-                            Composite Trust Score
+                            Quality Metrics
                           </p>
                           <div className="flex items-center gap-2">
                             {compositeTrust.isStable && (

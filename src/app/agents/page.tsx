@@ -12,6 +12,7 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
 // Categories unused — filter now uses trust levels directly
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
+import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
@@ -1224,6 +1225,21 @@ function AgentsPageContent() {
     }
   }, [agentSignals, weightedTrust, supportSupply, combinedStakerCount, agentTriple.counterTermId, onChainPrice, peakOnChainPrice])
 
+  // ─── Hybrid Score (AGENTSCORE = 60% economic confidence + 40% quality metrics) ───
+  const hybridScore = useMemo((): number | null => {
+    try {
+      if (!agentTrust || !compositeTrust) return null
+      const supportWei = agentTrust.supportStake
+      const opposeWei = agentTrust.opposeStake
+      const totalWei = supportWei + opposeWei
+      const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
+      return calculateHybridScore(agentTrust.score, compositeTrust.score, supportRatio)
+    } catch (e) {
+      console.error('[hybridScore]', e)
+      return null
+    }
+  }, [agentTrust, compositeTrust])
+
   // ─── Trust Tier dla wybranego agenta ───
   const agentTrustTier = useMemo(() => {
     try {
@@ -1234,7 +1250,7 @@ function AgentsPageContent() {
       const totalWei = supportWei + opposeWei
       const totalStake = Number(totalWei) / 1e18
       const rawTrustRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
-      const trustRatio = compositeTrust?.score ?? rawTrustRatio
+      const trustRatio = hybridScore ?? compositeTrust?.score ?? rawTrustRatio
       const ageDays = selectedAgent.created_at ? getAgentAgeDays(selectedAgent.created_at) : 0
       const tier = calculateTier(stakers, totalStake, trustRatio, ageDays)
       const progress = calculateTierProgress(stakers, totalStake, trustRatio, ageDays)
@@ -1243,7 +1259,7 @@ function AgentsPageContent() {
       console.error('[agentTrustTier]', e)
       return null
     }
-  }, [selectedAgent, combinedStakerCount, agentTrust, compositeTrust])
+  }, [selectedAgent, combinedStakerCount, agentTrust, compositeTrust, hybridScore])
 
   // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
   const agentAvatar = useMemo(() => {
@@ -1582,12 +1598,12 @@ function AgentsPageContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ agent, trust: cardTrust }) => {
                   const trustScore = cardTrust.score
+                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const color = cardTrust.level === 'excellent' ? '#2ECC71'
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316'
                     : '#EF4444'
-                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
                   const name = getAgentName(agent.label)
                   const creator = agent.creator?.label || 'unknown'
@@ -1651,11 +1667,11 @@ function AgentsPageContent() {
                 </div>
                 {sorted.map(({ agent, trust: cardTrust }, i) => {
                   const trustScore = cardTrust.score
+                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const color = cardTrust.level === 'excellent' ? '#2ECC71'
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
-                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
                   const name = getAgentName(agent.label)
                   const creator = agent.creator?.label || 'unknown'
@@ -1748,24 +1764,6 @@ function AgentsPageContent() {
                     </div>
                   </div>
 
-                  {/* Avatar / Icon — right side */}
-                  {agentAvatar ? (
-                    <img
-                      src={agentAvatar}
-                      alt={getAgentName(selectedAgent.label)}
-                      className="w-16 h-16 rounded-2xl object-cover flex-shrink-0"
-                    />
-                  ) : selectedAgent.emoji ? (
-                    <div
-                      className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{
-                        backgroundColor: getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares) + '20',
-                        border: `2px solid ${getTrustStateColor(selectedAgent.positions_aggregate?.aggregate?.sum?.shares)}50`
-                      }}
-                    >
-                      <span className="text-2xl">{selectedAgent.emoji}</span>
-                    </div>
-                  ) : null}
 
                   {/* Close */}
                   <button
@@ -2232,11 +2230,11 @@ function AgentsPageContent() {
                 )
               })()}
 
-              {/* === TRUST SCORE + STAKE BREAKDOWN === */}
+              {/* === AGENTSCORE + STAKE BREAKDOWN === */}
               {(() => {
                 const t = agentTrust
-                const score = t?.score ?? 50
-                const level = t?.level ?? 'moderate'
+                const score = hybridScore ?? t?.score ?? 50
+                const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
                 const confidence = t?.confidence ?? 0
                 const momentum = t?.momentum ?? 0
                 const supportWei = t?.supportStake ?? BigInt(0)
@@ -2270,7 +2268,7 @@ function AgentsPageContent() {
                   <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                     <div className="grid grid-cols-2 gap-6">
 
-                      {/* LEFT: Trust Score */}
+                      {/* LEFT: AgentScore */}
                       <div>
                         <h3 className="text-white font-bold mb-4">Trust Score</h3>
                         <div className="flex items-center gap-4 mb-4">
@@ -2393,8 +2391,9 @@ function AgentsPageContent() {
 
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (() => {
-                  const score = agentTrust?.score ?? 50
-                  const level = agentTrust?.level ?? 'moderate'
+                  const rawScore = agentTrust?.score ?? 50
+                  const score = hybridScore ?? rawScore
+                  const level = hybridScore != null ? getHybridLevel(hybridScore) : (agentTrust?.level ?? 'moderate')
                   const confidence = agentTrust?.confidence ?? 0
                   const momentum = agentTrust?.momentum ?? 0
                   const supportWei = agentTrust?.supportStake ?? BigInt(0)
@@ -2418,7 +2417,7 @@ function AgentsPageContent() {
 
                   return (
                   <div className="p-5 space-y-5">
-                    {/* Trust Score Visual */}
+                    {/* AGENTSCORE Visual */}
                     <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
@@ -2432,7 +2431,7 @@ function AgentsPageContent() {
 
                       {/* Score gauge */}
                       <div className="flex items-end gap-4 mb-3">
-                        <p className="text-4xl font-bold text-white leading-none">{score}</p>
+                        <p className="text-4xl font-bold text-white leading-none">{typeof score === 'number' ? score.toFixed(1) : score}</p>
                         <p className="text-[#B5BDC6] text-xs pb-1">/100</p>
                         {momentum !== 0 && (
                           <span className={`text-xs font-medium pb-1 ${momentum > 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
@@ -2458,6 +2457,21 @@ function AgentsPageContent() {
                         <span>Good</span>
                         <span>Excellent</span>
                       </div>
+
+                      {/* Components breakdown (only when hybridScore available) */}
+                      {hybridScore != null && agentTrust && compositeTrust && (
+                        <div className="mt-3 pt-3 border-t border-[#C8963C]/10 space-y-1.5">
+                          <p className="text-[#7A838D] text-[10px] uppercase tracking-wider mb-1">Components</p>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-[#B5BDC6]">Economic confidence</span>
+                            <span className="text-white font-semibold">{agentTrust.score}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-[#B5BDC6]">Quality metrics</span>
+                            <span className="text-white font-semibold">{compositeTrust.score.toFixed(1)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Weighted Trust (time-decayed) */}
@@ -2507,12 +2521,12 @@ function AgentsPageContent() {
                       </div>
                     )}
 
-                    {/* Composite Trust Score */}
+                    {/* Quality Metrics (Composite) */}
                     {compositeTrust && (
                       <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">
-                            Composite Trust Score
+                            Quality Metrics
                           </p>
                           <div className="flex items-center gap-2">
                             {compositeTrust.isStable && (

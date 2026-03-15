@@ -26,6 +26,7 @@ import {
 } from '@/lib/composite-trust'
 import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
+import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
 import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 import { CreateClaimForm } from '@/components/claims/CreateClaimForm'
@@ -101,7 +102,7 @@ function tripleToDisplayClaim(t: GraphQLTriple): Claim {
     positions_aggregate: t.positions_aggregate
       ? { aggregate: { count: t.positions_aggregate.aggregate?.count, sum: t.positions_aggregate.aggregate?.sum ?? undefined } }
       : undefined,
-    trust_score: Math.min(100, Math.round(Number(t.positions_aggregate?.aggregate?.sum?.shares ?? 0) / 1e18)),
+    trust_score: (() => { try { const s = BigInt(t.positions_aggregate?.aggregate?.sum?.shares ?? '0'); return calculateTrustScoreFromStakes(s, 0n).score } catch { return 50 } })(),
     stakers_count: t.positions_aggregate?.aggregate?.count ?? 0,
   }
 }
@@ -558,6 +559,21 @@ function ClaimsPageContent() {
     } catch { return null }
   }, [selectedClaim, claimSignals, weightedTrust, supportSupply, combinedStakerCount, claimTriple.counterTermId, onChainPrice, peakOnChainPrice])
 
+  // ─── Hybrid Score (AGENTSCORE = 60% economic confidence + 40% quality metrics) ───
+  const hybridScore = useMemo((): number | null => {
+    try {
+      if (!claimTrust || !compositeTrust) return null
+      const supportWei = claimTrust.supportStake
+      const opposeWei = claimTrust.opposeStake
+      const totalWei = supportWei + opposeWei
+      const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
+      return calculateHybridScore(claimTrust.score, compositeTrust.score, supportRatio)
+    } catch (e) {
+      console.error('[hybridScore]', e)
+      return null
+    }
+  }, [claimTrust, compositeTrust])
+
   const exitLimit = useMemo(() => {
     try {
       if (!userPosition || !signalSide) return null
@@ -1007,9 +1023,10 @@ function ClaimsPageContent() {
                         <TrustTierBadge tier={tierCfg} size="sm" />
                         <span className="text-xs text-[#7A838D]">{claim.stakers_count ?? 0} stakers</span>
                       </div>
-                      <span className={cn('text-sm font-bold font-mono', score >= 70 ? 'text-[#2ECC71]' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>
-                        {score}
-                      </span>
+                      <div className="text-right">
+                        <p className={cn('text-sm font-bold font-mono', score >= 70 ? 'text-[#2ECC71]' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>{score}</p>
+                        <p className="text-[10px] text-[#4A5260]">Trust Score</p>
+                      </div>
                     </div>
                     {/* Score bar */}
                     <div className="w-full h-1 bg-white/5 rounded-full mt-2.5 overflow-hidden">
@@ -1612,11 +1629,11 @@ function ClaimsPageContent() {
                 )
               })()}
 
-              {/* === CARD 3: Trust Score + Stake Breakdown === */}
+              {/* === CARD 3: AgentScore + Stake Breakdown === */}
               {(() => {
                 const t = claimTrust
-                const score = t?.score ?? 50
-                const level = t?.level ?? 'moderate'
+                const score = hybridScore ?? t?.score ?? 50
+                const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
                 const confidence = t?.confidence ?? 0
                 const momentum = t?.momentum ?? 0
                 const supportWei = t?.supportStake ?? BigInt(0)
@@ -1638,7 +1655,7 @@ function ClaimsPageContent() {
                 return (
                   <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                     <div className="grid grid-cols-2 gap-6">
-                      {/* LEFT: Trust Score gauge */}
+                      {/* LEFT: AgentScore gauge */}
                       <div>
                         <h3 className="text-white font-bold mb-4">Trust Score</h3>
                         <div className="flex items-center gap-4 mb-4">
@@ -1731,8 +1748,8 @@ function ClaimsPageContent() {
                 {/* ── OVERVIEW TAB ── */}
                 {activeTab === 'overview' && (() => {
                   const t = claimTrust
-                  const score = t?.score ?? 50
-                  const level = t?.level ?? 'moderate'
+                  const score = hybridScore ?? t?.score ?? 50
+                  const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
                   const confidence = t?.confidence ?? 0
                   const momentum = t?.momentum ?? 0
                   const supportWei = t?.supportStake ?? BigInt(0)
@@ -1753,7 +1770,7 @@ function ClaimsPageContent() {
                   const ageLabel = ageDays === 0 ? 'today' : ageDays === 1 ? '1 day' : `${ageDays} days`
                   return (
                     <div className="p-5 space-y-5">
-                      {/* Trust Score Visual */}
+                      {/* AGENTSCORE Visual */}
                       <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
@@ -1763,7 +1780,7 @@ function ClaimsPageContent() {
                           </span>
                         </div>
                         <div className="flex items-end gap-4 mb-3">
-                          <p className="text-4xl font-bold text-white leading-none">{score}</p>
+                          <p className="text-4xl font-bold text-white leading-none">{typeof score === 'number' ? score.toFixed(1) : score}</p>
                           <p className="text-[#B5BDC6] text-xs pb-1">/100</p>
                           {momentum !== 0 && (
                             <span className={`text-xs font-medium pb-1 ${momentum > 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
@@ -1778,6 +1795,21 @@ function ClaimsPageContent() {
                         <div className="flex justify-between text-[10px] text-[#7A838D]">
                           <span>Critical</span><span>Low</span><span>Moderate</span><span>Good</span><span>Excellent</span>
                         </div>
+
+                        {/* Components breakdown (only when hybridScore available) */}
+                        {hybridScore != null && claimTrust && compositeTrust && (
+                          <div className="mt-3 pt-3 border-t border-[#C8963C]/10 space-y-1.5">
+                            <p className="text-[#7A838D] text-[10px] uppercase tracking-wider mb-1">Components</p>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-[#B5BDC6]">Economic confidence</span>
+                              <span className="text-white font-semibold">{claimTrust.score}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-[#B5BDC6]">Quality metrics</span>
+                              <span className="text-white font-semibold">{compositeTrust.score.toFixed(1)}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Weighted Trust */}
@@ -1800,11 +1832,11 @@ function ClaimsPageContent() {
                         </div>
                       )}
 
-                      {/* Composite Trust */}
+                      {/* Quality Metrics (Composite) */}
                       {compositeTrust && (
                         <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Composite Trust Score</p>
+                            <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Quality Metrics</p>
                             <div className="flex items-center gap-2">
                               {compositeTrust.isStable && <span style={{ fontSize:'10px', padding:'2px 6px', borderRadius:'4px', background:'rgba(34,197,94,0.1)', color:'#22c55e', border:'1px solid rgba(34,197,94,0.2)' }}>Stable</span>}
                               <span className="text-base font-bold" style={{ color: compositeTrust.score >= 60 ? '#22c55e' : compositeTrust.score >= 40 ? '#eab308' : '#ef4444' }}>{compositeTrust.score.toFixed(1)}</span>
