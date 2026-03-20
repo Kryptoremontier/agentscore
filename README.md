@@ -83,7 +83,7 @@ AgentScore uses a **Hybrid Trust Score** combining economic confidence with mult
 Hybrid Score = 60% × Trust Score + 40% × Composite Score
 ```
 
-With **minimum gate**: if support ratio < 30%, score is capped regardless of other metrics. An agent with 10% support can never score above 8/100.
+With **soft gate**: if support ratio < 50%, score is proportionally reduced (ratio/50). An agent with 10% support gets score × 0.20, 30% support gets score × 0.60. Above 50% — full score applies.
 
 ### Trust Score (Economic Confidence)
 ```
@@ -98,9 +98,9 @@ Anchored at 50 until sufficient economic stake accumulates. More stake = higher 
 | Component | Weight | What it measures |
 |-----------|--------|-----------------|
 | Signal Ratio | 40% | Time-weighted support ratio (90-day half-life decay) |
-| Staker Diversity | 20% | Unique stakers count (whale resistance) |
+| Staker Diversity | 25% | Unique stakers count (whale resistance) |
 | Sustained Stability | 25% | Days maintaining >50% trust ratio |
-| Price Retention | 15% | Current on-chain share price vs ATH |
+| Price Retention | 10% | Current on-chain share price vs ATH |
 
 All pricing data read directly from MultiVault contract — no local approximations.
 
