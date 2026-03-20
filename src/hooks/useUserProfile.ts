@@ -5,7 +5,7 @@ import type { UserProfile, RegisteredAgent, AgentSupport, UserStats, PnLPosition
 import { calculateExpertLevel, autoBuildBadges } from '@/lib/badges'
 import { getAddress } from 'viem'
 import { APP_CONFIG } from '@/lib/app-config'
-import { AGENT_WHERE_OBJ, SKILL_WHERE_OBJ } from '@/lib/gql-filters'
+import { AGENT_WHERE_OBJ, SKILL_WHERE_OBJ, AGENT_ATOM_INLINE, SKILL_ATOM_INLINE } from '@/lib/gql-filters'
 import { getUserRegistrationsByType } from '@/lib/registrant-store'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -121,7 +121,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
 
       ownedAgentAtoms: atoms(
         where: {
-          label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" }
+          ${AGENT_ATOM_INLINE}
           positions: { account_id: { _eq: $address } }
         }
         order_by: { created_at: desc }
@@ -146,7 +146,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
 
       ownedSkillAtoms: atoms(
         where: {
-          label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" }
+          ${SKILL_ATOM_INLINE}
           positions: { account_id: { _eq: $address } }
         }
         order_by: { created_at: desc }
@@ -189,7 +189,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
 
       mySkills: atoms_aggregate(
         where: {
-          label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" }
+          ${SKILL_ATOM_INLINE}
           creator_id: { _eq: $address }
         }
       ) { aggregate { count } }
@@ -200,6 +200,8 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
           _or: [
             { subject: { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } } }
             { subject: { label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" } } }
+            { subject: { as_subject_triples: { predicate_id: { _eq: "0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba" } } } }
+            { subject: { as_subject_triples: { predicate: { label: { _eq: "is" } } object: { label: { _eq: "Agent Skill" } } } } }
           ]
         }
       ) { aggregate { count } }
@@ -246,6 +248,13 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     totalStaked: a.positions_aggregate?.aggregate?.sum?.shares || '0',
   }))
 
+  // Build a set of all platform atom IDs (from agent + skill maps).
+  // Used to recognise prefix-less atoms registered via FeeProxy.
+  const platformAtomIds = new Set<string>([
+    ...Array.from(agentMap.keys()),
+    ...Array.from(skillMap.keys()),
+  ])
+
   const pnlPositions: PnLPosition[] = []
   const agentPositions: AgentSupport[] = []
   const seenKeys = new Set<string>()
@@ -258,19 +267,28 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     const term = pos.vault?.term
     if (!term) continue
 
-    // Check if this position belongs to an INTU-scoped entity
+    // Check if this position belongs to an INTU-scoped entity.
+    // Recognises both legacy prefix atoms and new prefix-less platform atoms.
     const atomLabel = term.atom?.label || ''
+    const atomTermId = term.atom?.term_id || ''
     const tripleSubjectLabel = term.triple?.subject?.label || ''
+    const tripleSubjectTermId = term.triple?.subject?.term_id || ''
     const isIntuScoped =
       atomLabel.startsWith(APP_CONFIG.AGENT_PREFIX) ||
       atomLabel.startsWith(APP_CONFIG.SKILL_PREFIX) ||
       tripleSubjectLabel.startsWith(APP_CONFIG.AGENT_PREFIX) ||
-      tripleSubjectLabel.startsWith(APP_CONFIG.SKILL_PREFIX)
+      tripleSubjectLabel.startsWith(APP_CONFIG.SKILL_PREFIX) ||
+      platformAtomIds.has(atomTermId) ||
+      platformAtomIds.has(tripleSubjectTermId)
 
     if (!isIntuScoped) continue
     totalStaked += shares
 
-    if (term.atom && term.atom.label?.startsWith(APP_CONFIG.AGENT_PREFIX)) {
+    const isAgentAtom =
+      term.atom?.label?.startsWith(APP_CONFIG.AGENT_PREFIX) ||
+      agentMap.has(atomTermId)
+
+    if (term.atom && isAgentAtom) {
       const key = `atom-${term.atom.term_id}`
       if (!seenKeys.has(key)) {
         seenKeys.add(key)
@@ -285,7 +303,11 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
       }
     }
 
-    if (term.triple && term.triple.subject?.label?.startsWith(APP_CONFIG.AGENT_PREFIX)) {
+    const isAgentTripleSubject =
+      term.triple?.subject?.label?.startsWith(APP_CONFIG.AGENT_PREFIX) ||
+      agentMap.has(tripleSubjectTermId)
+
+    if (term.triple && isAgentTripleSubject) {
       const t = term.triple
       const isForVault = t.term_id === pos.vault.term_id
       const side = isForVault ? 'for' : 'against'
@@ -309,9 +331,10 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
       const totalShares = pos.vault?.total_shares || '0'
       if (term.atom) {
         const label = term.atom.label || ''
-        const type = label.startsWith(APP_CONFIG.AGENT_PREFIX)
+        const tid = term.atom.term_id || ''
+        const type = (label.startsWith(APP_CONFIG.AGENT_PREFIX) || agentMap.has(tid))
           ? 'agent'
-          : label.startsWith(APP_CONFIG.SKILL_PREFIX)
+          : (label.startsWith(APP_CONFIG.SKILL_PREFIX) || skillMap.has(tid))
             ? 'skill'
             : null
         if (type) {
@@ -330,8 +353,13 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
       } else if (term.triple) {
         const t = term.triple
         const subjectLabel = t.subject?.label || ''
+        const subjectTermId = t.subject?.term_id || ''
         // Only include claims where subject is an INTU-tagged entity
-        if (subjectLabel.startsWith(APP_CONFIG.AGENT_PREFIX) || subjectLabel.startsWith(APP_CONFIG.SKILL_PREFIX)) {
+        if (
+          subjectLabel.startsWith(APP_CONFIG.AGENT_PREFIX) ||
+          subjectLabel.startsWith(APP_CONFIG.SKILL_PREFIX) ||
+          platformAtomIds.has(subjectTermId)
+        ) {
           const isForVault = t.term_id === pos.vault.term_id
           const side = isForVault ? 'for' : 'against'
           pnlPositions.push({

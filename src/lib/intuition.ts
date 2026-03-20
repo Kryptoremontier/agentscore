@@ -382,7 +382,7 @@ export async function createAgentAtom(
   metadata: AgentMetadata,
   initialDeposit?: bigint
 ) {
-  const atomText = `${APP_CONFIG.AGENT_PREFIX} ${metadata.name} - ${metadata.description}`
+  const atomText = `${metadata.name} - ${metadata.description}`
   const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
@@ -400,11 +400,13 @@ export async function createSkillAtom(
   metadata: { name: string; description: string; category: string; compatibilities: string[]; requiresApiKey?: boolean; pricing?: string; githubUrl?: string; installCommand?: string },
   initialDeposit?: bigint
 ) {
-  const atomText = `${APP_CONFIG.SKILL_PREFIX} ${metadata.name} - ${metadata.description}`
+  const atomText = `${metadata.name} - ${metadata.description}`
   const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
   if (userAddress) saveRegistration(result.termId, userAddress, 'skill')
+  // Tag entity type: [skill] [is] [Agent Skill] — used for semantic filtering
+  tagSkillType(config, result.termId)
   return result
 }
 
@@ -899,6 +901,31 @@ async function tagCreatedVia(cfg: WriteConfig, newTermId: string): Promise<void>
     )
   } catch (err) {
     console.warn('[tagCreatedVia] Failed to tag atom — continuing:', err)
+  }
+}
+
+/**
+ * Tag a skill atom with [skill] [is] [Agent Skill].
+ * This type triple is used for semantic filtering (replaces label prefix).
+ * Fire-and-forget — never throws or blocks the main creation flow.
+ */
+async function tagSkillType(cfg: WriteConfig, skillTermId: `0x${string}`): Promise<void> {
+  try {
+    const isPredicateTermId = await findOrCreateAtom(cfg, 'is')
+    const agentSkillTermId = await findOrCreateAtom(cfg, 'Agent Skill')
+    // Check if type triple already exists
+    const res = await fetch(INTUITION_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `{ triples(where: { subject_id: { _eq: "${skillTermId}" }, predicate_id: { _eq: "${isPredicateTermId}" }, object_id: { _eq: "${agentSkillTermId}" } }, limit: 1) { term_id } }`,
+      }),
+    })
+    const data = await res.json()
+    if (data.data?.triples?.length > 0) return // already tagged
+    await createTriple(cfg, skillTermId, isPredicateTermId, agentSkillTermId, DEFAULT_ATOM_DEPOSIT)
+  } catch (err) {
+    console.warn('[tagSkillType] Failed to tag skill type — continuing:', err)
   }
 }
 

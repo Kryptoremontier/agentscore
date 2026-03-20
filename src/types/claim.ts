@@ -10,7 +10,7 @@ export type PredicateId =
   | 'enhances'
   | 'replaces'
   | 'competes-with'
-  | 'is-trusted-for'
+  | 'has-agent-skill'
   | 'is-certified-by'
   | 'custom'
 
@@ -89,12 +89,12 @@ export const PREDICATES: PredicateConfig[] = [
     category: 'comparative',
   },
   {
-    id: 'is-trusted-for',
-    label: 'is trusted for',
-    atomLabel: 'isTrustedFor',
+    id: 'has-agent-skill',
+    label: 'has agent skill',
+    atomLabel: 'hasAgentSkill',
     icon: 'ShieldCheck',
     color: '#2EE6D6',
-    description: 'Trusted in specific context',
+    description: 'Agent has this skill or capability',
     category: 'positive',
   },
   {
@@ -197,3 +197,10 @@ export function getAtomName(label: string): string {
     .split(' - ')[0]
     .trim()
 }
+
+/**
+ * Strip legacy prefixes from an atom label for display.
+ * Backward-compatible: old atoms with "Agent:INTU:" / "Skill:INTU:" prefixes
+ * display cleanly; new atoms without prefixes pass through unchanged.
+ */
+export const cleanAtomName = getAtomName

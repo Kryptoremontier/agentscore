@@ -9,7 +9,8 @@ import { cn } from '@/lib/cn'
 import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
 
 import { APP_CONFIG } from '@/lib/app-config'
-import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+import { cleanAtomName } from '@/types/claim'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -38,9 +39,6 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: 'skills', label: 'Skills', icon: Zap,          accentRgb: '46,230,214',  accentHex: '#2EE6D6', prefix: SKILL_PREFIX },
   { id: 'claims', label: 'Claims', icon: MessageSquare, accentRgb: '56,182,255', accentHex: '#38B6FF', prefix: '' },
 ]
-
-const stripPrefix = (label: string, prefix: string) =>
-  label.replace(new RegExp(`^${prefix}\\s*`, 'i'), '').split(' - ')[0].trim()
 
 const getDescription = (label: string, prefix: string) => {
   const parts = label.replace(new RegExp(`^${prefix}\\s*`, 'i'), '').split(' - ')
@@ -83,13 +81,13 @@ export function FeaturedAgents() {
         setClaims(d.data?.triples || [])
         setItems([])
       } else {
-        const prefix = TABS.find(t => t.id === tab)!.prefix
+        const whereStr = tab === 'agents' ? AGENT_WHERE_STR : SKILL_WHERE_STR
         const res = await fetch(GRAPHQL_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: `{
             atoms(
-              where: { label: { _ilike: "${prefix}%" } }
+              where: ${whereStr}
               limit: 8 order_by: { created_at: desc }
             ) {
               term_id label created_at
@@ -305,7 +303,7 @@ export function FeaturedAgents() {
                                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
                                     style={{ background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.28)', color: '#C8963C' }}>
                                     <Bot className="w-3 h-3" />
-                                    {subjectLabel.replace(/^Agent:(?:\w+:)?\s*/i, '').split(' - ')[0].slice(0, 18)}
+                                    {cleanAtomName(subjectLabel).slice(0, 18)}
                                   </span>
                                   <span className="flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold"
                                     style={{ background: 'rgba(46,230,214,0.10)', border: '1px solid rgba(46,230,214,0.25)', color: '#2EE6D6' }}>
@@ -313,7 +311,7 @@ export function FeaturedAgents() {
                                   </span>
                                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
                                     style={{ background: 'rgba(56,182,255,0.10)', border: '1px solid rgba(56,182,255,0.25)', color: '#38B6FF' }}>
-                                    {objectLabel.replace(/^(Agent|Skill):\s*/i, '').split(' - ')[0].slice(0, 18)}
+                                    {cleanAtomName(objectLabel).slice(0, 18)}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between mt-auto">
@@ -331,7 +329,7 @@ export function FeaturedAgents() {
                       })
                     : items.map((item, i) => {
                         const cfg = TABS.find(t => t.id === activeTab)!
-                        const name = stripPrefix(item.label, cfg.prefix)
+                        const name = cleanAtomName(item.label)
                         const description = getDescription(item.label, cfg.prefix)
                         const stakers = item.positions_aggregate?.aggregate?.count || 0
                         const sharesWei = BigInt(item.positions_aggregate?.aggregate?.sum?.shares || '0')

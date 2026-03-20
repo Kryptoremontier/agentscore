@@ -11,7 +11,12 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { cn } from '@/lib/cn'
 
 import { APP_CONFIG } from '@/lib/app-config'
-import { AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+import {
+  AGENT_WHERE_STR, SKILL_WHERE_STR,
+  AGENT_VAULT_POSITION_STR, SKILL_VAULT_POSITION_STR, CLAIM_VAULT_POSITION_STR,
+  AGENT_SIGNAL_WHERE_STR, SKILL_SIGNAL_WHERE_STR, CLAIM_SIGNAL_WHERE_STR,
+  AGENT_PREFIX, SKILL_PREFIX,
+} from '@/lib/gql-filters'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -63,14 +68,14 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
   }>(`
     query LeaderboardData {
       agents: atoms(
-        where: { label: { _ilike: "${AGENT_PREFIX}%" } }
+        where: ${AGENT_WHERE_STR}
         limit: 500
       ) {
         positions(order_by: { created_at: asc }, limit: 1) { account_id }
       }
 
       skills: atoms(
-        where: { label: { _ilike: "${SKILL_PREFIX}%" } }
+        where: ${SKILL_WHERE_STR}
         limit: 500
       ) {
         positions(order_by: { created_at: asc }, limit: 1) { account_id }
@@ -82,49 +87,42 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
           _or: [
             { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } }
             { subject: { label: { _ilike: "${SKILL_PREFIX}%" } } }
+            { subject: { as_subject_triples: { predicate_id: { _eq: "0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba" } } } }
+            { subject: { as_subject_triples: { predicate: { label: { _eq: "is" } } object: { label: { _eq: "Agent Skill" } } } } }
           ]
         }
         limit: 500
       ) { creator_id }
 
       agentPositions: positions(
-        where: {
-          shares: { _gt: "0" }
-          vault: { term: { atom: { label: { _ilike: "${AGENT_PREFIX}%" } } } }
-        }
+        where: { ${AGENT_VAULT_POSITION_STR} }
         limit: 1000
       ) { account_id shares }
 
       skillPositions: positions(
-        where: {
-          shares: { _gt: "0" }
-          vault: { term: { atom: { label: { _ilike: "${SKILL_PREFIX}%" } } } }
-        }
+        where: { ${SKILL_VAULT_POSITION_STR} }
         limit: 1000
       ) { account_id shares }
 
       claimPositions: positions(
-        where: {
-          shares: { _gt: "0" }
-          vault: { term: { triple: { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } } } }
-        }
+        where: { ${CLAIM_VAULT_POSITION_STR} }
         limit: 1000
       ) { account_id shares }
 
       agentSignals: signals(
-        where: { vault: { term: { atom: { label: { _ilike: "${AGENT_PREFIX}%" } } } } }
+        where: { ${AGENT_SIGNAL_WHERE_STR} }
         limit: 3000
         order_by: { created_at: desc }
       ) { account_id }
 
       skillSignals: signals(
-        where: { vault: { term: { atom: { label: { _ilike: "${SKILL_PREFIX}%" } } } } }
+        where: { ${SKILL_SIGNAL_WHERE_STR} }
         limit: 1000
         order_by: { created_at: desc }
       ) { account_id }
 
       claimSignals: signals(
-        where: { vault: { term: { triple: { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } } } } }
+        where: { ${CLAIM_SIGNAL_WHERE_STR} }
         limit: 1000
         order_by: { created_at: desc }
       ) { account_id }
