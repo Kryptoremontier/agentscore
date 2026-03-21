@@ -29,9 +29,14 @@ import { APP_CONFIG } from './app-config'
 /**
  * "is trustworthy" predicate on Intuition Testnet.
  * Used in trust triples: [Agent] [is trustworthy] [AI Agent]
- * Agents are identified by having this triple as subject.
  */
 const TRUST_PREDICATE_TERM_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
+
+/**
+ * "AI Agent" atom on Intuition Testnet (object in both trust triples and type triples).
+ * Type triple: [Agent] [is] [AI Agent]  ← created by tagAgentType() on registration
+ */
+const AI_AGENT_TERM_ID = '0x4990eef19ea1d9b893c1802af9e2ec37fbc1ae138868959ebc23c98b1fc9565e'
 
 // ── internal helpers ──────────────────────────────────────────────────────────
 
@@ -68,6 +73,7 @@ export const AGENT_WHERE_STR: string = APP_CONFIG.APP_SCOPE_ENABLED
   ? `{ _or: [
         { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } }
         { as_subject_triples: { predicate_id: { _eq: "${TRUST_PREDICATE_TERM_ID}" } } }
+        { as_subject_triples: { predicate: { label: { _eq: "is" } } object_id: { _eq: "${AI_AGENT_TERM_ID}" } } }
       ]${dateFragStr()} }`
   : scopeOffStr()
 
@@ -79,6 +85,7 @@ export const AGENT_WHERE_OBJ: Record<string, unknown> = APP_CONFIG.APP_SCOPE_ENA
       _or: [
         { label: { _ilike: `${APP_CONFIG.AGENT_PREFIX}%` } },
         { as_subject_triples: { predicate_id: { _eq: TRUST_PREDICATE_TERM_ID } } },
+        { as_subject_triples: { predicate: { label: { _eq: 'is' } }, object_id: { _eq: AI_AGENT_TERM_ID } } },
       ],
       ...dateFragObj(),
     }
@@ -118,6 +125,7 @@ export const TRIPLE_SUBJECT_OR_STR: string = APP_CONFIG.APP_SCOPE_ENABLED
         { subject: { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } } }
         { subject: { label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" } } }
         { subject: { as_subject_triples: { predicate_id: { _eq: "${TRUST_PREDICATE_TERM_ID}" } } } }
+        { subject: { as_subject_triples: { predicate: { label: { _eq: "is" } } object_id: { _eq: "${AI_AGENT_TERM_ID}" } } } }
         { subject: { as_subject_triples: { predicate: { label: { _eq: "is" } } object: { label: { _eq: "Agent Skill" } } } } }
       ]`
   : ''
@@ -127,6 +135,7 @@ export const TRIPLE_OBJECT_OR_STR: string = APP_CONFIG.APP_SCOPE_ENABLED
         { object: { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } } }
         { object: { label: { _ilike: "${APP_CONFIG.SKILL_PREFIX}%" } } }
         { object: { as_subject_triples: { predicate_id: { _eq: "${TRUST_PREDICATE_TERM_ID}" } } } }
+        { object: { as_subject_triples: { predicate: { label: { _eq: "is" } } object_id: { _eq: "${AI_AGENT_TERM_ID}" } } } }
         { object: { as_subject_triples: { predicate: { label: { _eq: "is" } } object: { label: { _eq: "Agent Skill" } } } } }
       ]`
   : ''
@@ -154,6 +163,7 @@ export const AGENT_VAULT_POSITION_STR: string = APP_CONFIG.APP_SCOPE_ENABLED
   ? `shares: { _gt: "0" } vault: { term: { atom: { _or: [
         { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } }
         { as_subject_triples: { predicate_id: { _eq: "${TRUST_PREDICATE_TERM_ID}" } } }
+        { as_subject_triples: { predicate: { label: { _eq: "is" } } object_id: { _eq: "${AI_AGENT_TERM_ID}" } } }
       ] } } }`
   : 'shares: { _gt: "0" }'
 
@@ -168,6 +178,7 @@ export const CLAIM_VAULT_POSITION_STR: string = APP_CONFIG.APP_SCOPE_ENABLED
   ? `shares: { _gt: "0" } vault: { term: { triple: { subject: { _or: [
         { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } }
         { as_subject_triples: { predicate_id: { _eq: "${TRUST_PREDICATE_TERM_ID}" } } }
+        { as_subject_triples: { predicate: { label: { _eq: "is" } } object_id: { _eq: "${AI_AGENT_TERM_ID}" } } }
       ] } } } }`
   : 'shares: { _gt: "0" }'
 
@@ -177,6 +188,7 @@ export const AGENT_SIGNAL_WHERE_STR: string = APP_CONFIG.APP_SCOPE_ENABLED
   ? `vault: { term: { atom: { _or: [
         { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } }
         { as_subject_triples: { predicate_id: { _eq: "${TRUST_PREDICATE_TERM_ID}" } } }
+        { as_subject_triples: { predicate: { label: { _eq: "is" } } object_id: { _eq: "${AI_AGENT_TERM_ID}" } } }
       ] } } }`
   : ''
 
@@ -191,6 +203,7 @@ export const CLAIM_SIGNAL_WHERE_STR: string = APP_CONFIG.APP_SCOPE_ENABLED
   ? `vault: { term: { triple: { subject: { _or: [
         { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } }
         { as_subject_triples: { predicate_id: { _eq: "${TRUST_PREDICATE_TERM_ID}" } } }
+        { as_subject_triples: { predicate: { label: { _eq: "is" } } object_id: { _eq: "${AI_AGENT_TERM_ID}" } } }
       ] } } } }`
   : ''
 
@@ -204,6 +217,7 @@ export const AGENT_ATOM_INLINE: string = APP_CONFIG.APP_SCOPE_ENABLED
   ? `_or: [
         { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } }
         { as_subject_triples: { predicate_id: { _eq: "${TRUST_PREDICATE_TERM_ID}" } } }
+        { as_subject_triples: { predicate: { label: { _eq: "is" } } object_id: { _eq: "${AI_AGENT_TERM_ID}" } } }
       ]`
   : ''
 

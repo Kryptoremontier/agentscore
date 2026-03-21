@@ -387,6 +387,8 @@ export async function createAgentAtom(
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
   if (userAddress) saveRegistration(result.termId, userAddress, 'agent')
+  // Tag entity type: [agent] [is] [AI Agent] — used for semantic filtering
+  tagAgentType(config, result.termId)
   return result
 }
 
@@ -901,6 +903,31 @@ async function tagCreatedVia(cfg: WriteConfig, newTermId: string): Promise<void>
     )
   } catch (err) {
     console.warn('[tagCreatedVia] Failed to tag atom — continuing:', err)
+  }
+}
+
+/**
+ * Tag an agent atom with [agent] [is] [AI Agent].
+ * This type triple is used for semantic filtering (replaces label prefix).
+ * Uses the known TRUST_OBJECT_TERM_ID ("AI Agent" — already exists on testnet).
+ * Fire-and-forget — never throws or blocks the main creation flow.
+ */
+async function tagAgentType(cfg: WriteConfig, agentTermId: `0x${string}`): Promise<void> {
+  try {
+    const isPredicateTermId = await findOrCreateAtom(cfg, 'is')
+    // Check if type triple already exists
+    const res = await fetch(INTUITION_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `{ triples(where: { subject_id: { _eq: "${agentTermId}" }, predicate_id: { _eq: "${isPredicateTermId}" }, object_id: { _eq: "${TRUST_OBJECT_TERM_ID}" } }, limit: 1) { term_id } }`,
+      }),
+    })
+    const data = await res.json()
+    if (data.data?.triples?.length > 0) return // already tagged
+    await createTriple(cfg, agentTermId, isPredicateTermId, TRUST_OBJECT_TERM_ID as `0x${string}`, DEFAULT_ATOM_DEPOSIT)
+  } catch (err) {
+    console.warn('[tagAgentType] Failed to tag agent type — continuing:', err)
   }
 }
 
