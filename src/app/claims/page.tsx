@@ -1668,7 +1668,7 @@ function ClaimsPageContent() {
                     <div className="grid grid-cols-2 gap-6">
                       {/* LEFT: AgentScore gauge */}
                       <div>
-                        <h3 className="text-white font-bold mb-4">Trust Score</h3>
+                        <h3 className="text-white font-bold mb-4">AGENTSCORE</h3>
                         <div className="flex items-center gap-4 mb-4">
                           <div className="relative w-20 h-20 flex-shrink-0">
                             <svg viewBox="0 0 80 80" className="w-20 h-20 -rotate-90">
