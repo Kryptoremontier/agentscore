@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 // Categories unused — filter now uses trust levels directly
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
 import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
+import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
@@ -1240,16 +1241,24 @@ function AgentsPageContent() {
   const hybridScore = useMemo((): number | null => {
     try {
       if (!agentTrust || !compositeTrust) return null
-      const supportWei = agentTrust.supportStake
-      const opposeWei = agentTrust.opposeStake
-      const totalWei = supportWei + opposeWei
-      const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
+      const supportPositions = allPositions.filter(
+        (p: any) => p.term_id === agentTriple.termId,
+      )
+      const opposePositions = allPositions.filter(
+        (p: any) => p.term_id === agentTriple.counterTermId,
+      )
+      const supportRatio = (supportPositions.length > 0 || opposePositions.length > 0)
+        ? calculateDiversityWeightedRatio(supportPositions, opposePositions)
+        : (() => {
+            const totalWei = agentTrust.supportStake + agentTrust.opposeStake
+            return totalWei > 0n ? Number((agentTrust.supportStake * 100n) / totalWei) : 50
+          })()
       return calculateHybridScore(agentTrust.score, compositeTrust.score, supportRatio)
     } catch (e) {
       console.error('[hybridScore]', e)
       return null
     }
-  }, [agentTrust, compositeTrust])
+  }, [agentTrust, compositeTrust, allPositions, agentTriple.termId, agentTriple.counterTermId])
 
   // ─── Trust Tier dla wybranego agenta ───
   const agentTrustTier = useMemo(() => {

@@ -27,6 +27,7 @@ import {
 import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
 import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
+import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 import { CreateClaimForm } from '@/components/claims/CreateClaimForm'
@@ -574,16 +575,24 @@ function ClaimsPageContent() {
   const hybridScore = useMemo((): number | null => {
     try {
       if (!claimTrust || !compositeTrust) return null
-      const supportWei = claimTrust.supportStake
-      const opposeWei = claimTrust.opposeStake
-      const totalWei = supportWei + opposeWei
-      const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
+      const supportPositions = allPositions.filter(
+        (p: any) => p.term_id === claimTriple.termId,
+      )
+      const opposePositions = allPositions.filter(
+        (p: any) => p.term_id === claimTriple.counterTermId,
+      )
+      const supportRatio = (supportPositions.length > 0 || opposePositions.length > 0)
+        ? calculateDiversityWeightedRatio(supportPositions, opposePositions)
+        : (() => {
+            const totalWei = claimTrust.supportStake + claimTrust.opposeStake
+            return totalWei > 0n ? Number((claimTrust.supportStake * 100n) / totalWei) : 50
+          })()
       return calculateHybridScore(claimTrust.score, compositeTrust.score, supportRatio)
     } catch (e) {
       console.error('[hybridScore]', e)
       return null
     }
-  }, [claimTrust, compositeTrust])
+  }, [claimTrust, compositeTrust, allPositions, claimTriple.termId, claimTriple.counterTermId])
 
   const exitLimit = useMemo(() => {
     try {

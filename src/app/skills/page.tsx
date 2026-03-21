@@ -12,6 +12,7 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
 import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
+import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
@@ -1174,16 +1175,24 @@ function SkillsPageContent() {
   const hybridScore = useMemo((): number | null => {
     try {
       if (!skillTrust || !compositeTrust) return null
-      const supportWei = skillTrust.supportStake
-      const opposeWei = skillTrust.opposeStake
-      const totalWei = supportWei + opposeWei
-      const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
+      const supportPositions = allPositions.filter(
+        (p: any) => p.term_id === skillTriple.termId,
+      )
+      const opposePositions = allPositions.filter(
+        (p: any) => p.term_id === skillTriple.counterTermId,
+      )
+      const supportRatio = (supportPositions.length > 0 || opposePositions.length > 0)
+        ? calculateDiversityWeightedRatio(supportPositions, opposePositions)
+        : (() => {
+            const totalWei = skillTrust.supportStake + skillTrust.opposeStake
+            return totalWei > 0n ? Number((skillTrust.supportStake * 100n) / totalWei) : 50
+          })()
       return calculateHybridScore(skillTrust.score, compositeTrust.score, supportRatio)
     } catch (e) {
       console.error('[hybridScore]', e)
       return null
     }
-  }, [skillTrust, compositeTrust])
+  }, [skillTrust, compositeTrust, allPositions, skillTriple.termId, skillTriple.counterTermId])
 
   const skillTrustTier = useMemo(() => {
     try {
