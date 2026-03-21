@@ -372,6 +372,7 @@ npm start            # Run production server
 - [ ] Cross-protocol reputation portability
 - [ ] Partner integrations (agent frameworks, AI platforms)
 - [ ] Enterprise trust scoring API
+- [ ] ERC-8004 compatibility — AgentScore as reputation provider for the Trustless Agents standard (bridge Intuition trust scores to Ethereum/Base Identity and Reputation Registries)
 
 ---
 

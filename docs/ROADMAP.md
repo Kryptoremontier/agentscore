@@ -86,6 +86,7 @@ Raw data becomes actionable intelligence. Help users make better decisions faste
 - [ ] Early warning system for suspicious behavior
 - [ ] API for developers building on trust data
 - [ ] Integration with AgentRank algorithm
+- [ ] ERC-8004 compatibility — AgentScore as reputation provider for the Trustless Agents standard (bridge Intuition trust scores to Ethereum/Base Identity and Reputation Registries)
 
 ### Philosophy:
 > *"Information is not knowledge. We transform signals into understanding."*
