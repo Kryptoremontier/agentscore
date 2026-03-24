@@ -29,6 +29,9 @@ import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { AGENT_WHERE_STR } from '@/lib/gql-filters'
+import { calculateSkillBreakdown, type SkillBreakdownResult } from '@/lib/skill-trust'
+import { fetchAgentSkillTriples } from '@/lib/intuition'
+import { SkillBreakdown } from '@/components/SkillBreakdown'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -137,6 +140,7 @@ function AgentsPageContent() {
   const [peakOnChainPrice, setPeakOnChainPrice] = useState<number | null>(null)
   const [pageError, setPageError] = useState<string | null>(null)
   const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
+  const [skillTriples, setSkillTriples] = useState<any[]>([])
 
   // On-chain buy/sell previews (replace fictional local bonding curve)
   const activeVaultId = selectedAgent?.term_id || undefined
@@ -477,6 +481,17 @@ function AgentsPageContent() {
         }))
         .catch(() => setAgentTriple({ termId: null, counterTermId: null, loading: false }))
     })
+  }, [selectedAgent?.term_id])
+
+  // Fetch skill triples when modal opens (for skill trust breakdown)
+  useEffect(() => {
+    if (!selectedAgent) {
+      setSkillTriples([])
+      return
+    }
+    fetchAgentSkillTriples(selectedAgent.term_id)
+      .then(setSkillTriples)
+      .catch(() => setSkillTriples([]))
   }, [selectedAgent?.term_id])
 
   // PRIMARY: Derive userPosition from allPositions (same data that feeds Attestations — reliable)
@@ -1259,6 +1274,18 @@ function AgentsPageContent() {
       return null
     }
   }, [agentTrust, compositeTrust, allPositions, agentTriple.termId, agentTriple.counterTermId])
+
+  // ─── Skill Trust Breakdown ───
+  const skillBreakdown = useMemo((): SkillBreakdownResult | null => {
+    try {
+      if (!skillTriples || skillTriples.length === 0) return null
+      const result = calculateSkillBreakdown(skillTriples)
+      return result.hasSkills ? result : null
+    } catch (e) {
+      console.error('[skillBreakdown]', e)
+      return null
+    }
+  }, [skillTriples])
 
   // ─── Trust Tier dla wybranego agenta ───
   const agentTrustTier = useMemo(() => {
@@ -2648,6 +2675,14 @@ function AgentsPageContent() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Skill Trust Breakdown — per-skill contextual scores */}
+                    {skillBreakdown && (
+                      <SkillBreakdown
+                        skills={skillBreakdown.skills}
+                        overallScore={skillBreakdown.overallScore}
+                      />
+                    )}
 
                     {/* Bonding Curve Charts */}
                     <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">

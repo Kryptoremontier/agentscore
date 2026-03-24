@@ -283,6 +283,156 @@ async function createAtomViaProxy(
 const INTUITION_GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 // ============================================================================
+// Public read-only GraphQL helpers
+// ============================================================================
+
+/**
+ * Search for an atom by exact label match (read-only, no wallet required).
+ * Returns null if not found or on network error.
+ * Used by findOrCreateAtom logic to avoid duplicate atoms on mainnet.
+ */
+export async function findAtomByLabel(
+  label: string
+): Promise<{ id: string; label: string } | null> {
+  if (!INTUITION_GRAPHQL_URL) return null
+  try {
+    const res = await fetch(INTUITION_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `
+          query FindAtomByLabel($label: String!) {
+            atoms(where: { label: { _eq: $label } }, limit: 1) {
+              term_id
+              label
+            }
+          }
+        `,
+        variables: { label },
+      }),
+    })
+    const data = await res.json()
+    const atom = data?.data?.atoms?.[0]
+    if (!atom) return null
+    return { id: atom.term_id as string, label: atom.label as string }
+  } catch (err) {
+    console.warn(`[findAtomByLabel] Query failed for "${label}":`, err)
+    return null
+  }
+}
+
+/**
+ * Fetch skill triples for an agent (predicate = hasAgentSkill).
+ * Returns enriched triple list with aggregated vault shares per triple.
+ * Read-only, no wallet required.
+ */
+export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array<{
+  id: string
+  predicate: { label: string }
+  object: { id: string; label: string }
+  vault: { totalShares: string; currentSharePrice: string; positionCount: number }
+  counterVault: { totalShares: string; currentSharePrice: string; positionCount: number }
+}>> {
+  if (!INTUITION_GRAPHQL_URL) return []
+  try {
+    // Step 1: Fetch skill triples for this agent
+    const res = await fetch(INTUITION_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `
+          query GetAgentSkillTriples($agentId: String!) {
+            triples(
+              where: {
+                subject_id: { _eq: $agentId }
+                predicate: { label: { _eq: "hasAgentSkill" } }
+              }
+              limit: 50
+            ) {
+              term_id
+              counter_term_id
+              object { term_id label }
+            }
+          }
+        `,
+        variables: { agentId: agentTermId },
+      }),
+    })
+    const data = await res.json()
+    const triples: Array<{ term_id: string; counter_term_id: string; object: { term_id: string; label: string } }> =
+      data?.data?.triples || []
+
+    if (triples.length === 0) return []
+
+    // Step 2: Collect all vault term IDs (for + against per triple)
+    const vaultIds: string[] = []
+    for (const t of triples) {
+      vaultIds.push(t.term_id)
+      if (t.counter_term_id) vaultIds.push(t.counter_term_id)
+    }
+
+    // Step 3: Batch-fetch positions for all vaults
+    const posRes = await fetch(INTUITION_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `
+          query GetSkillVaultPositions($vaultIds: [String!]!) {
+            positions(where: { term_id: { _in: $vaultIds } }) {
+              term_id
+              shares
+            }
+          }
+        `,
+        variables: { vaultIds },
+      }),
+    })
+    const posData = await posRes.json()
+    const positions: Array<{ term_id: string; shares: string }> = posData?.data?.positions || []
+
+    // Step 4: Aggregate shares + count per vault
+    const vaultMap = new Map<string, { totalShares: bigint; count: number }>()
+    for (const pos of positions) {
+      if (!pos.shares) continue
+      const prev = vaultMap.get(pos.term_id) || { totalShares: 0n, count: 0 }
+      try {
+        vaultMap.set(pos.term_id, {
+          totalShares: prev.totalShares + BigInt(pos.shares),
+          count: prev.count + 1,
+        })
+      } catch { /* skip malformed */ }
+    }
+
+    // Step 5: Build enriched result
+    return triples.map(t => {
+      const forVault = vaultMap.get(t.term_id) || { totalShares: 0n, count: 0 }
+      const againstVault = t.counter_term_id
+        ? (vaultMap.get(t.counter_term_id) || { totalShares: 0n, count: 0 })
+        : { totalShares: 0n, count: 0 }
+
+      return {
+        id: t.term_id,
+        predicate: { label: 'hasAgentSkill' },
+        object: { id: t.object?.term_id || '', label: t.object?.label || 'Unknown' },
+        vault: {
+          totalShares: forVault.totalShares.toString(),
+          currentSharePrice: '0',
+          positionCount: forVault.count,
+        },
+        counterVault: {
+          totalShares: againstVault.totalShares.toString(),
+          currentSharePrice: '0',
+          positionCount: againstVault.count,
+        },
+      }
+    })
+  } catch (err) {
+    console.warn('[fetchAgentSkillTriples] Failed:', err)
+    return []
+  }
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -402,8 +552,22 @@ export async function createSkillAtom(
   metadata: { name: string; description: string; category: string; compatibilities: string[]; requiresApiKey?: boolean; pricing?: string; githubUrl?: string; installCommand?: string },
   initialDeposit?: bigint
 ) {
-  const atomText = `${metadata.name} - ${metadata.description}`
   const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
+
+  // Check if a skill atom with this name already exists (mainnet dedup)
+  // On testnet this will usually return null → creates new as before
+  const existing = await findAtomByLabel(metadata.name)
+  if (existing) {
+    console.log(`[createSkillAtom] Reusing existing atom "${metadata.name}" → ${existing.id}`)
+    const tid = existing.id as `0x${string}`
+    const userAddress = config.walletClient.account?.address
+    if (userAddress) saveRegistration(tid, userAddress, 'skill')
+    // Don't re-tag type triple — may already exist on mainnet
+    return { termId: tid, transactionHash: '0x' as `0x${string}`, state: { termId: tid } }
+  }
+
+  // Not found → create new atom
+  const atomText = `${metadata.name} - ${metadata.description}`
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
   if (userAddress) saveRegistration(result.termId, userAddress, 'skill')
