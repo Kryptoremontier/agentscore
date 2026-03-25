@@ -12,6 +12,7 @@ import { intuitionTestnet } from '@0xintuition/protocol'
 import { cn } from '@/lib/cn'
 import { PREDICATES, type PredicateConfig, getAtomName } from '@/types/claim'
 import { APP_CONFIG } from '@/lib/app-config'
+import { AGENT_WHERE_STR, SKILL_WHERE_STR } from '@/lib/gql-filters'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -42,14 +43,19 @@ interface AtomResult {
 }
 
 async function fetchAtoms(prefix: 'Agent' | 'Skill', search = ''): Promise<AtomResult[]> {
-  const resolvedPrefix = prefix === 'Agent' ? APP_CONFIG.AGENT_PREFIX : APP_CONFIG.SKILL_PREFIX
-  const conditions = [`{ label: { _ilike: "${resolvedPrefix}%" } }`]
+  // Use the same semantic filter as the main agents/skills pages —
+  // catches both prefixed labels AND atoms identified via type triples.
+  const baseWhere = prefix === 'Agent' ? AGENT_WHERE_STR : SKILL_WHERE_STR
+  const conditions = [baseWhere]
   if (search.trim()) conditions.push(`{ label: { _ilike: "%${search.trim()}%" } }`)
+  const where = conditions.length > 1
+    ? `{ _and: [${conditions.join(', ')}] }`
+    : baseWhere
   const res = await fetch(GRAPHQL_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      query: `query FetchAtoms { atoms(where: { _and: [${conditions.join(', ')}] } order_by: { created_at: desc } limit: 20) { term_id label created_at positions_aggregate { aggregate { count sum { shares } } } } }`,
+      query: `query FetchAtoms { atoms(where: ${where} order_by: { created_at: desc } limit: 50) { term_id label created_at positions_aggregate { aggregate { count sum { shares } } } } }`,
     }),
   })
   const data = await res.json()

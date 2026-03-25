@@ -322,8 +322,9 @@ export async function findAtomByLabel(
 }
 
 /**
- * Fetch skill triples for an agent (predicate = hasAgentSkill).
- * Returns enriched triple list with aggregated vault shares per triple.
+ * Fetch skill triples for an agent.
+ * Fetches ALL subject triples, returns predicate label for each.
+ * Filtering to skill-only predicates is done in calculateSkillBreakdown().
  * Read-only, no wallet required.
  */
 export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array<{
@@ -335,22 +336,21 @@ export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array
 }>> {
   if (!INTUITION_GRAPHQL_URL) return []
   try {
-    // Step 1: Fetch skill triples for this agent
+    // Step 1: Fetch ALL subject triples — filter by predicate done in JS
+    // (avoids assuming predicate label casing/spelling on-chain)
     const res = await fetch(INTUITION_GRAPHQL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: `
-          query GetAgentSkillTriples($agentId: String!) {
+          query GetAgentAllTriples($agentId: String!) {
             triples(
-              where: {
-                subject_id: { _eq: $agentId }
-                predicate: { label: { _eq: "hasAgentSkill" } }
-              }
-              limit: 50
+              where: { subject_id: { _eq: $agentId } }
+              limit: 100
             ) {
               term_id
               counter_term_id
+              predicate { term_id label }
               object { term_id label }
             }
           }
@@ -359,8 +359,18 @@ export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array
       }),
     })
     const data = await res.json()
-    const triples: Array<{ term_id: string; counter_term_id: string; object: { term_id: string; label: string } }> =
-      data?.data?.triples || []
+    const triples: Array<{
+      term_id: string
+      counter_term_id: string
+      predicate: { term_id: string; label: string }
+      object: { term_id: string; label: string }
+    }> = data?.data?.triples || []
+
+    // DEBUG: log all predicate labels so we can see what's on-chain
+    console.log(`[fetchAgentSkillTriples] agent=${agentTermId} — ${triples.length} triples total:`)
+    triples.forEach(t =>
+      console.log(`  predicate="${t.predicate?.label}" object="${t.object?.label}"`)
+    )
 
     if (triples.length === 0) return []
 
@@ -412,7 +422,7 @@ export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array
 
       return {
         id: t.term_id,
-        predicate: { label: 'hasAgentSkill' },
+        predicate: { label: t.predicate?.label || '' },
         object: { id: t.object?.term_id || '', label: t.object?.label || 'Unknown' },
         vault: {
           totalShares: forVault.totalShares.toString(),

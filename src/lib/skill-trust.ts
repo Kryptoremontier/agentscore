@@ -130,7 +130,16 @@ export function calculateSkillBreakdown(
 }
 
 function cleanSkillName(label: string): string {
-  return label.replace(/^(INTU:|Skill:|Agent:)/i, '').trim()
+  // Strip repeated prefixes like "Skill:INTU: Name - description"
+  let result = label.trim()
+  const prefixRe = /^(INTU:|Skill:|Agent:)\s*/i
+  while (prefixRe.test(result)) {
+    result = result.replace(prefixRe, '').trim()
+  }
+  // If label has format "Name - description", return just the Name part
+  const dashIdx = result.indexOf(' - ')
+  if (dashIdx > 0) result = result.slice(0, dashIdx)
+  return result
 }
 
 function getSkillLevel(score: number): string {

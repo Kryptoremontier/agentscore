@@ -2677,11 +2677,22 @@ function AgentsPageContent() {
                     </div>
 
                     {/* Skill Trust Breakdown — per-skill contextual scores */}
-                    {skillBreakdown && (
+                    {skillBreakdown ? (
                       <SkillBreakdown
                         skills={skillBreakdown.skills}
                         overallScore={skillBreakdown.overallScore}
                       />
+                    ) : (
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
+                        <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-2">
+                          Skill Trust Breakdown
+                        </p>
+                        <p className="text-[#7A838D] text-xs">
+                          No skills linked yet. Create a claim{' '}
+                          <span className="text-[#C8963C]">[Agent] [hasAgentSkill] [Skill]</span>
+                          {' '}to see per-skill trust scores.
+                        </p>
+                      </div>
                     )}
 
                     {/* Bonding Curve Charts */}
