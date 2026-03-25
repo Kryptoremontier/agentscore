@@ -76,7 +76,7 @@ function getMomentumIndicator(momentum: number): { arrow: string; color: string;
   if (momentum > 0.5) return { arrow: '↗',  color: '#4ade80', label: 'Slightly rising' }
   if (momentum < -2)  return { arrow: '↓',  color: '#ef4444', label: 'Falling' }
   if (momentum < -0.5)return { arrow: '↘',  color: '#f87171', label: 'Slightly falling' }
-  return               { arrow: '→',  color: '#6b7280', label: 'Stable' }
+  return               { arrow: '→',  color: '#94a3b8', label: 'Stable' }
 }
 
 function AgentsPageContent() {
@@ -1657,14 +1657,14 @@ function AgentsPageContent() {
                 {sorted.map(({ agent, trust: cardTrust }) => {
                   const trustScore = cardTrust.score
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
-                  const color = cardTrust.level === 'excellent' ? '#2ECC71'
-                    : cardTrust.level === 'good' ? '#22C55E'
-                    : cardTrust.level === 'moderate' ? '#EAB308'
-                    : cardTrust.level === 'low' ? '#F97316'
-                    : '#EF4444'
+                  const color = cardTrust.level === 'excellent' ? '#34d399'
+                    : cardTrust.level === 'good' ? '#C8963C'
+                    : cardTrust.level === 'moderate' ? '#eab308'
+                    : cardTrust.level === 'low' ? '#f97316'
+                    : '#ef4444'
+                  const cardMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
                   const name = getAgentName(agent.label)
-                  const creator = agent.creator?.label || 'unknown'
 
                   return (
                     <motion.div
@@ -1698,8 +1698,11 @@ function AgentsPageContent() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl font-bold leading-none" style={{ color: getTrustColor(trustScore) }}>{trustScore}</p>
-                          <p className="text-xs text-[#7A838D] mt-0.5">Trust Score</p>
+                          <div className="flex items-baseline justify-end gap-1 mb-0.5">
+                            <p className="text-2xl font-bold leading-none" style={{ color }}>{trustScore}</p>
+                            <span className="text-base leading-none" style={{ color: cardMi.color }}>{cardMi.arrow}</span>
+                          </div>
+                          <p className="text-[10px] text-[#7A838D]">AGENTSCORE</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
@@ -1726,13 +1729,13 @@ function AgentsPageContent() {
                 {sorted.map(({ agent, trust: cardTrust }, i) => {
                   const trustScore = cardTrust.score
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
-                  const color = cardTrust.level === 'excellent' ? '#2ECC71'
-                    : cardTrust.level === 'good' ? '#22C55E'
-                    : cardTrust.level === 'moderate' ? '#EAB308'
-                    : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
+                  const color = cardTrust.level === 'excellent' ? '#34d399'
+                    : cardTrust.level === 'good' ? '#C8963C'
+                    : cardTrust.level === 'moderate' ? '#eab308'
+                    : cardTrust.level === 'low' ? '#f97316' : '#ef4444'
+                  const listMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
                   const name = getAgentName(agent.label)
-                  const creator = agent.creator?.label || 'unknown'
 
                   return (
                     <motion.div
@@ -1769,8 +1772,11 @@ function AgentsPageContent() {
                       <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{stakes}</span>
                       {/* Stakers */}
                       <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{stakers}</span>
-                      {/* Score */}
-                      <span className="text-sm font-bold font-mono text-right w-12" style={{ color }}>{trustScore}</span>
+                      {/* Score + momentum */}
+                      <div className="flex items-center justify-end gap-1 w-12">
+                        <span className="text-sm font-bold font-mono" style={{ color }}>{trustScore}</span>
+                        <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
+                      </div>
                     </motion.div>
                   )
                 })}
@@ -1785,7 +1791,7 @@ function AgentsPageContent() {
       {/* Agent Detail Modal */}
       {selectedAgent && (
         <div
-          className="fixed inset-0 top-[64px] z-[55] overflow-y-auto"
+          className="fixed inset-0 top-16 lg:top-20 z-[30] overflow-y-auto"
           style={{
             backgroundColor: '#0A0C0E',
             backgroundImage: "linear-gradient(rgba(10,10,15,0.75), rgba(10,10,15,0.75)), url('/images/brand/gold/background.png')",
@@ -2494,19 +2500,42 @@ function AgentsPageContent() {
                           .map((d: { trustRatio: number }) => d.trustRatio)
                           .slice(-10)
                         return (
-                          <div className="flex items-center gap-3 mb-3">
-                            <p className="text-4xl font-bold text-white leading-none">{typeof score === 'number' ? score.toFixed(1) : score}</p>
-                            <span
-                              className="text-2xl leading-none"
-                              style={{ color: mi.color }}
-                              title={`${mi.label}${momentum !== 0 ? ` (${momentum > 0 ? '+' : ''}${momentum.toFixed(1)} pts)` : ''}`}
+                          <div className="mb-3">
+                            {/* Score number */}
+                            <div className="flex items-baseline gap-2 mb-3">
+                              <span className="text-4xl font-bold text-white leading-none">
+                                {typeof score === 'number' ? score.toFixed(1) : score}
+                              </span>
+                              <span className="text-[#7A838D] text-sm leading-none">/100</span>
+                            </div>
+
+                            {/* Momentum pill — prominent, own row */}
+                            <div
+                              className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-lg mb-3"
+                              style={{
+                                background: `${mi.color}15`,
+                                border: `1px solid ${mi.color}45`,
+                              }}
                             >
-                              {mi.arrow}
-                            </span>
+                              <span className="text-2xl leading-none" style={{ color: mi.color }}>{mi.arrow}</span>
+                              <span className="text-base font-semibold leading-none" style={{ color: mi.color }}>{mi.label}</span>
+                              {momentum !== 0 && (
+                                <span
+                                  className="text-xs font-medium pl-2 border-l leading-none"
+                                  style={{ color: `${mi.color}bb`, borderColor: `${mi.color}40` }}
+                                >
+                                  {momentum > 0 ? '+' : ''}{momentum.toFixed(1)} pts
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Sparkline */}
                             {sparkData.length >= 2 && (
-                              <TrustSparkline datapoints={sparkData} color={mi.color} />
+                              <div className="flex items-center gap-2">
+                                <TrustSparkline datapoints={sparkData} color={mi.color} width={110} height={22} />
+                                <span className="text-[10px] text-white/25 tracking-wide">7d trend</span>
+                              </div>
                             )}
-                            <p className="text-[#B5BDC6] text-xs self-end pb-0.5">/100</p>
                           </div>
                         )
                       })()}

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import type { SkillTrustScore } from '@/lib/skill-trust'
 
 interface SkillBreakdownProps {
@@ -7,12 +8,12 @@ interface SkillBreakdownProps {
   overallScore: number
 }
 
-const LEVEL_COLORS: Record<string, { bar: string; text: string }> = {
-  excellent: { bar: '#2ECC71', text: '#2ECC71' },
-  good:      { bar: '#22c55e', text: '#22c55e' },
-  moderate:  { bar: '#eab308', text: '#eab308' },
-  low:       { bar: '#f97316', text: '#f97316' },
-  critical:  { bar: '#ef4444', text: '#ef4444' },
+const TIER_COLOR: Record<string, string> = {
+  excellent: '#34d399',   // emerald-400
+  good:      '#C8963C',   // gold
+  moderate:  '#eab308',   // yellow-500
+  low:       '#f97316',   // orange-400
+  critical:  '#ef4444',   // red-400
 }
 
 export function SkillBreakdown({ skills, overallScore }: SkillBreakdownProps) {
@@ -20,64 +21,68 @@ export function SkillBreakdown({ skills, overallScore }: SkillBreakdownProps) {
 
   return (
     <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
         <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">
           Skill Trust Breakdown
         </p>
         <span className="text-[#7A838D] text-[10px]">
-          Weighted avg: <span className="text-white font-semibold">{overallScore.toFixed(1)}</span>
+          Avg&nbsp;<span className="text-white font-semibold">{overallScore.toFixed(1)}</span>
         </span>
       </div>
+      <div className="border-b border-white/[0.06] mb-3" />
 
-      <div className="space-y-2.5">
+      {/* Skill rows */}
+      <div className="space-y-1">
         {skills.map((skill) => {
-          const colors = LEVEL_COLORS[skill.level] || LEVEL_COLORS.moderate
-          const supportTtrust = (Number(skill.supportShares) / 1e18).toFixed(3)
-          const opposeTtrust = (Number(skill.opposeShares) / 1e18).toFixed(3)
+          const bar = TIER_COLOR[skill.level] ?? TIER_COLOR.moderate
+          const supportTrust = (Number(skill.supportShares) / 1e18).toFixed(3)
+          const opposeTrust  = (Number(skill.opposeShares)  / 1e18).toFixed(3)
 
           return (
-            <div key={skill.tripleId} className="group">
-              <div className="flex items-center gap-2 mb-1">
-                {/* Skill name */}
-                <span
-                  className="text-[#B5BDC6] text-xs truncate flex-1 min-w-0"
-                  title={skill.skillName}
+            <div
+              key={skill.tripleId}
+              className="group rounded-lg px-2 py-2 -mx-2 hover:bg-white/[0.03] transition-colors duration-150"
+            >
+              {/* Name / score / stakers */}
+              <div className="flex items-center gap-2 mb-1.5">
+                <Link
+                  href={`/claims?open=${encodeURIComponent(skill.tripleId)}`}
+                  className="text-[#C8C8D0] hover:text-[#2EE6D6] text-xs font-medium truncate flex-1 min-w-0 transition-colors underline-offset-2 hover:underline"
+                  title={`View claim: ${skill.skillName}`}
+                  onClick={e => e.stopPropagation()}
                 >
                   {skill.skillName}
-                </span>
-
-                {/* Score */}
+                </Link>
                 <span
                   className="text-xs font-bold font-mono tabular-nums flex-shrink-0"
-                  style={{ color: colors.text, minWidth: '28px', textAlign: 'right' }}
+                  style={{ color: bar, minWidth: '26px', textAlign: 'right' }}
                 >
                   {Math.round(skill.score)}
                 </span>
-
-                {/* Staker count */}
                 <span className="text-[#7A838D] text-[10px] flex-shrink-0 w-16 text-right">
-                  {skill.stakerCount} staker{skill.stakerCount !== 1 ? 's' : ''}
+                  {skill.stakerCount}&thinsp;staker{skill.stakerCount !== 1 ? 's' : ''}
                 </span>
               </div>
 
               {/* Progress bar */}
-              <div className="w-full h-1.5 bg-[#1E2229] rounded-full overflow-hidden">
+              <div className="w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: `${skill.score}%`,
-                    background: `linear-gradient(90deg, ${colors.bar}80, ${colors.bar})`,
+                    background: `linear-gradient(90deg, ${bar}55, ${bar})`,
                   }}
                 />
               </div>
 
-              {/* Expanded details on hover */}
-              <div className="hidden group-hover:flex justify-between text-[10px] text-[#7A838D] mt-1">
-                <span style={{ color: '#34a872' }}>
-                  ↑ {supportTtrust} tTRUST ({skill.supportRatio}%)
+              {/* Hover: support / oppose */}
+              <div className="hidden group-hover:flex justify-between text-[10px] mt-1.5">
+                <span style={{ color: '#34d399' }}>
+                  ↑ {supportTrust} tTRUST ({skill.supportRatio}%)
                 </span>
-                <span style={{ color: '#c45454' }}>
-                  ↓ {opposeTtrust} tTRUST ({100 - skill.supportRatio}%)
+                <span style={{ color: '#f87171' }}>
+                  ↓ {opposeTrust} tTRUST ({100 - skill.supportRatio}%)
                 </span>
               </div>
             </div>
@@ -85,8 +90,8 @@ export function SkillBreakdown({ skills, overallScore }: SkillBreakdownProps) {
         })}
       </div>
 
-      <p className="text-[#7A838D] text-[10px] mt-3 pt-2 border-t border-[#C8963C]/10">
-        Score per [Agent] [hasAgentSkill] [Skill] triple vault
+      <p className="text-[#7A838D] text-[10px] mt-3 pt-2 border-t border-white/[0.04]">
+        Per [Agent] [hasAgentSkill] [Skill] triple vault
       </p>
     </div>
   )
