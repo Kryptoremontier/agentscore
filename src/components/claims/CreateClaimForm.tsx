@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, Check, ChevronRight, ChevronLeft, Sparkles, Loader2, AlertCircle,
-  Flame, HeartHandshake, TrendingUp, Link2, ArrowLeftRight, Swords,
-  ShieldCheck, BadgeCheck, MessageSquare,
+  HeartHandshake, TrendingUp, Link2, ArrowLeftRight, Swords,
+  ShieldCheck, BadgeCheck, MessageSquare, Plus, X, ThumbsUp,
 } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { intuitionTestnet } from '@0xintuition/protocol'
@@ -25,8 +25,8 @@ const COLORS = {
 
 // ── Lucide icon map for predicates ──────────────────────────────────────────
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  Flame, HeartHandshake, TrendingUp, Link: Link2, Sparkles,
-  ArrowLeftRight, Swords, ShieldCheck, BadgeCheck, MessageSquare,
+  HeartHandshake, TrendingUp, Link: Link2, Sparkles,
+  ArrowLeftRight, Swords, ShieldCheck, BadgeCheck, MessageSquare, ThumbsUp,
 }
 
 function PredIcon({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
@@ -92,12 +92,25 @@ export function CreateClaimForm({ onSuccess, onClose }: Props) {
   const [selectedPredicate, setSelectedPredicate] = useState<PredicateConfig | null>(null)
   const [customPredicate, setCustomPredicate] = useState('')
 
+  // Accordion state for Step 2 categories
+  const [capOpen, setCapOpen] = useState(true)
+  const [relOpen, setRelOpen] = useState(false)
+  const [opnOpen, setOpnOpen] = useState(false)
+
   // Object
   const [objectTab, setObjectTab] = useState<'Agent' | 'Skill'>('Skill')
   const [objectSearch, setObjectSearch] = useState('')
   const [objectAtoms, setObjectAtoms] = useState<AtomResult[]>([])
   const [objectLoading, setObjectLoading] = useState(false)
   const [selectedObject, setSelectedObject] = useState<AtomResult | null>(null)
+
+  // Create-new atom inline
+  const [showCreateSubject, setShowCreateSubject] = useState(false)
+  const [showCreateObject, setShowCreateObject] = useState(false)
+  const [newAtomName, setNewAtomName] = useState('')
+  const [newAtomDesc, setNewAtomDesc] = useState('')
+  const [creatingAtom, setCreatingAtom] = useState(false)
+  const [createAtomError, setCreateAtomError] = useState<string | null>(null)
 
   // Submit
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -126,6 +139,53 @@ export function CreateClaimForm({ onSuccess, onClose }: Props) {
     const t = setTimeout(() => loadObjectAtoms(objectTab, objectSearch), 300)
     return () => clearTimeout(t)
   }, [objectTab, objectSearch, step, loadObjectAtoms])
+
+  // ── Create new atom inline ──
+  const handleCreateNewAtom = async (forStep: 'subject' | 'object', tab: 'Agent' | 'Skill') => {
+    const name = newAtomName.trim()
+    if (!name) return
+    setCreatingAtom(true)
+    setCreateAtomError(null)
+    try {
+      const { getWalletClient } = await import('@wagmi/core')
+      const { config: wagmiConfig } = await import('@/lib/wagmi')
+      const freshWalletClient = walletClient ?? await getWalletClient(wagmiConfig)
+      if (!freshWalletClient || !publicClient) throw new Error('Wallet not connected')
+      const { createWriteConfig, createSimpleAtom } = await import('@/lib/intuition')
+      const cfg = createWriteConfig(freshWalletClient, publicClient)
+      const desc = newAtomDesc.trim() || name
+
+      // Use platform-prefixed label so the label filter in fetchClaims matches
+      // immediately after indexing (without waiting for tag triples).
+      const prefix = tab === 'Skill' ? APP_CONFIG.SKILL_PREFIX : APP_CONFIG.AGENT_PREFIX
+      const atomLabel = `${prefix}${name}${desc !== name ? ` - ${desc}` : ''}`
+
+      const result = await createSimpleAtom(cfg, atomLabel)
+      const termId = result.termId
+
+      const newAtom: AtomResult = {
+        term_id: termId,
+        label: atomLabel,
+        created_at: new Date().toISOString(),
+      }
+
+      if (forStep === 'subject') {
+        setSubjectAtoms(prev => [newAtom, ...prev])
+        setSelectedSubject(newAtom)
+        setShowCreateSubject(false)
+      } else {
+        setObjectAtoms(prev => [newAtom, ...prev])
+        setSelectedObject(newAtom)
+        setShowCreateObject(false)
+      }
+      setNewAtomName('')
+      setNewAtomDesc('')
+    } catch (e: any) {
+      setCreateAtomError(e.message || 'Failed to create')
+    } finally {
+      setCreatingAtom(false)
+    }
+  }
 
   // ── Submit ──
   const handleSubmit = async () => {
@@ -313,6 +373,69 @@ export function CreateClaimForm({ onSuccess, onClose }: Props) {
     )
   }
 
+  function CreateNewPanel({ forStep, tab }: { forStep: 'subject' | 'object'; tab: 'Agent' | 'Skill' }) {
+    const color = tab === 'Agent' ? COLORS.subject : { text: '#4ADE80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.25)', glow: '' }
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mt-3 rounded-xl p-3 space-y-2"
+        style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${color.border}` }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold" style={{ color: color.text }}>
+            Create new {tab}
+          </p>
+          <button
+            onClick={() => {
+              forStep === 'subject' ? setShowCreateSubject(false) : setShowCreateObject(false)
+              setNewAtomName('')
+              setNewAtomDesc('')
+              setCreateAtomError(null)
+            }}
+            className="p-0.5 rounded hover:bg-white/10 transition-colors"
+          >
+            <X className="w-3.5 h-3.5 text-[#7A838D]" />
+          </button>
+        </div>
+
+        <input
+          type="text"
+          value={newAtomName}
+          onChange={e => setNewAtomName(e.target.value)}
+          placeholder={`${tab} name...`}
+          className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', color: '#E8E8E8' }}
+          autoFocus
+        />
+        <input
+          type="text"
+          value={newAtomDesc}
+          onChange={e => setNewAtomDesc(e.target.value)}
+          placeholder="Short description (optional)"
+          className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', color: '#E8E8E8' }}
+        />
+
+        {createAtomError && (
+          <p className="text-xs text-[#F87171]">{createAtomError}</p>
+        )}
+
+        <button
+          onClick={() => handleCreateNewAtom(forStep, tab)}
+          disabled={creatingAtom || !newAtomName.trim() || !isConnected}
+          className="w-full py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+          style={{ background: color.bg, border: `1px solid ${color.border}`, color: color.text }}
+        >
+          {creatingAtom
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating on-chain...</>
+            : <><Plus className="w-3.5 h-3.5" /> Create &amp; select</>
+          }
+        </button>
+      </motion.div>
+    )
+  }
+
   // ── Main render ──
   return (
     <div className="max-w-xl mx-auto">
@@ -351,6 +474,22 @@ export function CreateClaimForm({ onSuccess, onClose }: Props) {
 
               <AtomList atoms={subjectAtoms} loading={subjectLoading} selectedId={selectedSubject?.term_id} tab={subjectTab} onSelect={setSelectedSubject} />
 
+              {/* Create new — always visible */}
+              {!showCreateSubject && (
+                <button
+                  onClick={() => { setShowCreateSubject(true); setNewAtomName(subjectSearch.trim()) }}
+                  className="w-full mt-2 py-2 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5"
+                  style={{ background: 'rgba(200,150,60,0.07)', border: '1px dashed rgba(200,150,60,0.30)', color: '#C8963C' }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {subjectSearch.trim().length >= 2
+                    ? <>Create new {subjectTab}: &ldquo;{subjectSearch.trim()}&rdquo;</>
+                    : <>Create new {subjectTab}</>
+                  }
+                </button>
+              )}
+              {showCreateSubject && <CreateNewPanel forStep="subject" tab={subjectTab} />}
+
               <button
                 onClick={() => setStep(2)}
                 disabled={!canProceedStep1}
@@ -375,52 +514,215 @@ export function CreateClaimForm({ onSuccess, onClose }: Props) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-1.5 mb-3">
-                {PREDICATES.filter(p => p.id !== 'custom').map(pred => {
-                  const selected = selectedPredicate?.id === pred.id
-                  return (
-                    <button
-                      key={pred.id}
-                      onClick={() => setSelectedPredicate(pred)}
-                      className={cn('flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-all')}
-                      style={{
-                        background: selected ? pred.color + '15' : 'rgba(255,255,255,0.02)',
-                        border: selected ? `1px solid ${pred.color}40` : '1px solid rgba(255,255,255,0.04)',
-                      }}
-                    >
-                      <PredIcon name={pred.icon} className="w-4 h-4 shrink-0" style={{ color: selected ? pred.color : '#7A838D' }} />
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium truncate" style={{ color: selected ? pred.color : '#B5BDC6' }}>{pred.label}</div>
-                        <div className="text-[9px] text-[#4A5260] truncate">{pred.description}</div>
+              {/* ⚡ Capability Claims */}
+              <div className="mb-2 rounded-xl overflow-hidden" style={{ border: capOpen ? '1px solid rgba(245,158,11,0.25)' : '1px solid rgba(255,255,255,0.07)' }}>
+                <button
+                  onClick={() => setCapOpen(o => !o)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 transition-all"
+                  style={{ background: capOpen ? 'rgba(245,158,11,0.05)' : 'rgba(255,255,255,0.02)' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">⚡</span>
+                    <div className="text-left">
+                      <p className="text-xs font-semibold text-white">Capability Claims</p>
+                      <p className="text-[10px] text-[#4A5260]">Powers trust scoring &amp; domain leaderboards</p>
+                    </div>
+                  </div>
+                  <ChevronRight className={cn('w-3.5 h-3.5 text-[#4A5260] transition-transform shrink-0', capOpen && 'rotate-90')} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {capOpen && (
+                    <motion.div key="cap" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
+                      <div className="px-3 pb-3 pt-1 space-y-1.5">
+                        {/* hasAgentSkill — featured large card */}
+                        {(() => {
+                          const pred = PREDICATES.find(p => p.id === 'has-agent-skill')!
+                          const selected = selectedPredicate?.id === pred.id
+                          return (
+                            <button
+                              onClick={() => setSelectedPredicate(pred)}
+                              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all"
+                              style={{
+                                background: selected ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.05)',
+                                border: selected ? '1px solid rgba(245,158,11,0.55)' : '1px solid rgba(245,158,11,0.20)',
+                              }}
+                            >
+                              <PredIcon name={pred.icon} className="w-5 h-5 shrink-0" style={{ color: '#F59E0B' }} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm font-semibold" style={{ color: '#F59E0B' }}>{pred.label}</span>
+                                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(245,158,11,0.15)', color: 'rgba(245,158,11,0.85)' }}>Powers scoring</span>
+                                </div>
+                                <div className="text-[10px] text-[#7A838D] mt-0.5">Powers Skill Breakdown &amp; Domain Leaderboards</div>
+                              </div>
+                              {selected && <Check className="w-4 h-4 shrink-0" style={{ color: '#F59E0B' }} />}
+                            </button>
+                          )
+                        })()}
+                        {/* isCertifiedBy */}
+                        {(() => {
+                          const pred = PREDICATES.find(p => p.id === 'is-certified-by')!
+                          const selected = selectedPredicate?.id === pred.id
+                          return (
+                            <button
+                              onClick={() => setSelectedPredicate(pred)}
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all"
+                              style={{
+                                background: selected ? pred.color + '12' : 'rgba(255,255,255,0.02)',
+                                border: selected ? `1px solid ${pred.color}40` : '1px solid rgba(255,255,255,0.05)',
+                              }}
+                            >
+                              <PredIcon name={pred.icon} className="w-4 h-4 shrink-0" style={{ color: selected ? pred.color : '#7A838D' }} />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-medium" style={{ color: selected ? pred.color : '#B5BDC6' }}>{pred.label}</div>
+                                <div className="text-[9px] text-[#4A5260]">{pred.description}</div>
+                              </div>
+                              <span className="text-[9px] shrink-0" style={{ color: 'rgba(46,204,113,0.45)' }}>Phase 2 verification</span>
+                              {selected && <Check className="w-3.5 h-3.5 shrink-0" style={{ color: pred.color }} />}
+                            </button>
+                          )
+                        })()}
                       </div>
-                    </button>
-                  )
-                })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              {/* Custom option */}
-              <button
-                onClick={() => setSelectedPredicate(PREDICATES.find(p => p.id === 'custom')!)}
-                className={cn('w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all mb-3')}
-                style={{
-                  background: selectedPredicate?.id === 'custom' ? 'rgba(107,114,128,0.15)' : 'rgba(255,255,255,0.02)',
-                  border: selectedPredicate?.id === 'custom' ? '1px solid rgba(107,114,128,0.35)' : '1px solid rgba(255,255,255,0.04)',
-                }}
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-[#7A838D] shrink-0" />
-                <span className="text-xs text-[#7A838D]">Custom predicate...</span>
-              </button>
+              {/* 🔗 Relationship Claims */}
+              <div className="mb-2 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+                <button
+                  onClick={() => setRelOpen(o => !o)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 transition-all hover:bg-white/[0.02]"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">🔗</span>
+                    <div className="text-left">
+                      <p className="text-xs font-semibold text-white">Relationship Claims</p>
+                      <p className="text-[10px] text-[#4A5260]">Discovery &amp; connections between agents</p>
+                    </div>
+                  </div>
+                  <ChevronRight className={cn('w-3.5 h-3.5 text-[#4A5260] transition-transform shrink-0', relOpen && 'rotate-90')} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {relOpen && (
+                    <motion.div key="rel" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
+                      <div className="px-3 pb-3 pt-1">
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {PREDICATES.filter(p => p.group === 'relationship' && p.id !== 'custom').map(pred => {
+                            const selected = selectedPredicate?.id === pred.id
+                            return (
+                              <button
+                                key={pred.id}
+                                onClick={() => setSelectedPredicate(pred)}
+                                className="flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all"
+                                style={{
+                                  background: selected ? pred.color + '15' : 'rgba(255,255,255,0.02)',
+                                  border: selected ? `1px solid ${pred.color}40` : '1px solid rgba(255,255,255,0.05)',
+                                }}
+                              >
+                                <PredIcon name={pred.icon} className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: selected ? pred.color : '#7A838D' }} />
+                                <div className="min-w-0">
+                                  <div className="text-xs font-medium truncate" style={{ color: selected ? pred.color : '#B5BDC6' }}>{pred.label}</div>
+                                  <div className="text-[9px] text-[#4A5260] truncate">{pred.description}</div>
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* 💬 Opinion Claims */}
+              <div className="mb-3 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+                <button
+                  onClick={() => setOpnOpen(o => !o)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 transition-all hover:bg-white/[0.02]"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">💬</span>
+                    <div className="text-left">
+                      <p className="text-xs font-semibold text-white">Opinion Claims</p>
+                      <p className="text-[10px] text-[#4A5260]">Community can stake to agree/disagree</p>
+                    </div>
+                  </div>
+                  <ChevronRight className={cn('w-3.5 h-3.5 text-[#4A5260] transition-transform shrink-0', opnOpen && 'rotate-90')} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {opnOpen && (
+                    <motion.div key="opn" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
+                      <div className="px-3 pb-3 pt-1">
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {PREDICATES.filter(p => p.group === 'opinion').map(pred => {
+                            const selected = selectedPredicate?.id === pred.id
+                            return (
+                              <button
+                                key={pred.id}
+                                onClick={() => setSelectedPredicate(pred)}
+                                className="flex items-start gap-2 px-3 py-2.5 rounded-xl text-left transition-all"
+                                style={{
+                                  background: selected ? pred.color + '15' : 'rgba(255,255,255,0.02)',
+                                  border: selected ? `1px solid ${pred.color}40` : '1px solid rgba(255,255,255,0.05)',
+                                }}
+                              >
+                                <PredIcon name={pred.icon} className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: selected ? pred.color : '#7A838D' }} />
+                                <div className="min-w-0">
+                                  <div className="text-xs font-medium truncate" style={{ color: selected ? pred.color : '#B5BDC6' }}>{pred.label}</div>
+                                  <div className="text-[9px] text-[#4A5260] truncate">{pred.description}</div>
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <p className="text-[9px] mt-2" style={{ color: 'rgba(255,255,255,0.18)' }}>Stakeable opinions — community can agree or disagree</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Create custom predicate — always visible */}
+              {selectedPredicate?.id !== 'custom' && (
+                <button
+                  onClick={() => { setSelectedPredicate(PREDICATES.find(p => p.id === 'custom')!); setCustomPredicate('') }}
+                  className="w-full py-2 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 mb-3"
+                  style={{ background: 'rgba(46,230,214,0.07)', border: '1px dashed rgba(46,230,214,0.30)', color: '#2EE6D6' }}
+                >
+                  <Plus className="w-3.5 h-3.5" /> Create custom relationship
+                </button>
+              )}
 
               {selectedPredicate?.id === 'custom' && (
-                <input
-                  type="text"
-                  value={customPredicate}
-                  onChange={e => setCustomPredicate(e.target.value)}
-                  placeholder="e.g. isCompatibleWith"
-                  className="w-full px-3 py-2 rounded-lg text-xs outline-none mb-3"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#E8E8E8' }}
-                  autoFocus
-                />
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-3 rounded-xl p-3 space-y-2"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(46,230,214,0.25)' }}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold" style={{ color: '#2EE6D6' }}>Custom relationship</p>
+                    <button
+                      onClick={() => { setSelectedPredicate(null); setCustomPredicate('') }}
+                      className="p-0.5 rounded hover:bg-white/10 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5 text-[#7A838D]" />
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={customPredicate}
+                    onChange={e => setCustomPredicate(e.target.value)}
+                    placeholder="e.g. isCompatibleWith, dependsOn..."
+                    className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', color: '#E8E8E8' }}
+                    autoFocus
+                  />
+                  <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                    A new predicate atom will be created on-chain when you submit.
+                  </p>
+                </motion.div>
               )}
 
               <div className="flex gap-2">
@@ -455,7 +757,7 @@ export function CreateClaimForm({ onSuccess, onClose }: Props) {
               </div>
 
               <div className="flex items-center gap-3 mb-3">
-                <TabSwitch value={objectTab} onChange={v => { setObjectTab(v); setSelectedObject(null) }} />
+                <TabSwitch value={objectTab} onChange={v => { setObjectTab(v); setSelectedObject(null); setShowCreateObject(false) }} />
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4A5260]" />
                   <input
@@ -478,8 +780,39 @@ export function CreateClaimForm({ onSuccess, onClose }: Props) {
                 onSelect={setSelectedObject}
               />
 
+              {/* Create new — always visible at the bottom */}
+              {!showCreateObject && (
+                <button
+                  onClick={() => { setShowCreateObject(true); setNewAtomName(objectSearch.trim()) }}
+                  className="w-full mt-2 py-2 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5"
+                  style={{ background: 'rgba(56,182,255,0.07)', border: '1px dashed rgba(56,182,255,0.30)', color: '#38B6FF' }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {objectSearch.trim().length >= 2
+                    ? <>Create new {objectTab}: &ldquo;{objectSearch.trim()}&rdquo;</>
+                    : <>Create new {objectTab}</>
+                  }
+                </button>
+              )}
+              {showCreateObject && <CreateNewPanel forStep="object" tab={objectTab} />}
+
+              {/* Group context message */}
+              {selectedPredicate && selectedPredicate.id !== 'custom' && (
+                <div className="mt-3 px-3 py-2 rounded-xl text-[10px] font-medium flex items-center gap-2"
+                  style={{
+                    background: selectedPredicate.group === 'capability' ? 'rgba(245,158,11,0.08)' : selectedPredicate.group === 'opinion' ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.03)',
+                    border: selectedPredicate.group === 'capability' ? '1px solid rgba(245,158,11,0.20)' : '1px solid rgba(255,255,255,0.06)',
+                    color: selectedPredicate.group === 'capability' ? 'rgba(245,158,11,0.80)' : '#7A838D',
+                  }}
+                >
+                  {selectedPredicate.group === 'capability' && <span>⚡ This claim powers Domain Leaderboards &amp; Skill Breakdown scoring</span>}
+                  {selectedPredicate.group === 'relationship' && <span>🔗 Visible in agent connections — helps users discover related agents</span>}
+                  {selectedPredicate.group === 'opinion' && <span>💬 Community can stake to agree or disagree with this claim</span>}
+                </div>
+              )}
+
               {/* Cost + info */}
-              <div className="flex items-start gap-2.5 mt-4 p-3 rounded-xl text-[11px] text-[#7A838D] leading-relaxed"
+              <div className="flex items-start gap-2.5 mt-2 p-3 rounded-xl text-[11px] text-[#7A838D] leading-relaxed"
                 style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#C8963C]" />
                 <span>
