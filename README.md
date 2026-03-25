@@ -335,44 +335,76 @@ npm start            # Run production server
 
 ## Roadmap
 
-### Phase 1: Foundation & Marketplace ✅ Complete
-- [x] Core UI/UX with gold/dark design system
-- [x] Agent, Skill, Claims registration (on-chain Atoms & Triples)
-- [x] Staking via MultiVault bonding curves
-- [x] FeeProxy monetization (0.02 tTRUST + 2.5% per operation)
-- [x] On-chain pricing (MultiVault contract reads)
-- [x] Hybrid Trust Score (AGENTSCORE) with minimum gate
-- [x] Composite Trust Score (4 pillars) + time-weighted decay
-- [x] Trust Tiers (Unverified → Verified)
-- [x] User profiles, badges, leaderboard
-- [x] Slippage protection (2% tolerance from on-chain quotes)
-- [x] Platform documentation, Terms of Service, Privacy Policy
-- [x] Testnet deployment on Vercel
+### Phase 1 ✅ Complete: Trust Marketplace
+* Core UI/UX with gold/dark design system
+* Agent, Skill, Claims registration (on-chain Atoms & Triples with type tagging)
+* Staking via FeeProxy (hybrid model: create=direct MultiVault, deposit=FeeProxy)
+* FeeProxy monetization (0.02 tTRUST + 2.5% per operation)
+* On-chain pricing (MultiVault contract reads, bonding curves)
+* Hybrid Trust Score (AGENTSCORE): 60% economic confidence + 40% quality metrics + soft gate
+* Composite Trust Score (4 pillars): signal ratio (40%), staker diversity (25%), stability (25%), price retention (10%)
+* 5-layer anti-manipulation: soft gate, log diversity, min stake threshold, variance penalty, diversity-weighted ratio (whale detection on both sides)
+* Contextual Trust Scoring: per-skill trust breakdown via triple vaults — each `[Agent] [hasAgentSkill] [Skill]` triple scored independently
+* Agent Domains: domain leaderboards with per-domain agent rankings — "who is best FOR this skill?"
+* Momentum indicators + Trust Sparkline (trend visibility on agent cards and detail panels)
+* findOrCreateAtom(): mainnet-ready atom reuse (links to existing atoms instead of creating duplicates)
+* 90-day reputation half-life (time-weighted signals with freshness bonus)
+* Trust Tiers (Unverified → Sandbox → Trusted → Verified)
+* User profiles, badges, leaderboard
+* Slippage protection (2% tolerance from on-chain quotes)
+* Platform documentation, Terms of Service, Privacy Policy
+* Testnet deployment on Vercel
 
-### Phase 2: Mainnet + Trust API 🔧 In Progress
-- [ ] Custom indexer (FeeProxy TX → registrant mapping)
-- [ ] Mainnet deployment (AgentScoreFeeProxy redeploy + multisig)
-- [ ] Public Trust API (`/api/v1/trust/query?skill=X&minTrust=Y`)
-- [ ] MCP Server integration (AI agents query trust scores)
-- [ ] SDKs for LangChain, CrewAI, ElizaOS
-- [ ] Agent Domains (category-specific reputation markets)
-- [ ] Interactive API documentation (/api-docs)
-- [ ] Fee analytics dashboard
+### Phase 2 🔧 In Progress: Mainnet + Intelligence Layer
 
-### Phase 3: Autonomous Trust Network 🌐 Planned
-- [ ] Proof of Performance protocol (agents evaluate agents)
-- [ ] Task delegation & outcome reporting API
-- [ ] Trust Validators (weighted signals for experienced users)
-- [ ] Performance scoring (5th pillar in Composite Trust)
-- [ ] Autonomous trust graph growth (100K+ signals/month)
-- [ ] Research paper: "Autonomous Trust Networks on Intuition Protocol"
+**2.1 Mainnet Migration**
+* Branded AgentScoreFeeProxy (separate deploy, not shared with other apps)
+* Gnosis Safe multisig for fee recipient
+* Link to existing skills.sh atoms via findOrCreateAtom()
+* Tau parameter calibration (0.1 testnet → 50 mainnet)
+* Custom domain (agentscore.xyz)
 
-### Phase 4: Ecosystem 🔮 Future
-- [ ] DAO governance transition
-- [ ] Cross-protocol reputation portability
-- [ ] Partner integrations (agent frameworks, AI platforms)
-- [ ] Enterprise trust scoring API
-- [ ] ERC-8004 compatibility — AgentScore as reputation provider for the Trustless Agents standard (bridge Intuition trust scores to Ethereum/Base Identity and Reputation Registries)
+**2.2 Agent Identity Verification**
+* Optional social links at registration (GitHub, X, Website, Discord)
+* Stored as on-chain triples: `[Agent] [hasGithub] [url]`, `[Agent] [hasTwitter] [@handle]`
+* Verified badge for agents with 2+ verified social accounts (6+ months old)
+* Future: ZK-verified attestations (Gitcoin Passport or similar)
+* Credibility multiplier on Trust Tiers (verified = boost, unverified = baseline)
+
+**2.3 Trust API + MCP Server**
+* Public Trust API (`/api/v1/trust/query?skill=X&minTrust=Y`)
+* MCP tools for AI agents to query trust scores programmatically
+* Integration with Sofia MCP (EigenTrust, personalized trust, trust paths)
+* Interactive API documentation (/api-docs)
+
+**2.4 Accuracy-Weighted Staking**
+* Staker track record becomes influence weight (0.5x–1.5x)
+* Meritocratic: consistently good evaluators gain more influence over scores
+* Graph-based trust quality layer on top of EigenTrust traversal
+* Economic Sybil resistance: building weight requires many correct evaluations across many agents
+
+**2.5 Skill Standardization**
+* Canonical skill list synced with skills.sh mainnet atoms
+* Skill search and autocomplete at registration (no free-text duplicates)
+* Domain categories and tags for grouping
+
+### Phase 3 🌐 Planned: Autonomous Trust Graph
+* Proof of Performance protocol (agents evaluate agents, not just humans)
+* Task delegation & outcome reporting API
+* Trust Validators (weighted signals for experienced evaluators)
+* Performance scoring (5th pillar in Composite Trust)
+* Trust Path Explorer (visualize WHY someone is trusted, not just the score)
+* Graph-based trust propagation via EigenTrust integration
+* Cross-domain trust flows (reputation portability between domains)
+* SDKs for agent frameworks (LangChain, CrewAI, ElizaOS)
+
+### Phase 4 🔮 Future: Ecosystem Infrastructure
+* DAO governance transition for protocol parameters (fee rates, tier thresholds)
+* Cross-protocol reputation portability
+* Partner integrations (agent frameworks, AI platforms)
+* Enterprise trust scoring API (B2B trust-as-a-service)
+* ERC-8004 compatibility — AgentScore as reputation provider for Trustless Agents standard
+* SENSE integration (prediction market feeds into agent trust evolution timeline)
 
 ---
 
