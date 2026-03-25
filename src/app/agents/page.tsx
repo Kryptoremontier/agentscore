@@ -32,6 +32,7 @@ import { AGENT_WHERE_STR } from '@/lib/gql-filters'
 import { calculateSkillBreakdown, type SkillBreakdownResult } from '@/lib/skill-trust'
 import { fetchAgentSkillTriples } from '@/lib/intuition'
 import { SkillBreakdown } from '@/components/SkillBreakdown'
+import { TrustSparkline } from '@/components/TrustSparkline'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -68,6 +69,14 @@ export default function AgentsPage() {
       <AgentsPageContent />
     </Suspense>
   )
+}
+
+function getMomentumIndicator(momentum: number): { arrow: string; color: string; label: string } {
+  if (momentum > 2)   return { arrow: '↑',  color: '#22c55e', label: 'Rising' }
+  if (momentum > 0.5) return { arrow: '↗',  color: '#4ade80', label: 'Slightly rising' }
+  if (momentum < -2)  return { arrow: '↓',  color: '#ef4444', label: 'Falling' }
+  if (momentum < -0.5)return { arrow: '↘',  color: '#f87171', label: 'Slightly falling' }
+  return               { arrow: '→',  color: '#6b7280', label: 'Stable' }
 }
 
 function AgentsPageContent() {
@@ -1256,8 +1265,10 @@ function AgentsPageContent() {
   const hybridScore = useMemo((): number | null => {
     try {
       if (!agentTrust || !compositeTrust) return null
+      // Support positions are in the ATOM vault (selectedAgent.term_id), NOT the triple vault (agentTriple.termId).
+      // agentTriple.termId is the triple's own support-vault termId, which differs from the atom's termId.
       const supportPositions = allPositions.filter(
-        (p: any) => p.term_id === agentTriple.termId,
+        (p: any) => p.term_id === selectedAgent?.term_id,
       )
       const opposePositions = allPositions.filter(
         (p: any) => p.term_id === agentTriple.counterTermId,
@@ -2477,15 +2488,28 @@ function AgentsPageContent() {
                       </div>
 
                       {/* Score gauge */}
-                      <div className="flex items-end gap-4 mb-3">
-                        <p className="text-4xl font-bold text-white leading-none">{typeof score === 'number' ? score.toFixed(1) : score}</p>
-                        <p className="text-[#B5BDC6] text-xs pb-1">/100</p>
-                        {momentum !== 0 && (
-                          <span className={`text-xs font-medium pb-1 ${momentum > 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
-                            {momentum > 0 ? '▲' : '▼'} {Math.abs(momentum).toFixed(1)} momentum
-                          </span>
-                        )}
-                      </div>
+                      {(() => {
+                        const mi = getMomentumIndicator(momentum)
+                        const sparkData = buildTrustChartData(agentSignals, agentTriple.counterTermId)
+                          .map((d: { trustRatio: number }) => d.trustRatio)
+                          .slice(-10)
+                        return (
+                          <div className="flex items-center gap-3 mb-3">
+                            <p className="text-4xl font-bold text-white leading-none">{typeof score === 'number' ? score.toFixed(1) : score}</p>
+                            <span
+                              className="text-2xl leading-none"
+                              style={{ color: mi.color }}
+                              title={`${mi.label}${momentum !== 0 ? ` (${momentum > 0 ? '+' : ''}${momentum.toFixed(1)} pts)` : ''}`}
+                            >
+                              {mi.arrow}
+                            </span>
+                            {sparkData.length >= 2 && (
+                              <TrustSparkline datapoints={sparkData} color={mi.color} />
+                            )}
+                            <p className="text-[#B5BDC6] text-xs self-end pb-0.5">/100</p>
+                          </div>
+                        )
+                      })()}
 
                       {/* Score bar */}
                       <div className="w-full h-2 bg-[#1E2229] rounded-full overflow-hidden mb-2">
