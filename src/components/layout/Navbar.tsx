@@ -15,6 +15,7 @@ import {
   Zap,
   MessageSquare,
   Trophy,
+  Layers,
 } from 'lucide-react'
 import { WalletButton } from '@/components/wallet/WalletButton'
 import { SearchModal } from '@/components/shared/SearchModal'
@@ -111,7 +112,7 @@ function ExploreDropdown() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const isActive = pathname?.startsWith('/agents') || pathname?.startsWith('/skills') || pathname?.startsWith('/claims') || pathname?.startsWith('/leaderboard')
+  const isActive = pathname?.startsWith('/agents') || pathname?.startsWith('/skills') || pathname?.startsWith('/claims') || pathname?.startsWith('/leaderboard') || pathname?.startsWith('/domains')
 
   // Click outside to close
   useEffect(() => {
@@ -213,6 +214,26 @@ function ExploreDropdown() {
                 <div>
                   <p className="font-medium text-sm">Claims</p>
                   <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Agent-Skill relationship claims</p>
+                </div>
+              </Link>
+
+              <Link
+                href="/domains"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group',
+                  pathname?.startsWith('/domains')
+                    ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]'
+                    : 'hover:bg-white/5 text-[#B5BDC6] hover:text-white'
+                )}
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(139,92,246,0.10)', border: '1px solid rgba(139,92,246,0.22)', boxShadow: '0 0 10px rgba(139,92,246,0.12)' }}>
+                  <Layers className="w-4 h-4" style={{ color: '#8B5CF6' }} />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Domains</p>
+                  <p className="text-xs text-[#7A838D] group-hover:text-[#B5BDC6] transition-colors">Agent leaderboards by skill</p>
                 </div>
               </Link>
 
@@ -452,6 +473,18 @@ export function Navbar() {
                   )}
                 >
                   <MessageSquare className="w-5 h-5 text-[#38B6FF]" /> Claims
+                </Link>
+                <Link
+                  href="/domains"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all',
+                    pathname?.startsWith('/domains')
+                      ? 'text-[#8B5CF6] bg-[#8B5CF6]/10'
+                      : 'text-[#B5BDC6] hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  <Layers className="w-5 h-5 text-[#8B5CF6]" /> Domains
                 </Link>
                 <Link
                   href="/leaderboard"

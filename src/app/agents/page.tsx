@@ -33,6 +33,7 @@ import { calculateSkillBreakdown, type SkillBreakdownResult } from '@/lib/skill-
 import { fetchAgentSkillTriples } from '@/lib/intuition'
 import { SkillBreakdown } from '@/components/SkillBreakdown'
 import { TrustSparkline } from '@/components/TrustSparkline'
+import { AgentRadar } from '@/components/AgentRadar'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -2746,6 +2747,11 @@ function AgentsPageContent() {
                           {' '}to see per-skill trust scores.
                         </p>
                       </div>
+                    )}
+
+                    {/* Agent Radar — skill spider chart (3+ skills only) */}
+                    {skillBreakdown && skillBreakdown.skills.length >= 3 && (
+                      <AgentRadar skills={skillBreakdown.skills} />
                     )}
 
                     {/* Bonding Curve Charts */}

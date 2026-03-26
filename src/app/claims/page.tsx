@@ -1137,9 +1137,22 @@ function ClaimsPageContent() {
                   <CreateClaimForm
                     onSuccess={(claimTermId) => {
                       setShowCreateModal(false)
-                      setToast('Claim created on Intuition!')
-                      setTimeout(() => setToast(null), 4000)
-                      fetchClaims(searchTerm)
+                      setToast('Claim created! Syncing with indexer...')
+                      // Indexer lag: retry fetchClaims until claim appears (up to ~30s)
+                      let attempt = 0
+                      const delays = [3000, 5000, 7000, 10000, 10000]
+                      const poll = () => {
+                        fetchClaims(searchTerm).then(() => {
+                          attempt++
+                          if (attempt < delays.length) {
+                            setTimeout(poll, delays[attempt])
+                          } else {
+                            setToast('Claim created! It may take a moment to appear.')
+                            setTimeout(() => setToast(null), 5000)
+                          }
+                        })
+                      }
+                      setTimeout(poll, delays[0])
                     }}
                     onClose={() => setShowCreateModal(false)}
                   />
@@ -1153,7 +1166,7 @@ function ClaimsPageContent() {
       {/* ── Claim Detail Modal ── */}
       {selectedClaim && (
         <div
-          className="fixed inset-0 top-[64px] z-[55] overflow-y-auto"
+          className="fixed inset-0 top-16 lg:top-20 z-[30] overflow-y-auto"
           style={{
             backgroundColor: '#0A0C0E',
             backgroundImage: "linear-gradient(rgba(10,10,15,0.75), rgba(10,10,15,0.75)), url('/images/brand/gold/background.png')",

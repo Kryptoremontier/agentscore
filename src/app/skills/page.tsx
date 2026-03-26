@@ -1641,7 +1641,7 @@ function SkillsPageContent() {
       {/* Skill Detail Modal */}
       {selectedSkill && (
         <div
-          className="fixed inset-0 top-[64px] z-[55] overflow-y-auto"
+          className="fixed inset-0 top-16 lg:top-20 z-[30] overflow-y-auto"
           style={{
             backgroundColor: '#0A0C0E',
             backgroundImage: "linear-gradient(rgba(10,10,15,0.75), rgba(10,10,15,0.75)), url('/images/brand/gold/background.png')",
