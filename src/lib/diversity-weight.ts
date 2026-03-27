@@ -30,10 +30,16 @@ export function getDiversityWeight(stakerShares: bigint, totalShares: bigint): n
  * getDiversityWeight(). The final ratio is: weightedSupport / weightedTotal × 100.
  *
  * Falls back to 50 (neutral) when there is no stake on either side.
+ *
+ * Optional evaluatorWeights: Map<account_id, evaluatorWeight (0.5–1.5)>
+ * When provided, each staker's effective stake is further multiplied by their
+ * evaluator weight (track record accuracy). Default weight = 1.0 (neutral).
+ * Backward compatible — omit evaluatorWeights to preserve original behavior.
  */
 export function calculateDiversityWeightedRatio(
   supportPositions: StakerPosition[],
   opposePositions: StakerPosition[],
+  evaluatorWeights?: Map<string, number>,
 ): number {
   const toWeighted = (positions: StakerPosition[]): number => {
     if (positions.length === 0) return 0
@@ -44,8 +50,9 @@ export function calculateDiversityWeightedRatio(
     return positions.reduce((acc, p) => {
       try {
         const shares = BigInt(p.shares || '0')
-        const weight = getDiversityWeight(shares, total)
-        return acc + Number(shares) * weight
+        const diversityW = getDiversityWeight(shares, total)
+        const evaluatorW = evaluatorWeights?.get(p.account_id.toLowerCase()) ?? 1.0
+        return acc + Number(shares) * diversityW * evaluatorW
       } catch { return acc }
     }, 0)
   }

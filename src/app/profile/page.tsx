@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useAccount } from 'wagmi'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Settings, Bot, TrendingUp, Award, BarChart2 } from 'lucide-react'
+import { Settings, Bot, TrendingUp, Award, BarChart2, Target } from 'lucide-react'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { ProfileHeader } from '@/components/profile/ProfileHeader'
 import { ProfileStats } from '@/components/profile/ProfileStats'
@@ -12,13 +12,16 @@ import { MySupportedAgents } from '@/components/profile/MySupportedAgents'
 import { MyBadges } from '@/components/profile/MyBadges'
 import { ProfileSettings } from '@/components/profile/ProfileSettings'
 import { PnLTab } from '@/components/profile/PnLTab'
+import { EvaluatorCard } from '@/components/profile/EvaluatorCard'
 import { cn } from '@/lib/cn'
 import { useUserProfile } from '@/hooks/useUserProfile'
+import { useEvaluatorScore } from '@/hooks/useEvaluatorScore'
 
 const PROFILE_TABS = [
   { id: 'agents',     label: 'My Agents',  icon: Bot,        color: '#C8963C' },
   { id: 'supporting', label: 'Supporting', icon: TrendingUp, color: '#4ADE80' },
   { id: 'pnl',        label: 'P&L',        icon: BarChart2,  color: '#38BDF8' },
+  { id: 'evaluator',  label: 'Evaluator',  icon: Target,     color: '#F59E0B' },
   { id: 'badges',     label: 'Badges',     icon: Award,      color: '#A78BFA' },
   { id: 'settings',   label: 'Settings',   icon: Settings,   color: '#7A838D' },
 ] as const
@@ -36,11 +39,12 @@ function ProfilePageContent() {
   const searchParams = useSearchParams()
   const { address, isConnected } = useAccount()
   const { profile, isLoading, updateProfile } = useUserProfile(address)
+  const { profile: evaluatorProfile, loading: evaluatorLoading } = useEvaluatorScore(address)
   const [mounted, setMounted] = useState(false)
 
   const defaultTab = useMemo(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['agents', 'supporting', 'pnl', 'badges', 'settings'].includes(tab)) return tab as typeof PROFILE_TABS[number]['id']
+    if (tab && ['agents', 'supporting', 'pnl', 'evaluator', 'badges', 'settings'].includes(tab)) return tab as typeof PROFILE_TABS[number]['id']
     return 'agents' as typeof PROFILE_TABS[number]['id']
   }, [searchParams])
 
@@ -119,6 +123,9 @@ function ProfilePageContent() {
           isLoading
             ? <TabSkeleton />
             : <PnLTab positions={profile.pnlPositions} />
+        )}
+        {activeTab === 'evaluator' && (
+          <EvaluatorCard profile={evaluatorProfile} loading={evaluatorLoading} />
         )}
         {activeTab === 'badges' && (
           isLoading
