@@ -122,13 +122,13 @@ All pricing data read directly from MultiVault contract — no local approximati
 │                      FRONTEND                             │
 │             Next.js 14 · TypeScript · Tailwind            │
 │                                                           │
-│  ┌──────────┬──────────┬──────────┬──────────┬─────────┐ │
-│  │  Landing │  Agents  │  Skills  │  Claims  │ Profile │ │
-│  │  Page    │  Explorer│  Explorer│  Registry│ Badges  │ │
-│  └──────────┴──────────┴──────────┴──────────┴─────────┘ │
-│  ┌──────────┬──────────┬──────────┬──────────┐           │
-│  │ Register │  Docs    │Leaderboard│  /terms │           │
-│  └──────────┴──────────┴──────────┴──────────┘           │
+│  ┌─────────┬─────────┬─────────┬─────────┬──────────────┐ │
+│  │ Landing │ Agents  │ Skills  │ Claims  │   Profile    │ │
+│  │ Page    │ Explorer│ Explorer│ Registry│   Badges     │ │
+│  └─────────┴─────────┴─────────┴─────────┴──────────────┘ │
+│  ┌─────────┬─────────┬─────────┬─────────┬──────────────┐ │
+│  │Register │  Docs   │Leaderboard│Domains│  Evaluators  │ │
+│  └─────────┴─────────┴─────────┴─────────┴──────────────┘ │
 │                                                           │
 │        wagmi v2 + viem + on-chain-pricing.ts              │
 └──────────┬────────────────────────┬───────────────────────┘
@@ -343,9 +343,12 @@ npm start            # Run production server
 * On-chain pricing (MultiVault contract reads, bonding curves)
 * Hybrid Trust Score (AGENTSCORE): 60% economic confidence + 40% quality metrics + soft gate
 * Composite Trust Score (4 pillars): signal ratio (40%), staker diversity (25%), stability (25%), price retention (10%)
-* 5-layer anti-manipulation: soft gate, log diversity, min stake threshold, variance penalty, diversity-weighted ratio (whale detection on both sides)
+* 6-layer anti-manipulation: soft gate, log diversity, min stake threshold, variance penalty, diversity-weighted ratio (whale detection on both sides), accuracy-weighted staking (evaluator quality)
 * Contextual Trust Scoring: per-skill trust breakdown via triple vaults — each `[Agent] [hasAgentSkill] [Skill]` triple scored independently
 * Agent Domains: domain leaderboards with per-domain agent rankings — "who is best FOR this skill?"
+* Accuracy-Weighted Staking (Evaluator System): staker track record determines influence weight (0.5x–1.5x), evaluator tiers (Newcomer→Scout→Analyst→Oracle→Sage), /evaluators leaderboard
+* Radar chart for agents with 3+ skills (visual skill profile)
+* Navigation redesign: left sidebar (always expanded) + mobile bottom tab bar
 * Momentum indicators + Trust Sparkline (trend visibility on agent cards and detail panels)
 * findOrCreateAtom(): mainnet-ready atom reuse (links to existing atoms instead of creating duplicates)
 * 90-day reputation half-life (time-weighted signals with freshness bonus)
@@ -377,11 +380,12 @@ npm start            # Run production server
 * Integration with Sofia MCP (EigenTrust, personalized trust, trust paths)
 * Interactive API documentation (/api-docs)
 
-**2.4 Accuracy-Weighted Staking**
-* Staker track record becomes influence weight (0.5x–1.5x)
-* Meritocratic: consistently good evaluators gain more influence over scores
-* Graph-based trust quality layer on top of EigenTrust traversal
-* Economic Sybil resistance: building weight requires many correct evaluations across many agents
+**2.4 Accuracy-Weighted Staking ✅ Live** *(moved to Phase 1)*
+* Staker track record determines influence weight (0.5x–1.5x) — Live
+* Evaluator tiers: Newcomer→Scout→Analyst→Oracle→Sage — Live
+* /evaluators leaderboard — Live
+* Graph-based trust quality layer on top of EigenTrust traversal — Planned
+* Economic Sybil resistance: building weight requires many correct evaluations across many agents — Planned
 
 **2.5 Skill Standardization**
 * Canonical skill list synced with skills.sh mainnet atoms
