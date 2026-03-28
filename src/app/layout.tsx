@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Providers } from './providers'
 import { Navbar } from '@/components/layout/Navbar'
+import { Sidebar } from '@/components/layout/Sidebar'
 import { Footer } from '@/components/layout/Footer'
 import { MobileBottomNav } from '@/components/layout/MobileNav'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
@@ -79,14 +80,19 @@ export default function RootLayout({
           <div className="relative min-h-screen text-white">
             {/* Dark overlay to dim the background image */}
             <div className="fixed inset-0 bg-[rgb(10,10,15)]/75 pointer-events-none z-0" />
-            {/* Navbar is outside ErrorBoundary — stays visible even if a page crashes */}
+            {/* Navbar stays visible even if a page crashes */}
             <Navbar />
-            <main className="relative">
-              <ErrorBoundary>
-                {children}
-              </ErrorBoundary>
-            </main>
-            <Footer />
+            {/* Sidebar — desktop only, collapsed 56px, hover-expanded */}
+            <Sidebar />
+            {/* Content area — offset by sidebar on desktop */}
+            <div className="md:pl-56">
+              <main className="relative">
+                <ErrorBoundary>
+                  {children}
+                </ErrorBoundary>
+              </main>
+              <Footer />
+            </div>
             <MobileBottomNav />
             <ScrollToTop />
           </div>

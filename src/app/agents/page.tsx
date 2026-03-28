@@ -16,6 +16,7 @@ import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
 import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
+import { useAgentStakerWeights } from '@/hooks/useEvaluatorScore'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
 import { calculateWeightedTrust } from '@/lib/reputation-decay'
 import {
@@ -162,6 +163,20 @@ function AgentsPageContent() {
     tradeAction === 'sell' ? activeVaultId : undefined,
     tradeAction === 'sell' ? (Number(redeemShares) || 0) : undefined,
   )
+
+  // Unique staker addresses for selected agent (support + oppose), capped at 20
+  const agentStakerAddresses = useMemo(() => {
+    if (!selectedAgent?.term_id) return []
+    const seen = new Set<string>()
+    for (const p of allPositions) {
+      const id = p.account_id?.toLowerCase()
+      if (id) seen.add(id)
+    }
+    return Array.from(seen).slice(0, 20)
+  }, [allPositions, selectedAgent?.term_id])
+
+  // Evaluator weights for all stakers of current agent
+  const { weights: evaluatorWeights } = useAgentStakerWeights(agentStakerAddresses)
 
   // Load platform fee config from FeeProxy contract (once per session)
   useEffect(() => {
@@ -1275,7 +1290,7 @@ function AgentsPageContent() {
         (p: any) => p.term_id === agentTriple.counterTermId,
       )
       const supportRatio = (supportPositions.length > 0 || opposePositions.length > 0)
-        ? calculateDiversityWeightedRatio(supportPositions, opposePositions)
+        ? calculateDiversityWeightedRatio(supportPositions, opposePositions, evaluatorWeights)
         : (() => {
             const totalWei = agentTrust.supportStake + agentTrust.opposeStake
             return totalWei > 0n ? Number((agentTrust.supportStake * 100n) / totalWei) : 50
@@ -1285,7 +1300,7 @@ function AgentsPageContent() {
       console.error('[hybridScore]', e)
       return null
     }
-  }, [agentTrust, compositeTrust, allPositions, agentTriple.termId, agentTriple.counterTermId])
+  }, [agentTrust, compositeTrust, allPositions, agentTriple.termId, agentTriple.counterTermId, evaluatorWeights])
 
   // ─── Skill Trust Breakdown ───
   const skillBreakdown = useMemo((): SkillBreakdownResult | null => {

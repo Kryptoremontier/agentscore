@@ -1,8 +1,16 @@
 'use client'
 
-import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile } from '@/lib/evaluator-score'
+import { Shield, Eye, BookOpen, Sparkles, Crown, Flame, Loader2 } from 'lucide-react'
+import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile, type EvaluatorTier } from '@/lib/evaluator-score'
 import { cn } from '@/lib/cn'
-import { Loader2 } from 'lucide-react'
+
+const TIER_ICONS: Record<EvaluatorTier, React.ElementType> = {
+  newcomer: Shield,
+  scout:    Eye,
+  analyst:  BookOpen,
+  oracle:   Sparkles,
+  sage:     Crown,
+}
 
 interface EvaluatorCardProps {
   profile: EvaluatorProfile | null
@@ -46,7 +54,7 @@ export function EvaluatorCard({ profile, loading }: EvaluatorCardProps) {
       <div className="px-5 py-4 flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl">{cfg.icon}</span>
+            {(() => { const Icon = TIER_ICONS[profile.evaluatorTier]; return <Icon className={cn('w-5 h-5', cfg.color)} /> })()}
             <span className={cn('text-xl font-bold', cfg.color)}>{cfg.label}</span>
           </div>
           <p className="text-xs text-[#7A838D]">{cfg.description}</p>
@@ -65,10 +73,13 @@ export function EvaluatorCard({ profile, loading }: EvaluatorCardProps) {
                 />
               </div>
               {profile.totalPositions > 0 && (
-                <p className="text-[11px] text-[#7A838D] mt-1.5">
+                <p className="text-[11px] text-[#7A838D] mt-1.5 flex items-center gap-1">
                   {profile.goodPicks} correct · {profile.totalPositions} total
                   {profile.streakCount > 1 && (
-                    <span className="ml-2 text-amber-400">🔥 {profile.streakCount} streak</span>
+                    <span className="ml-1 text-[#C8963C] inline-flex items-center gap-0.5">
+                      <Flame className="w-3 h-3" />
+                      {profile.streakCount} streak
+                    </span>
                   )}
                 </p>
               )}
@@ -132,15 +143,15 @@ function StatRow({ label, value, truncate }: { label: string; value: string; tru
 }
 
 function getWeightColor(weight: number): string {
-  if (weight >= 1.3) return 'text-emerald-400'
-  if (weight >= 1.1) return 'text-amber-400'
+  if (weight >= 1.3) return 'text-[#2ECC71]'
+  if (weight >= 1.1) return 'text-[#C8963C]'
   if (weight >= 1.0) return 'text-white/60'
   return 'text-red-400'
 }
 
 function getBarColor(accuracy: number): string {
-  if (accuracy >= 0.8) return 'bg-emerald-500'
-  if (accuracy >= 0.6) return 'bg-amber-500'
+  if (accuracy >= 0.8) return 'bg-[#2ECC71]'
+  if (accuracy >= 0.6) return 'bg-[#C8963C]'
   if (accuracy >= 0.4) return 'bg-yellow-500'
   return 'bg-red-500'
 }

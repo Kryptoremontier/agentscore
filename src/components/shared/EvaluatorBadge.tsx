@@ -1,7 +1,16 @@
 'use client'
 
+import { Shield, Eye, BookOpen, Sparkles, Crown } from 'lucide-react'
 import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile, type EvaluatorTier } from '@/lib/evaluator-score'
 import { cn } from '@/lib/cn'
+
+const TIER_ICONS: Record<EvaluatorTier, React.ElementType> = {
+  newcomer: Shield,
+  scout:    Eye,
+  analyst:  BookOpen,
+  oracle:   Sparkles,
+  sage:     Crown,
+}
 
 interface EvaluatorBadgeProps {
   profile: EvaluatorProfile
@@ -12,17 +21,20 @@ interface EvaluatorBadgeProps {
 /**
  * EvaluatorBadge — compact pill showing evaluator tier, accuracy, and weight.
  *
- * sm  → icon + tier name only (for staker lists)
- * md  → icon + tier + accuracy% (for profile)
- * lg  → full with weight multiplier (for leaderboard)
+ * sm  → icon + tier name only
+ * md  → icon + tier + accuracy%
+ * lg  → icon + tier + accuracy% + weight multiplier
  */
 export function EvaluatorBadge({ profile, size = 'md', className }: EvaluatorBadgeProps) {
   const cfg = EVALUATOR_TIER_CONFIG[profile.evaluatorTier]
+  const Icon = TIER_ICONS[profile.evaluatorTier]
   const accuracyPct = Math.round(profile.adjustedAccuracy * 100)
   const weightColor = getWeightColor(profile.evaluatorWeight)
 
+  const iconSize = size === 'sm' ? 10 : size === 'md' ? 11 : 12
+
   const tooltipText = [
-    `${cfg.icon} ${cfg.label} evaluator`,
+    `${cfg.label} evaluator`,
     `${accuracyPct}% accuracy across ${profile.totalPositions} evaluation${profile.totalPositions !== 1 ? 's' : ''}`,
     `Staking weight: ${profile.evaluatorWeight.toFixed(2)}x`,
     profile.streakCount > 1 ? `${profile.streakCount} pick streak` : '',
@@ -38,19 +50,19 @@ export function EvaluatorBadge({ profile, size = 'md', className }: EvaluatorBad
         className,
       )}
     >
-      <span>{cfg.icon}</span>
+      <Icon style={{ width: iconSize, height: iconSize }} className={cfg.color} />
       <span className={cfg.color}>{cfg.label}</span>
 
       {size !== 'sm' && (
-        <span className="text-white/40">·</span>
-      )}
-      {size !== 'sm' && (
-        <span className={cfg.color}>{accuracyPct}%</span>
+        <>
+          <span className="text-white/30">·</span>
+          <span className={cfg.color}>{accuracyPct}%</span>
+        </>
       )}
 
       {size === 'lg' && (
         <>
-          <span className="text-white/40">·</span>
+          <span className="text-white/30">·</span>
           <span className={weightColor}>{profile.evaluatorWeight.toFixed(2)}x</span>
         </>
       )}
@@ -59,8 +71,8 @@ export function EvaluatorBadge({ profile, size = 'md', className }: EvaluatorBad
 }
 
 function getWeightColor(weight: number): string {
-  if (weight >= 1.3) return 'text-emerald-400'
-  if (weight >= 1.1) return 'text-amber-400'
+  if (weight >= 1.3) return 'text-[#2ECC71]'
+  if (weight >= 1.1) return 'text-[#C8963C]'
   if (weight >= 1.0) return 'text-white/60'
   return 'text-red-400'
 }

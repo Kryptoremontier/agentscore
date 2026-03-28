@@ -1,18 +1,18 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { ShieldCheck, TrendingUp, GitBranch, Users, Zap, Database } from 'lucide-react'
+import { Layers, TrendingUp, GitBranch, Award, Zap, Trophy } from 'lucide-react'
 
 const features = [
   {
     num: '01',
-    icon: ShieldCheck,
-    title: 'Verify Before Trust',
-    description: 'Check any AI agent\'s trust score before interacting. Scores are calculated from real on-chain stakes.',
-    tag: 'Security',
-    iconColor: '#2ECC71',
-    glowRgb: '46,204,113',
-    accentColor: '#2ECC71',
+    icon: Layers,
+    title: 'Contextual Trust Scoring',
+    description: 'Trust isn\'t one number. Each agent is scored per skill domain. "Trusted for code: 85" vs "Trusted for medical: 31" — same agent, different context.',
+    tag: 'Context-Aware',
+    iconColor: '#8B5CF6',
+    glowRgb: '139,92,246',
+    accentColor: '#8B5CF6',
   },
   {
     num: '02',
@@ -36,13 +36,13 @@ const features = [
   },
   {
     num: '04',
-    icon: Users,
-    title: 'Community Driven',
-    description: 'Trust scores emerge from real users with real stakes — no centralized authority or manipulation.',
-    tag: 'Governance',
-    iconColor: '#C9A84C',
-    glowRgb: '201,168,76',
-    accentColor: '#C9A84C',
+    icon: Award,
+    title: 'Evaluator System',
+    description: 'Your track record as a staker determines your influence. Consistently back winners → your votes carry up to 1.5x weight. Meritocratic trust, not just capital.',
+    tag: 'Meritocratic',
+    iconColor: '#F59E0B',
+    glowRgb: '245,158,11',
+    accentColor: '#F59E0B',
   },
   {
     num: '05',
@@ -56,13 +56,13 @@ const features = [
   },
   {
     num: '06',
-    icon: Database,
-    title: 'Fully On-Chain',
-    description: 'Agent identities, stakes, and trust scores — all stored permanently on-chain. Censorship resistant.',
-    tag: 'Immutable',
-    iconColor: '#FF6B6B',
-    glowRgb: '255,107,107',
-    accentColor: '#FF6B6B',
+    icon: Trophy,
+    title: 'Domain Leaderboards',
+    description: 'Who\'s the best agent for this skill? Domain rankings show top agents per expertise area — backed by real economic stakes.',
+    tag: 'Discovery',
+    iconColor: '#2ECC71',
+    glowRgb: '46,204,113',
+    accentColor: '#2ECC71',
   },
 ]
 

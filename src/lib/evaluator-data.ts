@@ -15,7 +15,13 @@
  */
 
 import { APP_CONFIG } from './app-config'
-import { AGENT_WHERE_STR, AGENT_VAULT_POSITION_STR } from './gql-filters'
+import { AGENT_WHERE_STR } from './gql-filters'
+
+// Lightweight position filter for leaderboard — label prefix only.
+// AGENT_VAULT_POSITION_STR includes as_subject_triples in WHERE which causes
+// GraphQL timeouts at limit:1500. Label prefix is fast (indexed) and covers
+// all AgentScore-created agents on testnet.
+const LEADERBOARD_POSITION_FILTER = `shares: { _gt: "0" } vault: { term: { atom: { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } } } }`
 import { calculateEvaluatorScore, type StakerPosition, type EvaluatorProfile } from './evaluator-score'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -175,7 +181,7 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
     const data = await gql<{ positions: PosRow[] }>(`
       {
         positions(
-          where: { ${AGENT_VAULT_POSITION_STR} }
+          where: { ${LEADERBOARD_POSITION_FILTER} }
           limit: 1500
         ) {
           account_id
