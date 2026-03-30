@@ -658,6 +658,19 @@ export async function getEvaluators(options: {
   })
 }
 
+/**
+ * Alias used by MCP handler — wraps getEvaluators with single-tier string param.
+ */
+export async function getEvaluatorLeaderboard(options: {
+  minAccuracy?: number
+  tier?: string
+  limit?: number
+} = {}) {
+  const { minAccuracy, tier, limit } = options
+  const tiers = tier ? [tier as EvaluatorTier] : undefined
+  return getEvaluators({ minAccuracy, tiers, limit })
+}
+
 export async function getEvaluatorProfile(address: string) {
   // Fetch leaderboard and individual positions in parallel
   const [leaderboard, positions] = await Promise.all([
