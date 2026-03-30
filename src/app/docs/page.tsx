@@ -6,7 +6,7 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import {
   Bot, Zap, MessageSquare, TrendingUp, ShieldCheck, Database, GitBranch,
   Users, Layers, ScanLine, ChevronRight, DollarSign, Target, Globe,
-  Code, ExternalLink, BookOpen,
+  Code, ExternalLink, BookOpen, Plug,
 } from 'lucide-react'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,6 +60,7 @@ const TABS = [
   { id: 'domains',    label: 'Domains',           icon: Globe },
   { id: 'fees',       label: 'Fee Model',         icon: DollarSign },
   { id: 'contracts',  label: 'Smart Contracts',   icon: Code },
+  { id: 'api',        label: 'API & MCP',         icon: Plug },
 ]
 
 // ─── Tab content ──────────────────────────────────────────────────────────────
@@ -855,6 +856,100 @@ function TabFees() {
   )
 }
 
+function TabApiMcp() {
+  const restEndpoints = [
+    { method: 'GET', path: '/api/v1/agents',                  desc: 'List agents (sort, minTrust, limit, offset)' },
+    { method: 'GET', path: '/api/v1/agents/:id',              desc: 'Agent detail by termId' },
+    { method: 'GET', path: '/api/v1/agents/:id/trust',        desc: 'Deep trust breakdown with evaluator weights' },
+    { method: 'GET', path: '/api/v1/skills',                  desc: 'List all registered skills' },
+    { method: 'GET', path: '/api/v1/skills/:id',              desc: 'Skill detail with agent count' },
+    { method: 'GET', path: '/api/v1/domains',                 desc: 'List skill domains with top agents' },
+    { method: 'GET', path: '/api/v1/domains/:id/agents',      desc: 'Domain leaderboard (agents by domain score)' },
+    { method: 'GET', path: '/api/v1/evaluators',              desc: 'Evaluator leaderboard (accuracy-ranked)' },
+    { method: 'GET', path: '/api/v1/evaluators/:address',     desc: 'Evaluator profile with track record' },
+    { method: 'GET', path: '/api/v1/trust/query',             desc: 'Lens query: filter by skill, minTrust, minStakers' },
+    { method: 'GET', path: '/api/v1/stats',                   desc: 'Platform stats (agents, domains, total staked)' },
+    { method: 'GET', path: '/api/v1',                         desc: 'API index — endpoint directory' },
+  ]
+  const mcpTools = [
+    { name: 'search_agents',      desc: 'Search agents by score, stakers, or newest' },
+    { name: 'get_agent_trust',    desc: 'Full trust breakdown for a specific agent' },
+    { name: 'get_domain_ranking', desc: 'Top agents in a skill domain' },
+    { name: 'list_domains',       desc: 'All domains with stats and top agents' },
+    { name: 'trust_query',        desc: 'Main lens — filter by skill, trust, stakers' },
+    { name: 'get_evaluator',      desc: 'Evaluator accuracy profile and track record' },
+    { name: 'top_evaluators',     desc: 'Evaluator leaderboard by accuracy' },
+    { name: 'compare_agents',     desc: 'Side-by-side comparison of 2–5 agents' },
+    { name: 'platform_stats',     desc: 'Ecosystem overview (agents, stake, top agent)' },
+  ]
+  return (
+    <div className="grid gap-5">
+
+      {/* REST API */}
+      <DocCard>
+        <SectionTitle icon={Plug} color="#38B6FF" label="Trust API — REST Endpoints" />
+        <p className="text-sm text-[#8B949E] mb-5">
+          Public, read-only REST API. All endpoints support CORS and return{' '}
+          <code className="text-[#38B6FF] bg-white/5 px-1 py-0.5 rounded text-xs">{'{ success, data, meta }'}</code>.
+          Responses are cached for 15 seconds on the CDN edge.
+        </p>
+        <div className="space-y-2">
+          {restEndpoints.map(ep => (
+            <div key={ep.path} className="flex items-start gap-3 py-2 border-b border-white/5 last:border-0">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5"
+                style={{ background: 'rgba(56,182,255,0.12)', color: '#38B6FF', border: '1px solid rgba(56,182,255,0.25)' }}>
+                {ep.method}
+              </span>
+              <code className="text-[#C8963C] text-xs font-mono shrink-0">{ep.path}</code>
+              <span className="text-[#6B7480] text-xs">{ep.desc}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 p-3 rounded-xl text-xs text-[#6B7480]"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          Base URL: <code className="text-[#38B6FF]">https://agentscore-gilt.vercel.app</code>
+        </div>
+      </DocCard>
+
+      {/* MCP Server */}
+      <DocCard>
+        <SectionTitle icon={Bot} color="#C8963C" label="MCP Server — AI Agent Tools" />
+        <p className="text-sm text-[#8B949E] mb-5">
+          Model Context Protocol server for AI agents. Connect your LLM to AgentScore trust data
+          using the{' '}
+          <code className="text-[#C8963C] bg-white/5 px-1 py-0.5 rounded text-xs">Streamable HTTP</code>{' '}
+          transport. Endpoint:{' '}
+          <code className="text-[#C8963C] bg-white/5 px-1 py-0.5 rounded text-xs">/api/mcp/mcp</code>
+        </p>
+        <div className="space-y-2 mb-5">
+          {mcpTools.map(tool => (
+            <div key={tool.name} className="flex items-start gap-3 py-2 border-b border-white/5 last:border-0">
+              <code className="text-[#C8963C] text-xs font-mono shrink-0">{tool.name}</code>
+              <span className="text-[#6B7480] text-xs">{tool.desc}</span>
+            </div>
+          ))}
+        </div>
+        <Formula label="Connect via MCP config">
+          {`{`}<br />
+          &nbsp;&nbsp;{`"mcpServers": {`}<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;{`"agentscore": {`}<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{`"type": "http",`}<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{`"url": "https://agentscore-gilt.vercel.app/api/mcp/mcp"`}<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;{`}`}<br />
+          &nbsp;&nbsp;{`}`}<br />
+          {`}`}
+        </Formula>
+        <div className="p-3 rounded-xl text-xs text-[#6B7480]"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          Compatible with Claude Desktop, Claude Code, Cursor, and any MCP-enabled client.
+          Tools include 6-layer anti-manipulation scoring data.
+        </div>
+      </DocCard>
+
+    </div>
+  )
+}
+
 function TabContracts() {
   const explorer = 'https://testnet.explorer.intuition.systems/address/'
   const contracts = [
@@ -1080,6 +1175,7 @@ export default function DocsPage() {
           {activeTab === 'domains'    && <TabDomains />}
           {activeTab === 'fees'       && <TabFees />}
           {activeTab === 'contracts'  && <TabContracts />}
+          {activeTab === 'api'        && <TabApiMcp />}
 
         </div>
       </div>

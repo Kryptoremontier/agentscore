@@ -248,6 +248,12 @@ Unlike applications using local bonding curve approximations, AgentScore reads a
 | Fee breakdown in UI (transparent pricing) | ✅ Live |
 | Contract links in footer | ✅ Live |
 
+### Integrations
+| Feature | Status |
+|---------|--------|
+| Trust API (12 REST endpoints at `/api/v1/`) | ✅ Live |
+| MCP Server (9 tools for AI agents at `/api/mcp/mcp`) | ✅ Live |
+
 ---
 
 ## Bonding Curve Economics
@@ -374,11 +380,11 @@ npm start            # Run production server
 * Future: ZK-verified attestations (Gitcoin Passport or similar)
 * Credibility multiplier on Trust Tiers (verified = boost, unverified = baseline)
 
-**2.3 Trust API + MCP Server**
-* Public Trust API (`/api/v1/trust/query?skill=X&minTrust=Y`)
-* MCP tools for AI agents to query trust scores programmatically
-* Integration with Sofia MCP (EigenTrust, personalized trust, trust paths)
-* Interactive API documentation (/api-docs)
+**2.3 Trust API + MCP Server ✅ Live**
+* Trust API: 12 REST endpoints at `/api/v1/`
+* MCP Server: 9 tools at `/api/mcp/mcp`
+* Integration with Sofia MCP (EigenTrust, personalized trust, trust paths) — Planned
+* Interactive API documentation (/api-docs) — Planned
 
 **2.4 Accuracy-Weighted Staking ✅ Live** *(moved to Phase 1)*
 * Staker track record determines influence weight (0.5x–1.5x) — Live
