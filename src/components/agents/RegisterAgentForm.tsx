@@ -1,7 +1,11 @@
 'use client'
 
-import { useState, useMemo, useEffect, KeyboardEvent } from 'react'
-import { ChevronDown, X, Plus, Loader2 } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef, KeyboardEvent } from 'react'
+import {
+  ChevronDown, X, Loader2,
+  Bot, Zap, Link2, GitBranch, MessageSquare, Lightbulb,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient, useSwitchChain } from 'wagmi'
 import { intuitionTestnet } from '@0xintuition/protocol'
 import { parseEther } from 'viem'
@@ -126,8 +130,9 @@ function CompletenessBar({ pct, isA2AReady, nextMissing }: { pct: number; isA2AR
         />
       </div>
       {nextMissing && pct < 100 && (
-        <p className="text-xs text-[#7A838D]">
-          💡 Add <span className="text-[#C8963C]">{nextMissing}</span> to increase completeness
+        <p className="text-xs text-[#7A838D] flex items-center gap-1.5">
+          <Lightbulb className="w-3 h-3 text-[#C8963C] flex-shrink-0" />
+          Add <span className="text-[#C8963C]">{nextMissing}</span> to increase completeness
         </p>
       )}
     </div>
@@ -137,9 +142,10 @@ function CompletenessBar({ pct, isA2AReady, nextMissing }: { pct: number; isA2AR
 // ─── Section Header ───────────────────────────────────────────────────────��──
 
 function SectionHeader({
-  icon, label, badge, expanded, filled, partial, toggle,
+  icon: Icon, iconColor, label, badge, expanded, filled, partial, toggle,
 }: {
-  icon: string
+  icon: LucideIcon
+  iconColor: string
   label: string
   badge?: string
   expanded: boolean
@@ -154,8 +160,14 @@ function SectionHeader({
       className="w-full flex items-center gap-3 py-3 text-left group"
     >
       <SectionDot filled={filled} partial={partial} />
+      <div
+        className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
+        style={{ background: `${iconColor}14`, border: `1px solid ${iconColor}30` }}
+      >
+        <Icon className="w-3.5 h-3.5" style={{ color: iconColor }} />
+      </div>
       <span className="text-sm font-semibold text-[#C8D1DA] flex-1">
-        {icon} {label}
+        {label}
         {badge && (
           <span className="ml-2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-[#C8963C15] text-[#C8963C] border border-[#C8963C25]">
             {badge}
@@ -193,6 +205,9 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
 
   const [initialStake, setInitialStake] = useState('')
   const [skillInput, setSkillInput] = useState('')
+  const [existingSkills, setExistingSkills] = useState<string[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const skillContainerRef = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>({
     identity:     true,
     capabilities: true,
@@ -213,6 +228,21 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
       getFeeConfig(publicClient).then(setPlatformFee).catch(() => {})
     }
   }, [publicClient])
+
+  // Fetch existing skills for autocomplete (lazy — on first focus)
+  const fetchSkillsOnce = useRef(false)
+  const fetchExistingSkills = async () => {
+    if (fetchSkillsOnce.current) return
+    fetchSkillsOnce.current = true
+    try {
+      const res = await fetch('/api/v1/skills')
+      const json = await res.json()
+      const names: string[] = (json.data ?? [])
+        .map((s: { name?: string; label?: string }) => s.name || s.label || '')
+        .filter(Boolean)
+      setExistingSkills(names)
+    } catch { /* non-critical */ }
+  }
 
   // ── Completeness (real-time) ─────────────────────────────────────────────
 
@@ -273,6 +303,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
     if (cardData.skills?.includes(skill)) return
     setCardData(prev => ({ ...prev, skills: [...(prev.skills ?? []), skill] }))
     setSkillInput('')
+    setShowSuggestions(false)
   }
 
   const removeSkill = (skill: string) =>
@@ -283,7 +314,21 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
       e.preventDefault()
       addSkill(skillInput)
     }
+    if (e.key === 'Escape') setShowSuggestions(false)
   }
+
+  // Suggestions: existing skills matching input, excluding already added
+  const suggestions = useMemo(() => {
+    const q = skillInput.trim().toLowerCase()
+    if (!q) return []
+    return existingSkills
+      .filter(s => s.toLowerCase().includes(q) && !cardData.skills?.includes(s))
+      .slice(0, 8)
+  }, [skillInput, existingSkills, cardData.skills])
+
+  const showNewOption = skillInput.trim().length > 0
+    && !existingSkills.some(s => s.toLowerCase() === skillInput.trim().toLowerCase())
+    && !cardData.skills?.includes(skillInput.trim())
 
   // ── URL validation (on blur) ─────────────────────────────────────────────
 
@@ -406,7 +451,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
           {/* ── Identity ── */}
           <div>
             <SectionHeader
-              icon="🤖" label="Identity" badge="required"
+              icon={Bot} iconColor="#C8963C" label="Identity" badge="required"
               expanded={expanded.identity}
               filled={sectionFilled.identity} partial={sectionPartial.identity}
               toggle={() => toggleSection('identity')}
@@ -459,7 +504,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
           {/* ── Capabilities ── */}
           <div>
             <SectionHeader
-              icon="⚡" label="Capabilities" badge="powers scoring"
+              icon={Zap} iconColor="#2EE6D6" label="Capabilities" badge="powers scoring"
               expanded={expanded.capabilities}
               filled={sectionFilled.capabilities}
               toggle={() => toggleSection('capabilities')}
@@ -468,38 +513,76 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
               <div className="pb-5 space-y-3">
                 <Field
                   label="Skills"
-                  hint="Type a skill name and press Enter. Skills power Domain Leaderboards and scoring."
+                  hint="Type to search existing skills or add a new one. Skills power Domain Leaderboards."
                 >
-                  {/* Chips */}
-                  <div
-                    className="flex flex-wrap gap-2 min-h-[44px] p-2.5 rounded-xl bg-[#12151A] border border-[#1E2229] focus-within:border-[#C8963C]/40 transition-colors cursor-text"
-                    onClick={() => document.getElementById('skill-input')?.focus()}
-                  >
-                    {cardData.skills?.map(skill => (
-                      <span
-                        key={skill}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-[#C8963C15] text-[#E8B84B] border border-[#C8963C30]"
-                      >
-                        {skill}
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); removeSkill(skill) }}
-                          className="hover:text-white transition-colors ml-0.5"
+                  <div className="relative" ref={skillContainerRef}>
+                    {/* Chips + input */}
+                    <div
+                      className="flex flex-wrap gap-2 min-h-[44px] p-2.5 rounded-xl bg-[#12151A] border border-[#1E2229] focus-within:border-[#C8963C]/40 transition-colors cursor-text"
+                      onClick={() => document.getElementById('skill-input')?.focus()}
+                    >
+                      {cardData.skills?.map(skill => (
+                        <span
+                          key={skill}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-[#C8963C15] text-[#E8B84B] border border-[#C8963C30]"
                         >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                    <input
-                      id="skill-input"
-                      type="text"
-                      value={skillInput}
-                      onChange={e => setSkillInput(e.target.value)}
-                      onKeyDown={onSkillKeyDown}
-                      onBlur={() => addSkill(skillInput)}
-                      placeholder={(cardData.skills?.length ?? 0) === 0 ? 'Add skill (Enter to confirm)…' : ''}
-                      className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-white placeholder-[#4A5260]"
-                    />
+                          {skill}
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); removeSkill(skill) }}
+                            className="hover:text-white transition-colors ml-0.5"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        id="skill-input"
+                        type="text"
+                        value={skillInput}
+                        autoComplete="off"
+                        onChange={e => { setSkillInput(e.target.value); setShowSuggestions(true) }}
+                        onFocus={() => { fetchExistingSkills(); setShowSuggestions(true) }}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                        onKeyDown={onSkillKeyDown}
+                        placeholder={(cardData.skills?.length ?? 0) === 0 ? 'Search or add skill…' : 'Add more…'}
+                        className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-white placeholder-[#4A5260]"
+                      />
+                    </div>
+
+                    {/* Autocomplete dropdown */}
+                    {showSuggestions && (suggestions.length > 0 || showNewOption) && (
+                      <div
+                        className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl overflow-hidden shadow-xl"
+                        style={{ background: '#1A1D22', border: '1px solid rgba(200,150,60,0.2)' }}
+                      >
+                        {suggestions.map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onMouseDown={e => { e.preventDefault(); addSkill(s) }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-[#C8963C10] transition-colors"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#C8963C] flex-shrink-0" />
+                            <span className="text-[#C8D1DA]">{s}</span>
+                            <span className="ml-auto text-[10px] text-[#4A5260]">existing</span>
+                          </button>
+                        ))}
+                        {showNewOption && (
+                          <button
+                            type="button"
+                            onMouseDown={e => { e.preventDefault(); addSkill(skillInput) }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-[#2ECC7110] transition-colors border-t border-[#1E2229]"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#2ECC71] flex-shrink-0" />
+                            <span className="text-[#C8D1DA]">
+                              Add <span className="text-[#2ECC71] font-medium">"{skillInput.trim()}"</span>
+                            </span>
+                            <span className="ml-auto text-[10px] text-[#4A5260]">new</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {(cardData.skills?.length ?? 0) >= 10 && (
                     <p className="text-xs text-[#7A838D]">Maximum 10 skills</p>
@@ -512,7 +595,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
           {/* ── Endpoints ── */}
           <div>
             <SectionHeader
-              icon="🔗" label="Endpoints" badge="A2A discovery"
+              icon={Link2} iconColor="#38B6FF" label="Endpoints" badge="A2A discovery"
               expanded={expanded.endpoints}
               filled={sectionFilled.endpoints} partial={sectionPartial.endpoints}
               toggle={() => toggleSection('endpoints')}
@@ -580,7 +663,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
           {/* ── Source ── */}
           <div>
             <SectionHeader
-              icon="📋" label="Source & Provenance"
+              icon={GitBranch} iconColor="#A78BFA" label="Source & Provenance"
               expanded={expanded.source}
               filled={sectionFilled.source} partial={sectionPartial.source}
               toggle={() => toggleSection('source')}
@@ -642,7 +725,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
           {/* ── Social ── */}
           <div>
             <SectionHeader
-              icon="🐦" label="Social"
+              icon={MessageSquare} iconColor="#7A838D" label="Social"
               expanded={expanded.social}
               filled={sectionFilled.social}
               toggle={() => toggleSection('social')}
