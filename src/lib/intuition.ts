@@ -564,6 +564,8 @@ export async function createAgentAtom(
  *   [agentTermId] [hasAgentSkill] [skillAtom]
  *
  * Creates skill atom and predicate if they don't exist yet.
+ * Also tags the skill atom as [skill][is][Agent Skill] so it appears
+ * in the Skills tab (same as registering via RegisterSkillForm).
  * Call this once per skill after createAgentAtom().
  */
 export async function linkSkillToAgent(
@@ -575,6 +577,8 @@ export async function linkSkillToAgent(
   const skillTermId     = await findOrCreateAtom(config, skillName, onProgress)
   const predicateTermId = await findOrCreateAtom(config, 'hasAgentSkill', onProgress)
   await createTriple(config, agentTermId, predicateTermId, skillTermId, DEFAULT_ATOM_DEPOSIT)
+  // Tag as Agent Skill type so it appears in the Skills tab
+  await tagSkillType(config, skillTermId)
 }
 
 /**
