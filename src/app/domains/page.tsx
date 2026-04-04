@@ -168,40 +168,49 @@ function DomainCard({
   return (
     <button
       onClick={onClick}
-      className="w-full text-left px-4 py-3 rounded-xl transition-all duration-150 group"
+      className="w-full text-left px-4 rounded-xl transition-all duration-200 group"
       style={{
         background: selected ? 'rgba(200,150,60,0.08)' : 'transparent',
         borderLeft: selected ? '2px solid #C8963C' : '2px solid transparent',
+        paddingTop: selected ? '10px' : '8px',
+        paddingBottom: selected ? '10px' : '8px',
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white truncate group-hover:text-white/90">
-            {domain.name}
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
+      {/* Always visible: name + score dot */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-white truncate group-hover:text-white/90">
+          {domain.name}
+        </p>
+        {domain.topAgentScore > 0 && (
+          <span
+            className="text-xs font-bold tabular-nums flex-shrink-0 px-1.5 py-0.5 rounded-md"
+            style={{ color, background: `${color}18` }}
+          >
+            {domain.topAgentScore}
+          </span>
+        )}
+      </div>
+
+      {/* Expanded details — only when selected */}
+      {selected && (
+        <div className="mt-2 space-y-1.5">
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
             {domain.agentCount} {domain.agentCount === 1 ? 'agent' : 'agents'}
             {domain.totalStakers > 0 && ` · ${domain.totalStakers} stakers`}
           </p>
           {domain.topAgent && (
-            <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
               #1: <span style={{ color }}>{domain.topAgent}</span>
-              {' '}
-              <span style={{ color, fontWeight: 600 }}>
-                ({domain.topAgentScore})
-              </span>
             </p>
           )}
-        </div>
-      </div>
-
-      {/* mini progress bar */}
-      {domain.topAgentScore > 0 && (
-        <div className="mt-2 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
-          <div
-            className="h-1 rounded-full transition-all duration-500"
-            style={{ width: `${barPct}%`, background: color }}
-          />
+          {domain.topAgentScore > 0 && (
+            <div className="h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+              <div
+                className="h-1 rounded-full transition-all duration-500"
+                style={{ width: `${barPct}%`, background: color }}
+              />
+            </div>
+          )}
         </div>
       )}
     </button>
@@ -209,54 +218,60 @@ function DomainCard({
 }
 
 function AgentRankRow({ agent, index }: { agent: DomainAgent; index: number }) {
+  const [expanded, setExpanded] = useState(false)
   const color = scoreColor(agent.domainScore)
   const rColor = rankColor(agent.rank)
   const barPct = Math.min(agent.domainScore, 100)
+  const hasStats = agent.stakerCount > 0 || agent.supportShares > 0n || agent.opposeShares > 0n
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04, duration: 0.2 }}
-      className="rounded-xl px-4 py-3 transition-colors duration-150"
-      style={{ background: 'rgba(255,255,255,0.03)' }}
+      className="rounded-xl px-4 py-2.5 transition-colors duration-150 cursor-pointer select-none"
+      style={{ background: expanded ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)' }}
+      onClick={() => setExpanded(e => !e)}
     >
+      {/* Always visible row */}
       <div className="flex items-center gap-3">
         {/* rank */}
         <span
-          className="text-base font-bold w-7 text-center flex-shrink-0 tabular-nums"
+          className="text-sm font-bold w-6 text-center flex-shrink-0 tabular-nums"
           style={{ color: rColor }}
         >
           #{agent.rank}
         </span>
 
-        {/* avatar placeholder */}
+        {/* avatar */}
         <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold"
-          style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.5)' }}
+          className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold"
+          style={{ background: `${color}18`, color }}
         >
           {agent.agentName.slice(0, 2).toUpperCase()}
         </div>
 
-        {/* name + score */}
+        {/* name */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <Link
-              href={`/agents?open=${agent.agentId}`}
-              className="text-sm font-semibold text-white hover:text-[#C8963C] transition-colors truncate"
-            >
-              {agent.agentName}
-            </Link>
-            <span
-              className="text-base font-bold flex-shrink-0 tabular-nums"
-              style={{ color }}
-            >
-              {agent.domainScore}
-            </span>
-          </div>
+          <span className="text-sm font-semibold text-white truncate block">
+            {agent.agentName}
+          </span>
+        </div>
 
+        {/* score badge */}
+        <span
+          className="text-sm font-bold flex-shrink-0 tabular-nums px-2 py-0.5 rounded-md"
+          style={{ color, background: `${color}18` }}
+        >
+          {agent.domainScore}
+        </span>
+      </div>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="mt-2.5 ml-[52px] space-y-1.5">
           {/* progress bar */}
-          <div className="mt-1.5 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
             <div
               className="h-1.5 rounded-full transition-all duration-500"
               style={{ width: `${barPct}%`, background: color }}
@@ -264,22 +279,32 @@ function AgentRankRow({ agent, index }: { agent: DomainAgent; index: number }) {
           </div>
 
           {/* stats */}
-          <div className="mt-1 flex items-center gap-2 text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            {agent.stakerCount > 0 && <span>{agent.stakerCount} stakers</span>}
-            {agent.stakerCount > 0 && (agent.supportShares > 0n || agent.opposeShares > 0n) && (
-              <span>·</span>
-            )}
-            {(agent.supportShares > 0n || agent.opposeShares > 0n) && (
-              <span>
-                Support: <span style={{ color: '#10b981' }}>{agent.supportRatio}%</span>
-                {agent.opposeShares > 0n && (
-                  <> · Oppose: <span style={{ color: '#ef4444' }}>{(100 - agent.supportRatio).toFixed(1)}%</span></>
-                )}
-              </span>
-            )}
-          </div>
+          {hasStats && (
+            <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              {agent.stakerCount > 0 && <span>{agent.stakerCount} stakers</span>}
+              {agent.stakerCount > 0 && agent.supportShares > 0n && <span>·</span>}
+              {agent.supportShares > 0n && (
+                <span>
+                  <span style={{ color: '#10b981' }}>{agent.supportRatio}%</span> support
+                  {agent.opposeShares > 0n && (
+                    <> · <span style={{ color: '#ef4444' }}>{(100 - agent.supportRatio).toFixed(1)}%</span> oppose</>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* link */}
+          <Link
+            href={`/agents?open=${agent.agentId}`}
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-xs font-medium transition-colors"
+            style={{ color: '#8B5CF6' }}
+          >
+            View agent →
+          </Link>
         </div>
-      </div>
+      )}
     </motion.div>
   )
 }
