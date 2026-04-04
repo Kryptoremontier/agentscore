@@ -12,9 +12,8 @@ import { parseEther } from 'viem'
 import { cn } from '@/lib/cn'
 import {
   createWriteConfig,
-  createAgentAtom,
   getFeeConfig,
-  linkSkillToAgent,
+  registerAgentBatch,
 } from '@/lib/intuition'
 import {
   calculateProfileCompleteness,
@@ -400,21 +399,17 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
 
       const deposit = initialStake ? parseEther(initialStake) : undefined
 
-      setLoadingStep('Creating agent on-chain...')
-      const result = await createAgentAtom(config, finalCard, deposit)
-      const agentTermId = result.state.termId
-
-      // Avatar persistence (unchanged from previous version)
-      // We no longer have avatar in new form; kept for backward compat if needed.
-
-      // Link skills
       const skills = (cardData.skills ?? []).filter(Boolean)
-      for (let i = 0; i < skills.length; i++) {
-        setLoadingStep(`Linking skill ${i + 1}/${skills.length}: ${skills[i]}...`)
-        await linkSkillToAgent(config, agentTermId, skills[i])
-      }
 
-      onSuccess?.(agentTermId)
+      const result = await registerAgentBatch(
+        config,
+        finalCard,
+        skills,
+        deposit,
+        (step) => setLoadingStep(step),
+      )
+
+      onSuccess?.(result.termId)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
       setSubmitError(msg || 'Registration failed')

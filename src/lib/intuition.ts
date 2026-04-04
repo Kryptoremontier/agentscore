@@ -567,6 +567,9 @@ export async function createAgentAtom(
  * Also tags the skill atom as [skill][is][Agent Skill] so it appears
  * in the Skills tab (same as registering via RegisterSkillForm).
  * Call this once per skill after createAgentAtom().
+ *
+ * NOTE: For new registrations prefer registerAgentBatch() which does
+ * everything in 2 txs instead of N per skill.
  */
 export async function linkSkillToAgent(
   config: WriteConfig,
@@ -579,6 +582,155 @@ export async function linkSkillToAgent(
   await createTriple(config, agentTermId, predicateTermId, skillTermId, DEFAULT_ATOM_DEPOSIT)
   // Tag as Agent Skill type so it appears in the Skills tab
   await tagSkillType(config, skillTermId)
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Batch Registration — 2 txs total regardless of skill count
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Register an agent + all skills in exactly 2 on-chain transactions:
+ *
+ *   Tx 1 — createAtoms([agentAtom, ...newSkillAtoms])
+ *   Tx 2 — createTriples([agent-is-AIAgent, agent-hasSkill-s1..N, s1..N-is-AgentSkill])
+ *
+ * Atoms that already exist on-chain are detected via isTermCreated() reads
+ * (parallel, no txs) and excluded from the batch.
+ * Predicates ('is', 'hasAgentSkill', 'AI Agent', 'Agent Skill') are shared
+ * across all agents and are usually pre-existing after the first registration.
+ *
+ * @param initialDeposit — optional extra stake on the agent atom (default 0.001 tTRUST)
+ * @param onProgress — optional callback for loading UI updates
+ */
+export async function registerAgentBatch(
+  config: WriteConfig,
+  cardData: AgentCardData,
+  skills: string[],
+  initialDeposit?: bigint,
+  onProgress?: (step: string) => void,
+): Promise<{ termId: `0x${string}`; transactionHash: `0x${string}` }> {
+  await ensureFeeProxyApproved(config)
+
+  const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
+  const mvAddress = getMultiVaultAddress(config.publicClient.chain?.id)
+
+  // ── Step 1: Pre-compute all termIds (pure, no tx) ─────────────────────────
+  const agentLabel = serializeAgentCard(cardData)
+
+  // Shared semantic atoms (usually exist after first registration)
+  const SHARED = ['is', 'AI Agent', 'hasAgentSkill', 'Agent Skill'] as const
+
+  const allLabels: string[] = [agentLabel, ...SHARED, ...skills]
+
+  const termIds = allLabels.map(label =>
+    sdkCalculateAtomId(stringToHex(label) as Hex) as `0x${string}`
+  )
+
+  // ── Step 2: Check existence in parallel (read calls, no tx) ───────────────
+  onProgress?.('Checking on-chain state…')
+  const existsArr = await Promise.all(
+    termIds.map(id =>
+      (config.publicClient.readContract({
+        address: mvAddress,
+        abi: MultiVaultAbi,
+        functionName: 'isTermCreated',
+        args: [id],
+      }) as Promise<boolean>).catch(() => false)
+    )
+  )
+
+  // Build convenient map label → { termId, exists }
+  type AtomInfo = { termId: `0x${string}`; exists: boolean }
+  const atomMap = new Map<string, AtomInfo>(
+    allLabels.map((label, i) => [label, { termId: termIds[i], exists: existsArr[i] }])
+  )
+
+  const agentTermId = atomMap.get(agentLabel)!.termId
+
+  // ── Tx 1: Batch-create all missing atoms ───────────────────────────────────
+  const toCreate = allLabels.filter(label => !atomMap.get(label)!.exists)
+
+  if (toCreate.length > 0) {
+    onProgress?.(`Creating ${toCreate.length} atom(s) on-chain…`)
+
+    const datas    = toCreate.map(label => stringToHex(label))
+    const deposits = toCreate.map(label => label === agentLabel ? deposit : DEFAULT_ATOM_DEPOSIT)
+
+    const atomCost = await config.publicClient.readContract({
+      address: FEE_PROXY_ADDRESS,
+      abi: FeeProxyAbi,
+      functionName: 'getAtomCost',
+    }) as bigint
+
+    const N          = BigInt(toCreate.length)
+    const totalDep   = deposits.reduce((a, b) => a + b, 0n)
+    const baseCost   = atomCost * N + totalDep
+    const fees       = await getFeeConfig(config.publicClient)
+    const totalValue = calcFeeProxyValue(baseCost, fees)
+
+    const hash = await config.walletClient.writeContract({
+      address: FEE_PROXY_ADDRESS,
+      abi: FeeProxyAbi,
+      functionName: 'createAtoms',
+      args: [config.walletClient.account!.address, datas, deposits, 1n],
+      value: totalValue,
+      account: config.walletClient.account!,
+      chain: config.walletClient.chain ?? intuitionTestnet,
+    })
+    await config.publicClient.waitForTransactionReceipt({ hash })
+  }
+
+  // ── Tx 2: Batch-create all triples ─────────────────────────────────────────
+  // Always:   [agent][is][AI Agent]
+  // Per skill: [agent][hasAgentSkill][skill]  +  [skill][is][Agent Skill]
+  onProgress?.('Linking relationships…')
+
+  const isId       = atomMap.get('is')!.termId
+  const aiAgentId  = atomMap.get('AI Agent')!.termId
+  const hasSkillId = atomMap.get('hasAgentSkill')!.termId
+  const agSkillId  = atomMap.get('Agent Skill')!.termId
+
+  const subjects:  `0x${string}`[] = [agentTermId]
+  const predicates:`0x${string}`[] = [isId]
+  const objects:   `0x${string}`[] = [aiAgentId]
+  const tDeposits: bigint[]        = [DEFAULT_ATOM_DEPOSIT]
+
+  for (const skill of skills) {
+    const skillId = atomMap.get(skill)!.termId
+    subjects.push(agentTermId, skillId)
+    predicates.push(hasSkillId, isId)
+    objects.push(skillId, agSkillId)
+    tDeposits.push(DEFAULT_ATOM_DEPOSIT, DEFAULT_ATOM_DEPOSIT)
+  }
+
+  const tripleCost = await config.publicClient.readContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'getTripleCost',
+  }) as bigint
+
+  const M          = BigInt(subjects.length)
+  const totalTDep  = tDeposits.reduce((a, b) => a + b, 0n)
+  const tBaseCost  = tripleCost * M + totalTDep
+  const fees       = await getFeeConfig(config.publicClient)
+  const tTotal     = calcFeeProxyValue(tBaseCost, fees)
+
+  const tripleHash = await config.walletClient.writeContract({
+    address: FEE_PROXY_ADDRESS,
+    abi: FeeProxyAbi,
+    functionName: 'createTriples',
+    args: [config.walletClient.account!.address, subjects, predicates, objects, tDeposits, 1n],
+    value: tTotal,
+    account: config.walletClient.account!,
+    chain: config.walletClient.chain ?? intuitionTestnet,
+  })
+  await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
+
+  // Persist registration
+  const userAddress = config.walletClient.account?.address
+  if (userAddress) saveRegistration(agentTermId, userAddress, 'agent')
+
+  return { termId: agentTermId, transactionHash: tripleHash }
 }
 
 /**
