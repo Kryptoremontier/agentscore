@@ -192,9 +192,6 @@ export default function TestIntuitionPage() {
                             const result = await createAgentAtom(cfg, {
                               name: agent.name,
                               description: agent.description,
-                              category: agent.category,
-                              website: agent.website,
-                              tags: agent.tags,
                             })
                             setRegisteredAgents(prev => ({
                               ...prev,
@@ -306,8 +303,6 @@ export default function TestIntuitionPage() {
                     metadata: {
                       name: agentName,
                       description: agentDescription,
-                      category: 'coding',
-                      tags: ['test', 'demo'],
                     },
                     deposit: parseEther('0.001'),
                   })

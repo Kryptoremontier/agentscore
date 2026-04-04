@@ -12,6 +12,12 @@ import {
   trustQuery,
   getPlatformStats,
 } from '@/lib/api-data'
+import {
+  calculateProfileCompleteness,
+  serializeAgentCard,
+  type AgentCardData,
+  type AgentCategory,
+} from '@/lib/agent-card'
 
 const handler = createMcpHandler(
   (server) => {
@@ -387,6 +393,97 @@ const handler = createMcpHandler(
                 comparison: comparisons,
                 skill: skill || 'overall',
                 recommendation: ranked[0]?.name ?? null,
+              }, null, 2),
+            }],
+          }
+        } catch (error) {
+          return { content: [{ type: 'text' as const, text: `Error: ${error}` }] }
+        }
+      }
+    )
+
+    // ═══════════════════════════════════════════
+    // TOOL 10: register_agent
+    // ═══════════════════════════════════════════
+    server.registerTool(
+      'register_agent',
+      {
+        title: 'Register AI Agent',
+        description:
+          'Prepare registration data for a new AI agent on AgentScore. ' +
+          'Returns structured data (atomLabel + instructions) needed to create ' +
+          'on-chain atoms and triples. ' +
+          'The actual on-chain transaction must be signed by the agent\'s wallet — ' +
+          'this tool does NOT execute transactions. ' +
+          'Provide as much metadata as possible for higher profile completeness score.',
+        inputSchema: {
+          name: z.string()
+            .describe('Agent name (required). E.g. "CodeBuddy"'),
+          description: z.string().optional()
+            .describe('One-line description of what the agent does (max 500 chars)'),
+          category: z.string().optional()
+            .describe('Category: developer-tools | data-analysis | content-creation | defi-trading | security-audit | customer-support | research | education | healthcare | gaming | social | infrastructure | other'),
+          skills: z.array(z.string()).optional()
+            .describe('Array of skill/capability names. E.g. ["code-review", "bug-detection"]'),
+          apiEndpoint: z.string().optional()
+            .describe('REST API URL where the agent can be reached. E.g. "https://codebuddy.ai/api"'),
+          mcpEndpoint: z.string().optional()
+            .describe('MCP server URL for agent-to-agent communication. E.g. "https://codebuddy.ai/mcp"'),
+          a2aCard: z.string().optional()
+            .describe('A2A agent card URL. E.g. "https://codebuddy.ai/.well-known/agent.json"'),
+          github: z.string().optional()
+            .describe('GitHub repository. E.g. "github.com/org/repo"'),
+          version: z.string().optional()
+            .describe('Current version. E.g. "v2.1.0"'),
+          license: z.string().optional()
+            .describe('License. E.g. "MIT", "Apache-2.0", "Proprietary"'),
+          framework: z.string().optional()
+            .describe('Agent framework. E.g. "LangChain", "CrewAI", "ElizaOS", "Custom"'),
+          website: z.string().optional()
+            .describe('Agent website URL'),
+          twitter: z.string().optional()
+            .describe('Twitter/X handle. E.g. "@agentname"'),
+        },
+      },
+      async ({ name, description, category, skills, apiEndpoint, mcpEndpoint, a2aCard, github, version, license, framework, website, twitter }) => {
+        try {
+          const cardData: AgentCardData = {
+            name,
+            description,
+            category: category as AgentCategory | undefined,
+            skills,
+            endpoints: {
+              api:     apiEndpoint,
+              mcp:     mcpEndpoint,
+              a2aCard: a2aCard,
+              website: website,
+            },
+            source: { github, version, license, framework },
+            social: { twitter },
+          }
+
+          const atomLabel    = serializeAgentCard(cardData)
+          const completeness = calculateProfileCompleteness(cardData)
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                status: 'prepared',
+                atomLabel,
+                skills: skills || [],
+                profileCompleteness: completeness.percentage,
+                isA2AReady: completeness.isA2AReady,
+                missingFields: completeness.missingFields,
+                nextSteps: [
+                  '1. Connect wallet to Intuition Testnet (Chain ID: 13579)',
+                  '2. Sign and submit createAtom transaction with the atomLabel',
+                  '3. Create type triple: [Agent] [is] [AI Agent]',
+                  '4. Create skill triples using linkSkillToAgent() for each skill',
+                  '5. Profile will appear on AgentScore once indexed',
+                ],
+                registrationUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://agentscore-gilt.vercel.app'}/register`,
+                network: process.env.NEXT_PUBLIC_NETWORK || 'testnet',
               }, null, 2),
             }],
           }

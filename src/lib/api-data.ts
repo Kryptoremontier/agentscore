@@ -47,6 +47,15 @@ function weiToFloat(wei: bigint): number {
 }
 
 function cleanLabel(label: string): string {
+  // New agents: label is JSON → extract name field
+  try {
+    const parsed = JSON.parse(label)
+    if (typeof parsed === 'object' && parsed !== null && typeof parsed.name === 'string') {
+      return parsed.name
+    }
+  } catch {
+    // not JSON — fall through
+  }
   return label.replace(/^(INTU:|Agent:|Skill:)/i, '').trim()
 }
 
@@ -75,6 +84,7 @@ type AgentRow = {
 export type AgentApiItem = {
   id: string
   name: string
+  rawLabel?: string    // original atom label — may be JSON (Phase 2A+) or plain string (legacy)
   agentScore: number
   trustTier: string
   momentum: number
@@ -149,6 +159,7 @@ function rowToAgentItem(row: AgentRow, opposeWei: bigint): AgentApiItem {
   return {
     id: row.term_id,
     name: cleanLabel(row.label),
+    rawLabel: row.label,
     agentScore,
     trustTier: trustTier.tier,
     momentum: Math.round(trustResult.momentum * 10) / 10,

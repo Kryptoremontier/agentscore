@@ -19,6 +19,7 @@ import {
   TRIPLE_SUBJECT_OR_STR,
   TRIPLE_OBJECT_OR_STR,
 } from './gql-filters'
+import { type AgentCardData, serializeAgentCard } from './agent-card'
 
 // ============================================================================
 // Fee Proxy
@@ -535,14 +536,20 @@ export async function createAccountAtom(
 /**
  * Create Agent Atom with full metadata via FeeProxy.
  * Platform fee applies (collected on registration).
- * @param initialDeposit — optional; defaults to 0.001 tTRUST (minimum to create). Pass more to auto-stake.
+ *
+ * Accepts AgentCardData — encoded as JSON in the atom label.
+ * Old AgentMetadata callers: pass { name, description, ... } — still compatible.
+ *
+ * @param initialDeposit — optional; defaults to 0.001 tTRUST. Pass more to auto-stake.
  */
 export async function createAgentAtom(
   config: WriteConfig,
-  metadata: AgentMetadata,
+  cardData: AgentCardData,
   initialDeposit?: bigint
 ) {
-  const atomText = `${metadata.name} - ${metadata.description}`
+  // Encode as JSON for rich A2A metadata (Phase 2A, Opcja A).
+  // Old agents had plain "Name - description" labels; new agents use JSON.
+  const atomText = serializeAgentCard(cardData)
   const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
@@ -550,6 +557,24 @@ export async function createAgentAtom(
   // Tag entity type: [agent] [is] [AI Agent] — used for semantic filtering
   tagAgentType(config, result.termId)
   return result
+}
+
+/**
+ * Link a skill to an agent via an on-chain triple:
+ *   [agentTermId] [hasAgentSkill] [skillAtom]
+ *
+ * Creates skill atom and predicate if they don't exist yet.
+ * Call this once per skill after createAgentAtom().
+ */
+export async function linkSkillToAgent(
+  config: WriteConfig,
+  agentTermId: `0x${string}`,
+  skillName: string,
+  onProgress?: (step: string) => void,
+): Promise<void> {
+  const skillTermId     = await findOrCreateAtom(config, skillName, onProgress)
+  const predicateTermId = await findOrCreateAtom(config, 'hasAgentSkill', onProgress)
+  await createTriple(config, agentTermId, predicateTermId, skillTermId, DEFAULT_ATOM_DEPOSIT)
 }
 
 /**

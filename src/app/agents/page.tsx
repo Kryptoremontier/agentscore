@@ -27,6 +27,7 @@ import {
 import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
 import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
+import { parseAgentCard, calculateProfileCompleteness, AGENT_CATEGORIES } from '@/lib/agent-card'
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { AGENT_WHERE_STR } from '@/lib/gql-filters'
@@ -1176,6 +1177,14 @@ function AgentsPageContent() {
 
   // Helper: clean agent name (remove "Agent: " prefix and description)
   const getAgentName = (label: string): string => {
+    // New format: JSON label
+    try {
+      const parsed = JSON.parse(label)
+      if (typeof parsed === 'object' && parsed !== null && typeof parsed.name === 'string') {
+        return parsed.name
+      }
+    } catch { /* not JSON */ }
+    // Old format: "Name - description"
     let name = label.replace(/^Agent:(?:\w+:)?\s*/i, '')
     if (name.includes(' - ')) name = name.split(' - ')[0]
     return name.trim()
@@ -1858,9 +1867,15 @@ function AgentsPageContent() {
 
                 {/* Description */}
                 <p className="text-[#B5BDC6] text-sm leading-relaxed mb-5">
-                  {selectedAgent.label.includes(' - ')
-                    ? selectedAgent.label.split(' - ').slice(1).join(' - ')
-                    : 'AI Agent registered on Intuition Protocol.'}
+                  {(() => {
+                    try {
+                      const p = JSON.parse(selectedAgent.label)
+                      if (p?.description) return p.description
+                    } catch { /* not JSON */ }
+                    return selectedAgent.label.includes(' - ')
+                      ? selectedAgent.label.split(' - ').slice(1).join(' - ')
+                      : 'AI Agent registered on Intuition Protocol.'
+                  })()}
                 </p>
 
                 {/* Atom ID */}
@@ -2422,6 +2437,134 @@ function AgentsPageContent() {
                               {netWei >= BigInt(0) ? '+' : ''}{fmtWei(netWei)} tTRUST
                             </p>
                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* === AGENT CARD (metadata) === */}
+              {(() => {
+                const card = parseAgentCard(selectedAgent.label)
+                const hasMetadata = !!(
+                  card.description || card.category || card.endpoints || card.source || card.social
+                )
+                if (!hasMetadata) return null
+
+                const completeness = calculateProfileCompleteness({ name: card.name || getAgentName(selectedAgent.label), ...card })
+                const categoryInfo = card.category ? AGENT_CATEGORIES.find(c => c.id === card.category) : null
+
+                const LinkItem = ({ href, label }: { href: string; label: string }) => (
+                  <a
+                    href={href.startsWith('http') ? href : `https://${href}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[#C8963C] hover:text-[#E8B84B] transition-colors text-xs truncate"
+                  >
+                    <span className="truncate">{label}</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="flex-shrink-0">
+                      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </a>
+                )
+
+                const ep = card.endpoints || {}
+                const src = card.source || {}
+                const soc = card.social || {}
+                const hasEndpoints = ep.api || ep.mcp || ep.a2aCard || ep.website || ep.docs
+                const hasSource    = src.github || src.version || src.license || src.framework
+                const hasSocial    = soc.twitter || soc.discord || soc.telegram
+
+                return (
+                  <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
+                    <h3 className="text-white font-bold text-sm mb-3">Agent Card</h3>
+
+                    <div className="space-y-3">
+                      {/* Description + category */}
+                      {card.description && (
+                        <p className="text-[#B5BDC6] text-xs leading-relaxed">
+                          {card.description}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {categoryInfo && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C8963C15] text-[#C8963C] border border-[#C8963C25] font-medium">
+                            {categoryInfo.icon} {categoryInfo.label}
+                          </span>
+                        )}
+                        {src.version && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1E2229] text-[#7A838D] border border-[#2A3040]">
+                            {src.version}
+                          </span>
+                        )}
+                        {src.license && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1E2229] text-[#7A838D] border border-[#2A3040]">
+                            {src.license}
+                          </span>
+                        )}
+                        {src.framework && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1E2229] text-[#7A838D] border border-[#2A3040]">
+                            {src.framework}
+                          </span>
+                        )}
+                        {completeness.isA2AReady && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2ECC7115] text-[#2ECC71] border border-[#2ECC7125] font-bold">
+                            A2A Ready
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Endpoints */}
+                      {hasEndpoints && (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] text-[#7A838D] uppercase tracking-wider font-semibold">Endpoints</p>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                            {ep.api    && <LinkItem href={ep.api}    label={`API: ${ep.api.replace(/^https?:\/\//, '')}`} />}
+                            {ep.mcp    && <LinkItem href={ep.mcp}    label={`MCP: ${ep.mcp.replace(/^https?:\/\//, '')}`} />}
+                            {ep.a2aCard && <LinkItem href={ep.a2aCard} label="A2A Card" />}
+                            {ep.website && <LinkItem href={ep.website} label={`Web: ${ep.website.replace(/^https?:\/\//, '')}`} />}
+                            {ep.docs   && <LinkItem href={ep.docs}   label={`Docs: ${ep.docs.replace(/^https?:\/\//, '')}`} />}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Source */}
+                      {hasSource && (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] text-[#7A838D] uppercase tracking-wider font-semibold">Source</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                            {src.github && <LinkItem href={src.github} label={src.github} />}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Social */}
+                      {hasSocial && (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] text-[#7A838D] uppercase tracking-wider font-semibold">Social</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                            {soc.twitter  && <LinkItem href={`https://x.com/${soc.twitter.replace('@','')}`} label={soc.twitter.startsWith('@') ? soc.twitter : `@${soc.twitter}`} />}
+                            {soc.discord  && <LinkItem href={soc.discord.startsWith('http') ? soc.discord : `https://${soc.discord}`} label="Discord" />}
+                            {soc.telegram && <LinkItem href={soc.telegram.startsWith('http') ? soc.telegram : `https://t.me/${soc.telegram.replace('@','')}`} label={soc.telegram} />}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Profile Completeness */}
+                      <div className="pt-1">
+                        <div className="flex items-center justify-between text-[10px] mb-1">
+                          <span className="text-[#7A838D]">Profile</span>
+                          <span className="text-[#B5BDC6] font-medium">{completeness.percentage}% complete</span>
+                        </div>
+                        <div className="h-1 bg-[#1E2229] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${completeness.percentage}%`,
+                              background: completeness.percentage > 60 ? '#2ECC71' : completeness.percentage > 30 ? '#EAB308' : '#EF4444',
+                            }}
+                          />
                         </div>
                       </div>
                     </div>
@@ -3738,12 +3881,7 @@ function AgentsPageContent() {
               <div className="flex justify-between items-center px-4 py-3 border-b border-[#C8963C]/12">
                 <span className="text-[#B5BDC6] text-sm">Agent</span>
                 <span className="text-white text-sm font-semibold text-right max-w-[180px] truncate">
-                  {pendingVote.agent.label
-                    .replace(/^Agent:(?:\w+:)?\s*/i, '')
-                    .split(' - ')[0]
-                    .replace(/\s*from\s+Kryptoremont.*/i, '')
-                    .trim()
-                  }
+                  {getAgentName(pendingVote.agent.label)}
                 </span>
               </div>
 

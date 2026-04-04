@@ -20,10 +20,10 @@ import {
   parseStakeAmount,
   DEFAULT_ATOM_DEPOSIT,
   DEFAULT_STAKE_AMOUNT,
-  type AgentMetadata,
   type WriteConfig,
   type ReadConfig,
 } from '@/lib/intuition'
+import { type AgentCardData } from '@/lib/agent-card'
 
 // ============================================================================
 // Configuration Hooks
@@ -153,7 +153,7 @@ export function useCreateAgent() {
       metadata,
       deposit,
     }: {
-      metadata: AgentMetadata
+      metadata: AgentCardData
       deposit?: bigint
     }) => {
       if (!config) throw new Error('Wallet not connected')
