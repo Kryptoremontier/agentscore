@@ -206,6 +206,14 @@ export function getAtomType(label: string): 'agent' | 'skill' | 'unknown' {
 }
 
 export function getAtomName(label: string): string {
+  // JSON label (new format): {"name":"...","description":"..."}
+  try {
+    const parsed = JSON.parse(label)
+    if (typeof parsed === 'object' && parsed !== null && typeof parsed.name === 'string') {
+      return parsed.name
+    }
+  } catch { /* not JSON — fall through */ }
+  // Legacy plain-text format: "Agent:INTU: Name - description"
   return label
     .replace(/^Agent:(?:\w+:)?\s*/i, '')
     .replace(/^Skill:(?:\w+:)?\s*/i, '')

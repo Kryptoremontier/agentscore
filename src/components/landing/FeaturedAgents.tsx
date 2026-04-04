@@ -41,6 +41,10 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
 ]
 
 const getDescription = (label: string, prefix: string) => {
+  try {
+    const parsed = JSON.parse(label)
+    if (parsed?.description) return parsed.description as string
+  } catch { /* not JSON */ }
   const parts = label.replace(new RegExp(`^${prefix}\\s*`, 'i'), '').split(' - ')
   return parts.length > 1 ? parts.slice(1).join(' - ').trim() : null
 }

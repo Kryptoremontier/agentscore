@@ -494,9 +494,9 @@ async function fetchDomainTriplesInternal(): Promise<DomainTripleData[]> {
     return {
       tripleId: t.term_id,
       agentId: t.subject?.term_id || '',
-      agentName: t.subject?.label || 'Unknown',
+      agentName: t.subject?.label ? cleanLabel(t.subject.label) : 'Unknown',
       skillId: t.object?.term_id || '',
-      skillName: t.object?.label || 'Unknown',
+      skillName: t.object?.label ? cleanLabel(t.object.label) : 'Unknown',
       supportShares: forVault.totalShares,
       opposeShares: againstVault.totalShares,
       supportPositionCount: forVault.count,

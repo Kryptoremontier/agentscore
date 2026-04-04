@@ -40,6 +40,12 @@ async function gql<T>(query: string, variables?: Record<string, unknown>): Promi
 }
 
 function cleanName(label: string): string {
+  try {
+    const parsed = JSON.parse(label)
+    if (typeof parsed === 'object' && parsed !== null && typeof parsed.name === 'string') {
+      return parsed.name
+    }
+  } catch { /* not JSON */ }
   return label.replace(/^(INTU:|Agent:|Skill:)/i, '').trim()
 }
 
