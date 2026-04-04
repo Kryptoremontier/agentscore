@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://agentscore-gilt.vercel.app/images/brand/gold/logo.png" alt="AgentScore" width="120" />
+  <img src="https://github.com/Kryptoremontier/agentscore/blob/main/public/images/brand/gold/og-image.png" alt="AgentScore" width="120" />
 </p>
 
 <h1 align="center">AgentScore</h1>
