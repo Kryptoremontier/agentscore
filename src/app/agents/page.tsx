@@ -36,7 +36,8 @@ import { fetchAgentSkillTriples } from '@/lib/intuition'
 import { SkillBreakdown } from '@/components/SkillBreakdown'
 import { TrustSparkline } from '@/components/TrustSparkline'
 import { AgentRadar } from '@/components/AgentRadar'
-import { TrustTimeline } from '@/components/agents/TrustTimeline'
+import { TrustTimeline, ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
+import { buildAgentTimeline } from '@/lib/trust-timeline'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -1373,6 +1374,35 @@ function AgentsPageContent() {
       return []
     }
   }, [allPositions])
+
+  // ─── Score Trajectory (for Overview chart) ───
+  const scoreTrajectory = useMemo(() => {
+    try {
+      if (!selectedAgent) return []
+      const score = hybridScore ?? agentTrust?.score ?? 50
+      const tier = agentTrustTier?.tier?.tier ?? 'unverified'
+      const stakingEvts = agentSignals.map((s: any) => ({
+        id: s.id as string,
+        accountId: s.account_id as string,
+        type: Number(s.delta || 0) >= 0 ? 'deposit' as const : 'redeem' as const,
+        side: (agentTriple.counterTermId && s.term_id === agentTriple.counterTermId)
+          ? 'oppose' as const
+          : 'support' as const,
+        deltaWei: String(Math.abs(Number(s.delta || 0))),
+        timestamp: s.created_at as string,
+      }))
+      const tl = buildAgentTimeline({
+        agentId: selectedAgent.term_id,
+        agentName: selectedAgent.label,
+        createdAt: selectedAgent.created_at,
+        currentScore: score,
+        currentTier: tier,
+        stakingEvents: stakingEvts,
+        skillEvents: [],
+      })
+      return tl.scoreHistory
+    } catch { return [] }
+  }, [selectedAgent, agentSignals, agentTriple.counterTermId, hybridScore, agentTrust, agentTrustTier])
 
   return (
     <PageBackground image="hero" opacity={0.4}>
@@ -3006,42 +3036,15 @@ function AgentsPageContent() {
                       </div>
                     </div>
 
-                    {/* Trust History Chart */}
-                    {(() => {
-                      const chartData = buildTrustChartData(agentSignals, agentTriple.counterTermId)
-                      if (chartData.length < 2) return null
-                      return (
-                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
-                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">Trust History</p>
-                          <div className="h-40">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={chartData}>
-                                <defs>
-                                  <linearGradient id="trustGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#34a872" stopOpacity={0.3}/>
-                                    <stop offset="95%" stopColor="#34a872" stopOpacity={0}/>
-                                  </linearGradient>
-                                </defs>
-                                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                <YAxis domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
-                                <Tooltip
-                                  contentStyle={{ backgroundColor: '#161b22', border: '1px solid #21262d', borderRadius: 8, fontSize: 12 }}
-                                  labelStyle={{ color: '#8b949e' }}
-                                  formatter={(value: any) => [`${value}%`, 'Trust Ratio']}
-                                />
-                                <ReferenceLine y={50} stroke="#21262d" strokeDasharray="3 3" />
-                                <Area type="monotone" dataKey="trustRatio" stroke="#34a872" fillOpacity={1} fill="url(#trustGrad)" strokeWidth={2} />
-                              </AreaChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div className="flex justify-between text-[10px] text-[#7A838D] mt-1">
-                            <span>0% = All Oppose</span>
-                            <span>50% = Balanced</span>
-                            <span>100% = All Support</span>
-                          </div>
-                        </div>
-                      )
-                    })()}
+                    {/* Score Trajectory Chart */}
+                    {scoreTrajectory.length >= 2 && (
+                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4" style={{ height: 200 }}>
+                        <ScoreTrajectoryChart
+                          scoreHistory={scoreTrajectory}
+                          currentScore={hybridScore ?? agentTrust?.score ?? 50}
+                        />
+                      </div>
+                    )}
 
                     {/* Positions Table */}
                     {(() => {

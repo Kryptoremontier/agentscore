@@ -2,13 +2,19 @@
 
 import { useMemo, useState } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import {
+  Bot, Zap, TrendingUp, TrendingDown, LogOut,
+  Shield, ShieldCheck, Star, Sparkles, Crown,
+  Wifi, ChevronDown,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { cleanAtomName } from '@/types/claim'
 import {
   buildAgentTimeline,
   type TimelineEvent,
+  type TimelineEventType,
   type StakingEvent,
   type SkillEvent,
-  type TimelineEventType,
 } from '@/lib/trust-timeline'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -55,10 +61,36 @@ const FILTER_OPTIONS: { id: string; label: string; types?: TimelineEventType[] }
 // ─── Severity colors ──────────────────────────────────────────────────────────
 
 const SEVERITY_STYLES = {
-  positive:  { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)', text: '#10b981' },
-  negative:  { bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.35)',  text: '#ef4444' },
-  neutral:   { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.15)', text: 'rgba(255,255,255,0.5)' },
-  milestone: { bg: 'rgba(200,150,60,0.12)', border: 'rgba(200,150,60,0.35)', text: '#C8963C' },
+  positive:  { bg: 'rgba(46,204,113,0.12)',  border: 'rgba(46,204,113,0.35)',  text: '#2ECC71' },
+  negative:  { bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.35)',   text: '#EF4444' },
+  neutral:   { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.12)', text: 'rgba(255,255,255,0.45)' },
+  milestone: { bg: 'rgba(200,150,60,0.12)',  border: 'rgba(200,150,60,0.35)',  text: '#C8963C' },
+}
+
+// ─── Icon mapping (type → Lucide + color) ─────────────────────────────────────
+
+function getEventIcon(event: TimelineEvent): { Icon: LucideIcon; color: string } {
+  const tier = event.metadata?.evaluatorTier as string | undefined
+  const metaTier = event.metadata?.tier as string | undefined
+
+  switch (event.type) {
+    case 'registered':       return { Icon: Bot,          color: '#C8963C' }
+    case 'staker_joined':    return { Icon: TrendingUp,   color: '#2ECC71' }
+    case 'staker_opposed':   return { Icon: TrendingDown, color: '#EF4444' }
+    case 'staker_left':      return { Icon: LogOut,       color: '#7A838D' }
+    case 'skill_added':      return { Icon: Zap,          color: '#2EE6D6' }
+    case 'a2a_ready':        return { Icon: Wifi,         color: '#2EE6D6' }
+    case 'evaluator_staked':
+      return tier === 'Sage'
+        ? { Icon: Crown,    color: '#2ECC71' }
+        : { Icon: Sparkles, color: '#C8963C' }
+    case 'tier_upgrade':
+      if (metaTier === 'Verified') return { Icon: Star,         color: '#C8963C' }
+      if (metaTier === 'Trusted')  return { Icon: ShieldCheck,  color: '#2ECC71' }
+      return { Icon: Shield, color: '#38B6FF' }
+    default:
+      return { Icon: Bot, color: '#7A838D' }
+  }
 }
 
 // ─── Date formatter ───────────────────────────────────────────────────────────
@@ -77,19 +109,20 @@ function formatDateShort(iso: string): string {
 
 function EventCard({ event, isLast }: { event: TimelineEvent; isLast: boolean }) {
   const style = SEVERITY_STYLES[event.severity]
+  const { Icon, color } = getEventIcon(event)
 
   return (
     <div className="flex gap-3">
-      {/* Dot + line */}
+      {/* Icon + connector line */}
       <div className="flex flex-col items-center flex-shrink-0">
         <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0"
+          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
           style={{ background: style.bg, border: `1.5px solid ${style.border}` }}
         >
-          {event.icon}
+          <Icon className="w-4 h-4" style={{ color }} />
         </div>
         {!isLast && (
-          <div className="w-px flex-1 my-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          <div className="w-px flex-1 my-1" style={{ background: 'rgba(255,255,255,0.07)' }} />
         )}
       </div>
 
@@ -117,9 +150,9 @@ function EventCard({ event, isLast }: { event: TimelineEvent; isLast: boolean })
   )
 }
 
-// ─── Score Chart ──────────────────────────────────────────────────────────────
+// ─── Score Chart (also exported for use in Overview tab) ─────────────────────
 
-function ScoreChart({
+export function ScoreTrajectoryChart({
   scoreHistory,
   currentScore,
 }: {
@@ -304,9 +337,7 @@ export function TrustTimeline({
             style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
           >
             {activeFilter.label}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${filterOpen ? 'rotate-180' : ''}`} />
           </button>
           {filterOpen && (
             <div
@@ -361,7 +392,7 @@ export function TrustTimeline({
           className="hidden md:flex flex-col flex-shrink-0 rounded-xl p-4"
           style={{ width: 220, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
         >
-          <ScoreChart
+          <ScoreTrajectoryChart
             scoreHistory={timeline.scoreHistory}
             currentScore={currentScore}
           />
