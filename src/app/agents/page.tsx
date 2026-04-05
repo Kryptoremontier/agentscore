@@ -36,6 +36,7 @@ import { fetchAgentSkillTriples } from '@/lib/intuition'
 import { SkillBreakdown } from '@/components/SkillBreakdown'
 import { TrustSparkline } from '@/components/TrustSparkline'
 import { AgentRadar } from '@/components/AgentRadar'
+import { TrustTimeline } from '@/components/agents/TrustTimeline'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -98,7 +99,7 @@ function AgentsPageContent() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [showOnlyOurs, setShowOnlyOurs] = useState(true)
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('overview')
   const [trustAmount, setTrustAmount] = useState('0.05')
   const [untrustAmount, setUntrustAmount] = useState('0.05')
   const [claims, setClaims] = useState<any[]>([])
@@ -2596,6 +2597,7 @@ function AgentsPageContent() {
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
                     { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'activity', label: 'Activity', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+                    { id: 'timeline', label: 'Timeline', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="4" r="1.5" fill="currentColor" fillOpacity="0.5"/><circle cx="12" cy="20" r="1.5" fill="currentColor" fillOpacity="0.5"/><path d="M12 6v4M12 14v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M7 8h3M14 8h3M7 16h3M14 16h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5"/></svg> },
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -3561,6 +3563,28 @@ function AgentsPageContent() {
                   </div>
                 )}
               </div>
+
+                {/* Timeline Tab */}
+                {activeTab === 'timeline' && selectedAgent && (() => {
+                  const agentCard = parseAgentCard(selectedAgent.label)
+                  const completeness = calculateProfileCompleteness({ name: agentCard.name ?? '', ...agentCard })
+                  const score = hybridScore ?? agentTrust?.score ?? 50
+                  const tier = agentTrustTier?.tier?.tier ?? 'unverified'
+                  return (
+                    <TrustTimeline
+                      agentId={selectedAgent.term_id}
+                      agentName={agentCard.name ?? selectedAgent.label}
+                      createdAt={selectedAgent.created_at}
+                      currentScore={score}
+                      currentTier={tier}
+                      agentSignals={agentSignals}
+                      counterTermId={agentTriple.counterTermId}
+                      skillTriples={skillTriples}
+                      evaluatorWeights={evaluatorWeights}
+                      isA2AReady={completeness.isA2AReady}
+                    />
+                  )
+                })()}
 
               {/* === REPORT SECTION === */}
               {isConnected && (

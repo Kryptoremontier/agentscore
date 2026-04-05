@@ -12,6 +12,8 @@ import {
   trustQuery,
   getPlatformStats,
 } from '@/lib/api-data'
+import { fetchTimelineData } from '@/lib/timeline-data'
+import { buildAgentTimeline } from '@/lib/trust-timeline'
 import {
   calculateProfileCompleteness,
   serializeAgentCard,
@@ -514,6 +516,81 @@ const handler = createMcpHandler(
             content: [{
               type: 'text' as const,
               text: JSON.stringify(stats, null, 2),
+            }],
+          }
+        } catch (error) {
+          return { content: [{ type: 'text' as const, text: `Error: ${error}` }] }
+        }
+      }
+    )
+
+    // ═══════════════════════════════════════════
+    // TOOL 11: get_agent_timeline
+    // ═══════════════════════════════════════════
+    server.registerTool(
+      'get_agent_timeline',
+      {
+        title: 'Get Agent Trust Timeline',
+        description:
+          'Get the chronological trust history of an AI agent. ' +
+          'Shows every significant event: staker joins/leaves, skill additions, ' +
+          'tier upgrades (Sandbox at 3, Trusted at 10, Verified at 25 stakers), ' +
+          'high-accuracy evaluator staking, and A2A readiness. ' +
+          'Use this to understand WHY an agent has its current score ' +
+          'and HOW its reputation developed over time.',
+        inputSchema: {
+          agentId: z.string().describe("Agent's term ID (from search_agents or get_agent_trust)"),
+          limit: z.number().min(1).max(50).optional().describe('Max events to return (default: 20)'),
+          type: z.enum([
+            'staker_joined', 'staker_opposed', 'staker_left',
+            'skill_added', 'tier_upgrade', 'evaluator_staked',
+            'registered', 'a2a_ready',
+          ]).optional().describe('Filter by event type'),
+        },
+      },
+      async ({ agentId, limit, type }) => {
+        try {
+          const [rawData, agentDetail] = await Promise.all([
+            fetchTimelineData(agentId),
+            getAgentDetail(agentId),
+          ])
+
+          if (!rawData) {
+            return { content: [{ type: 'text' as const, text: 'Agent not found.' }] }
+          }
+
+          const timeline = buildAgentTimeline({
+            agentId: rawData.agentId,
+            agentName: rawData.agentName,
+            createdAt: rawData.createdAt,
+            currentScore: agentDetail?.agentScore ?? 50,
+            currentTier: agentDetail?.trustTier ?? 'unverified',
+            stakingEvents: rawData.stakingEvents,
+            skillEvents: rawData.skillEvents,
+          })
+
+          let events = timeline.events
+          if (type) events = events.filter(e => e.type === type)
+          events = events.slice(0, limit ?? 20)
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                agentName: timeline.agentName,
+                currentScore: timeline.currentScore,
+                currentTier: timeline.currentTier,
+                summary: timeline.summary,
+                events: events.map(e => ({
+                  date: e.timestamp,
+                  type: e.type,
+                  title: e.title,
+                  description: e.description,
+                  scoreAtEvent: e.scoreAtEvent,
+                  severity: e.severity,
+                })),
+                info: 'Timeline reconstructed from on-chain signals and skill triples. Events are ordered newest first.',
+              }, null, 2),
             }],
           }
         } catch (error) {
