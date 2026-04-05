@@ -143,12 +143,6 @@ export function WalletButton() {
             My Profile
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/profile?tab=agents" className="flex items-center">
-            <Shield className="w-4 h-4 mr-2" />
-            My Agents
-          </Link>
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigator.clipboard.writeText(address!)}>
           <Copy className="w-4 h-4 mr-2" />
