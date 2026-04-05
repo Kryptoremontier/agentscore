@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { Hero } from '@/components/landing/Hero'
+import { AlphaTestnetBanner } from '@/components/landing/AlphaTestnetBanner'
 import { Features } from '@/components/landing/Features'
 import { HowItWorks } from '@/components/landing/HowItWorks'
 import { Stats } from '@/components/landing/Stats'
@@ -19,6 +20,7 @@ export default function HomePage() {
     <div className="relative">
       <Suspense fallback={<HomeFallback />}>
         <Hero />
+        <AlphaTestnetBanner />
         <Features />
         <HowItWorks />
         <Stats />
