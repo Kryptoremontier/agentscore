@@ -6,7 +6,7 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import {
   Bot, Zap, MessageSquare, TrendingUp, ShieldCheck, Database, GitBranch,
   Users, Layers, ScanLine, ChevronRight, DollarSign, Target, Globe,
-  Code, ExternalLink, BookOpen, Plug,
+  Code, ExternalLink, BookOpen, Plug, Rocket,
 } from 'lucide-react'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -54,6 +54,7 @@ function Formula({ children, label }: { children: React.ReactNode; label?: strin
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
 const TABS = [
+  { id: 'getting-started', label: 'Getting Started', icon: Rocket },
   { id: 'overview',   label: 'Overview',         icon: BookOpen },
   { id: 'scoring',    label: 'Trust Scoring',     icon: TrendingUp },
   { id: 'evaluators', label: 'Evaluators',        icon: Target },
@@ -64,6 +65,281 @@ const TABS = [
 ]
 
 // ─── Tab content ──────────────────────────────────────────────────────────────
+
+// ── Helpers for Getting Started ──────────────────────────────────────────────
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-4">
+      <div className="flex flex-col items-center flex-shrink-0">
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+          style={{ background: 'rgba(200,150,60,0.15)', border: '1.5px solid rgba(200,150,60,0.4)', color: '#C8963C' }}
+        >
+          {n}
+        </div>
+        {/* connector line — last step has no line */}
+        <div className="w-px flex-1 mt-1" style={{ background: 'rgba(255,255,255,0.06)', minHeight: 16 }} />
+      </div>
+      <div className="pb-6 min-w-0 flex-1">
+        <p className="text-white font-semibold mb-2 leading-tight">{title}</p>
+        <div className="text-sm space-y-1.5" style={{ color: 'rgba(255,255,255,0.55)' }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Mono({ children }: { children: React.ReactNode }) {
+  return (
+    <code
+      className="font-mono text-xs px-1.5 py-0.5 rounded"
+      style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.8)' }}
+    >
+      {children}
+    </code>
+  )
+}
+
+function ExtLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 font-medium transition-colors hover:opacity-90"
+      style={{ color: '#C8963C' }}
+    >
+      {children}
+      <ExternalLink className="w-3 h-3 opacity-70" />
+    </a>
+  )
+}
+
+function TabGettingStarted() {
+  return (
+    <div className="grid gap-5">
+
+      {/* Intro banner */}
+      <div
+        className="rounded-2xl px-6 py-5"
+        style={{
+          background: 'linear-gradient(135deg, rgba(200,150,60,0.08) 0%, rgba(245,158,11,0.04) 100%)',
+          border: '1px solid rgba(200,150,60,0.2)',
+        }}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <Rocket className="w-4 h-4" style={{ color: '#C8963C' }} />
+          <span className="text-sm font-bold uppercase tracking-widest" style={{ color: '#C8963C' }}>
+            Alpha Testnet
+          </span>
+          <span
+            className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full"
+            style={{ background: 'rgba(46,204,113,0.12)', border: '1px solid rgba(46,204,113,0.3)', color: '#2ECC71' }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#2ECC71] animate-pulse inline-block" />
+            Now Live
+          </span>
+        </div>
+        <p className="text-white font-medium mb-0.5">
+          AgentScore is live on Intuition Testnet.
+        </p>
+        <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          No real funds required — all actions use free testnet tokens (tTRUST).
+        </p>
+      </div>
+
+      {/* Steps */}
+      <DocCard>
+        <SectionTitle icon={Rocket} color="#C8963C" label="Getting Started" />
+
+        <Step n={1} title="Get Test Tokens">
+          <p>
+            Visit the{' '}
+            <ExtLink href="https://portal.intuition.systems">Intuition Faucet</ExtLink>
+            {' '}to receive free tTRUST tokens.
+          </p>
+          <p>You need tTRUST to register agents and stake on trust claims.</p>
+          <div className="mt-2 flex flex-col gap-1 text-xs">
+            <span>
+              <span className="text-white/50">Network:</span>{' '}
+              <span className="text-white/80">Intuition Testnet</span>
+              {' · '}
+              <span className="text-white/50">Chain ID:</span>{' '}
+              <Mono>13579</Mono>
+            </span>
+            <span>
+              <span className="text-white/50">RPC:</span>{' '}
+              <Mono>https://testnet.rpc.intuition.systems/http</Mono>
+            </span>
+          </div>
+        </Step>
+
+        <Step n={2} title="Connect Your Wallet">
+          <p>
+            Click <span className="text-white">"Connect Wallet"</span> in the top right corner.
+          </p>
+          <p>AgentScore supports MetaMask and WalletConnect-compatible wallets.</p>
+        </Step>
+
+        <Step n={3} title="Register an AI Agent">
+          <p>
+            Go to <Link href="/agents" className="text-[#C8963C] font-medium hover:underline">Agents</Link>
+            {' → '}Register button, then fill in:
+          </p>
+          <ul className="mt-1.5 space-y-1 list-none">
+            {[
+              ['Name', 'required — your agent\'s name'],
+              ['Description', 'what it does'],
+              ['Category', 'select from 13 categories'],
+              ['Skills', 'capabilities, e.g. "Code Generation", "Data Analysis"'],
+              ['Endpoints', 'API, MCP, website URLs — makes your agent A2A discoverable'],
+              ['Source', 'GitHub repo, version, license'],
+              ['Social', 'Twitter, Discord'],
+            ].map(([field, desc]) => (
+              <li key={field} className="flex gap-2">
+                <span className="text-[#C8963C] font-mono text-xs mt-0.5">›</span>
+                <span><span className="text-white/80">{field}</span> — {desc}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Only name is required. More details = higher Profile Completeness = more credibility.
+          </p>
+        </Step>
+
+        <Step n={4} title="Create Capability Claims">
+          <p>
+            Go to{' '}
+            <Link href="/claims?create=true" className="text-[#C8963C] font-medium hover:underline">Create Claim</Link>.
+          </p>
+          <p>Select your agent → choose <span className="text-white">"has agent skill"</span> → select or create a skill.</p>
+          <p className="mt-1.5">
+            This creates an on-chain triple:{' '}
+            <Mono>[YourAgent] [hasAgentSkill] [SkillName]</Mono>
+          </p>
+          <p className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Each claim gets its own vault where the community can stake.
+          </p>
+        </Step>
+
+        <Step n={5} title="Stake on Agents">
+          <p>
+            Browse{' '}
+            <Link href="/agents" className="text-[#C8963C] font-medium hover:underline">Agents</Link>
+            {' '}or{' '}
+            <Link href="/domains" className="text-[#C8963C] font-medium hover:underline">Domains</Link>.
+            Click any agent → Support or Oppose with tTRUST.
+          </p>
+          <ul className="mt-1.5 space-y-1 list-none">
+            {[
+              'Signals trust (or distrust) on-chain',
+              'Earns shares via bonding curve — early stakers get more',
+              'Builds your Evaluator track record',
+            ].map(item => (
+              <li key={item} className="flex gap-2">
+                <span className="text-[#2ECC71] mt-0.5">✓</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </Step>
+
+        <Step n={6} title="Build Your Evaluator Reputation">
+          <p>
+            Every stake you make is tracked. Back agents that maintain trust → accuracy rises.
+            Back agents that crash → accuracy drops.
+          </p>
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-xs">
+            {[
+              { icon: '🌱', tier: 'Newcomer', color: '#7A838D' },
+              { icon: '🔍', tier: 'Scout',    color: '#38B6FF' },
+              { icon: '📊', tier: 'Analyst',  color: '#A78BFA' },
+              { icon: '🔮', tier: 'Oracle',   color: '#C8963C' },
+              { icon: '🧙', tier: 'Sage',     color: '#2ECC71' },
+            ].map(({ icon, tier, color }) => (
+              <div
+                key={tier}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
+                style={{ background: `${color}14`, border: `1px solid ${color}30` }}
+              >
+                <span>{icon}</span>
+                <span style={{ color }}>{tier}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Evaluator weight (0.5×–1.5×) affects how much influence your future stakes carry.
+            Check your profile at{' '}
+            <Link href="/profile" className="text-[#C8963C] hover:underline">/profile → Evaluator tab</Link>.
+          </p>
+        </Step>
+
+        <Step n={7} title="Explore">
+          <div className="space-y-1">
+            {[
+              { href: '/domains',    label: '/domains',    desc: 'Who\'s the best agent for each skill?' },
+              { href: '/evaluators', label: '/evaluators', desc: 'Who are the most accurate evaluators?' },
+              { href: '/docs',       label: '/docs',       desc: 'Full scoring formulas and documentation' },
+            ].map(({ href, label, desc }) => (
+              <div key={href} className="flex gap-2">
+                <Link href={href} className="text-[#C8963C] font-mono text-xs hover:underline flex-shrink-0">{label}</Link>
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>— {desc}</span>
+              </div>
+            ))}
+          </div>
+        </Step>
+
+      </DocCard>
+
+      {/* For Developers */}
+      <DocCard>
+        <SectionTitle icon={Code} color="#38B6FF" label="For Developers" />
+        <div className="space-y-2 text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
+            <span className="text-white/70 font-medium">Trust API</span>
+            <span>13 REST endpoints</span>
+            <Mono>GET /api/v1/agents</Mono>
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
+            <span className="text-white/70 font-medium">MCP Server</span>
+            <span>11 tools for AI agents</span>
+            <Mono>/api/mcp/mcp</Mono>
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
+            <span className="text-white/70 font-medium">A2A Card</span>
+            <span>Agent discovery endpoint</span>
+            <Mono>GET /api/v1/agents/:id/card</Mono>
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
+            <span className="text-white/70 font-medium">API Index</span>
+            <Mono>/api/v1</Mono>
+          </div>
+        </div>
+      </DocCard>
+
+      {/* Feedback */}
+      <DocCard>
+        <SectionTitle icon={MessageSquare} color="#A78BFA" label="Feedback" />
+        <p className="text-sm mb-3" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          Found a bug? Have an idea? We want to hear from you.
+        </p>
+        <div className="flex flex-col gap-2 text-sm">
+          <div className="flex items-center gap-2" style={{ color: 'rgba(255,255,255,0.55)' }}>
+            <span>›</span>
+            <ExtLink href="https://x.com/AgentScoreApp">DM @AgentScoreApp on X</ExtLink>
+          </div>
+          <div className="flex items-center gap-2" style={{ color: 'rgba(255,255,255,0.55)' }}>
+            <span>›</span>
+            <ExtLink href="https://discord.gg/intuition">Post in Intuition Discord #ecosystem channel</ExtLink>
+          </div>
+        </div>
+      </DocCard>
+
+    </div>
+  )
+}
 
 function TabOverview() {
   return (
@@ -1100,7 +1376,7 @@ function TabContracts() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DocsPage() {
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('getting-started')
 
   // URL hash support: /docs#evaluators
   useEffect(() => {
@@ -1169,6 +1445,7 @@ export default function DocsPage() {
           </div>
 
           {/* Tab content */}
+          {activeTab === 'getting-started' && <TabGettingStarted />}
           {activeTab === 'overview'   && <TabOverview />}
           {activeTab === 'scoring'    && <TabScoring />}
           {activeTab === 'evaluators' && <TabEvaluators />}
