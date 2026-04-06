@@ -1614,7 +1614,7 @@ const REPORT_PREDICATE_LABELS: Record<ReportCategory, string> = {
  * Find or create an atom for a given text label.
  * Returns the term_id.
  */
-async function findOrCreateAtom(
+export async function findOrCreateAtom(
   cfg: WriteConfig,
   label: string,
   onProgress?: (step: string) => void,
