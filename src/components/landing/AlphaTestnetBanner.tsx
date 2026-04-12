@@ -73,7 +73,7 @@ export function AlphaTestnetBanner() {
           <div className="flex flex-wrap items-center gap-4 text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
             <span className="flex items-center gap-1.5">
               <span className="w-1 h-1 rounded-full" style={{ background: '#2ECC71' }} />
-              Free tTRUST from Intuition Faucet
+              Free tTRUST from <a href="https://testnet.hub.intuition.systems/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.55)' }}>Intuition Hub</a>
             </span>
             <span className="flex items-center gap-1.5">
               <span className="w-1 h-1 rounded-full" style={{ background: '#C8963C' }} />

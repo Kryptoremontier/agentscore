@@ -34,9 +34,17 @@ export function EvaluatorCard({ profile, loading }: EvaluatorCardProps) {
   if (!profile) return null
 
   const cfg = EVALUATOR_TIER_CONFIG[profile.evaluatorTier]
+  const TierIcon = TIER_ICONS[profile.evaluatorTier]
   const accuracyPct = Math.round(profile.adjustedAccuracy * 100)
   const rawPct = Math.round(profile.rawAccuracy * 100)
   const weightColor = getWeightColor(profile.evaluatorWeight)
+
+  const stats = [
+    { label: 'Weight',    value: `${profile.evaluatorWeight.toFixed(2)}x`, color: weightColor },
+    { label: 'Accuracy',  value: `${accuracyPct}%` },
+    { label: 'Positions', value: String(profile.totalPositions) },
+    { label: 'Correct',   value: String(profile.goodPicks) },
+  ]
 
   return (
     <div
@@ -44,86 +52,75 @@ export function EvaluatorCard({ profile, loading }: EvaluatorCardProps) {
       style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(200,150,60,0.15)' }}
     >
       {/* Header */}
-      <div className="px-5 py-4 border-b border-white/5">
+      <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <p className="text-[11px] font-medium uppercase tracking-wider text-[#7A838D]">
           Your Evaluator Profile
         </p>
       </div>
 
-      {/* Main stats */}
-      <div className="px-5 py-4 flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            {(() => { const Icon = TIER_ICONS[profile.evaluatorTier]; return <Icon className={cn('w-5 h-5', cfg.color)} /> })()}
-            <span className={cn('text-xl font-bold', cfg.color)}>{cfg.label}</span>
-          </div>
-          <p className="text-xs text-[#7A838D]">{cfg.description}</p>
-
-          {/* Accuracy bar */}
-          {profile.totalPositions > 0 && (
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-[#7A838D]">Accuracy</span>
-                <span className={cn('text-xs font-semibold', cfg.color)}>{accuracyPct}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
-                <div
-                  className={cn('h-full rounded-full transition-all duration-700', getBarColor(profile.adjustedAccuracy))}
-                  style={{ width: `${accuracyPct}%` }}
-                />
-              </div>
-              {profile.totalPositions > 0 && (
-                <p className="text-[11px] text-[#7A838D] mt-1.5 flex items-center gap-1">
-                  {profile.goodPicks} correct · {profile.totalPositions} total
-                  {profile.streakCount > 1 && (
-                    <span className="ml-1 text-[#C8963C] inline-flex items-center gap-0.5">
-                      <Flame className="w-3 h-3" />
-                      {profile.streakCount} streak
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
-          )}
-
-          {profile.totalPositions === 0 && (
-            <p className="text-xs text-[#7A838D] mt-3">
-              Stake on agents to build your evaluator track record.
-            </p>
-          )}
+      {/* Tier + description */}
+      <div className="px-5 py-4 flex items-center gap-3">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: 'rgba(200,150,60,0.10)', border: '1px solid rgba(200,150,60,0.22)' }}
+        >
+          <TierIcon className={cn('w-5 h-5', cfg.color)} />
         </div>
-
-        {/* Weight display */}
-        <div className="flex-shrink-0 text-center">
-          <div
-            className="px-4 py-3 rounded-xl"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-          >
-            <p className="text-[10px] text-[#7A838D] mb-1 uppercase tracking-wide">Weight</p>
-            <p className={cn('text-2xl font-bold tabular-nums', weightColor)}>
-              {profile.evaluatorWeight.toFixed(2)}x
-            </p>
-          </div>
-          {profile.totalPositions === 0 && (
-            <p className="text-[10px] text-[#7A838D] mt-1">neutral</p>
-          )}
+        <div>
+          <div className={cn('text-base font-bold', cfg.color)}>{cfg.label}</div>
+          <p className="text-xs text-[#7A838D] mt-0.5">{cfg.description}</p>
         </div>
       </div>
 
-      {/* Track record */}
+      {/* Accuracy bar */}
       {profile.totalPositions > 0 && (
         <div className="px-5 pb-4">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-[#7A838D] mb-2">
-            Stats
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <StatRow label="Raw accuracy" value={`${rawPct}%`} />
-            <StatRow label="Confidence" value={`${Math.round(profile.confidence * 100)}%`} />
-            {profile.bestPick && <StatRow label="Best pick" value={profile.bestPick} truncate />}
-            {profile.worstPick && profile.worstPick !== profile.bestPick && (
-              <StatRow label="Worst pick" value={profile.worstPick} truncate />
-            )}
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-[#7A838D]">Accuracy</span>
+            <span className={cn('text-xs font-semibold', cfg.color)}>{accuracyPct}%</span>
           </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            <div
+              className={cn('h-full rounded-full transition-all duration-700', getBarColor(profile.adjustedAccuracy))}
+              style={{ width: `${accuracyPct}%` }}
+            />
+          </div>
+          {profile.streakCount > 1 && (
+            <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              {profile.goodPicks} correct · {profile.totalPositions} total
+              <span className="text-[#C8963C] inline-flex items-center gap-0.5 ml-1">
+                <Flame className="w-3 h-3" />{profile.streakCount} streak
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {profile.totalPositions === 0 && (
+        <p className="px-5 pb-4 text-xs text-[#7A838D]">
+          Stake on agents to build your evaluator track record.
+        </p>
+      )}
+
+      {/* Stat strip */}
+      <div className="flex divide-x" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.06)' }}>
+        {stats.map(s => (
+          <div key={s.label} className="flex-1 text-center py-3 px-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <div className={cn('text-base font-bold font-mono tabular-nums leading-none', s.color ?? 'text-white')}>{s.value}</div>
+            <div className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Extra stats if positions exist */}
+      {profile.totalPositions > 0 && (profile.bestPick || profile.worstPick) && (
+        <div className="px-5 py-3 grid grid-cols-2 gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {profile.bestPick && <StatRow label="Best pick" value={profile.bestPick} truncate />}
+          {profile.worstPick && profile.worstPick !== profile.bestPick && (
+            <StatRow label="Worst pick" value={profile.worstPick} truncate />
+          )}
+          <StatRow label="Raw accuracy" value={`${rawPct}%`} />
+          <StatRow label="Confidence" value={`${Math.round(profile.confidence * 100)}%`} />
         </div>
       )}
     </div>

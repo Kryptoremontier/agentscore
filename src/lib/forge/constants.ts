@@ -1,19 +1,20 @@
 import { ForgeCategory, ProjectStage } from './types'
 
 // Emoji icons — rendered directly in CategoryPill / ProjectGrid
+// Lucide icon key strings — mapped to React components in CategoryPill / ProjectGrid
 export const FORGE_CATEGORY_ICONS: Record<ForgeCategory, string> = {
-  ai_agents:          '🤖',
-  trust_reputation:   '🛡️',
-  defi:               '💎',
-  social:             '💬',
-  identity:           '🪪',
-  data_analytics:     '📊',
-  developer_tools:    '🛠️',
-  infrastructure:     '⚙️',
-  prediction_markets: '🔮',
-  governance:         '🏛️',
-  gaming_nft:         '🎮',
-  other:              '✨',
+  ai_agents:          'bot',
+  trust_reputation:   'shield',
+  defi:               'coins',
+  social:             'globe',
+  identity:           'fingerprint',
+  data_analytics:     'bar-chart-2',
+  developer_tools:    'wrench',
+  infrastructure:     'server',
+  prediction_markets: 'target',
+  governance:         'scroll-text',
+  gaming_nft:         'gamepad-2',
+  other:              'layers',
 }
 
 export const PROJECT_STAGE_COLORS: Record<ProjectStage, string> = {

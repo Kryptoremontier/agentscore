@@ -2,22 +2,28 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Camera, Edit, Check, X, Copy, ExternalLink, Bot, TrendingUp, Award } from 'lucide-react'
-import { cn } from '@/lib/cn'
+import { Camera, Edit, Check, X, Copy, ExternalLink } from 'lucide-react'
 import type { UserProfile } from '@/types/user'
-import { BadgeDisplay } from './BadgeDisplay'
+
+const EXPERT_STYLES: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  newcomer:    { label: 'Newcomer',    color: '#7A838D', bg: 'rgba(122,131,141,0.12)', border: 'rgba(122,131,141,0.25)' },
+  contributor: { label: 'Contributor', color: '#2ECC71', bg: 'rgba(46,204,113,0.10)',  border: 'rgba(46,204,113,0.25)' },
+  expert:      { label: 'Expert',      color: '#38B6FF', bg: 'rgba(56,182,255,0.10)',  border: 'rgba(56,182,255,0.25)' },
+  master:      { label: 'Master',      color: '#A78BFA', bg: 'rgba(167,139,250,0.10)', border: 'rgba(167,139,250,0.25)' },
+  legend:      { label: 'Legend',      color: '#C8963C', bg: 'rgba(200,150,60,0.12)',  border: 'rgba(200,150,60,0.35)' },
+}
 
 interface ProfileHeaderProps {
   profile: UserProfile
   onUpdate: (data: Partial<UserProfile>) => Promise<void>
 }
 
-const EXPERT_STYLES: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  newcomer:    { label: 'Newcomer',    color: '#94A3B8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.30)' },
-  contributor: { label: 'Contributor', color: '#4ADE80', bg: 'rgba(74,222,128,0.12)',  border: 'rgba(74,222,128,0.30)' },
-  expert:      { label: 'Expert',      color: '#38B6FF', bg: 'rgba(56,182,255,0.12)',  border: 'rgba(56,182,255,0.30)' },
-  master:      { label: 'Master',      color: '#A78BFA', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.30)' },
-  legend:      { label: 'Legend',      color: '#C8963C', bg: 'rgba(200,150,60,0.15)',  border: 'rgba(200,150,60,0.40)' },
+function formatStaked(raw: bigint): string {
+  const val = Number(raw) / 1e18
+  if (val >= 1000) return `${(val / 1000).toFixed(1)}K`
+  if (val >= 1) return val.toFixed(2)
+  if (val > 0) return val.toFixed(4)
+  return '0'
 }
 
 export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
@@ -52,143 +58,122 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
     setIsEditing(false)
   }
 
-  const formatStaked = (raw: bigint): string => {
-    const val = Number(raw) / 1e18
-    if (val >= 1000) return `${(val / 1000).toFixed(1)}K`
-    if (val >= 1) return val.toFixed(2)
-    if (val > 0) return val.toFixed(4)
-    return '0'
-  }
+  const shortAddr = `${profile.address.slice(0, 6)}…${profile.address.slice(-4)}`
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl p-6 mb-6"
-      style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(200,150,60,0.20)' }}
+      className="rounded-2xl mb-4 overflow-hidden"
+      style={{ background: 'rgba(13,15,17,0.92)', border: '1px solid rgba(255,255,255,0.07)' }}
     >
-      <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 px-6 py-5">
 
         {/* Avatar */}
         <div className="relative group shrink-0">
-          <div className="w-20 h-20 rounded-2xl overflow-hidden"
-            style={{ background: 'linear-gradient(135deg,rgba(200,150,60,0.3),rgba(46,230,214,0.2))', border: '2px solid rgba(200,150,60,0.30)' }}>
+          <div className="w-16 h-16 rounded-xl overflow-hidden"
+            style={{ background: 'rgba(200,150,60,0.12)', border: '1.5px solid rgba(200,150,60,0.25)' }}>
             {profile.avatar ? (
               <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-[#C8963C]">
+              <div className="w-full h-full flex items-center justify-center text-xl font-bold" style={{ color: '#C8963C' }}>
                 {profile.name?.[0]?.toUpperCase() || profile.address.slice(2, 4).toUpperCase()}
               </div>
             )}
           </div>
           <button onClick={() => fileInputRef.current?.click()}
-            className="absolute inset-0 rounded-2xl flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-            <Camera className="w-5 h-5 text-white" />
+            className="absolute inset-0 rounded-xl flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera className="w-4 h-4 text-white" />
           </button>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
-
-          {/* Expert badge */}
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-bold capitalize whitespace-nowrap"
-            style={{ background: expertStyle.bg, border: `1px solid ${expertStyle.border}`, color: expertStyle.color }}>
-            {expertStyle.label}
-          </div>
         </div>
 
-        {/* Info */}
+        {/* Identity */}
         <div className="flex-1 min-w-0">
           {isEditing ? (
             <div className="space-y-2">
               <input
                 type="text" value={name} onChange={e => setName(e.target.value)}
                 placeholder="Display name"
-                className="w-full rounded-xl px-4 py-2 text-lg font-bold focus:outline-none"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,150,60,0.35)', color: '#E8E8E8' }}
+                className="w-full rounded-lg px-3 py-1.5 text-base font-bold focus:outline-none"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,150,60,0.30)', color: '#E8E8E8' }}
               />
               <textarea
                 value={bio} onChange={e => setBio(e.target.value)}
                 placeholder="Short bio..." rows={2}
-                className="w-full rounded-xl px-4 py-2 text-sm focus:outline-none resize-none"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', color: '#B5BDC6' }}
+                className="w-full rounded-lg px-3 py-1.5 text-sm focus:outline-none resize-none"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: '#B5BDC6' }}
               />
               <div className="flex gap-2">
                 <button onClick={handleSave}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
-                  style={{ background: 'rgba(200,150,60,0.20)', border: '1px solid rgba(200,150,60,0.40)', color: '#C8963C' }}>
-                  <Check className="w-3.5 h-3.5" /> Save
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
+                  style={{ background: 'rgba(200,150,60,0.16)', border: '1px solid rgba(200,150,60,0.35)', color: '#C8963C' }}>
+                  <Check className="w-3 h-3" /> Save
                 </button>
                 <button onClick={() => setIsEditing(false)}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all text-[#7A838D] hover:text-[#B5BDC6]"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#7A838D] hover:text-[#B5BDC6]"
                   style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <X className="w-3.5 h-3.5" /> Cancel
+                  <X className="w-3 h-3" /> Cancel
                 </button>
               </div>
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-white truncate">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-bold text-white leading-tight">
                   {profile.name || 'Anonymous User'}
                 </h1>
+                {/* Expert level — inline with name */}
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize"
+                  style={{ background: expertStyle.bg, border: `1px solid ${expertStyle.border}`, color: expertStyle.color }}>
+                  {expertStyle.label}
+                </span>
                 <button onClick={() => setIsEditing(true)}
-                  className="p-1.5 rounded-lg transition-colors text-[#7A838D] hover:text-white hover:bg-white/10 shrink-0">
-                  <Edit className="w-3.5 h-3.5" />
+                  className="p-1 rounded-md text-[#4A5260] hover:text-[#7A838D] hover:bg-white/[0.06] transition-colors">
+                  <Edit className="w-3 h-3" />
                 </button>
               </div>
 
               {profile.bio && (
-                <p className="text-sm text-[#7A838D] mt-1">{profile.bio}</p>
+                <p className="text-xs text-[#7A838D] mt-0.5 leading-relaxed">{profile.bio}</p>
               )}
 
-              <div className="flex items-center gap-2 mt-2">
-                <code className="text-xs text-[#7A838D] font-mono">
-                  {profile.address.slice(0, 6)}…{profile.address.slice(-4)}
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <code className="text-xs font-mono" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  {shortAddr}
                 </code>
-                <button onClick={handleCopyAddress} className="p-1 rounded hover:bg-white/10 transition-colors" title="Copy">
-                  {copied ? <Check className="w-3.5 h-3.5 text-[#4ADE80]" /> : <Copy className="w-3.5 h-3.5 text-[#7A838D]" />}
+                <button onClick={handleCopyAddress} className="p-1 rounded hover:bg-white/[0.06] transition-colors" title="Copy address">
+                  {copied
+                    ? <Check className="w-3 h-3 text-[#2ECC71]" />
+                    : <Copy className="w-3 h-3 text-[#4A5260] hover:text-[#7A838D]" />}
                 </button>
                 <a href={`https://base-sepolia.blockscout.com/address/${profile.address}`}
                   target="_blank" rel="noopener noreferrer"
-                  className="p-1 rounded hover:bg-white/10 transition-colors" title="View on explorer">
-                  <ExternalLink className="w-3.5 h-3.5 text-[#7A838D]" />
+                  className="p-1 rounded hover:bg-white/[0.06] transition-colors" title="Explorer">
+                  <ExternalLink className="w-3 h-3 text-[#4A5260] hover:text-[#7A838D]" />
                 </a>
               </div>
-
-              {profile.badges.length > 0 && (
-                <div className="flex items-center gap-1.5 mt-3">
-                  {profile.badges.slice(0, 4).map(badge => (
-                    <BadgeDisplay key={badge.id} badge={badge} size="sm" />
-                  ))}
-                  {profile.badges.length > 4 && (
-                    <span className="text-xs text-[#7A838D]">+{profile.badges.length - 4}</span>
-                  )}
-                </div>
-              )}
             </>
           )}
         </div>
 
-        {/* Quick stats */}
-        <div className="flex gap-5 text-center shrink-0 md:border-l md:pl-6"
-          style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-          <div>
-            <div className="text-2xl font-bold font-mono" style={{ color: '#C8963C' }}>
-              {profile.stats.totalAgentsRegistered}
+        {/* Quick stats — right side, subtle, monochrome */}
+        <div className="flex items-center gap-0 shrink-0 sm:border-l sm:pl-5"
+          style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          {[
+            { value: profile.stats.totalAgentsRegistered, label: 'Agents' },
+            { value: formatStaked(profile.stats.totalTrustStaked), label: 'tTRUST' },
+            { value: profile.badges.length, label: 'Badges' },
+          ].map((stat, i) => (
+            <div key={stat.label}
+              className={`text-center px-4 ${i < 2 ? 'border-r' : ''}`}
+              style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+              <div className="text-lg font-bold font-mono text-white leading-none">{stat.value}</div>
+              <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>{stat.label}</div>
             </div>
-            <div className="text-[11px] text-[#7A838D]">Agents</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold font-mono" style={{ color: '#4ADE80' }}>
-              {formatStaked(profile.stats.totalTrustStaked)}
-            </div>
-            <div className="text-[11px] text-[#7A838D]">tTRUST</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold font-mono" style={{ color: '#A78BFA' }}>
-              {profile.badges.length}
-            </div>
-            <div className="text-[11px] text-[#7A838D]">Badges</div>
-          </div>
+          ))}
         </div>
+
       </div>
     </motion.div>
   )

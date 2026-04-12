@@ -62,19 +62,27 @@ function cacheFeeProxyApproved(userAddress: string): void {
  * Idempotent: no-op if already approved (cached in localStorage).
  * Must be called before any FeeProxy operation that involves deposits.
  */
-export async function ensureFeeProxyApproved(config: WriteConfig): Promise<void> {
-  const address = config.walletClient.account!.address
+export async function ensureFeeProxyApproved(
+  config: WriteConfig,
+  onProgress?: (msg: string) => void,
+): Promise<void> {
+  const account = config.walletClient.account
+  if (!account) throw new Error('Wallet account not available. Please reconnect your wallet.')
+
+  const address = account.address
   if (isFeeProxyApproved(address)) return
 
+  onProgress?.('Approving FeeProxy (one-time setup)…')
   const hash = await config.walletClient.writeContract({
     address: config.address, // MultiVault
     abi: MultiVaultAbi,
     functionName: 'approve',
     args: [FEE_PROXY_ADDRESS, 1], // 1 = DEPOSIT approval
-    account: config.walletClient.account!,
+    account,
     chain: config.walletClient.chain ?? intuitionTestnet,
   })
 
+  onProgress?.('Waiting for approval confirmation…')
   await config.publicClient.waitForTransactionReceipt({ hash })
   cacheFeeProxyApproved(address)
 }
@@ -219,6 +227,31 @@ const FeeProxyAbi = [
  */
 function calcFeeProxyValue(depositAmount: bigint, fees: { fixedFee: bigint; bps: bigint }): bigint {
   return (depositAmount * (10000n + fees.bps)) / 10000n + fees.fixedFee
+}
+
+/**
+ * Correct fee calculation for batch createAtoms / createTriples calls.
+ *
+ * FeeProxy contract formula (IntuitionFeeProxy.sol):
+ *   fee          = fixedFee * depositCount + totalDeposit * bps / 10000
+ *   multiVaultCost = protocolCostPerItem * count + totalDeposit
+ *   totalRequired  = multiVaultCost + fee
+ *
+ * Key difference from calcFeeProxyValue: fixedFee is multiplied by depositCount
+ * (number of non-zero deposits), NOT added once. For N=1 both formulas agree;
+ * for N>1 calcFeeProxyValue underestimates and causes InsufficientValue reverts.
+ */
+function calcBatchCreationValue(
+  protocolCostPerItem: bigint,
+  count: bigint,
+  deposits: bigint[],
+  fees: { fixedFee: bigint; bps: bigint },
+): bigint {
+  const totalDeposit   = deposits.reduce((a, b) => a + b, 0n)
+  const depositCount   = BigInt(deposits.filter(d => d > 0n).length)
+  const multiVaultCost = protocolCostPerItem * count + totalDeposit
+  const fee            = fees.fixedFee * depositCount + (totalDeposit * fees.bps) / 10000n
+  return multiVaultCost + fee
 }
 
 /**
@@ -609,7 +642,7 @@ export async function registerAgentBatch(
   initialDeposit?: bigint,
   onProgress?: (step: string) => void,
 ): Promise<{ termId: `0x${string}`; transactionHash: `0x${string}` }> {
-  await ensureFeeProxyApproved(config)
+  await ensureFeeProxyApproved(config, onProgress)
 
   const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
   const mvAddress = getMultiVaultAddress(config.publicClient.chain?.id)
@@ -656,17 +689,16 @@ export async function registerAgentBatch(
     const datas    = toCreate.map(label => stringToHex(label))
     const deposits = toCreate.map(label => label === agentLabel ? deposit : DEFAULT_ATOM_DEPOSIT)
 
-    const atomCost = await config.publicClient.readContract({
-      address: FEE_PROXY_ADDRESS,
-      abi: FeeProxyAbi,
-      functionName: 'getAtomCost',
-    }) as bigint
+    const [atomCost, fees] = await Promise.all([
+      config.publicClient.readContract({
+        address: FEE_PROXY_ADDRESS,
+        abi: FeeProxyAbi,
+        functionName: 'getAtomCost',
+      }) as Promise<bigint>,
+      getFeeConfig(config.publicClient),
+    ])
 
-    const N          = BigInt(toCreate.length)
-    const totalDep   = deposits.reduce((a, b) => a + b, 0n)
-    const baseCost   = atomCost * N + totalDep
-    const fees       = await getFeeConfig(config.publicClient)
-    const totalValue = calcFeeProxyValue(baseCost, fees)
+    const totalValue = calcBatchCreationValue(atomCost, BigInt(toCreate.length), deposits, fees)
 
     const hash = await config.walletClient.writeContract({
       address: FEE_PROXY_ADDRESS,
@@ -680,57 +712,263 @@ export async function registerAgentBatch(
     await config.publicClient.waitForTransactionReceipt({ hash })
   }
 
-  // ── Tx 2: Batch-create all triples ─────────────────────────────────────────
+  // ── Tx 2: Batch-create triples (skip any that already exist) ─────────────
   // Always:   [agent][is][AI Agent]
   // Per skill: [agent][hasAgentSkill][skill]  +  [skill][is][Agent Skill]
-  onProgress?.('Linking relationships…')
+  onProgress?.('Checking existing relationships…')
 
   const isId       = atomMap.get('is')!.termId
   const aiAgentId  = atomMap.get('AI Agent')!.termId
   const hasSkillId = atomMap.get('hasAgentSkill')!.termId
   const agSkillId  = atomMap.get('Agent Skill')!.termId
 
-  const subjects:  `0x${string}`[] = [agentTermId]
-  const predicates:`0x${string}`[] = [isId]
-  const objects:   `0x${string}`[] = [aiAgentId]
-  const tDeposits: bigint[]        = [DEFAULT_ATOM_DEPOSIT]
-
+  // Build candidate triples
+  type TripleCandidate = { s: `0x${string}`; p: `0x${string}`; o: `0x${string}`; dep: bigint }
+  const candidates: TripleCandidate[] = [
+    { s: agentTermId, p: isId, o: aiAgentId, dep: DEFAULT_ATOM_DEPOSIT },
+  ]
   for (const skill of skills) {
     const skillId = atomMap.get(skill)!.termId
-    subjects.push(agentTermId, skillId)
-    predicates.push(hasSkillId, isId)
-    objects.push(skillId, agSkillId)
-    tDeposits.push(DEFAULT_ATOM_DEPOSIT, DEFAULT_ATOM_DEPOSIT)
+    candidates.push(
+      { s: agentTermId, p: hasSkillId, o: skillId,    dep: DEFAULT_ATOM_DEPOSIT },
+      { s: skillId,     p: isId,       o: agSkillId,  dep: DEFAULT_ATOM_DEPOSIT },
+    )
   }
 
-  const tripleCost = await config.publicClient.readContract({
-    address: FEE_PROXY_ADDRESS,
-    abi: FeeProxyAbi,
-    functionName: 'getTripleCost',
-  }) as bigint
+  // Compute all triple IDs in parallel (pure view, no tx)
+  const tripleIds = await Promise.all(
+    candidates.map(c =>
+      config.publicClient.readContract({
+        address: mvAddress,
+        abi: MultiVaultAbi,
+        functionName: 'calculateTripleId',
+        args: [c.s, c.p, c.o],
+      }) as Promise<`0x${string}`>
+    )
+  )
 
-  const M          = BigInt(subjects.length)
-  const totalTDep  = tDeposits.reduce((a, b) => a + b, 0n)
-  const tBaseCost  = tripleCost * M + totalTDep
-  const fees       = await getFeeConfig(config.publicClient)
-  const tTotal     = calcFeeProxyValue(tBaseCost, fees)
+  // Check existence in parallel
+  const tripleExistsArr = await Promise.all(
+    tripleIds.map(id =>
+      (config.publicClient.readContract({
+        address: mvAddress,
+        abi: MultiVaultAbi,
+        functionName: 'isTermCreated',
+        args: [id],
+      }) as Promise<boolean>).catch(() => false)
+    )
+  )
 
-  const tripleHash = await config.walletClient.writeContract({
-    address: FEE_PROXY_ADDRESS,
-    abi: FeeProxyAbi,
-    functionName: 'createTriples',
-    args: [config.walletClient.account!.address, subjects, predicates, objects, tDeposits, 1n],
-    value: tTotal,
-    account: config.walletClient.account!,
-    chain: config.walletClient.chain ?? intuitionTestnet,
-  })
-  await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
+  // Filter to only missing triples
+  const missing = candidates.filter((_, i) => !tripleExistsArr[i])
+
+  const subjects:  `0x${string}`[] = missing.map(c => c.s)
+  const predicates:`0x${string}`[] = missing.map(c => c.p)
+  const objects:   `0x${string}`[] = missing.map(c => c.o)
+  const tDeposits: bigint[]        = missing.map(c => c.dep)
+
+  const [tripleCost, fees] = await Promise.all([
+    config.publicClient.readContract({
+      address: FEE_PROXY_ADDRESS,
+      abi: FeeProxyAbi,
+      functionName: 'getTripleCost',
+    }) as Promise<bigint>,
+    getFeeConfig(config.publicClient),
+  ])
+
+  let tripleHash: `0x${string}` = '0x0'
+
+  if (missing.length > 0) {
+    onProgress?.(`Linking ${missing.length} relationship(s)…`)
+
+    const M      = BigInt(missing.length)
+    const tTotal = calcBatchCreationValue(tripleCost, M, tDeposits, fees)
+
+    tripleHash = await config.walletClient.writeContract({
+      address: FEE_PROXY_ADDRESS,
+      abi: FeeProxyAbi,
+      functionName: 'createTriples',
+      args: [config.walletClient.account!.address, subjects, predicates, objects, tDeposits, 1n],
+      value: tTotal,
+      account: config.walletClient.account!,
+      chain: config.walletClient.chain ?? intuitionTestnet,
+    })
+    await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
+  } else {
+    onProgress?.('All relationships already exist on-chain…')
+  }
 
   // Persist registration
   const userAddress = config.walletClient.account?.address
   if (userAddress) saveRegistration(agentTermId, userAddress, 'agent')
 
   return { termId: agentTermId, transactionHash: tripleHash }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Forge Project Batch Registration — 2 txs total
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Register an IntuForge project in exactly 2 on-chain transactions:
+ *
+ *   Tx 1 — createAtoms([projectAtom, ...missingSharedAtoms])
+ *   Tx 2 — createTriples([[project][is][Intuition Project], [project][hasForgeCategory][category]])
+ *
+ * Shared semantic atoms ("is", "Intuition Project", "hasForgeCategory", category)
+ * are detected via isTermCreated() reads (parallel, no txs) and skipped if they exist.
+ *
+ * @param atomLabel       Serialized JSON project label (from serializeForgeProject)
+ * @param categoryLabel   Human-readable category, e.g. "AI Agents"
+ * @param initialDeposit  Optional initial stake on the project atom (default 0.001 tTRUST)
+ * @param onProgress      Optional UI callback
+ */
+export async function registerForgeProjectBatch(
+  config: WriteConfig,
+  atomLabel: string,        // JSON metadata string (same pattern as Agent Card)
+  categoryLabel: string,
+  initialDeposit?: bigint,
+  onProgress?: (step: string) => void,
+): Promise<{ termId: `0x${string}`; transactionHash: `0x${string}` }> {
+  await ensureFeeProxyApproved(config, onProgress)
+
+  const deposit   = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
+  const mvAddress = getMultiVaultAddress(config.publicClient.chain?.id)
+
+  // ── Step 1: Pre-compute all termIds (pure view, no tx) ────────────────────
+  //
+  // Same pattern as registerAgentBatch:
+  //   atomLabel (project atom) — JSON metadata stored in atom data
+  //   shared atoms             — reused across all IntuForge projects
+  //
+  // Triples (Tx2):
+  //   [project][is][Intuition Project]
+  //   [project][hasForgeCategory][categoryLabel]
+  const SHARED_LABELS = ['is', 'Intuition Project', 'hasForgeCategory', categoryLabel] as const
+  const allLabels     = [atomLabel, ...SHARED_LABELS]
+
+  const termIds = allLabels.map(
+    label => sdkCalculateAtomId(stringToHex(label) as Hex) as `0x${string}`
+  )
+
+  const projectTermId = termIds[0]
+
+  // ── Step 2: Parallel existence checks (read calls, no tx) ─────────────────
+  onProgress?.('Checking on-chain state…')
+  const existsArr = await Promise.all(
+    termIds.map(id =>
+      (config.publicClient.readContract({
+        address: mvAddress,
+        abi: MultiVaultAbi,
+        functionName: 'isTermCreated',
+        args: [id],
+      }) as Promise<boolean>).catch(() => false)
+    )
+  )
+
+  type AtomInfo = { termId: `0x${string}`; exists: boolean }
+  const atomMap = new Map<string, AtomInfo>(
+    allLabels.map((label, i) => [label, { termId: termIds[i], exists: existsArr[i] }])
+  )
+
+  // ── Tx 1: Batch-create all missing atoms ──────────────────────────────────
+  const toCreate = allLabels.filter(label => !atomMap.get(label)!.exists)
+
+  if (toCreate.length > 0) {
+    onProgress?.(`Creating ${toCreate.length} atom(s) on-chain…`)
+
+    const datas    = toCreate.map(label => stringToHex(label))
+    const deposits = toCreate.map(label => label === atomLabel ? deposit : DEFAULT_ATOM_DEPOSIT)
+
+    const [atomCost, fees2] = await Promise.all([
+      config.publicClient.readContract({
+        address: FEE_PROXY_ADDRESS,
+        abi: FeeProxyAbi,
+        functionName: 'getAtomCost',
+      }) as Promise<bigint>,
+      getFeeConfig(config.publicClient),
+    ])
+
+    const totalValue = calcBatchCreationValue(atomCost, BigInt(toCreate.length), deposits, fees2)
+
+    const hash = await config.walletClient.writeContract({
+      address: FEE_PROXY_ADDRESS,
+      abi: FeeProxyAbi,
+      functionName: 'createAtoms',
+      args: [config.walletClient.account!.address, datas, deposits, 1n],
+      value: totalValue,
+      account: config.walletClient.account!,
+      chain: config.walletClient.chain ?? intuitionTestnet,
+    })
+    await config.publicClient.waitForTransactionReceipt({ hash })
+  } else {
+    onProgress?.('All atoms already exist on-chain…')
+  }
+
+  // ── Tx 2: Batch-create triples (skip any that already exist) ─────────────
+  //   [project][is][Intuition Project]
+  //   [project][hasForgeCategory][categoryLabel]
+  onProgress?.('Checking existing relationships…')
+
+  const isId  = atomMap.get('is')!.termId
+  const ipId  = atomMap.get('Intuition Project')!.termId
+  const hfcId = atomMap.get('hasForgeCategory')!.termId
+  const catId = atomMap.get(categoryLabel)!.termId
+
+  const [typeTripleId, catTripleId] = await Promise.all([
+    config.publicClient.readContract({
+      address: mvAddress, abi: MultiVaultAbi, functionName: 'calculateTripleId',
+      args: [projectTermId, isId, ipId],
+    }) as Promise<`0x${string}`>,
+    config.publicClient.readContract({
+      address: mvAddress, abi: MultiVaultAbi, functionName: 'calculateTripleId',
+      args: [projectTermId, hfcId, catId],
+    }) as Promise<`0x${string}`>,
+  ])
+
+  const [typeExists, catExists] = await Promise.all([
+    (config.publicClient.readContract({ address: mvAddress, abi: MultiVaultAbi, functionName: 'isTermCreated', args: [typeTripleId] }) as Promise<boolean>).catch(() => false),
+    (config.publicClient.readContract({ address: mvAddress, abi: MultiVaultAbi, functionName: 'isTermCreated', args: [catTripleId]  }) as Promise<boolean>).catch(() => false),
+  ])
+
+  const tSubjects:   `0x${string}`[] = []
+  const tPredicates: `0x${string}`[] = []
+  const tObjects:    `0x${string}`[] = []
+  const tDeps:       bigint[]        = []
+
+  if (!typeExists) { tSubjects.push(projectTermId); tPredicates.push(isId);  tObjects.push(ipId);  tDeps.push(DEFAULT_ATOM_DEPOSIT) }
+  if (!catExists)  { tSubjects.push(projectTermId); tPredicates.push(hfcId); tObjects.push(catId); tDeps.push(DEFAULT_ATOM_DEPOSIT) }
+
+  let lastHash: `0x${string}` = '0x0'
+
+  if (tSubjects.length > 0) {
+    onProgress?.(`Creating ${tSubjects.length} relationship triple(s)…`)
+
+    const [tripleCost, tFees] = await Promise.all([
+      config.publicClient.readContract({
+        address: FEE_PROXY_ADDRESS, abi: FeeProxyAbi, functionName: 'getTripleCost',
+      }) as Promise<bigint>,
+      getFeeConfig(config.publicClient),
+    ])
+
+    const tTotal = calcBatchCreationValue(tripleCost, BigInt(tSubjects.length), tDeps, tFees)
+
+    const tripleHash = await config.walletClient.writeContract({
+      address: FEE_PROXY_ADDRESS,
+      abi: FeeProxyAbi,
+      functionName: 'createTriples',
+      args: [config.walletClient.account!.address, tSubjects, tPredicates, tObjects, tDeps, 1n],
+      value: tTotal,
+      account: config.walletClient.account!,
+      chain: config.walletClient.chain ?? intuitionTestnet,
+    })
+    await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
+    lastHash = tripleHash
+  } else {
+    onProgress?.('All relationships already exist on-chain…')
+  }
+
+  return { termId: projectTermId, transactionHash: lastHash }
 }
 
 /**

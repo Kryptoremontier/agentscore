@@ -7,6 +7,7 @@ import {
   Bot, Zap, MessageSquare, TrendingUp, ShieldCheck, Database, GitBranch,
   Users, Layers, ScanLine, ChevronRight, DollarSign, Target, Globe,
   Code, ExternalLink, BookOpen, Plug, Rocket,
+  Shield, Eye, Sparkles, Crown,
 } from 'lucide-react'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -157,7 +158,7 @@ function TabGettingStarted() {
         <Step n={1} title="Get Test Tokens">
           <p>
             Visit the{' '}
-            <ExtLink href="https://portal.intuition.systems">Intuition Faucet</ExtLink>
+            <ExtLink href="https://testnet.hub.intuition.systems/">Intuition Hub (Testnet)</ExtLink>
             {' '}to receive free tTRUST tokens.
           </p>
           <p>You need tTRUST to register agents and stake on trust claims.</p>
@@ -252,19 +253,19 @@ function TabGettingStarted() {
             Back agents that crash → accuracy drops.
           </p>
           <div className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-xs">
-            {[
-              { icon: '🌱', tier: 'Newcomer', color: '#7A838D' },
-              { icon: '🔍', tier: 'Scout',    color: '#38B6FF' },
-              { icon: '📊', tier: 'Analyst',  color: '#A78BFA' },
-              { icon: '🔮', tier: 'Oracle',   color: '#C8963C' },
-              { icon: '🧙', tier: 'Sage',     color: '#2ECC71' },
-            ].map(({ icon, tier, color }) => (
+            {([
+              { Icon: Shield,  tier: 'Newcomer', color: '#7A838D', rgb: '122,131,141' },
+              { Icon: Eye,     tier: 'Scout',    color: '#38B6FF', rgb: '56,182,255'  },
+              { Icon: BookOpen,tier: 'Analyst',  color: '#A78BFA', rgb: '167,139,250' },
+              { Icon: Sparkles,tier: 'Oracle',   color: '#C8963C', rgb: '200,150,60'  },
+              { Icon: Crown,   tier: 'Sage',     color: '#2ECC71', rgb: '46,204,113'  },
+            ] as const).map(({ Icon, tier, color, rgb }) => (
               <div
                 key={tier}
                 className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
-                style={{ background: `${color}14`, border: `1px solid ${color}30` }}
+                style={{ background: `rgba(${rgb},0.08)`, border: `1px solid rgba(${rgb},0.25)` }}
               >
-                <span>{icon}</span>
+                <Icon className="w-3 h-3 shrink-0" style={{ color }} />
                 <span style={{ color }}>{tier}</span>
               </div>
             ))}
@@ -332,7 +333,7 @@ function TabGettingStarted() {
           </div>
           <div className="flex items-center gap-2" style={{ color: 'rgba(255,255,255,0.55)' }}>
             <span>›</span>
-            <ExtLink href="https://discord.gg/intuition">Post in Intuition Discord #ecosystem channel</ExtLink>
+            <ExtLink href="https://discord.gg/0xintuition">Post in Intuition Discord #ecosystem channel</ExtLink>
           </div>
         </div>
       </DocCard>
@@ -490,7 +491,7 @@ function TabOverview() {
       <DocCard>
         <SectionTitle icon={Users} color="#2ECC71" label="Getting started" />
         <p className="text-[#9BA5B0] text-sm mb-6">
-          Connect a wallet, get testnet tTRUST from the faucet, then explore or register.
+          Connect a wallet, get testnet tTRUST from <a href="https://testnet.hub.intuition.systems/" target="_blank" rel="noopener noreferrer" className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#C8963C' }}>Intuition Hub</a>, then explore or register.
         </p>
         <div className="grid sm:grid-cols-3 gap-3">
           {[
@@ -853,19 +854,29 @@ function TabEvaluators() {
       {/* Evaluator Tiers */}
       <DocCard>
         <SectionTitle icon={Target} color="#F59E0B" label="Evaluator Tiers" />
-        <div className="grid sm:grid-cols-5 gap-3">
-          {[
-            { tier: 'Newcomer', icon: '🌱', req: '< 3 picks', color: '#7A838D', bg: 'rgba(255,255,255,0.03)' },
-            { tier: 'Scout', icon: '🔍', req: '3+ picks, < 60%', color: '#38B6FF', bg: 'rgba(56,182,255,0.06)' },
-            { tier: 'Analyst', icon: '📊', req: '5+ picks, ≥ 60%', color: '#A855F7', bg: 'rgba(168,85,247,0.06)' },
-            { tier: 'Oracle', icon: '🔮', req: '10+ picks, ≥ 75%', color: '#F59E0B', bg: 'rgba(245,158,11,0.06)' },
-            { tier: 'Sage', icon: '🧙', req: '20+ picks, ≥ 85%', color: '#10B981', bg: 'rgba(16,185,129,0.06)' },
-          ].map(t => (
-            <div key={t.tier} className="rounded-xl p-4 text-center"
-              style={{ background: t.bg, border: `1px solid ${t.color}30` }}>
-              <div className="text-2xl mb-1">{t.icon}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {([
+            { tier: 'Newcomer', Icon: Shield,   req: '< 3 picks',         color: '#7A838D', rgb: '122,131,141' },
+            { tier: 'Scout',    Icon: Eye,       req: '3+ picks, < 60%',   color: '#38B6FF', rgb: '56,182,255'  },
+            { tier: 'Analyst',  Icon: BookOpen,  req: '5+ picks, ≥ 60%',   color: '#A78BFA', rgb: '167,139,250' },
+            { tier: 'Oracle',   Icon: Sparkles,  req: '10+ picks, ≥ 75%',  color: '#C8963C', rgb: '200,150,60'  },
+            { tier: 'Sage',     Icon: Crown,     req: '20+ picks, ≥ 85%',  color: '#2ECC71', rgb: '46,204,113'  },
+          ] as const).map(t => (
+            <div key={t.tier}
+              className="rounded-xl p-4 text-center transition-all duration-200 hover:-translate-y-0.5"
+              style={{ background: `rgba(${t.rgb},0.06)`, border: `1px solid rgba(${t.rgb},0.20)` }}>
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3"
+                style={{
+                  background:  `rgba(${t.rgb},0.12)`,
+                  border:      `1px solid rgba(${t.rgb},0.28)`,
+                  boxShadow:   `0 0 14px rgba(${t.rgb},0.15)`,
+                }}
+              >
+                <t.Icon className="w-5 h-5" style={{ color: t.color }} />
+              </div>
               <div className="text-sm font-bold mb-1" style={{ color: t.color }}>{t.tier}</div>
-              <p className="text-[#6B7480] text-xs">{t.req}</p>
+              <p className="text-[11px] leading-tight" style={{ color: 'rgba(255,255,255,0.35)' }}>{t.req}</p>
             </div>
           ))}
         </div>
@@ -1415,32 +1426,36 @@ export default function DocsPage() {
             </p>
           </div>
 
-          {/* Tab navigation */}
-          <div className="mb-8 -mx-4 sm:mx-0">
-            <div className="overflow-x-auto scrollbar-hide px-4 sm:px-0">
-              <div className="flex gap-1 min-w-max sm:min-w-0"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                {TABS.map(tab => {
-                  const isActive = activeTab === tab.id
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => handleTabChange(tab.id)}
-                      className="flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 whitespace-nowrap relative"
-                      style={{
-                        color: isActive ? '#C8963C' : 'rgba(255,255,255,0.4)',
-                        borderBottom: isActive ? '2px solid #C8963C' : '2px solid transparent',
-                        marginBottom: '-1px',
-                      }}
-                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.65)' }}
-                      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)' }}
-                    >
-                      <tab.icon className="w-3.5 h-3.5" />
-                      {tab.label}
-                    </button>
-                  )
-                })}
-              </div>
+          {/* Tab navigation — 2 rows × 4 cols, no scroll */}
+          <div className="mb-8 rounded-xl overflow-hidden"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="grid grid-cols-4">
+              {TABS.map((tab, idx) => {
+                const isActive = activeTab === tab.id
+                const isLastRow = idx >= 4
+                const isLastInRow = (idx + 1) % 4 === 0
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleTabChange(tab.id)}
+                    className="flex items-center justify-center gap-2 px-3 py-3 text-sm font-medium transition-all duration-200 relative"
+                    style={{
+                      color: isActive ? '#C8963C' : 'rgba(255,255,255,0.4)',
+                      background: isActive
+                        ? 'linear-gradient(135deg, rgba(200,150,60,0.12), rgba(200,150,60,0.06))'
+                        : 'transparent',
+                      borderRight:  isLastInRow ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                      borderBottom: isLastRow   ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                      boxShadow: isActive ? 'inset 0 -2px 0 #C8963C' : 'none',
+                    }}
+                    onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)' }}
+                    onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)' }}
+                  >
+                    <tab.icon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden sm:inline truncate">{tab.label}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 

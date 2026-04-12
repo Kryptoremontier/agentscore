@@ -108,55 +108,36 @@ export function MyAgents({ agents }: MyAgentsProps) {
     <div className="space-y-4">
       {/* Overview panel */}
       <div
-        className="rounded-2xl p-5"
-        style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(200,150,60,0.15)' }}
+        className="rounded-2xl overflow-hidden"
+        style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(255,255,255,0.08)' }}
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.25)' }}
-            >
-              <Shield className="w-4 h-4 text-[#C8963C]" />
-            </div>
-            <div>
-              <span className="text-sm font-semibold text-white">Your Agents</span>
-              <span className="text-xs text-[#7A838D] ml-2">Registered on the knowledge graph</span>
-            </div>
+            <Shield className="w-4 h-4 text-[#C8963C]" />
+            <span className="text-sm font-semibold text-white">Your Agents</span>
+            <span className="text-xs text-[#7A838D]">Registered on the knowledge graph</span>
           </div>
           <Link
             href="/register"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all hover:scale-[1.02]"
-            style={{ background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.30)', color: '#C8963C' }}
+            style={{ background: 'rgba(200,150,60,0.10)', border: '1px solid rgba(200,150,60,0.25)', color: '#C8963C' }}
           >
             <Plus className="w-3.5 h-3.5" /> Register New
           </Link>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div
-            className="rounded-xl p-3 text-center"
-            style={{ background: 'rgba(200,150,60,0.06)', border: '1px solid rgba(200,150,60,0.15)' }}
-          >
-            <div className="text-lg font-bold font-mono text-[#C8963C]">{agents.length}</div>
-            <div className="text-[10px] text-[#7A838D] mt-0.5">Agents</div>
-          </div>
-          <div
-            className="rounded-xl p-3 text-center"
-            style={{ background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.15)' }}
-          >
-            <div className="text-lg font-bold font-mono text-[#38BDF8]">{totals.totalStakers}</div>
-            <div className="text-[10px] text-[#7A838D] mt-0.5">Total Stakers</div>
-          </div>
-          <div
-            className="rounded-xl p-3 text-center"
-            style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)' }}
-          >
-            <div className="text-lg font-bold font-mono text-[#4ADE80]">
-              {totals.totalStaked >= 1 ? totals.totalStaked.toFixed(2) : totals.totalStaked.toFixed(4)}
+        <div className="flex divide-x" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          {[
+            { value: agents.length,                                                                            label: 'Agents' },
+            { value: totals.totalStakers,                                                                      label: 'Total Stakers' },
+            { value: totals.totalStaked >= 1 ? totals.totalStaked.toFixed(2) : totals.totalStaked.toFixed(4), label: 'tTRUST Staked' },
+          ].map((s) => (
+            <div key={s.label} className="flex-1 text-center py-3 px-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+              <div className="text-lg font-bold font-mono tabular-nums text-white leading-none">{s.value}</div>
+              <div className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.label}</div>
             </div>
-            <div className="text-[10px] text-[#7A838D] mt-0.5">tTRUST Staked</div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -250,22 +231,22 @@ export function MyAgents({ agents }: MyAgentsProps) {
                     <div className="grid grid-cols-2 gap-2">
                       <div
                         className="rounded-xl px-3 py-2 flex items-center gap-2"
-                        style={{ background: 'rgba(56,189,248,0.05)', border: '1px solid rgba(56,189,248,0.12)' }}
+                        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                       >
-                        <Users className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+                        <Users className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgba(255,255,255,0.3)' }} />
                         <div>
-                          <div className="text-sm font-bold text-[#38BDF8]">{agent.stakers}</div>
-                          <div className="text-[10px] text-[#4A5260]">stakers</div>
+                          <div className="text-sm font-bold text-white">{agent.stakers}</div>
+                          <div className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>stakers</div>
                         </div>
                       </div>
                       <div
                         className="rounded-xl px-3 py-2 flex items-center gap-2"
-                        style={{ background: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.12)' }}
+                        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                       >
-                        <TrendingUp className="w-3.5 h-3.5 text-[#4ADE80] shrink-0" />
+                        <TrendingUp className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgba(255,255,255,0.3)' }} />
                         <div>
-                          <div className="text-sm font-bold text-[#4ADE80]">{formatShares(agent.totalStaked)}</div>
-                          <div className="text-[10px] text-[#4A5260]">tTRUST</div>
+                          <div className="text-sm font-bold text-white">{formatShares(agent.totalStaked)}</div>
+                          <div className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>tTRUST</div>
                         </div>
                       </div>
                     </div>
@@ -294,7 +275,7 @@ export function MyAgents({ agents }: MyAgentsProps) {
               <Users className="w-3 h-3" /> Stakers
             </span>
             <span className="text-right flex items-center justify-end gap-1">
-              <TrendingUp className="w-3 h-3 text-[#4ADE80]" /> tTRUST
+              <TrendingUp className="w-3 h-3" /> tTRUST
             </span>
           </div>
 
@@ -337,12 +318,12 @@ export function MyAgents({ agents }: MyAgentsProps) {
 
                     {/* Stakers */}
                     <div className="text-right self-center">
-                      <span className="text-sm font-medium text-[#38BDF8] font-mono">{agent.stakers}</span>
+                      <span className="text-sm font-medium text-white font-mono">{agent.stakers}</span>
                     </div>
 
                     {/* tTRUST */}
                     <div className="text-right self-center">
-                      <span className="text-sm font-semibold text-[#4ADE80] font-mono">
+                      <span className="text-sm font-semibold text-white font-mono">
                         {formatShares(agent.totalStaked)}
                       </span>
                     </div>

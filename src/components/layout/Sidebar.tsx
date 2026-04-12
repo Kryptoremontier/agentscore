@@ -6,15 +6,16 @@ import { usePathname } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import {
   Bot, Zap, Trophy, Target, MessageSquare, Crown,
-  PenSquare, BookOpen, User, Plus, ChevronDown,
+  PenSquare, BookOpen, User, Plus, ChevronDown, Hammer,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 const EXPLORE_ITEMS = [
-  { href: '/agents',     label: 'Agents',      icon: Bot,          color: '#C8963C' },
-  { href: '/skills',     label: 'Skills',       icon: Zap,          color: '#2EE6D6' },
-  { href: '/domains',    label: 'Domains',      icon: Trophy,       color: '#8B5CF6' },
-  { href: '/claims',     label: 'Claims',       icon: MessageSquare, color: '#38B6FF' },
+  { href: '/agents',              label: 'Agents',      icon: Bot,          color: '#C8963C' },
+  { href: '/skills',              label: 'Skills',       icon: Zap,          color: '#2EE6D6' },
+  { href: '/domains',             label: 'Domains',      icon: Trophy,       color: '#8B5CF6' },
+  { href: '/claims',              label: 'Claims',       icon: MessageSquare, color: '#38B6FF' },
+  { href: '/explore/intuforge',   label: 'IntuForge',    icon: Hammer,       color: '#C8963C' },
 ] as const
 
 const ACTIVITY_ITEMS = [
@@ -37,7 +38,7 @@ function GroupLabel({ label, first = false }: { label: string; first?: boolean }
   )
 }
 
-function NavLink({ href, label, icon: Icon, color, pathname }: { href: string; label: string; icon: React.ElementType; color: string; pathname: string }) {
+function NavLink({ href, label, icon: Icon, color, pathname, badge }: { href: string; label: string; icon: React.ElementType; color: string; pathname: string; badge?: string }) {
   const active = pathname === href || (href !== '/' && pathname.startsWith(href.split('?')[0]))
 
   return (
@@ -60,11 +61,19 @@ function NavLink({ href, label, icon: Icon, color, pathname }: { href: string; l
         style={{ color: active ? color : 'rgba(255,255,255,0.32)' }}
       />
       <span className={cn(
-        'text-sm font-medium whitespace-nowrap transition-colors duration-150 leading-none',
+        'flex-1 text-sm font-medium whitespace-nowrap transition-colors duration-150 leading-none',
         active ? 'text-white' : 'text-white/50 group-hover:text-white/80',
       )}>
         {label}
       </span>
+      {badge && (
+        <span
+          className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+          style={{ background: 'rgba(200,150,60,0.15)', color: '#C8963C', border: '1px solid rgba(200,150,60,0.2)' }}
+        >
+          {badge}
+        </span>
+      )}
     </Link>
   )
 }
@@ -190,7 +199,14 @@ export function Sidebar() {
 
         {/* EXPLORE */}
         <GroupLabel label="Explore" />
-        {EXPLORE_ITEMS.map(item => <NavLink key={item.href} {...item} pathname={pathname} />)}
+        {EXPLORE_ITEMS.map(item => (
+          <NavLink
+            key={item.href}
+            {...item}
+            pathname={pathname}
+            badge={item.href === '/explore/intuforge' ? 'NEW' : undefined}
+          />
+        ))}
 
         {/* ACTIVITY */}
         <GroupLabel label="Activity" />

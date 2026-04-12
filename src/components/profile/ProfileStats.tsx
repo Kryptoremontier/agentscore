@@ -1,9 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Shield, TrendingUp, Zap, Award, Bot, MessageSquare } from 'lucide-react'
+import { Bot, Zap, MessageSquare, TrendingUp, Shield, Award } from 'lucide-react'
 import type { UserStats, UserBadge } from '@/types/user'
-import { cn } from '@/lib/cn'
 
 interface ProfileStatsProps {
   stats: UserStats
@@ -18,90 +17,53 @@ function formatStaked(raw: bigint): string {
   return '0'
 }
 
-const STAT_CARDS = (stats: UserStats, badges: UserBadge[]) => [
-  {
-    icon: Bot,
-    label: 'Agents',
-    value: stats.totalAgentsRegistered,
-    sub: 'Registered',
-    color: '#C8963C',
-    bg: 'rgba(200,150,60,0.10)',
-    border: 'rgba(200,150,60,0.25)',
-  },
-  {
-    icon: Zap,
-    label: 'Skills',
-    value: stats.totalSkillsRegistered,
-    sub: 'Registered',
-    color: '#2EE6D6',
-    bg: 'rgba(46,230,214,0.08)',
-    border: 'rgba(46,230,214,0.20)',
-  },
-  {
-    icon: MessageSquare,
-    label: 'Claims',
-    value: stats.totalClaimsCreated,
-    sub: 'Created',
-    color: '#38B6FF',
-    bg: 'rgba(56,182,255,0.08)',
-    border: 'rgba(56,182,255,0.20)',
-  },
-  {
-    icon: TrendingUp,
-    label: 'Staked',
-    value: formatStaked(stats.totalTrustStaked),
-    sub: 'tTRUST',
-    color: '#4ADE80',
-    bg: 'rgba(74,222,128,0.08)',
-    border: 'rgba(74,222,128,0.20)',
-  },
-  {
-    icon: Shield,
-    label: 'Positions',
-    value: stats.totalPositions,
-    sub: 'Active',
-    color: '#A78BFA',
-    bg: 'rgba(167,139,250,0.08)',
-    border: 'rgba(167,139,250,0.20)',
-  },
-  {
-    icon: Award,
-    label: 'Reputation',
-    value: stats.reputation,
-    sub: 'Score',
-    color: stats.reputation >= 80 ? '#4ADE80' : stats.reputation >= 60 ? '#2EE6D6' : '#C8963C',
-    bg: 'rgba(255,255,255,0.04)',
-    border: 'rgba(255,255,255,0.10)',
-  },
-]
+function reputationColor(rep: number): string {
+  if (rep >= 80) return '#2ECC71'
+  if (rep >= 60) return '#C8963C'
+  if (rep >= 40) return '#EAB308'
+  return '#7A838D'
+}
 
 export function ProfileStats({ stats, badges }: ProfileStatsProps) {
-  const cards = STAT_CARDS(stats, badges)
+  const items = [
+    { icon: Bot,          label: 'Agents',     sub: 'Registered', value: stats.totalAgentsRegistered },
+    { icon: Zap,          label: 'Skills',     sub: 'Registered', value: stats.totalSkillsRegistered },
+    { icon: MessageSquare,label: 'Claims',     sub: 'Created',    value: stats.totalClaimsCreated },
+    { icon: TrendingUp,   label: 'Staked',     sub: 'tTRUST',     value: formatStaked(stats.totalTrustStaked) },
+    { icon: Shield,       label: 'Positions',  sub: 'Active',     value: stats.totalPositions },
+    { icon: Award,        label: 'Reputation', sub: 'Score',      value: stats.reputation,
+      valueColor: reputationColor(stats.reputation) },
+  ]
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.08 }}
-      className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-8"
+      transition={{ delay: 0.06 }}
+      className="rounded-xl mb-5 overflow-hidden"
+      style={{ background: 'rgba(13,15,17,0.85)', border: '1px solid rgba(255,255,255,0.07)' }}
     >
-      {cards.map((card, i) => (
-        <motion.div
-          key={card.label}
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.08 + i * 0.04 }}
-          className="rounded-2xl p-4 text-center"
-          style={{ background: card.bg, border: `1px solid ${card.border}` }}
-        >
-          <card.icon className="w-4 h-4 mx-auto mb-2" style={{ color: card.color }} />
-          <div className="text-2xl font-bold font-mono leading-none" style={{ color: card.color }}>
-            {card.value}
+      <div className="grid grid-cols-3 sm:grid-cols-6 divide-x divide-y sm:divide-y-0"
+        style={{ '--tw-divide-opacity': 1, borderColor: 'rgba(255,255,255,0.06)' } as React.CSSProperties}>
+        {items.map((item) => (
+          <div key={item.label} className="flex flex-col items-center justify-center gap-1 py-4 px-3"
+            style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <item.icon className="w-3.5 h-3.5 mb-0.5" style={{ color: 'rgba(255,255,255,0.2)' }} />
+            <span
+              className="text-xl font-bold font-mono leading-none tabular-nums"
+              style={{ color: item.valueColor ?? 'rgba(255,255,255,0.85)' }}
+            >
+              {item.value}
+            </span>
+            <span className="text-[10px] font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              {item.label}
+            </span>
+            <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.18)' }}>
+              {item.sub}
+            </span>
           </div>
-          <div className="text-[10px] text-[#7A838D] mt-1">{card.label}</div>
-          <div className="text-[9px] text-[#4A5260]">{card.sub}</div>
-        </motion.div>
-      ))}
+        ))}
+      </div>
     </motion.div>
   )
 }

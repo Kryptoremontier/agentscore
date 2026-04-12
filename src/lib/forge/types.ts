@@ -37,18 +37,18 @@ export interface ForgeCategoryDef {
 }
 
 export const FORGE_CATEGORIES: ForgeCategoryDef[] = [
-  { id: ForgeCategory.AI_AGENTS,          label: 'AI Agents',          icon: '🤖', description: 'Agent frameworks, tools, evaluators',       color: 'text-purple-400' },
-  { id: ForgeCategory.TRUST_REPUTATION,   label: 'Trust & Reputation', icon: '🛡️', description: 'Scoring, verification, identity trust',       color: 'text-amber-400'  },
-  { id: ForgeCategory.DEFI,               label: 'DeFi',               icon: '💎', description: 'Trading, lending, yield, vaults',            color: 'text-blue-400'   },
-  { id: ForgeCategory.SOCIAL,             label: 'Social',             icon: '💬', description: 'Social platforms, messaging, community',     color: 'text-pink-400'   },
-  { id: ForgeCategory.IDENTITY,           label: 'Identity',           icon: '🪪', description: 'DID, verification, credentials',             color: 'text-cyan-400'   },
-  { id: ForgeCategory.DATA_ANALYTICS,     label: 'Data & Analytics',   icon: '📊', description: 'Dashboards, indexers, insights',             color: 'text-emerald-400'},
-  { id: ForgeCategory.DEVELOPER_TOOLS,    label: 'Developer Tools',    icon: '🛠️', description: 'SDKs, CLIs, libraries, testing',             color: 'text-orange-400' },
-  { id: ForgeCategory.INFRASTRUCTURE,     label: 'Infrastructure',     icon: '⚙️', description: 'Nodes, oracles, bridges, MCP servers',       color: 'text-slate-400'  },
-  { id: ForgeCategory.PREDICTION_MARKETS, label: 'Prediction Markets', icon: '🔮', description: 'Forecasting, betting, knowledge markets',    color: 'text-violet-400' },
-  { id: ForgeCategory.GOVERNANCE,         label: 'Governance',         icon: '🏛️', description: 'DAOs, voting, proposals, coordination',      color: 'text-yellow-400' },
-  { id: ForgeCategory.GAMING_NFT,         label: 'Gaming & NFT',       icon: '🎮', description: 'Games, collectibles, metaverse',             color: 'text-red-400'    },
-  { id: ForgeCategory.OTHER,              label: 'Other',              icon: '✨', description: 'Everything else',                            color: 'text-white/40'   },
+  { id: ForgeCategory.AI_AGENTS,          label: 'AI Agents',          icon: 'bot',         description: 'Agent frameworks, tools, evaluators',    color: 'text-purple-400' },
+  { id: ForgeCategory.TRUST_REPUTATION,   label: 'Trust & Reputation', icon: 'shield',      description: 'Scoring, verification, identity trust',   color: 'text-amber-400'  },
+  { id: ForgeCategory.DEFI,               label: 'DeFi',               icon: 'coins',       description: 'Trading, lending, yield, vaults',         color: 'text-blue-400'   },
+  { id: ForgeCategory.SOCIAL,             label: 'Social',             icon: 'globe',       description: 'Social platforms, messaging, community',  color: 'text-pink-400'   },
+  { id: ForgeCategory.IDENTITY,           label: 'Identity',           icon: 'fingerprint', description: 'DID, verification, credentials',          color: 'text-cyan-400'   },
+  { id: ForgeCategory.DATA_ANALYTICS,     label: 'Data & Analytics',   icon: 'bar-chart-2', description: 'Dashboards, indexers, insights',          color: 'text-emerald-400'},
+  { id: ForgeCategory.DEVELOPER_TOOLS,    label: 'Developer Tools',    icon: 'wrench',      description: 'SDKs, CLIs, libraries, testing',          color: 'text-orange-400' },
+  { id: ForgeCategory.INFRASTRUCTURE,     label: 'Infrastructure',     icon: 'server',      description: 'Nodes, oracles, bridges, MCP servers',    color: 'text-slate-400'  },
+  { id: ForgeCategory.PREDICTION_MARKETS, label: 'Prediction Markets', icon: 'target',      description: 'Forecasting, betting, knowledge markets', color: 'text-violet-400' },
+  { id: ForgeCategory.GOVERNANCE,         label: 'Governance',         icon: 'scroll-text', description: 'DAOs, voting, proposals, coordination',   color: 'text-yellow-400' },
+  { id: ForgeCategory.GAMING_NFT,         label: 'Gaming & NFT',       icon: 'gamepad-2',   description: 'Games, collectibles, metaverse',          color: 'text-red-400'    },
+  { id: ForgeCategory.OTHER,              label: 'Other',              icon: 'layers',      description: 'Everything else',                         color: 'text-white/40'   },
 ]
 
 export enum ProjectStage {

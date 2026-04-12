@@ -28,7 +28,7 @@ const navLinks = [
     heading: 'Ecosystem',
     items: [
       { label: 'Intuition Protocol', href: 'https://github.com/0xIntuition', external: true },
-      { label: 'Intuition Testnet', href: 'https://testnet.portal.intuition.systems/', external: true },
+      { label: 'Intuition Hub (Testnet)', href: 'https://testnet.hub.intuition.systems/', external: true },
       { label: 'Intuition Docs', href: 'https://docs.intuition.systems', external: true },
       { label: 'GitHub', href: 'https://github.com/Kryptoremontier/agentscore', external: true },
     ],

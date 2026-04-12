@@ -89,9 +89,9 @@ interface BuildTimelineInput {
 
 // Staker count thresholds that trigger tier upgrades (mirrors trust-tiers.ts)
 const TIER_MILESTONES = [
-  { count: 3,  tier: 'Sandbox',  icon: '◐' },
-  { count: 10, tier: 'Trusted',  icon: '✓' },
-  { count: 25, tier: 'Verified', icon: '⭐' },
+  { count: 3,  tier: 'Sandbox',  icon: 'sandbox'  },
+  { count: 10, tier: 'Trusted',  icon: 'trusted'  },
+  { count: 25, tier: 'Verified', icon: 'verified' },
 ]
 
 // ─── Main Engine ─────────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
       description: `${input.agentName} was registered on AgentScore. Starting trust score: 50.`,
       scoreAtEvent: 50,
       scoreDelta: null,
-      icon: '🎯',
+      icon: 'registered',
       severity: 'milestone',
     })
   }
@@ -128,11 +128,11 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
         id: `eval_${ev.id}`,
         timestamp: ev.timestamp,
         type: 'evaluator_staked',
-        title: `${tier === 'Sage' ? '🧙 Sage' : '🔮 Oracle'} Evaluator Staked`,
+        title: `${tier} Evaluator Staked`,
         description: `High-accuracy ${tier} evaluator staked support (weight ${(evalWeight ?? 1).toFixed(2)}×). Effective stake is boosted, improving score quality.`,
         scoreAtEvent: null,
         scoreDelta: null,
-        icon: tier === 'Sage' ? '🧙' : '🔮',
+        icon: 'evaluator',
         severity: 'positive',
         metadata: { accountId: ev.accountId, evaluatorWeight: evalWeight, evaluatorTier: tier },
       })
@@ -153,7 +153,7 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
           : (isSupport ? 'A supporter redeemed their position.' : 'An opponent redeemed their position.'),
         scoreAtEvent: null,
         scoreDelta: null,
-        icon: isDeposit ? (isSupport ? '👍' : '👎') : '↩️',
+        icon: isDeposit ? (isSupport ? 'support' : 'oppose') : 'left',
         severity: isDeposit ? (isSupport ? 'positive' : 'negative') : 'neutral',
         metadata: { accountId: ev.accountId, side: ev.side },
       })
@@ -210,7 +210,7 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
       description: `Capability claim created: "${input.agentName} has skill ${skill.skillName}". This enables domain-specific scoring in the ${skill.skillName} leaderboard.`,
       scoreAtEvent: null,
       scoreDelta: null,
-      icon: '⚡',
+      icon: 'skill',
       severity: 'positive',
       metadata: { skillName: skill.skillName, skillId: skill.skillId },
     })
@@ -227,7 +227,7 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
       description: 'Agent has endpoints and capabilities registered. Other AI agents can now discover and interact with this agent programmatically via the A2A protocol.',
       scoreAtEvent: null,
       scoreDelta: null,
-      icon: '🤖',
+      icon: 'a2a',
       severity: 'milestone',
     })
   }

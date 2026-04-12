@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { useWalletClient, usePublicClient, useAccount, useChainId } from 'wagmi'
 import { cn } from '@/lib/cn'
 import { ForgeCategory, ProjectStage, FORGE_CATEGORIES, PROJECT_STAGE_LABELS } from '@/lib/forge/types'
+import { CATEGORY_ICON_MAP, CATEGORY_HEX } from './CategoryPill'
 import { calculateForgeCompleteness } from '@/lib/forge/completeness'
 import { serializeForgeProject } from '@/lib/forge/data'
 import { registerForgeProjectBatch } from '@/lib/forge/chain'
@@ -203,6 +204,8 @@ function Step1({
         <div className="grid grid-cols-2 gap-2">
           {FORGE_CATEGORIES.map(cat => {
             const selected = form.category === cat.id
+            const Icon     = CATEGORY_ICON_MAP[cat.icon]
+            const hex      = CATEGORY_HEX[cat.color] ?? CATEGORY_HEX['text-white/40']
             return (
               <button
                 key={cat.id}
@@ -210,17 +213,33 @@ function Step1({
                 onClick={() => update('category', cat.id)}
                 className={cn(
                   'flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all duration-150',
-                  selected
-                    ? `border-current ring-1 ring-current/30 bg-current/5 ${cat.color}`
-                    : 'border-white/10 hover:border-white/20 hover:bg-white/5',
+                  selected ? 'border-white/20' : 'border-white/10 hover:border-white/20 hover:bg-white/5',
                 )}
+                style={selected ? {
+                  background: `rgba(${hex.rgb},0.08)`,
+                  borderColor: `rgba(${hex.rgb},0.35)`,
+                  boxShadow: `0 0 12px rgba(${hex.rgb},0.08)`,
+                } : {}}
               >
-                <span className="text-2xl shrink-0 leading-none">{cat.icon}</span>
+                {/* Icon square — matches Agents/Skills/Claims style */}
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{
+                    background: `rgba(${hex.rgb},0.12)`,
+                    border:    `1px solid rgba(${hex.rgb},0.28)`,
+                    boxShadow: selected ? `0 0 14px rgba(${hex.rgb},0.20)` : `0 0 10px rgba(${hex.rgb},0.10)`,
+                  }}
+                >
+                  {Icon && <Icon className="w-4 h-4" style={{ color: hex.text }} />}
+                </div>
+
                 <div className="min-w-0">
-                  <p className={cn('text-sm font-semibold leading-tight truncate', selected ? cat.color : 'text-white/70')}>
+                  <p className="text-sm font-semibold leading-tight truncate"
+                    style={{ color: selected ? hex.text : 'rgba(255,255,255,0.75)' }}>
                     {cat.label}
                   </p>
-                  <p className="text-[11px] text-white/40 leading-snug mt-0.5 line-clamp-1">
+                  <p className="text-[11px] leading-snug mt-0.5 line-clamp-1"
+                    style={{ color: 'rgba(255,255,255,0.35)' }}>
                     {cat.description}
                   </p>
                 </div>

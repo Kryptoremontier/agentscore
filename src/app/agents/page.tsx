@@ -921,7 +921,7 @@ function AgentsPageContent() {
     } catch (e: any) {
       console.error('handleCreateTrustTriple error:', e)
       if (e?.message?.includes('InsufficientBalance') || e?.message?.includes('insufficient')) {
-        alert('Insufficient tTRUST balance. Get tTRUST from the faucet at testnet.portal.intuition.systems')
+        alert('Insufficient tTRUST balance. Get tTRUST from the faucet at https://testnet.hub.intuition.systems/')
       } else {
         alert(`Error creating Oppose vault: ${e?.message || 'Unknown error'}`)
       }

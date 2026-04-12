@@ -18,12 +18,12 @@ import { useUserProfile } from '@/hooks/useUserProfile'
 import { useEvaluatorScore } from '@/hooks/useEvaluatorScore'
 
 const PROFILE_TABS = [
-  { id: 'agents',     label: 'My Agents',  icon: Bot,        color: '#C8963C' },
-  { id: 'supporting', label: 'Supporting', icon: TrendingUp, color: '#4ADE80' },
-  { id: 'pnl',        label: 'P&L',        icon: BarChart2,  color: '#38BDF8' },
-  { id: 'evaluator',  label: 'Evaluator',  icon: Target,     color: '#F59E0B' },
-  { id: 'badges',     label: 'Badges',     icon: Award,      color: '#A78BFA' },
-  { id: 'settings',   label: 'Settings',   icon: Settings,   color: '#7A838D' },
+  { id: 'agents',     label: 'My Agents',  icon: Bot        },
+  { id: 'supporting', label: 'Supporting', icon: TrendingUp },
+  { id: 'pnl',        label: 'P&L',        icon: BarChart2  },
+  { id: 'evaluator',  label: 'Evaluator',  icon: Target     },
+  { id: 'badges',     label: 'Badges',     icon: Award      },
+  { id: 'settings',   label: 'Settings',   icon: Settings   },
 ] as const
 
 export default function ProfilePage() {
@@ -85,7 +85,10 @@ function ProfilePageContent() {
         <ProfileStats stats={profile.stats} badges={profile.badges} />
 
         {/* Tab bar */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+        <div
+          className="flex gap-1 mb-6 p-1 rounded-xl overflow-x-auto"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+        >
           {PROFILE_TABS.map(tab => {
             const isActive = activeTab === tab.id
             return (
@@ -93,15 +96,15 @@ function ProfilePageContent() {
                 key={tab.id}
                 onClick={() => handleTabClick(tab.id)}
                 className={cn(
-                  'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
-                  isActive ? 'text-white' : 'text-[#7A838D] hover:text-[#B5BDC6]'
+                  'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0',
+                  isActive ? 'text-[#C8963C]' : 'text-[#7A838D] hover:text-[#B5BDC6] hover:bg-white/[0.03]'
                 )}
                 style={isActive
-                  ? { background: `${tab.color}18`, border: `1px solid ${tab.color}40`, color: tab.color }
-                  : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }
+                  ? { background: 'rgba(200,150,60,0.12)', border: '1px solid rgba(200,150,60,0.25)' }
+                  : { border: '1px solid transparent' }
                 }
               >
-                <tab.icon className="w-4 h-4" />
+                <tab.icon className="w-3.5 h-3.5" />
                 {tab.label}
               </button>
             )

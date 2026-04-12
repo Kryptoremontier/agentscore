@@ -62,7 +62,7 @@ const nextConfig = {
   },
 
   // Webpack configuration
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     // Fix for wallet connect
     if (!isServer) {
       config.resolve.fallback = {
@@ -78,6 +78,13 @@ const nextConfig = {
       ...config.resolve.alias,
       '@react-native-async-storage/async-storage': false,
       'pino-pretty': false,
+    }
+
+    // Disable persistent filesystem cache in dev on Windows to prevent
+    // file-locking errors ("UNKNOWN: unknown error, open .next/static/chunks/...")
+    // that occur when HMR tries to overwrite files still held by the OS.
+    if (dev) {
+      config.cache = false
     }
 
     return config

@@ -4,13 +4,15 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "next dev",
-    "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev",
-    "dev:fresh": "npx --yes kill-port 3000 3001 3002 && node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev",
+    "dev": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev -p 3000",
+    "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev -p 3000",
+    "dev:fresh": "npx --yes kill-port 3000 3001 3002 && node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@0xintuition/protocol": "latest",

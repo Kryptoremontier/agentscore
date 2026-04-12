@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, Zap, Trophy, Target, MessageSquare, Crown,
-  PenSquare, BookOpen, User, Menu, X,
+  PenSquare, BookOpen, User, Menu, X, Hammer,
 } from 'lucide-react'
 import { WalletButton } from '@/components/wallet/WalletButton'
 import { cn } from '@/lib/cn'
@@ -25,7 +25,8 @@ const MENU_GROUPS = [
       { href: '/agents',     label: 'Agents',      icon: Bot,          color: '#C8963C' },
       { href: '/skills',     label: 'Skills',       icon: Zap,          color: '#2EE6D6' },
       { href: '/domains',    label: 'Domains',      icon: Trophy,       color: '#8B5CF6' },
-      { href: '/evaluators', label: 'Evaluators',   icon: Target,       color: '#F59E0B' },
+      { href: '/evaluators',           label: 'Evaluators',  icon: Target,   color: '#F59E0B' },
+      { href: '/explore/intuforge',    label: 'IntuForge',   icon: Hammer,   color: '#C8963C' },
     ],
   },
   {

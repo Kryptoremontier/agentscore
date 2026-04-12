@@ -27,10 +27,10 @@ interface RegisterSkillFormProps {
 }
 
 const steps = [
-  { id: 'basic',   label: 'Basic Info',    icon: FileText },
-  { id: 'category', label: 'Category',     icon: Puzzle },
-  { id: 'compat',  label: 'Compatibility', icon: LinkIcon },
-  { id: 'review',  label: 'Review',        icon: Check },
+  { id: 'basic',    label: 'Basic Info',    icon: FileText,  color: '#C8963C', rgb: '200,150,60'  },
+  { id: 'category', label: 'Category',      icon: Puzzle,    color: '#2EE6D6', rgb: '46,230,214'  },
+  { id: 'compat',   label: 'Compatibility', icon: LinkIcon,  color: '#A78BFA', rgb: '167,139,250' },
+  { id: 'review',   label: 'Review',        icon: Check,     color: '#2ECC71', rgb: '46,204,113'  },
 ]
 
 export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
@@ -196,8 +196,11 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Web Search Tool"
                 className={cn(
-                  'w-full px-4 py-3 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none',
-                  errors.name && 'ring-2 ring-trust-critical'
+                  'w-full px-4 py-3 rounded-xl text-sm text-white placeholder-[#4A5260]',
+                  'bg-[#12151A] border outline-none transition-colors',
+                  errors.name
+                    ? 'border-[#EF444440] focus:border-[#EF4444]'
+                    : 'border-[#1E2229] focus:border-[#C8963C]/40',
                 )}
               />
               {errors.name && (
@@ -215,8 +218,11 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Describe what this skill does, its inputs/outputs, and how agents can use it..."
                 className={cn(
-                  'w-full px-4 py-3 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none resize-none',
-                  errors.description && 'ring-2 ring-trust-critical'
+                  'w-full px-4 py-3 rounded-xl text-sm text-white placeholder-[#4A5260]',
+                  'bg-[#12151A] border outline-none transition-colors resize-none',
+                  errors.description
+                    ? 'border-[#EF444440] focus:border-[#EF4444]'
+                    : 'border-[#1E2229] focus:border-[#C8963C]/40',
                 )}
                 rows={4}
               />
@@ -497,8 +503,8 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
 
             <div className="space-y-4">
               {/* Basic Info */}
-              <div className="glass rounded-lg p-4">
-                <h4 className="font-medium mb-3 text-text-secondary">Basic Information</h4>
+              <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <h4 className="font-medium mb-3 text-[#7A838D] text-xs uppercase tracking-wider">Basic Information</h4>
                 <dl className="space-y-2">
                   <div className="flex justify-between">
                     <dt className="text-sm text-text-muted">Name</dt>
@@ -523,14 +529,14 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
               </div>
 
               {/* Description */}
-              <div className="glass rounded-lg p-4">
-                <h4 className="font-medium mb-3 text-text-secondary">Description</h4>
+              <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <h4 className="font-medium mb-3 text-[#7A838D] text-xs uppercase tracking-wider">Description</h4>
                 <p className="text-sm">{formData.description}</p>
               </div>
 
               {/* Compatibility & Access */}
-              <div className="glass rounded-lg p-4">
-                <h4 className="font-medium mb-3 text-text-secondary">Compatibility & Access</h4>
+              <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <h4 className="font-medium mb-3 text-[#7A838D] text-xs uppercase tracking-wider">Compatibility & Access</h4>
                 <dl className="space-y-2.5">
                   {/* Pricing */}
                   {(() => {
@@ -602,8 +608,9 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
               </div>
 
               {/* Registration Fee */}
-              <div className="glass rounded-lg p-4 border border-primary/20 space-y-2">
-                <p className="font-medium">Registration Fee</p>
+              <div className="rounded-xl p-4 space-y-2"
+                style={{ background: 'rgba(200,150,60,0.06)', border: '1px solid rgba(200,150,60,0.2)' }}>
+                <p className="font-medium text-[#C8963C]">Registration Fee</p>
                 {platformFee ? (() => {
                   const depositAmt = 0.001
                   const pctFee = depositAmt * Number(platformFee.bps) / 10000
@@ -682,32 +689,34 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
 
           return (
             <div key={step.id} className="flex items-center flex-1">
-              <div className="flex items-center">
-                <div className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center transition-all',
-                  isActive && 'bg-primary text-white',
-                  isComplete && 'bg-trust-good text-white',
-                  !isActive && !isComplete && 'glass'
-                )}>
-                  {isComplete ? (
-                    <Check className="w-5 h-5" />
-                  ) : (
-                    <Icon className="w-5 h-5" />
-                  )}
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all flex-shrink-0"
+                  style={
+                    isComplete
+                      ? { background: 'rgba(46,204,113,0.18)', border: '1px solid rgba(46,204,113,0.45)', boxShadow: '0 0 10px rgba(46,204,113,0.15)' }
+                      : isActive
+                        ? { background: `rgba(${step.rgb},0.18)`, border: `1px solid rgba(${step.rgb},0.5)`, boxShadow: `0 0 12px rgba(${step.rgb},0.2)` }
+                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)' }
+                  }
+                >
+                  {isComplete
+                    ? <Check className="w-4 h-4" style={{ color: '#2ECC71' }} />
+                    : <Icon className="w-4 h-4" style={{ color: isActive ? step.color : '#4A5260' }} />
+                  }
                 </div>
-                <span className={cn(
-                  'ml-3 text-sm font-medium hidden sm:inline',
-                  isActive && 'text-text-primary',
-                  !isActive && 'text-text-muted'
-                )}>
+                <span
+                  className="text-sm font-medium hidden sm:inline transition-colors"
+                  style={{ color: isActive ? step.color : isComplete ? '#2ECC71' : '#4A5260' }}
+                >
                   {step.label}
                 </span>
               </div>
               {index < steps.length - 1 && (
-                <div className={cn(
-                  'flex-1 h-px mx-4',
-                  isComplete ? 'bg-trust-good' : 'bg-border'
-                )} />
+                <div
+                  className="flex-1 h-px mx-3 transition-colors"
+                  style={{ background: isComplete ? 'rgba(46,204,113,0.35)' : 'rgba(255,255,255,0.07)' }}
+                />
               )}
             </div>
           )
@@ -715,40 +724,49 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
       </div>
 
       {/* Form Content */}
-      <div className="glass rounded-xl p-8">
+      <div className="rounded-2xl p-8"
+        style={{ background: 'linear-gradient(145deg,#0F1113,#13161B)', border: '1px solid rgba(200,150,60,0.14)' }}
+      >
         {/* Wallet Connection Warning */}
         {mounted && !isConnected && !txHash && (
-          <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-            <p className="text-yellow-400 font-semibold">Connect your wallet to register skills</p>
-            <p className="text-sm text-text-secondary mt-1">
-              Make sure you&apos;re on Intuition Testnet (Chain ID: 13579)
-            </p>
+          <div className="mb-6 px-4 py-3.5 rounded-xl flex items-start gap-3"
+            style={{ background: 'rgba(200,150,60,0.08)', border: '1px solid rgba(200,150,60,0.25)' }}>
+            <Plug className="w-4 h-4 text-[#C8963C] flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-[#C8963C]">Connect your wallet to register skills</p>
+              <p className="text-xs text-[#7A838D] mt-0.5">Make sure you&apos;re on Intuition Testnet (Chain ID: 13579)</p>
+            </div>
           </div>
         )}
 
         {/* Wrong Chain Warning */}
         {mounted && isWrongChain && !txHash && (
-          <div className="mb-6 p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-            <p className="text-orange-400 font-semibold">Wrong network detected</p>
-            <p className="text-sm text-text-secondary mt-1">
-              You&apos;re connected but not on Intuition Testnet (Chain ID: 13579).
-            </p>
-            <button
-              onClick={promptSwitchChain}
-              className="mt-3 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 rounded-lg text-sm font-medium transition-colors"
-            >
-              Switch to Intuition Testnet
-            </button>
+          <div className="mb-6 px-4 py-3.5 rounded-xl flex items-start gap-3"
+            style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)' }}>
+            <Zap className="w-4 h-4 text-[#EAB308] flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-[#EAB308]">Wrong network detected</p>
+              <p className="text-xs text-[#7A838D] mt-0.5">You&apos;re connected but not on Intuition Testnet (Chain ID: 13579).</p>
+              <button
+                onClick={promptSwitchChain}
+                className="mt-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)', color: '#EAB308' }}
+              >
+                Switch to Intuition Testnet
+              </button>
+            </div>
           </div>
         )}
 
         {/* Error State */}
         {error && !txHash && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-            <p className="text-red-400 font-bold flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4" /> Error
-            </p>
-            <p className="text-sm text-red-300 mt-1">{error}</p>
+          <div className="mb-6 px-4 py-3.5 rounded-xl flex items-start gap-3"
+            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            <ShieldCheck className="w-4 h-4 text-[#EF4444] flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-[#EF4444]">Error</p>
+              <p className="text-xs text-[#EF4444]/80 mt-0.5">{error}</p>
+            </div>
           </div>
         )}
 

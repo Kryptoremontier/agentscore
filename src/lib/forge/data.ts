@@ -103,16 +103,13 @@ function parseForgeAtomLabel(label: string): Partial<ForgeProjectRegistrationInp
 
 interface RawForgeAtom {
   term_id: string
-  label: string
+  data: string
   created_at: string
-  account: { address: string } | null
-  vault: {
-    position_count: number
-    positions_aggregate: {
-      aggregate: { sum: { shares: string | null } | null } | null
-    }
-    current_share_price: string | null
+  creator: { id: string } | null
+  positions_aggregate: {
+    aggregate: { count: number; sum: { shares: string | null } | null } | null
   } | null
+  // [x][is][Intuition Project] triple — used for counter_term_id (staking)
   as_subject_triples: Array<{
     term_id: string
     counter_term_id: string
@@ -128,22 +125,124 @@ async function gql<T>(query: string): Promise<T | null> {
       body: JSON.stringify({ query }),
       cache: 'no-store',
     })
-    if (!res.ok) return null
     const data = await res.json()
+    if (data.errors) {
+      console.error('[forge/data] GraphQL errors:', JSON.stringify(data.errors))
+    }
+    if (!res.ok || !data.data) return null
     return (data.data as T) ?? null
   } catch (err) {
-    console.error('[forge/data] GraphQL error:', err)
+    console.error('[forge/data] GraphQL fetch error:', err)
     return null
   }
 }
 
-function atomToForgeProject(atom: RawForgeAtom): ForgeProject | null {
-  const meta = parseForgeAtomLabel(atom.label)
-  if (!meta || !meta.name) return null
+// ─── Fix 1: Batch-fetch oppose vault shares ──────────────────────────────────
 
-  const supportWei = BigInt(atom.vault?.positions_aggregate?.aggregate?.sum?.shares || '0')
-  const uniqueStakers = atom.vault?.position_count || 0
-  const currentPrice = parseFloat(atom.vault?.current_share_price || '0') / 1e18
+/**
+ * Fetch total shares in oppose vaults for a list of counter_term_ids.
+ * Same pattern as batchFetchOpposeShares() in api-data.ts.
+ */
+async function batchFetchForgeOpposeShares(
+  counterTermIds: string[],
+): Promise<Map<string, bigint>> {
+  const map = new Map<string, bigint>()
+  if (!counterTermIds.length) return map
+
+  const data = await gql<{ positions: Array<{ term_id: string; shares: string }> }>(`
+    {
+      positions(
+        where: {
+          term_id: { _in: ${JSON.stringify(counterTermIds)} }
+          shares: { _gt: "0" }
+        }
+      ) {
+        term_id
+        shares
+      }
+    }
+  `)
+
+  for (const pos of data?.positions ?? []) {
+    const prev = map.get(pos.term_id) || 0n
+    try { map.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip malformed */ }
+  }
+  return map
+}
+
+// ─── Fix 2: Individual positions for detail view ─────────────────────────────
+
+interface ForgePositionRow {
+  address: string
+  sharesWei: string
+}
+
+/**
+ * Fetch individual staker positions for a project (support + oppose vaults).
+ * Used only in fetchForgeProjectById — too heavy for the list view.
+ */
+async function fetchForgeProjectPositions(
+  atomId: string,
+  counterTermId: string | null,
+): Promise<{ support: ForgePositionRow[]; oppose: ForgePositionRow[] }> {
+  const buildQuery = (termId: string) => `
+    {
+      positions(
+        where: {
+          term_id: { _eq: "${termId}" }
+          shares: { _gt: "0" }
+        }
+        limit: 50
+        order_by: { shares: desc }
+      ) {
+        account { id }
+        shares
+      }
+    }
+  `
+
+  const toRows = (data: { positions: Array<{ account: { id: string }; shares: string }> } | null): ForgePositionRow[] =>
+    (data?.positions ?? [])
+      .map(p => ({ address: p.account?.id ?? '', sharesWei: p.shares }))
+      .filter(p => p.address.length > 0)
+
+  const [supportData, opposeData] = await Promise.all([
+    gql<{ positions: Array<{ account: { id: string }; shares: string }> }>(buildQuery(atomId)),
+    counterTermId
+      ? gql<{ positions: Array<{ account: { id: string }; shares: string }> }>(buildQuery(counterTermId))
+      : Promise.resolve(null),
+  ])
+
+  return {
+    support: toRows(supportData),
+    oppose:  toRows(opposeData),
+  }
+}
+
+// ─── Mapping ─────────────────────────────────────────────────────────────────
+
+function atomToForgeProject(
+  atom: RawForgeAtom,
+  opposeWei = 0n,
+  positions?: { support: ForgePositionRow[]; oppose: ForgePositionRow[] },
+): ForgeProject | null {
+  const meta = parseForgeAtomLabel(atom.data)
+  if (!meta?.name) return null
+
+  const supportWei = (() => {
+    try { return BigInt(atom.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { return 0n }
+  })()
+  const uniqueStakers = atom.positions_aggregate?.aggregate?.count || 0
+
+  // Fix 4: neutral price defaults for testnet (no historical price data)
+  const currentPrice = 1
+  const peakPrice    = 1
+
+  // Fix 10: stableDays — how long supportRatio has been > 50%
+  const totalWei    = supportWei + opposeWei
+  const supportRatio = totalWei > 0n ? Number(supportWei * 100n / totalWei) : 50
+  const daysActive  = Math.max(0, Math.floor((Date.now() - new Date(atom.created_at).getTime()) / 86_400_000))
+  const stableDays  = supportRatio > 50 ? daysActive : 0
 
   const completenessInput: ForgeProjectRegistrationInput = {
     name:         meta.name        ?? '',
@@ -168,13 +267,25 @@ function atomToForgeProject(atom: RawForgeAtom): ForgeProject | null {
 
   const completeness = calculateForgeCompleteness(completenessInput).percentage
 
+  // Fix 2: map positions to scoring format
+  const supportPositions = (positions?.support ?? []).map(p => ({
+    account_id: p.address,
+    shares: (() => { try { return BigInt(p.sharesWei) } catch { return 0n } })(),
+  }))
+  const opposePositions = (positions?.oppose ?? []).map(p => ({
+    account_id: p.address,
+    shares: (() => { try { return BigInt(p.sharesWei) } catch { return 0n } })(),
+  }))
+
   const scoring = calculateForgeTrustScore({
-    supportStakeWei: supportWei,
-    opposeStakeWei:  0n,
+    supportStakeWei:  supportWei,
+    opposeStakeWei:   opposeWei,  // Fix 1: real oppose
     uniqueStakers,
     currentPrice,
-    peakPrice: Math.max(currentPrice, 1),
-    stableDays: 0,
+    peakPrice,
+    stableDays,
+    supportPositions,             // Fix 2: real positions → real diversity weight
+    opposePositions,
   })
 
   const counterTermId = atom.as_subject_triples?.[0]?.counter_term_id ?? null
@@ -183,7 +294,7 @@ function atomToForgeProject(atom: RawForgeAtom): ForgeProject | null {
     id:                atom.term_id,
     atomId:            atom.term_id,
     registeredAt:      atom.created_at,
-    registrantAddress: atom.account?.address ?? '0x0000000000000000000000000000000000000000',
+    registrantAddress: atom.creator?.id ?? '0x0000000000000000000000000000000000000000',
     name:              completenessInput.name,
     tagline:           completenessInput.tagline,
     description:       completenessInput.description,
@@ -208,9 +319,13 @@ function atomToForgeProject(atom: RawForgeAtom): ForgeProject | null {
     finalScore:        scoring.finalScore,
     stakerCount:       uniqueStakers,
     totalStaked:       Number(supportWei) / 1e18,
+    opposeStaked:      Number(opposeWei) / 1e18,  // Fix 1
     evaluatorCount:    0,
     momentum:          scoring.momentum,
     sparklineData:     buildSparkline([scoring.finalScore]),
+    daysActive,
+    supportPositions:  positions?.support,
+    opposePositions:   positions?.oppose,
     intuitionAtoms:    [],
     counterTermId,
   }
@@ -225,14 +340,10 @@ export function getCategoryLabel(category: ForgeCategory): string {
 
 const FORGE_ATOM_QUERY_FIELDS = `
   term_id
-  label
+  data
   created_at
-  account { address }
-  vault {
-    position_count
-    positions_aggregate { aggregate { sum { shares } } }
-    current_share_price
-  }
+  creator { id }
+  positions_aggregate { aggregate { count sum { shares } } }
   as_subject_triples(
     where: {
       predicate: { label: { _eq: "is" } }
@@ -253,8 +364,13 @@ export async function fetchForgeProjectsFromChain(limit = 100): Promise<ForgePro
   const data = await gql<{ atoms: RawForgeAtom[] }>(`
     {
       atoms(
-        where: { label: { _ilike: "%\\"type\\":\\"IntuitionProject\\"%" } }
-        order_by: { vault: { position_count: desc_nulls_last } }
+        where: {
+          as_subject_triples: {
+            predicate: { label: { _eq: "is" } }
+            object: { label: { _eq: "Intuition Project" } }
+          }
+        }
+        order_by: { created_at: desc }
         limit: ${limit}
       ) {
         ${FORGE_ATOM_QUERY_FIELDS}
@@ -264,9 +380,17 @@ export async function fetchForgeProjectsFromChain(limit = 100): Promise<ForgePro
 
   if (!data?.atoms?.length) return []
 
+  // Fix 1: batch-fetch oppose vault shares for all projects in one query
+  const counterTermIds = data.atoms
+    .map(a => a.as_subject_triples?.[0]?.counter_term_id)
+    .filter((id): id is string => !!id)
+  const opposeMap = await batchFetchForgeOpposeShares(counterTermIds)
+
   const projects: ForgeProject[] = []
   for (const atom of data.atoms) {
-    const p = atomToForgeProject(atom)
+    const ctid = atom.as_subject_triples?.[0]?.counter_term_id
+    const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
+    const p = atomToForgeProject(atom, opposeWei)
     if (p) projects.push(p)
   }
   return projects
@@ -274,6 +398,7 @@ export async function fetchForgeProjectsFromChain(limit = 100): Promise<ForgePro
 
 /**
  * Fetch a single IntuForge project by its atom term_id.
+ * Includes individual positions for staker list + diversity weight.
  * Returns null if not found or not a forge project atom.
  */
 export async function fetchForgeProjectById(id: string): Promise<ForgeProject | null> {
@@ -292,5 +417,15 @@ export async function fetchForgeProjectById(id: string): Promise<ForgeProject | 
 
   const atom = data?.atoms?.[0]
   if (!atom) return null
-  return atomToForgeProject(atom)
+
+  const ctid = atom.as_subject_triples?.[0]?.counter_term_id ?? null
+
+  // Fix 1 + Fix 2: fetch oppose shares and individual positions in parallel
+  const [opposeMap, positions] = await Promise.all([
+    batchFetchForgeOpposeShares(ctid ? [ctid] : []),
+    fetchForgeProjectPositions(id, ctid),
+  ])
+
+  const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
+  return atomToForgeProject(atom, opposeWei, positions)
 }

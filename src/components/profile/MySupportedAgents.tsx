@@ -92,13 +92,13 @@ export function MySupportedAgents({ supports }: MySupportedAgentsProps) {
     return (
       <div
         className="rounded-2xl p-12 flex flex-col items-center justify-center text-center"
-        style={{ background: 'rgba(15,17,19,0.7)', border: '1px solid rgba(74,222,128,0.15)' }}
+        style={{ background: 'rgba(15,17,19,0.7)', border: '1px solid rgba(255,255,255,0.07)' }}
       >
         <div
           className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-          style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.20)' }}
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)' }}
         >
-          <TrendingUp className="w-8 h-8 text-[#4ADE80]" />
+          <TrendingUp className="w-8 h-8" style={{ color: 'rgba(255,255,255,0.3)' }} />
         </div>
         <h3 className="text-lg font-semibold mb-2">No Positions Yet</h3>
         <p className="text-[#7A838D] text-sm max-w-sm mb-5">
@@ -107,7 +107,7 @@ export function MySupportedAgents({ supports }: MySupportedAgentsProps) {
         <Link
           href="/agents"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all"
-          style={{ background: 'rgba(74,222,128,0.10)', border: '1px solid rgba(74,222,128,0.25)', color: '#4ADE80' }}
+          style={{ background: 'rgba(200,150,60,0.10)', border: '1px solid rgba(200,150,60,0.25)', color: '#C8963C' }}
         >
           <Search className="w-4 h-4" /> Explore Agents
         </Link>
@@ -119,50 +119,38 @@ export function MySupportedAgents({ supports }: MySupportedAgentsProps) {
     <div className="space-y-4">
       {/* Overview panel */}
       <div
-        className="rounded-2xl p-5"
-        style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(74,222,128,0.12)' }}
+        className="rounded-2xl overflow-hidden"
+        style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(255,255,255,0.08)' }}
       >
-        <div className="flex items-center gap-2 mb-4">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(74,222,128,0.10)', border: '1px solid rgba(74,222,128,0.20)' }}
-          >
-            <TrendingUp className="w-4 h-4 text-[#4ADE80]" />
-          </div>
+        <div className="flex items-center gap-2 px-5 py-4"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <TrendingUp className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.4)' }} />
           <div>
             <span className="text-sm font-semibold text-white">Your Positions</span>
             <span className="text-xs text-[#7A838D] ml-2">Trust signals across the network</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div
-            className="rounded-xl p-3 text-center"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-          >
-            <div className="text-lg font-bold font-mono text-[#B5BDC6]">{supports.length}</div>
-            <div className="text-[10px] text-[#7A838D] mt-0.5">Total Positions</div>
-          </div>
-          <div
-            className="rounded-xl p-3 text-center"
-            style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)' }}
-          >
-            <div className="text-lg font-bold font-mono text-[#4ADE80]">{totals.forCount}</div>
-            <div className="text-[10px] text-[#7A838D] mt-0.5">FOR</div>
-          </div>
-          <div
-            className="rounded-xl p-3 text-center"
-            style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)' }}
-          >
-            <div className="text-lg font-bold font-mono text-[#F87171]">{totals.againstCount}</div>
-            <div className="text-[10px] text-[#7A838D] mt-0.5">AGAINST</div>
-          </div>
+        <div className="flex divide-x" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          {[
+            { value: supports.length,     label: 'Total Positions', color: undefined },
+            { value: totals.forCount,     label: 'FOR',             color: '#2ECC71' as const },
+            { value: totals.againstCount, label: 'AGAINST',         color: '#EF4444' as const },
+          ].map((s) => (
+            <div key={s.label} className="flex-1 text-center py-3 px-2"
+              style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+              <div className="text-lg font-bold font-mono tabular-nums leading-none"
+                style={{ color: s.color ?? 'rgba(255,255,255,0.85)' }}>{s.value}</div>
+              <div className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.label}</div>
+            </div>
+          ))}
         </div>
 
-        <div className="mt-3 text-xs text-[#7A838D]">
-          Total staked:{' '}
-          <span className="font-semibold text-[#4ADE80]">
-            {totals.totalStaked >= 1 ? totals.totalStaked.toFixed(2) : totals.totalStaked.toFixed(4)} tTRUST
+        <div className="px-5 py-2.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Total staked:{' '}
+            <span className="font-semibold text-white">
+              {totals.totalStaked >= 1 ? totals.totalStaked.toFixed(2) : totals.totalStaked.toFixed(4)} tTRUST
+            </span>
           </span>
         </div>
       </div>
@@ -204,13 +192,13 @@ export function MySupportedAgents({ supports }: MySupportedAgentsProps) {
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
           >
             <ArrowUpDown className="w-3 h-3 text-[#7A838D] ml-1" />
-            {[{ id: 'value' as SortKey, label: 'Value' }, { id: 'newest' as SortKey, label: 'Newest' }].map(opt => (
+              {[{ id: 'value' as SortKey, label: 'Value' }, { id: 'newest' as SortKey, label: 'Newest' }].map(opt => (
               <button
                 key={opt.id}
                 onClick={() => setSortBy(opt.id)}
                 className={cn(
                   'px-2 py-1 rounded-md text-[10px] font-medium transition-all',
-                  sortBy === opt.id ? 'text-[#4ADE80] bg-[rgba(74,222,128,0.12)]' : 'text-[#7A838D] hover:text-[#B5BDC6]'
+                  sortBy === opt.id ? 'text-[#C8963C] bg-[rgba(200,150,60,0.12)]' : 'text-[#7A838D] hover:text-[#B5BDC6]'
                 )}
               >
                 {opt.label}
@@ -226,16 +214,16 @@ export function MySupportedAgents({ supports }: MySupportedAgentsProps) {
             <button
               onClick={() => setViewMode('list')}
               className={cn('flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all',
-                viewMode === 'list' ? 'text-[#4ADE80]' : 'text-[#7A838D] hover:text-[#B5BDC6]')}
-              style={viewMode === 'list' ? { background: 'rgba(74,222,128,0.12)' } : {}}
+                viewMode === 'list' ? 'text-[#C8963C]' : 'text-[#7A838D] hover:text-[#B5BDC6]')}
+              style={viewMode === 'list' ? { background: 'rgba(200,150,60,0.12)' } : {}}
             >
               <List className="w-3 h-3" />
             </button>
             <button
               onClick={() => setViewMode('grid')}
               className={cn('flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all',
-                viewMode === 'grid' ? 'text-[#4ADE80]' : 'text-[#7A838D] hover:text-[#B5BDC6]')}
-              style={viewMode === 'grid' ? { background: 'rgba(74,222,128,0.12)' } : {}}
+                viewMode === 'grid' ? 'text-[#C8963C]' : 'text-[#7A838D] hover:text-[#B5BDC6]')}
+              style={viewMode === 'grid' ? { background: 'rgba(200,150,60,0.12)' } : {}}
             >
               <LayoutGrid className="w-3 h-3" />
             </button>
@@ -322,7 +310,7 @@ export function MySupportedAgents({ supports }: MySupportedAgentsProps) {
             style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}
           >
             <span className="flex items-center gap-1.5">
-              <TrendingUp className="w-3 h-3 text-[#4ADE80]" /> Entity
+              <TrendingUp className="w-3 h-3" style={{ color: 'rgba(255,255,255,0.3)' }} /> Entity
             </span>
             <span className="text-center">Side</span>
             <span className="text-right">tTRUST</span>
