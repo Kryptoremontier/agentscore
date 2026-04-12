@@ -1,26 +1,55 @@
 export enum ForgeCategory {
-  AI_AGENTS = 'ai_agents',
-  DEFI = 'defi',
-  SOCIAL = 'social',
-  IDENTITY = 'identity',
-  DATA = 'data',
-  INFRASTRUCTURE = 'infra',
-  TOOLING = 'tooling',
-  GAMING = 'gaming',
-  OTHER = 'other',
+  AI_AGENTS          = 'ai_agents',
+  TRUST_REPUTATION   = 'trust_reputation',
+  DEFI               = 'defi',
+  SOCIAL             = 'social',
+  IDENTITY           = 'identity',
+  DATA_ANALYTICS     = 'data_analytics',
+  DEVELOPER_TOOLS    = 'developer_tools',
+  INFRASTRUCTURE     = 'infrastructure',
+  PREDICTION_MARKETS = 'prediction_markets',
+  GOVERNANCE         = 'governance',
+  GAMING_NFT         = 'gaming_nft',
+  OTHER              = 'other',
 }
 
 export const FORGE_CATEGORY_LABELS: Record<ForgeCategory, string> = {
-  [ForgeCategory.AI_AGENTS]: 'AI Agents',
-  [ForgeCategory.DEFI]: 'DeFi',
-  [ForgeCategory.SOCIAL]: 'Social',
-  [ForgeCategory.IDENTITY]: 'Identity',
-  [ForgeCategory.DATA]: 'Data',
-  [ForgeCategory.INFRASTRUCTURE]: 'Infrastructure',
-  [ForgeCategory.TOOLING]: 'Tooling',
-  [ForgeCategory.GAMING]: 'Gaming',
-  [ForgeCategory.OTHER]: 'Other',
+  [ForgeCategory.AI_AGENTS]:          'AI Agents',
+  [ForgeCategory.TRUST_REPUTATION]:   'Trust & Reputation',
+  [ForgeCategory.DEFI]:               'DeFi',
+  [ForgeCategory.SOCIAL]:             'Social',
+  [ForgeCategory.IDENTITY]:           'Identity',
+  [ForgeCategory.DATA_ANALYTICS]:     'Data & Analytics',
+  [ForgeCategory.DEVELOPER_TOOLS]:    'Developer Tools',
+  [ForgeCategory.INFRASTRUCTURE]:     'Infrastructure',
+  [ForgeCategory.PREDICTION_MARKETS]: 'Prediction Markets',
+  [ForgeCategory.GOVERNANCE]:         'Governance',
+  [ForgeCategory.GAMING_NFT]:         'Gaming & NFT',
+  [ForgeCategory.OTHER]:              'Other',
 }
+
+export interface ForgeCategoryDef {
+  id: ForgeCategory
+  label: string
+  icon: string
+  description: string
+  color: string
+}
+
+export const FORGE_CATEGORIES: ForgeCategoryDef[] = [
+  { id: ForgeCategory.AI_AGENTS,          label: 'AI Agents',          icon: '🤖', description: 'Agent frameworks, tools, evaluators',       color: 'text-purple-400' },
+  { id: ForgeCategory.TRUST_REPUTATION,   label: 'Trust & Reputation', icon: '🛡️', description: 'Scoring, verification, identity trust',       color: 'text-amber-400'  },
+  { id: ForgeCategory.DEFI,               label: 'DeFi',               icon: '💎', description: 'Trading, lending, yield, vaults',            color: 'text-blue-400'   },
+  { id: ForgeCategory.SOCIAL,             label: 'Social',             icon: '💬', description: 'Social platforms, messaging, community',     color: 'text-pink-400'   },
+  { id: ForgeCategory.IDENTITY,           label: 'Identity',           icon: '🪪', description: 'DID, verification, credentials',             color: 'text-cyan-400'   },
+  { id: ForgeCategory.DATA_ANALYTICS,     label: 'Data & Analytics',   icon: '📊', description: 'Dashboards, indexers, insights',             color: 'text-emerald-400'},
+  { id: ForgeCategory.DEVELOPER_TOOLS,    label: 'Developer Tools',    icon: '🛠️', description: 'SDKs, CLIs, libraries, testing',             color: 'text-orange-400' },
+  { id: ForgeCategory.INFRASTRUCTURE,     label: 'Infrastructure',     icon: '⚙️', description: 'Nodes, oracles, bridges, MCP servers',       color: 'text-slate-400'  },
+  { id: ForgeCategory.PREDICTION_MARKETS, label: 'Prediction Markets', icon: '🔮', description: 'Forecasting, betting, knowledge markets',    color: 'text-violet-400' },
+  { id: ForgeCategory.GOVERNANCE,         label: 'Governance',         icon: '🏛️', description: 'DAOs, voting, proposals, coordination',      color: 'text-yellow-400' },
+  { id: ForgeCategory.GAMING_NFT,         label: 'Gaming & NFT',       icon: '🎮', description: 'Games, collectibles, metaverse',             color: 'text-red-400'    },
+  { id: ForgeCategory.OTHER,              label: 'Other',              icon: '✨', description: 'Everything else',                            color: 'text-white/40'   },
+]
 
 export enum ProjectStage {
   IDEA = 'idea',
@@ -89,9 +118,15 @@ export interface ForgeProject {
   finalScore: number
   stakerCount: number
   totalStaked: number
+  opposeStaked: number
   evaluatorCount: number
   momentum: 'up' | 'down' | 'stable'
   sparklineData: number[]
+  daysActive: number
+
+  // Individual positions (populated in detail view only)
+  supportPositions?: Array<{ address: string; sharesWei: string }>
+  opposePositions?: Array<{ address: string; sharesWei: string }>
 
   // On-chain vault references (populated from GraphQL)
   counterTermId?: string | null

@@ -3,18 +3,18 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
-import { useWalletClient, usePublicClient, useAccount } from 'wagmi'
+import { useWalletClient, usePublicClient, useAccount, useChainId } from 'wagmi'
 import { cn } from '@/lib/cn'
-import { ForgeCategory, ProjectStage, FORGE_CATEGORY_LABELS, PROJECT_STAGE_LABELS } from '@/lib/forge/types'
-import { FORGE_CATEGORY_ICONS } from '@/lib/forge/constants'
+import { ForgeCategory, ProjectStage, FORGE_CATEGORIES, PROJECT_STAGE_LABELS } from '@/lib/forge/types'
 import { calculateForgeCompleteness } from '@/lib/forge/completeness'
 import { serializeForgeProject } from '@/lib/forge/data'
-import { tagForgeProjectType, tagForgeProjectCategory } from '@/lib/forge/chain'
-import { createWriteConfig, createSimpleAtom } from '@/lib/intuition'
+import { registerForgeProjectBatch } from '@/lib/forge/chain'
+import { createWriteConfig } from '@/lib/intuition'
+
+const INTUITION_TESTNET_ID = 13579
 import { CategoryPill } from './CategoryPill'
 import type { ForgeProjectRegistrationInput } from '@/lib/forge/types'
 
-const ALL_CATEGORIES = Object.values(ForgeCategory)
 const ALL_STAGES = Object.values(ProjectStage)
 
 const STEP_LABELS = ['Basics', 'Details', 'Preview & List']
@@ -200,22 +200,33 @@ function Step1({
         <label className="text-xs font-medium text-white/50">
           Category <span className="text-amber-500/80">*</span>
         </label>
-        <div className="flex flex-wrap gap-2">
-          {ALL_CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => update('category', cat)}
-              className={cn(
-                'px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
-                form.category === cat
-                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                  : 'border-white/10 text-white/40 hover:border-white/20 hover:text-white/60',
-              )}
-            >
-              {FORGE_CATEGORY_ICONS[cat]} {FORGE_CATEGORY_LABELS[cat]}
-            </button>
-          ))}
+        <div className="grid grid-cols-2 gap-2">
+          {FORGE_CATEGORIES.map(cat => {
+            const selected = form.category === cat.id
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => update('category', cat.id)}
+                className={cn(
+                  'flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all duration-150',
+                  selected
+                    ? `border-current ring-1 ring-current/30 bg-current/5 ${cat.color}`
+                    : 'border-white/10 hover:border-white/20 hover:bg-white/5',
+                )}
+              >
+                <span className="text-2xl shrink-0 leading-none">{cat.icon}</span>
+                <div className="min-w-0">
+                  <p className={cn('text-sm font-semibold leading-tight truncate', selected ? cat.color : 'text-white/70')}>
+                    {cat.label}
+                  </p>
+                  <p className="text-[11px] text-white/40 leading-snug mt-0.5 line-clamp-1">
+                    {cat.description}
+                  </p>
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -537,6 +548,7 @@ export function ProjectRegistrationForm() {
   const { isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const chainId = useChainId()
 
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<ForgeProjectRegistrationInput>(EMPTY_FORM)
@@ -554,7 +566,17 @@ export function ProjectRegistrationForm() {
 
   async function handleSubmit() {
     if (!isConnected || !walletClient || !publicClient) {
-      setError('Please connect your wallet to Intuition Testnet first.')
+      setError('Connect your wallet to Intuition Testnet first.')
+      return
+    }
+
+    if (!walletClient.account) {
+      setError('Wallet account not available. Please disconnect and reconnect.')
+      return
+    }
+
+    if (chainId !== INTUITION_TESTNET_ID) {
+      setError(`Wrong network. Please switch to Intuition Testnet (chain ID ${INTUITION_TESTNET_ID}). Currently on chain ${chainId}.`)
       return
     }
 
@@ -563,22 +585,23 @@ export function ProjectRegistrationForm() {
     setProgressMsg('Preparing registration…')
 
     try {
-      // 1. Serialize form as JSON atom label
-      const atomLabel = serializeForgeProject(form)
+      const atomLabel     = serializeForgeProject(form)
+      const categoryDef   = FORGE_CATEGORIES.find(c => c.id === form.category)
+      const categoryLabel = categoryDef?.label ?? form.category
+      const cfg           = createWriteConfig(walletClient, publicClient)
 
-      // 2. Create the project atom on-chain
-      setProgressMsg('Creating project atom on-chain…')
-      const cfg = createWriteConfig(walletClient, publicClient)
-      const { termId } = await createSimpleAtom(cfg, atomLabel)
+      console.log('[ForgeRegistration] Starting registration', { name: form.name, categoryLabel, chainId })
 
-      // 3. Tag type: [project] [is] [Intuition Project]
-      await tagForgeProjectType(cfg, termId, setProgressMsg)
+      // Up to 3 txs: Tx0 (one-time approval), Tx1 batch atoms, Tx2 batch triples
+      const { termId } = await registerForgeProjectBatch(
+        cfg,
+        atomLabel,
+        categoryLabel,
+        undefined,
+        setProgressMsg,
+      )
 
-      // 4. Tag category: [project] [hasForgeCategory] [Category]
-      const categoryLabel = FORGE_CATEGORY_LABELS[form.category]
-      await tagForgeProjectCategory(cfg, termId, categoryLabel, setProgressMsg)
-
-      // 5. Redirect to project profile (indexer needs ~30s to sync)
+      console.log('[ForgeRegistration] Success, termId:', termId)
       setProgressMsg('Project registered! Redirecting…')
       router.push(`/explore/intuforge/${termId}?new=1`)
     } catch (err: unknown) {
