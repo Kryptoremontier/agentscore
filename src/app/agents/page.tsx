@@ -147,7 +147,6 @@ function AgentsPageContent() {
   const isExecutingRef = useRef(false)
   const [allPositions, setAllPositions] = useState<any[]>([])
   const [combinedStakerCount, setCombinedStakerCount] = useState(0)
-  const [hybridScoreCache, setHybridScoreCache] = useState<Map<string, number>>(new Map())
   const [positionsLoading, setPositionsLoading] = useState(false)
   const [supportSupply, setSupportSupply] = useState(0)
   const [opposeSupply, setOpposeSupply] = useState(0)
@@ -1314,17 +1313,6 @@ function AgentsPageContent() {
     }
   }, [agentTrust, compositeTrust, allPositions, agentTriple.termId, agentTriple.counterTermId, evaluatorWeights])
 
-  // Cache hybridScore per agent so the card shows the same value after closing the modal
-  useEffect(() => {
-    if (selectedAgent && hybridScore != null) {
-      setHybridScoreCache(prev => {
-        const next = new Map(prev)
-        next.set(selectedAgent.term_id, hybridScore)
-        return next
-      })
-    }
-  }, [selectedAgent, hybridScore])
-
   // ─── Skill Trust Breakdown ───
   const skillBreakdown = useMemo((): SkillBreakdownResult | null => {
     try {
@@ -1723,11 +1711,8 @@ function AgentsPageContent() {
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ agent, trust: cardTrust }) => {
-                  const cached = hybridScoreCache.get(agent.term_id)
-                  const trustScore = cached ?? cardTrust.score
-                  const effectiveLevel = cached != null
-                    ? getHybridLevel(cached)
-                    : cardTrust.level
+                  const trustScore = cardTrust.score
+                  const effectiveLevel = cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const color = effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -1799,11 +1784,8 @@ function AgentsPageContent() {
                   <span className="text-right w-12">Score</span>
                 </div>
                 {sorted.map(({ agent, trust: cardTrust }, i) => {
-                  const cached = hybridScoreCache.get(agent.term_id)
-                  const trustScore = cached ?? cardTrust.score
-                  const effectiveLevel = cached != null
-                    ? getHybridLevel(cached)
-                    : cardTrust.level
+                  const trustScore = cardTrust.score
+                  const effectiveLevel = cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const color = effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -2379,8 +2361,9 @@ function AgentsPageContent() {
               {/* === AGENTSCORE + STAKE BREAKDOWN === */}
               {(() => {
                 const t = agentTrust
-                const score = hybridScore ?? t?.score ?? 50
-                const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
+                // Agent Score = pure economic trust score (same as card preview)
+                const agentScore = t?.score ?? 50
+                const agentLevel = t?.level ?? 'moderate'
                 const confidence = t?.confidence ?? 0
                 const momentum = t?.momentum ?? 0
                 const supportWei = t?.supportStake ?? BigInt(0)
@@ -2396,10 +2379,10 @@ function AgentsPageContent() {
                   if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
                   return `$${n.toFixed(4)}`
                 }
-                const scoreColor = level === 'excellent' ? '#2ECC71'
-                  : level === 'good' ? '#22C55E'
-                  : level === 'moderate' ? '#EAB308'
-                  : level === 'low' ? '#F97316'
+                const scoreColor = agentLevel === 'excellent' ? '#2ECC71'
+                  : agentLevel === 'good' ? '#22C55E'
+                  : agentLevel === 'moderate' ? '#EAB308'
+                  : agentLevel === 'low' ? '#F97316'
                   : '#EF4444'
                 const momDir = momentum > 0.1 ? 'up' : momentum < -0.1 ? 'down' : 'stable'
                 const momText = momDir === 'up'
@@ -2408,15 +2391,23 @@ function AgentsPageContent() {
                     ? `${momentum.toFixed(1)} pts`
                     : 'Stable'
                 const circumference = 2 * Math.PI * 32
-                const dashLen = (score / 100) * circumference
+                const dashLen = (agentScore / 100) * circumference
+
+                // Hybrid Score = 60% Agent Score + 40% composite quality (separate metric)
+                const hybridColor = hybridScore == null ? '#7A838D'
+                  : getHybridLevel(hybridScore) === 'excellent' ? '#2ECC71'
+                  : getHybridLevel(hybridScore) === 'good' ? '#22C55E'
+                  : getHybridLevel(hybridScore) === 'moderate' ? '#EAB308'
+                  : getHybridLevel(hybridScore) === 'low' ? '#F97316'
+                  : '#EF4444'
 
                 return (
                   <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                     <div className="grid grid-cols-2 gap-6">
 
-                      {/* LEFT: AgentScore */}
+                      {/* LEFT: Agent Score */}
                       <div>
-                        <h3 className="text-white font-bold mb-4">AGENTSCORE</h3>
+                        <h3 className="text-white font-bold mb-4">AGENT SCORE</h3>
                         <div className="flex items-center gap-4 mb-4">
                           <div className="relative w-20 h-20 flex-shrink-0">
                             <svg viewBox="0 0 80 80" className="w-20 h-20 -rotate-90">
@@ -2428,7 +2419,7 @@ function AgentsPageContent() {
                             </svg>
                             <div className="absolute inset-0 flex items-center justify-center">
                               <span className="font-bold text-lg" style={{ color: scoreColor }}>
-                                {score}
+                                {agentScore}
                               </span>
                             </div>
                           </div>
@@ -2451,10 +2442,25 @@ function AgentsPageContent() {
                               </span>
                             </div>
                             <p className="text-[#B5BDC6] text-xs">Trust Level</p>
-                            <p className="text-white text-sm font-semibold capitalize">{level}</p>
+                            <p className="text-white text-sm font-semibold capitalize">{agentLevel}</p>
                             <p className="text-[#B5BDC6] text-xs mt-1">Confidence</p>
                             <p className="text-white text-sm font-semibold">{(confidence * 100).toFixed(0)}%</p>
                           </div>
+                        </div>
+
+                        {/* Hybrid Score — quality-adjusted component */}
+                        <div
+                          className="flex items-center justify-between px-3 py-2 rounded-xl"
+                          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+                          title="Hybrid Score = 60% Agent Score + 40% composite quality (staker diversity, stability, evaluator weights)"
+                        >
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#7A838D]">Hybrid Score</p>
+                            <p className="text-[10px] text-[#4A5260] mt-0.5">60% trust · 40% quality</p>
+                          </div>
+                          <span className="text-base font-bold tabular-nums" style={{ color: hybridColor }}>
+                            {hybridScore != null ? hybridScore : '—'}
+                          </span>
                         </div>
                       </div>
 
@@ -2666,9 +2672,8 @@ function AgentsPageContent() {
 
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (() => {
-                  const rawScore = agentTrust?.score ?? 50
-                  const score = hybridScore ?? rawScore
-                  const level = hybridScore != null ? getHybridLevel(hybridScore) : (agentTrust?.level ?? 'moderate')
+                  const score = agentTrust?.score ?? 50
+                  const level = agentTrust?.level ?? 'moderate'
                   const confidence = agentTrust?.confidence ?? 0
                   const momentum = agentTrust?.momentum ?? 0
                   const supportWei = agentTrust?.supportStake ?? BigInt(0)
