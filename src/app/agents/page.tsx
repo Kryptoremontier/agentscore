@@ -1711,12 +1711,16 @@ function AgentsPageContent() {
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ agent, trust: cardTrust }) => {
-                  const trustScore = cardTrust.score
+                  const isSelected = selectedAgent?.term_id === agent.term_id
+                  const trustScore = (isSelected && hybridScore != null) ? hybridScore : cardTrust.score
+                  const effectiveLevel = (isSelected && hybridScore != null)
+                    ? getHybridLevel(hybridScore)
+                    : cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
-                  const color = cardTrust.level === 'excellent' ? '#34d399'
-                    : cardTrust.level === 'good' ? '#C8963C'
-                    : cardTrust.level === 'moderate' ? '#eab308'
-                    : cardTrust.level === 'low' ? '#f97316'
+                  const color = effectiveLevel === 'excellent' ? '#34d399'
+                    : effectiveLevel === 'good' ? '#C8963C'
+                    : effectiveLevel === 'moderate' ? '#eab308'
+                    : effectiveLevel === 'low' ? '#f97316'
                     : '#ef4444'
                   const cardMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
@@ -1783,12 +1787,16 @@ function AgentsPageContent() {
                   <span className="text-right w-12">Score</span>
                 </div>
                 {sorted.map(({ agent, trust: cardTrust }, i) => {
-                  const trustScore = cardTrust.score
+                  const isSelected = selectedAgent?.term_id === agent.term_id
+                  const trustScore = (isSelected && hybridScore != null) ? hybridScore : cardTrust.score
+                  const effectiveLevel = (isSelected && hybridScore != null)
+                    ? getHybridLevel(hybridScore)
+                    : cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
-                  const color = cardTrust.level === 'excellent' ? '#34d399'
-                    : cardTrust.level === 'good' ? '#C8963C'
-                    : cardTrust.level === 'moderate' ? '#eab308'
-                    : cardTrust.level === 'low' ? '#f97316' : '#ef4444'
+                  const color = effectiveLevel === 'excellent' ? '#34d399'
+                    : effectiveLevel === 'good' ? '#C8963C'
+                    : effectiveLevel === 'moderate' ? '#eab308'
+                    : effectiveLevel === 'low' ? '#f97316' : '#ef4444'
                   const listMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
                   const name = getAgentName(agent.label)
