@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import Link from 'next/link'
 import {
   Target, Loader2, TrendingUp, Crown, Shield,
-  Flame, Eye, Sparkles, BookOpen, ChevronRight, Star,
+  Flame, Eye, Sparkles, BookOpen, ChevronRight, Star, Lock, CheckCircle2,
 } from 'lucide-react'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { EvaluatorBadge } from '@/components/shared/EvaluatorBadge'
@@ -209,12 +209,14 @@ export default function EvaluatorsPage() {
             style={{ background: 'rgba(13,15,17,0.9)', border: '1px solid rgba(200,150,60,0.15)' }}>
 
             {/* Header */}
-            <div className="grid grid-cols-[44px_1fr_90px_68px_56px] gap-2 px-5 py-3 border-b border-white/5"
+            <div className="grid grid-cols-[44px_1fr_90px_68px_68px_44px_44px] gap-2 px-5 py-3 border-b border-white/5"
               style={{ background: 'rgba(200,150,60,0.04)' }}>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-center">#</span>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest">Evaluator</span>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right">Accuracy</span>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right">Weight</span>
+              <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right" title="Realized + unrealized P&L on evaluator positions">P&L</span>
+              <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-center" title="Attestation Gate — verified by distinct wallets">Attested</span>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right">Picks</span>
             </div>
 
@@ -238,12 +240,14 @@ export default function EvaluatorsPage() {
               const aColor = getAccuracyColor(e.adjustedAccuracy)
               const isTop3 = rank <= 3
               const initials = e.address.slice(2, 4).toUpperCase()
+              const isGated = e.rawEvaluatorWeight > 1.0 && e.meetsAttestationThreshold === false
+              const attestationChecked = e.meetsAttestationThreshold !== null && e.meetsAttestationThreshold !== undefined
 
               return (
                 <div
                   key={e.address}
                   className={cn(
-                    'grid grid-cols-[44px_1fr_90px_68px_56px] gap-2 px-5 py-3.5 border-b border-white/[0.04] transition-all',
+                    'grid grid-cols-[44px_1fr_90px_68px_68px_44px_44px] gap-2 px-5 py-3.5 border-b border-white/[0.04] transition-all',
                     isMe
                       ? 'bg-[#C8963C]/[0.06] hover:bg-[#C8963C]/[0.09]'
                       : isTop3
@@ -314,10 +318,53 @@ export default function EvaluatorsPage() {
                   </div>
 
                   {/* Weight */}
-                  <div className="text-right flex items-center justify-end">
-                    <span className="text-sm font-bold tabular-nums" style={{ color: wColor }}>
+                  <div className="text-right flex items-center justify-end gap-1">
+                    <span
+                      className={cn('text-sm font-bold tabular-nums', isGated && 'line-through text-xs')}
+                      style={{ color: isGated ? '#7A838D' : wColor }}
+                    >
                       {e.evaluatorWeight.toFixed(2)}×
                     </span>
+                  </div>
+
+                  {/* P&L */}
+                  <div className="text-right flex items-center justify-end">
+                    {e.walletPNL && e.walletPNL.totalCostBasis > 0 ? (
+                      <span
+                        className="text-xs font-bold tabular-nums"
+                        style={{ color: e.walletPNL.pnlPercent >= 0 ? '#2ECC71' : '#EF4444' }}
+                        title={`Unrealized: ${e.walletPNL.totalUnrealized >= 0 ? '+' : ''}${e.walletPNL.totalUnrealized.toFixed(3)} tTRUST · Realized: ${e.walletPNL.totalRealized.toFixed(3)} tTRUST`}
+                      >
+                        {e.walletPNL.pnlPercent >= 0 ? '+' : ''}{e.walletPNL.pnlPercent.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-xs text-[#7A838D]">—</span>
+                    )}
+                  </div>
+
+                  {/* Attested */}
+                  <div className="flex items-center justify-center">
+                    {!attestationChecked ? (
+                      <span className="text-[10px] text-[#7A838D]">—</span>
+                    ) : isGated ? (
+                      <span
+                        title={`Weight capped at 1.0x — needs attestation from ${1} distinct wallet to unlock ${e.rawEvaluatorWeight.toFixed(2)}x`}
+                        className="inline-flex items-center gap-0.5"
+                      >
+                        <Lock className="w-3 h-3 text-[#7A838D]" />
+                        <span className="text-[10px] text-[#7A838D]">{e.attestationCount}/1</span>
+                      </span>
+                    ) : e.meetsAttestationThreshold ? (
+                      <span
+                        title={`Attested by ${e.attestationCount} distinct wallet(s)`}
+                        className="inline-flex items-center gap-0.5"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-[#2ECC71]" />
+                        <span className="text-[10px] text-[#2ECC71]">{e.attestationCount}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[#7A838D]" title="No amplification needed at this weight">✓</span>
+                    )}
                   </div>
 
                   {/* Picks */}

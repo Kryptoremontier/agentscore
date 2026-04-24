@@ -13,7 +13,15 @@
  *
  *   Range: 0.5x (bad evaluator) to 1.5x (excellent evaluator)
  *   New staker with no history: 1.0x (neutral)
+ *
+ * Good pick definition (PNL-based when available, trust-score fallback):
+ *   PNL mode:   support position with profit → correct
+ *               oppose position with loss    → correct
+ *   Trust mode: support with trustScore > 50 → correct
+ *               oppose with trustScore < 50  → correct
  */
+
+import { calculateWalletPNL, type PositionPNL, type WalletPNL } from './pnl-engine'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,11 +32,17 @@ export interface EvaluatorProfile {
   rawAccuracy: number          // 0.0 — 1.0
   confidence: number           // 0.0 — 1.0 (more positions = higher)
   adjustedAccuracy: number     // anchored at 0.5
-  evaluatorWeight: number      // 0.5x — 1.5x
+  evaluatorWeight: number      // 0.5x — 1.5x (gated: may be capped at 1.0)
+  rawEvaluatorWeight: number   // pre-gate weight (before attestation cap)
   evaluatorTier: EvaluatorTier
   streakCount: number          // consecutive correct picks (most recent first)
   bestPick: string | null      // agent name with highest trust score
   worstPick: string | null     // agent name with lowest trust score
+  // Attestation Gate (Layer 7)
+  meetsAttestationThreshold: boolean | null  // null = not yet checked
+  attestationCount: number                   // distinct wallets that attested
+  // PNL Engine
+  walletPNL?: WalletPNL                      // aggregate PNL across evaluator positions
 }
 
 export type EvaluatorTier =
@@ -45,6 +59,7 @@ export interface StakerPosition {
   currentTrustScore: number    // 0–100 support ratio of this agent
   isCreator: boolean           // exclude from track record if true
   stakedAt?: string            // ISO timestamp (optional, used for streak)
+  pnl?: PositionPNL            // on-chain P&L data (optional — scoring falls back if absent)
 }
 
 // ─── Core Calculation ─────────────────────────────────────────────────────────
@@ -58,13 +73,30 @@ export interface StakerPosition {
  *   - Everything else → incorrect
  *
  * Self-created agents are EXCLUDED from track record.
+ *
+ * options.meetsAttestationThreshold — if provided, applies Layer 7 attestation gate:
+ *   evaluatorWeight > 1.0 is capped at 1.0 when attestation threshold is not met.
+ *   null/undefined = gate not applied (backward-compatible).
  */
 export function calculateEvaluatorScore(
   address: string,
   positions: StakerPosition[],
+  options?: {
+    meetsAttestationThreshold?: boolean
+    attestationCount?: number
+    walletPNL?: WalletPNL
+  },
 ): EvaluatorProfile {
   const validPositions = positions.filter(p => !p.isCreator)
   const total = validPositions.length
+
+  // Compute walletPNL from positions.pnl[] when available, fall back to options
+  const pnlItems = validPositions
+    .map(p => p.pnl)
+    .filter((p): p is PositionPNL => p !== undefined)
+  const walletPNL: WalletPNL | undefined = pnlItems.length > 0
+    ? calculateWalletPNL(pnlItems)
+    : options?.walletPNL
 
   if (total === 0) {
     return {
@@ -75,18 +107,30 @@ export function calculateEvaluatorScore(
       confidence: 0,
       adjustedAccuracy: 0.5,
       evaluatorWeight: 1.0,
+      rawEvaluatorWeight: 1.0,
       evaluatorTier: 'newcomer',
       streakCount: 0,
       bestPick: null,
       worstPick: null,
+      meetsAttestationThreshold: options?.meetsAttestationThreshold ?? null,
+      attestationCount: options?.attestationCount ?? 0,
+      walletPNL,
     }
   }
 
-  const goodPicks = validPositions.filter(p => {
+  // Good pick: PNL-based when data available, trust-score fallback otherwise
+  function isGoodPick(p: StakerPosition): boolean {
+    if (p.pnl !== undefined) {
+      if (p.pnl.isProfit && p.side === 'support') return true
+      if (!p.pnl.isProfit && p.side === 'oppose') return true
+      return false
+    }
     if (p.side === 'support' && p.currentTrustScore > 50) return true
     if (p.side === 'oppose'  && p.currentTrustScore < 50) return true
     return false
-  }).length
+  }
+
+  const goodPicks = validPositions.filter(isGoodPick).length
 
   const rawAccuracy = goodPicks / total
 
@@ -97,30 +141,47 @@ export function calculateEvaluatorScore(
   const adjustedAccuracy = 0.5 + (rawAccuracy - 0.5) * confidence
 
   // 0.5 (worst) → 1.5 (best)
-  const evaluatorWeight = Math.round((0.5 + adjustedAccuracy) * 1000) / 1000
+  const rawEvaluatorWeight = Math.round((0.5 + adjustedAccuracy) * 1000) / 1000
+
+  // Apply attestation gate (Layer 7): cap weight at 1.0 if threshold not met
+  const meetsThreshold = options?.meetsAttestationThreshold
+  const evaluatorWeight = meetsThreshold !== undefined
+    ? (rawEvaluatorWeight > 1.0 && !meetsThreshold ? 1.0 : rawEvaluatorWeight)
+    : rawEvaluatorWeight
 
   // Streak: consecutive good picks from most recent (last in array = most recent)
   let streakCount = 0
   const reversed = [...validPositions].reverse()
   for (const p of reversed) {
-    const isGood =
-      (p.side === 'support' && p.currentTrustScore > 50) ||
-      (p.side === 'oppose'  && p.currentTrustScore < 50)
-    if (isGood) streakCount++
+    if (isGoodPick(p)) streakCount++
     else break
   }
 
-  // Best & worst picks (support positions only — we know "correct" direction)
+  // Best & worst picks (support positions only)
+  // When PNL data available: rank by pnlPercent; otherwise by trust score
   const supportPositions = validPositions.filter(p => p.side === 'support')
+  const hasPNL = supportPositions.some(p => p.pnl !== undefined)
+
   const bestPick = supportPositions.length > 0
-    ? supportPositions.reduce((best, p) =>
-        p.currentTrustScore > best.currentTrustScore ? p : best
-      ).agentName
+    ? (hasPNL
+        ? supportPositions
+            .filter(p => p.pnl !== undefined)
+            .reduce((best, p) => p.pnl!.pnlPercent > best.pnl!.pnlPercent ? p : best)
+            .agentName
+        : supportPositions.reduce((best, p) =>
+            p.currentTrustScore > best.currentTrustScore ? p : best
+          ).agentName)
     : null
+
   const worstPick = supportPositions.length > 0
-    ? supportPositions.reduce((worst, p) =>
-        p.currentTrustScore < worst.currentTrustScore ? p : worst
-      ).agentName
+    ? (hasPNL
+        ? supportPositions
+            .filter(p => p.pnl !== undefined)
+            .reduce((worst, p) => p.pnl!.pnlPercent < worst.pnl!.pnlPercent ? p : worst)
+            .agentName
+        : supportPositions.reduce((worst, p) =>
+            p.currentTrustScore < worst.currentTrustScore ? p : worst
+          ).agentName)
     : null
 
   return {
@@ -131,10 +192,14 @@ export function calculateEvaluatorScore(
     confidence:        Math.round(confidence        * 1000) / 1000,
     adjustedAccuracy:  Math.round(adjustedAccuracy  * 1000) / 1000,
     evaluatorWeight,
+    rawEvaluatorWeight,
     evaluatorTier: getEvaluatorTier(adjustedAccuracy, total),
     streakCount,
     bestPick,
     worstPick,
+    meetsAttestationThreshold: options?.meetsAttestationThreshold ?? null,
+    attestationCount: options?.attestationCount ?? 0,
+    walletPNL,
   }
 }
 

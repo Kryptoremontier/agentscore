@@ -1,6 +1,6 @@
 'use client'
 
-import { Shield, Eye, BookOpen, Sparkles, Crown, Flame, Loader2 } from 'lucide-react'
+import { Shield, Eye, BookOpen, Sparkles, Crown, Flame, TrendingUp, TrendingDown, Minus, Target } from 'lucide-react'
 import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile, type EvaluatorTier } from '@/lib/evaluator-score'
 import { cn } from '@/lib/cn'
 
@@ -123,6 +123,35 @@ export function EvaluatorCard({ profile, loading }: EvaluatorCardProps) {
           <StatRow label="Confidence" value={`${Math.round(profile.confidence * 100)}%`} />
         </div>
       )}
+
+      {/* PNL section — shown when on-chain cost basis data is available */}
+      {profile.walletPNL && profile.walletPNL.totalCostBasis > 0 && (
+        <div className="px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#7A838D] mb-3 flex items-center gap-1.5">
+            <Target className="w-3 h-3" />
+            P&L Performance
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <PNLStatCard
+              label="Total P&L"
+              value={profile.walletPNL.totalPNL}
+              pct={profile.walletPNL.pnlPercent}
+            />
+            <div
+              className="px-3 py-2 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+            >
+              <p className="text-[#7A838D] mb-0.5 text-[10px]">Win Rate</p>
+              <p className="text-[#B5BDC6] font-medium">
+                {Math.round(profile.walletPNL.winRate * 100)}%
+                <span className="text-[#7A838D] text-[10px] ml-1 font-normal">
+                  ({profile.walletPNL.profitablePositions}/{profile.walletPNL.totalPositions})
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -135,6 +164,36 @@ function StatRow({ label, value, truncate }: { label: string; value: string; tru
     >
       <p className="text-[#7A838D] mb-0.5 text-[10px]">{label}</p>
       <p className={cn('text-[#B5BDC6] font-medium', truncate && 'truncate')}>{value}</p>
+    </div>
+  )
+}
+
+function PNLStatCard({ label, value, pct }: { label: string; value: number; pct: number }) {
+  const positive = value >= 0
+  const Icon = value > 0.0001 ? TrendingUp : value < -0.0001 ? TrendingDown : Minus
+  const color = positive ? '#2ECC71' : '#EF4444'
+  const bg = positive ? 'rgba(46,204,113,0.06)' : 'rgba(239,68,68,0.06)'
+  const border = positive ? 'rgba(46,204,113,0.18)' : 'rgba(239,68,68,0.18)'
+
+  const fmt = (n: number) => {
+    const abs = Math.abs(n)
+    if (abs >= 1000) return `${(n / 1000).toFixed(1)}K`
+    if (abs >= 1) return n.toFixed(2)
+    return n.toFixed(4)
+  }
+
+  return (
+    <div className="px-3 py-2 rounded-lg" style={{ background: bg, border: `1px solid ${border}` }}>
+      <p className="text-[#7A838D] mb-0.5 text-[10px]">{label}</p>
+      <div className="flex items-center gap-1">
+        <Icon className="w-3 h-3 shrink-0" style={{ color }} />
+        <span className="font-bold font-mono text-sm" style={{ color }}>
+          {value >= 0 ? '+' : ''}{fmt(value)}
+        </span>
+        <span className="text-[10px] opacity-60" style={{ color }}>
+          ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
+        </span>
+      </div>
     </div>
   )
 }

@@ -23,6 +23,8 @@ import { AGENT_WHERE_STR } from './gql-filters'
 // all AgentScore-created agents on testnet.
 const LEADERBOARD_POSITION_FILTER = `shares: { _gt: "0" } vault: { term: { atom: { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } } } }`
 import { calculateEvaluatorScore, type StakerPosition, type EvaluatorProfile } from './evaluator-score'
+import { batchGetAttestationCounts, getAttestationConfig } from './attestation-gate'
+import { fetchPositionPNL, computePositionPNL, type PositionPNL } from './pnl-engine'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const TRUST_PREDICATE_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
@@ -126,6 +128,14 @@ export async function fetchStakerPositions(
       } catch { /* non-critical */ }
     }
 
+    // Fetch PNL for all agent term IDs in parallel with the above (graceful fallback)
+    const termIds = atoms.map(a => a.term_id)
+    const pnlMap = new Map<string, PositionPNL>()
+    const [pnlSettled] = await Promise.allSettled([fetchPositionPNL(wallet, termIds)])
+    if (pnlSettled.status === 'fulfilled') {
+      for (const p of pnlSettled.value) pnlMap.set(p.termId, p)
+    }
+
     // Map atoms to StakerPosition[]
     return atoms.map(atom => {
       const supportWei = (() => {
@@ -148,6 +158,7 @@ export async function fetchStakerPositions(
         // FeeProxy is creator_id for all atoms — always false for real users
         isCreator: atom.creator?.id?.toLowerCase() === wallet &&
                    atom.creator?.id?.toLowerCase() !== FEE_PROXY_LC,
+        pnl: pnlMap.get(atom.term_id),
       } satisfies StakerPosition
     })
   } catch (error) {
@@ -171,7 +182,10 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
       account_id: string
       shares: string
       term_id: string
+      total_deposit_assets_after_total_fees: string
+      total_redeem_assets_for_receiver: string
       vault: {
+        current_share_price: string
         term: {
           atom: {
             term_id: string
@@ -193,7 +207,10 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
           account_id
           shares
           term_id
+          total_deposit_assets_after_total_fees
+          total_redeem_assets_for_receiver
           vault {
+            current_share_price
             term {
               atom {
                 term_id
@@ -268,12 +285,22 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
         atom.creator.id.toLowerCase() === acct &&
         atom.creator.id.toLowerCase() !== FEE_PROXY_LC
 
+      // Compute on-chain PNL from the already-fetched position fields
+      const pnl = computePositionPNL({
+        termId: atom.term_id,
+        sharesStr: p.shares,
+        costBasisStr: p.total_deposit_assets_after_total_fees ?? '0',
+        realizedValueStr: p.total_redeem_assets_for_receiver ?? '0',
+        sharePriceStr: p.vault?.current_share_price ?? '0',
+      })
+
       const stakerPos: StakerPosition = {
         agentAtomId: atom.term_id,
         agentName: cleanName(atom.label || 'Unknown'),
         side: 'support',
         currentTrustScore: trustScore,
         isCreator,
+        pnl,
       }
 
       if (!accountPositions.has(acct)) accountPositions.set(acct, [])
@@ -284,10 +311,18 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
       }
     }
 
+    // Batch-fetch attestation counts for all evaluator wallets (Layer 7)
+    const allAddresses = Array.from(accountPositions.keys())
+    const attestationMap = await batchGetAttestationCounts(allAddresses, getAttestationConfig())
+
     // Calculate evaluator score for each account
     const profiles: EvaluatorProfile[] = []
     for (const [address, stakerPositions] of accountPositions) {
-      const profile = calculateEvaluatorScore(address, stakerPositions)
+      const attestation = attestationMap.get(address)
+      const profile = calculateEvaluatorScore(address, stakerPositions, {
+        meetsAttestationThreshold: attestation?.meetsThreshold,
+        attestationCount: attestation?.attestationCount ?? 0,
+      })
       if (profile.totalPositions > 0) {
         profiles.push(profile)
       }
