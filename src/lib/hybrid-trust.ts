@@ -14,16 +14,12 @@ import type { TrustLevel } from '@/types/agent'
 export function calculateHybridScore(
   trustScore: number,      // 0-100, from calculateTrustScore()
   compositeScore: number,  // 0-100, from calculateComposite()
-  supportRatio: number     // 0-100, raw support vs oppose percentage
+  _supportRatio: number    // reserved — soft gate removed (Trust Score already encodes oppose balance)
 ): number {
+  // trustScore already reflects oppose > support (score < 50 when opposed)
+  // compositeScore.signalScore uses weightedTrust which also drops under opposition
+  // A separate scaling gate was triple-penalizing the same signal → removed
   const hybridRaw = trustScore * 0.6 + compositeScore * 0.4
-
-  // Soft gate: low support ratio scales the entire score down smoothly
-  if (supportRatio < 50) {
-    const scaleFactor = supportRatio / 50  // 0.0 → 1.0 as ratio goes 0 → 50%
-    return Math.round(hybridRaw * scaleFactor * 10) / 10
-  }
-
   return Math.round(hybridRaw * 10) / 10
 }
 

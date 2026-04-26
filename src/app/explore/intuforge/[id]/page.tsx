@@ -26,11 +26,11 @@ async function getProject(id: string): Promise<ForgeProject | null> {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 80) return '#C8963C'
-  if (score >= 60) return '#2EE6D6'
-  if (score >= 40) return '#8B5CF6'
-  if (score >= 20) return '#F59E0B'
-  return '#ef4444'
+  if (score >= 80) return '#2ECC71'
+  if (score >= 60) return '#22C55E'
+  if (score >= 40) return '#EAB308'
+  if (score >= 20) return '#F97316'
+  return '#EF4444'
 }
 
 function MomentumIcon({ momentum }: { momentum: 'up' | 'down' | 'stable' }) {
@@ -388,14 +388,15 @@ export default async function ProjectProfilePage({ params, searchParams: _search
         {/* RIGHT — sidebar */}
         <div className="space-y-4">
 
-          {/* Trust Score Card — Fix 9: real sparkline */}
+          {/* Score Card */}
           <div
-            className="rounded-xl border p-4 space-y-3"
+            className="rounded-xl border p-4"
             style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }}
           >
-            <div className="flex items-end justify-between">
+            {/* Header: Forge Score (hybrid) + sparkline */}
+            <div className="flex items-end justify-between mb-3">
               <div>
-                <p className="text-xs text-white/30 uppercase tracking-wider mb-1">Trust Score</p>
+                <p className="text-xs text-white/30 uppercase tracking-wider mb-1">Forge Score</p>
                 <span className="text-4xl font-bold tabular-nums" style={{ color }}>
                   {project.finalScore}
                 </span>
@@ -407,22 +408,31 @@ export default async function ProjectProfilePage({ params, searchParams: _search
             </div>
 
             {/* Score bar */}
-            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${project.finalScore}%`, background: color }}
-              />
+            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden mb-3">
+              <div className="h-full rounded-full" style={{ width: `${project.finalScore}%`, background: color }} />
             </div>
 
-            {/* Breakdown */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-2 rounded-lg bg-white/[0.03] border border-white/5">
-                <p className="text-white/30 mb-0.5">Trust</p>
-                <p className="font-mono font-semibold text-white/70">{project.trustScore}</p>
+            {/* Thick divider */}
+            <div className="h-[2px] mb-3 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }} />
+
+            {/* Breakdown: how Forge Score is composed */}
+            <div
+              className="space-y-2.5"
+              title="Forge Score = 60% Trust Score + 40% Composite (staker diversity, stability, evaluator weights)"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-white/30">Trust Score</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-white/60 tabular-nums">{project.trustScore}</span>
+                  <span className="text-xs text-white/20">(60%)</span>
+                </div>
               </div>
-              <div className="p-2 rounded-lg bg-white/[0.03] border border-white/5">
-                <p className="text-white/30 mb-0.5">Composite</p>
-                <p className="font-mono font-semibold text-white/70">{project.compositeScore}</p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-white/30">Composite</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-white/60 tabular-nums">{project.compositeScore}</span>
+                  <span className="text-xs text-white/20">(40%)</span>
+                </div>
               </div>
             </div>
           </div>

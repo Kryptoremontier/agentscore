@@ -11,10 +11,10 @@ import { PROJECT_STAGE_LABELS } from '@/lib/forge/types'
 import type { ForgeProject } from '@/lib/forge/types'
 
 function scoreColor(score: number): string {
-  if (score >= 80) return '#C8963C'
-  if (score >= 60) return '#2EE6D6'
-  if (score >= 40) return '#A78BFA'
-  if (score >= 20) return '#F59E0B'
+  if (score >= 80) return '#2ECC71'
+  if (score >= 60) return '#22C55E'
+  if (score >= 40) return '#EAB308'
+  if (score >= 20) return '#F97316'
   return '#EF4444'
 }
 

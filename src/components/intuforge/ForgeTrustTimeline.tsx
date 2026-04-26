@@ -11,6 +11,7 @@ import { Hammer, TrendingUp, TrendingDown, LogOut, Star, Wifi, Crown, Sparkles }
 import type { LucideIcon } from 'lucide-react'
 import { buildForgeTimeline } from '@/lib/forge/timeline'
 import type { TimelineEvent } from '@/lib/trust-timeline'
+import { ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
 
 // ─── Severity styles (matches TrustTimeline) ──────────────────────────────────
 
@@ -169,16 +170,33 @@ export function ForgeTrustTimeline({
     )
   }
 
+  const hasChart = timeline.scoreHistory.length >= 2
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white/50 uppercase tracking-wider">Trust History</h3>
         <span className="text-xs text-white/25">{timeline.events.length} events</span>
       </div>
-      <div>
-        {timeline.events.map((event, i) => (
-          <EventCard key={event.id} event={event} isLast={i === timeline.events.length - 1} />
-        ))}
+
+      <div className={`grid gap-6 ${hasChart ? 'grid-cols-2' : 'grid-cols-1'}`} style={{ minHeight: hasChart ? 320 : undefined }}>
+        {hasChart && (
+          <div
+            className="flex flex-col rounded-xl p-4"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', minHeight: 280 }}
+          >
+            <ScoreTrajectoryChart
+              scoreHistory={timeline.scoreHistory}
+              currentScore={currentScore}
+            />
+          </div>
+        )}
+
+        <div className={hasChart ? 'overflow-y-auto pr-1' : ''} style={hasChart ? { maxHeight: 480 } : undefined}>
+          {timeline.events.map((event, i) => (
+            <EventCard key={event.id} event={event} isLast={i === timeline.events.length - 1} />
+          ))}
+        </div>
       </div>
     </div>
   )

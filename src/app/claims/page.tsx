@@ -77,6 +77,8 @@ interface GraphQLTriple {
 
 function tripleToDisplayClaim(t: GraphQLTriple): Claim {
   const predConfig = getPredicateConfig(t.predicate.label)
+  const supportWei = (() => { try { return BigInt(t.positions_aggregate?.aggregate?.sum?.shares ?? '0') } catch { return 0n } })()
+  const opposeWei: bigint = (t as any).__opposeWei ?? 0n
   return {
     id: t.term_id,
     term_id: t.term_id,
@@ -104,7 +106,7 @@ function tripleToDisplayClaim(t: GraphQLTriple): Claim {
     positions_aggregate: t.positions_aggregate
       ? { aggregate: { count: t.positions_aggregate.aggregate?.count, sum: t.positions_aggregate.aggregate?.sum ?? undefined } }
       : undefined,
-    trust_score: (() => { try { const s = BigInt(t.positions_aggregate?.aggregate?.sum?.shares ?? '0'); return calculateTrustScoreFromStakes(s, 0n).score } catch { return 50 } })(),
+    trust_score: calculateTrustScoreFromStakes(supportWei, opposeWei).score,
     stakers_count: t.positions_aggregate?.aggregate?.count ?? 0,
   }
 }
@@ -249,7 +251,37 @@ function ClaimsPageContent() {
       })
       const data = await res.json()
       if (data.errors) throw new Error(data.errors[0]?.message)
-      setClaims((data.data?.triples ?? []).map(tripleToDisplayClaim))
+      const triples: any[] = data.data?.triples ?? []
+
+      // Batch-fetch oppose vault shares for accurate card Trust Score
+      const counterTermIds = triples
+        .map((t: any) => t.counter_term_id)
+        .filter(Boolean) as string[]
+      if (counterTermIds.length > 0) {
+        try {
+          const opposeRes = await fetch(GRAPHQL_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
+            })
+          })
+          const opposeData = await opposeRes.json()
+          const opposeMap = new Map<string, bigint>()
+          for (const pos of opposeData.data?.positions ?? []) {
+            const prev = opposeMap.get(pos.term_id) || 0n
+            try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
+          }
+          for (const triple of triples) {
+            const ctid = triple.counter_term_id
+            if (ctid && opposeMap.has(ctid)) {
+              triple.__opposeWei = opposeMap.get(ctid) || 0n
+            }
+          }
+        } catch { /* non-critical, cards fall back to opposeWei=0 */ }
+      }
+
+      setClaims(triples.map(tripleToDisplayClaim))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -1684,36 +1716,56 @@ function ClaimsPageContent() {
                   : '#EF4444'
                 const momDir = momentum > 0.1 ? 'up' : momentum < -0.1 ? 'down' : 'stable'
                 const momText = momDir === 'up' ? `+${momentum.toFixed(1)} pts` : momDir === 'down' ? `${momentum.toFixed(1)} pts` : 'Stable'
-                const circumference = 2 * Math.PI * 32
-                const dashLen = (score / 100) * circumference
+                const rawScore = t?.score ?? 50
+                const rawLevel = t?.level ?? 'moderate'
+                const rawScoreColor = rawLevel === 'excellent' ? '#2ECC71'
+                  : rawLevel === 'good' ? '#22C55E'
+                  : rawLevel === 'moderate' ? '#EAB308'
+                  : rawLevel === 'low' ? '#F97316'
+                  : '#EF4444'
+                const hybridColor = hybridScore == null ? '#7A838D'
+                  : getHybridLevel(hybridScore) === 'excellent' ? '#2ECC71'
+                  : getHybridLevel(hybridScore) === 'good' ? '#22C55E'
+                  : getHybridLevel(hybridScore) === 'moderate' ? '#EAB308'
+                  : getHybridLevel(hybridScore) === 'low' ? '#F97316'
+                  : '#EF4444'
                 return (
                   <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
                     <div className="grid grid-cols-2 gap-6">
-                      {/* LEFT: AgentScore gauge */}
+                      {/* LEFT: Claim Score breakdown table */}
                       <div>
-                        <h3 className="text-white font-bold mb-4">AGENTSCORE</h3>
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="relative w-20 h-20 flex-shrink-0">
-                            <svg viewBox="0 0 80 80" className="w-20 h-20 -rotate-90">
-                              <circle cx="40" cy="40" r="32" fill="none" stroke="#21262d" strokeWidth="6"/>
-                              <circle cx="40" cy="40" r="32" fill="none" stroke={scoreColor} strokeWidth="6"
-                                strokeDasharray={`${dashLen} ${circumference}`} strokeLinecap="round"/>
-                            </svg>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="font-bold text-lg" style={{ color: scoreColor }}>{score}</span>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-[#7A838D]">Claim Score</h3>
+                          <span className="text-2xl font-bold tabular-nums" style={{ color: rawScoreColor }}>{rawScore}</span>
+                        </div>
+                        <div className="h-[2px] mb-3 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }} />
+                        <div className="space-y-2.5 mb-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-[#7A838D]">Trust Score</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-white tabular-nums">{rawScore}</span>
+                              <span className="text-xs text-[#4A5260]">(60%)</span>
                             </div>
                           </div>
-                          <div>
-                            <div className="flex items-center gap-1 mb-1">
-                              {momDir === 'up' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="#10b981" strokeWidth="2" strokeLinecap="round"/></svg>}
-                              {momDir === 'down' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M7 7L17 17M17 17H7M17 17V7" stroke="#f85149" strokeWidth="2" strokeLinecap="round"/></svg>}
-                              <span className={`text-sm font-medium ${momDir === 'up' ? 'text-[#10b981]' : momDir === 'down' ? 'text-[#f85149]' : 'text-[#B5BDC6]'}`}>{momText}</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-[#7A838D]">Composite</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-white tabular-nums">
+                                {compositeTrust != null ? Math.round(compositeTrust.score) : '—'}
+                              </span>
+                              <span className="text-xs text-[#4A5260]">(40%)</span>
                             </div>
-                            <p className="text-[#B5BDC6] text-xs">Trust Level</p>
-                            <p className="text-white text-sm font-semibold capitalize">{level}</p>
-                            <p className="text-[#B5BDC6] text-xs mt-1">Confidence</p>
-                            <p className="text-white text-sm font-semibold">{(confidence * 100).toFixed(0)}%</p>
                           </div>
+                        </div>
+                        <div className="h-px mb-3" style={{ background: 'rgba(255,255,255,0.07)' }} />
+                        <div
+                          className="flex items-center justify-between"
+                          title="Hybrid Score = 60% Claim Score + 40% composite quality (staker diversity, stability, evaluator weights)"
+                        >
+                          <span className="text-xs font-semibold uppercase tracking-wider text-[#B5BDC6]">Hybrid Score</span>
+                          <span className="text-xl font-bold tabular-nums" style={{ color: hybridColor }}>
+                            {hybridScore != null ? hybridScore : '—'}
+                          </span>
                         </div>
                       </div>
                       {/* RIGHT: Stake Breakdown */}
