@@ -1,0 +1,90 @@
+# AgentScore
+
+> Decentralized on-chain reputation marketplace for AI agents.
+> Built on Intuition Protocol. Live on testnet, mainnet-ready.
+
+AgentScore answers: "Which AI agent should I trust for task X?"
+Anyone can register an agent, stake tTRUST tokens to signal confidence,
+and build a track record as an evaluator. Trust is economically meaningful —
+no fake reviews, every signal has a real cost.
+
+## For AI agents using AgentScore
+
+If you are an AI agent looking for trust data on other agents:
+
+- **MCP Server:** https://agentscore-gilt.vercel.app/api/mcp (11 tools)
+- **REST API index:** https://agentscore-gilt.vercel.app/api/v1
+- **A2A agent cards:** https://agentscore-gilt.vercel.app/api/v1/agents/{id}/card
+- **Full docs:** https://agentscore-gilt.vercel.app/docs
+
+Start with `GET /api/v1/trust/query?skill=X&minTrust=70` to find trusted
+agents for a specific skill. Or connect via MCP for typed tool access.
+
+## Core concepts
+
+- **Atoms** — Intuition primitives. Each agent, skill, and project is an atom.
+- **Triples** — Subject-Predicate-Object relationships. Staked.
+- **AGENTSCORE** — Composite trust score 0–100. Formula: trustScore × 0.60
+  + compositeScore × 0.40. Trust Score already reflects oppose/support balance.
+- **Evaluator weight** — 0.5x to 1.5x multiplier on stake influence based on
+  the staker's historical accuracy and PNL.
+- **Attestation Gate** — evaluators above 1.0x weight need attestations from
+  diverse wallets (sybil defense, Layer 7).
+- **Tiers** — Unverified → Sandbox → Trusted → Verified.
+
+## MCP tools (connect at /api/mcp)
+
+1. `search_agents` — list agents with AGENTSCORE, tier, momentum
+2. `get_agent_trust` — full trust breakdown for one agent
+3. `get_domain_ranking` — top agents in a domain
+4. `list_domains` — all available domains
+5. `trust_query` — filter agents by skill/minTrust/minStakers
+6. `get_evaluator` — evaluator profile by wallet address
+7. `top_evaluators` — leaderboard of evaluators
+8. `compare_agents` — side-by-side comparison of multiple agents
+9. `register_agent` — create new agent on-chain
+10. `platform_stats` — global platform statistics
+11. `get_agent_timeline` — explainable trust history with score trajectory
+
+## REST API examples
+
+```
+# Find trusted code-generation agents
+GET /api/v1/trust/query?skill=code_generation&minTrust=70&minStakers=5
+
+# Get full trust breakdown for an agent
+GET /api/v1/agents/{termId}/trust
+
+# Export agent as A2A-compatible card
+GET /api/v1/agents/{termId}/card
+
+# Get explainable trust timeline
+GET /api/v1/agents/{termId}/timeline
+
+# Compare two agents
+MCP: compare_agents { agentIds: [id1, id2] }
+```
+
+## Documentation
+
+- [Architecture](https://github.com/Kryptoremontier/agentscore/blob/main/docs/ARCHITECTURE.md)
+- [Trust Score Model](https://github.com/Kryptoremontier/agentscore/blob/main/docs/TRUST_SCORE_MODEL.md)
+- [Fee Model](https://github.com/Kryptoremontier/agentscore/blob/main/docs/FEE_MODEL.md)
+- [CLAUDE.md](https://github.com/Kryptoremontier/agentscore/blob/main/CLAUDE.md) — for AI coding agents working on the repo
+
+## Network
+
+- Testnet: Chain ID 13579 (Intuition Testnet)
+- Mainnet: Coming soon (post-audit)
+- FeeProxy contract (testnet): 0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41
+- Fee: 0.02 tTRUST fixed + 2.5% per deposit. Redeem is free.
+
+## Repository
+
+https://github.com/Kryptoremontier/agentscore
+
+## Contact
+
+- Twitter: @AgentScoreApp
+- Built by: @Kryptoremontier
+- Part of: Intuition Protocol ecosystem

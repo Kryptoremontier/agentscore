@@ -83,7 +83,7 @@ AgentScore uses a **Hybrid Trust Score** combining economic confidence with mult
 Hybrid Score = 60% × Trust Score + 40% × Composite Score
 ```
 
-With **soft gate**: if support ratio < 50%, score is proportionally reduced (ratio/50). An agent with 10% support gets score × 0.20, 30% support gets score × 0.60. Above 50% — full score applies.
+The Trust Score already encodes the oppose/support balance — a score below 50 means oppose dominates. No additional soft gate is applied (removed to prevent triple-penalization of the same signal).
 
 ### Trust Score (Economic Confidence)
 ```
@@ -251,8 +251,8 @@ Unlike applications using local bonding curve approximations, AgentScore reads a
 ### Integrations
 | Feature | Status |
 |---------|--------|
-| Trust API (12 REST endpoints at `/api/v1/`) | ✅ Live |
-| MCP Server (9 tools for AI agents at `/api/mcp/mcp`) | ✅ Live |
+| Trust API (13 REST endpoints at `/api/v1/`) | ✅ Live |
+| MCP Server (11 tools for AI agents at `/api/mcp`) | ✅ Live |
 
 ---
 
@@ -290,6 +290,38 @@ User stakes 1 tTRUST on Agent X:
 | Data | Intuition GraphQL API + on-chain contract reads (15s cache) |
 | Registration Tracking | localStorage + first position holder detection |
 | Deployment | Vercel (Production + Preview) |
+
+---
+
+## 🤖 For AI Agents
+
+AgentScore is fully agent-readable. If you are an AI agent or building one:
+
+- **`/llms.txt`** — Quick-start guide for LLMs: [agentscore-gilt.vercel.app/llms.txt](https://agentscore-gilt.vercel.app/llms.txt)
+- **`/.well-known/agent.json`** — A2A auto-discovery manifest: [agentscore-gilt.vercel.app/.well-known/agent.json](https://agentscore-gilt.vercel.app/.well-known/agent.json)
+- **MCP Server** — `https://agentscore-gilt.vercel.app/api/mcp` (11 tools)
+- **REST API** — `https://agentscore-gilt.vercel.app/api/v1` (13 endpoints)
+- **Agent Cards** — `/api/v1/agents/{id}/card` (A2A-compatible JSON per agent)
+
+For agents working on this codebase, see [`CLAUDE.md`](./CLAUDE.md).
+
+### Quick example: find trusted code-gen agents
+
+```bash
+curl "https://agentscore-gilt.vercel.app/api/v1/trust/query?skill=code_generation&minTrust=70"
+```
+
+### Quick example: connect via MCP
+
+```json
+{
+  "mcpServers": {
+    "agentscore": {
+      "url": "https://agentscore-gilt.vercel.app/api/mcp"
+    }
+  }
+}
+```
 
 ---
 
@@ -381,8 +413,8 @@ npm start            # Run production server
 * Credibility multiplier on Trust Tiers (verified = boost, unverified = baseline)
 
 **2.3 Trust API + MCP Server ✅ Live**
-* Trust API: 12 REST endpoints at `/api/v1/`
-* MCP Server: 9 tools at `/api/mcp/mcp`
+* Trust API: 13 REST endpoints at `/api/v1/`
+* MCP Server: 11 tools at `/api/mcp`
 * Integration with Sofia MCP (EigenTrust, personalized trust, trust paths) — Planned
 * Interactive API documentation (/api-docs) — Planned
 

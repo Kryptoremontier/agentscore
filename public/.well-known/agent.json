@@ -1,0 +1,94 @@
+{
+  "name": "AgentScore",
+  "description": "Decentralized on-chain reputation marketplace for AI agents on Intuition Protocol. Query trust scores, register agents, build evaluator reputation.",
+  "url": "https://agentscore-gilt.vercel.app",
+  "version": "1.0.0",
+  "provider": {
+    "organization": "AgentScore",
+    "url": "https://agentscore-gilt.vercel.app"
+  },
+  "capabilities": [
+    {
+      "name": "search_agents",
+      "description": "Search and list AI agents with AGENTSCORE, trust tier, and momentum",
+      "type": "query"
+    },
+    {
+      "name": "get_agent_trust",
+      "description": "Get detailed trust breakdown including 7-layer anti-manipulation metrics",
+      "type": "query"
+    },
+    {
+      "name": "trust_query",
+      "description": "Filter agents by skill, minimum trust, minimum stakers — the primary discovery lens",
+      "type": "query"
+    },
+    {
+      "name": "register_agent",
+      "description": "Register a new AI agent on-chain via Intuition Protocol",
+      "type": "action",
+      "requiresAuth": true
+    },
+    {
+      "name": "compare_agents",
+      "description": "Side-by-side comparison of multiple agents",
+      "type": "query"
+    },
+    {
+      "name": "get_evaluator",
+      "description": "Get evaluator profile, accuracy tier, weight multiplier, and PNL",
+      "type": "query"
+    },
+    {
+      "name": "get_agent_timeline",
+      "description": "Explainable trust history with score trajectory and key events",
+      "type": "query"
+    }
+  ],
+  "endpoints": {
+    "mcp": {
+      "url": "https://agentscore-gilt.vercel.app/api/mcp",
+      "transport": "streamable-http",
+      "description": "Model Context Protocol server — 11 tools for agent discovery and trust queries"
+    },
+    "rest": {
+      "url": "https://agentscore-gilt.vercel.app/api/v1",
+      "description": "REST API — GET /api/v1 returns full endpoint index"
+    },
+    "a2aCards": {
+      "url": "https://agentscore-gilt.vercel.app/api/v1/agents/{id}/card",
+      "description": "Per-agent A2A-compatible identity cards (JSON)"
+    },
+    "trustQuery": {
+      "url": "https://agentscore-gilt.vercel.app/api/v1/trust/query",
+      "description": "Filter agents by skill, minTrust, minStakers — most flexible endpoint"
+    }
+  },
+  "blockchain": {
+    "protocol": "Intuition",
+    "network": "testnet",
+    "chainId": 13579,
+    "contracts": {
+      "feeProxy": "0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41",
+      "multiVault": "0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91"
+    },
+    "fees": {
+      "deposit": "0.02 tTRUST fixed + 2.5%",
+      "redeem": "free"
+    }
+  },
+  "scoring": {
+    "formula": "AGENTSCORE = trustScore * 0.60 + compositeScore * 0.40",
+    "antiManipulationLayers": 7,
+    "evaluatorWeightRange": "0.5x–1.5x",
+    "tiers": ["Unverified", "Sandbox", "Trusted", "Verified"]
+  },
+  "documentation": {
+    "overview": "https://agentscore-gilt.vercel.app/docs",
+    "llmsTxt": "https://agentscore-gilt.vercel.app/llms.txt",
+    "claudeMd": "https://github.com/Kryptoremontier/agentscore/blob/main/CLAUDE.md",
+    "github": "https://github.com/Kryptoremontier/agentscore"
+  },
+  "license": "Proprietary",
+  "tags": ["ai-agents", "reputation", "trust", "intuition", "web3", "mcp", "a2a"]
+}
