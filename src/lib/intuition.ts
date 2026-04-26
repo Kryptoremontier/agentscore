@@ -80,6 +80,7 @@ export async function ensureFeeProxyApproved(
     args: [FEE_PROXY_ADDRESS, 1], // 1 = DEPOSIT approval
     account,
     chain: config.walletClient.chain ?? intuitionTestnet,
+    gas: 100_000n, // explicit gas limit — testnet eth_estimateGas sometimes fails
   })
 
   onProgress?.('Waiting for approval confirmation…')
@@ -304,6 +305,7 @@ async function createAtomViaProxy(
     value: totalValue,
     account: config.walletClient.account!,
     chain: config.walletClient.chain ?? intuitionTestnet,
+    gas: 300_000n,
   })
 
   await config.publicClient.waitForTransactionReceipt({ hash })
@@ -708,6 +710,7 @@ export async function registerAgentBatch(
       value: totalValue,
       account: config.walletClient.account!,
       chain: config.walletClient.chain ?? intuitionTestnet,
+      gas: 500_000n,
     })
     await config.publicClient.waitForTransactionReceipt({ hash })
   }
@@ -792,6 +795,7 @@ export async function registerAgentBatch(
       value: tTotal,
       account: config.walletClient.account!,
       chain: config.walletClient.chain ?? intuitionTestnet,
+      gas: 500_000n,
     })
     await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
   } else {
@@ -899,6 +903,7 @@ export async function registerForgeProjectBatch(
       value: totalValue,
       account: config.walletClient.account!,
       chain: config.walletClient.chain ?? intuitionTestnet,
+      gas: 500_000n,
     })
     await config.publicClient.waitForTransactionReceipt({ hash })
   } else {
@@ -961,6 +966,7 @@ export async function registerForgeProjectBatch(
       value: tTotal,
       account: config.walletClient.account!,
       chain: config.walletClient.chain ?? intuitionTestnet,
+      gas: 500_000n,
     })
     await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
     lastHash = tripleHash
@@ -1053,6 +1059,7 @@ export async function createTriple(
     value: totalValue,
     account: config.walletClient.account!,
     chain: config.walletClient.chain ?? intuitionTestnet,
+    gas: 300_000n,
   })
 
   await config.publicClient.waitForTransactionReceipt({ hash })
@@ -1115,6 +1122,7 @@ export async function depositToVault(
     value: totalValue,
     account: config.walletClient.account!,
     chain: config.walletClient.chain ?? intuitionTestnet,
+    gas: 200_000n,
   })
 
   const receipt = await config.publicClient.waitForTransactionReceipt({ hash })

@@ -1,6 +1,6 @@
 'use client'
 
-import { Shield, Eye, BookOpen, Sparkles, Crown } from 'lucide-react'
+import { Shield, Eye, BookOpen, Sparkles, Crown, Lock, CheckCircle2 } from 'lucide-react'
 import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile, type EvaluatorTier } from '@/lib/evaluator-score'
 import { cn } from '@/lib/cn'
 
@@ -33,10 +33,18 @@ export function EvaluatorBadge({ profile, size = 'md', className }: EvaluatorBad
 
   const iconSize = size === 'sm' ? 10 : size === 'md' ? 11 : 12
 
+  const isGated = profile.rawEvaluatorWeight > 1.0 && profile.meetsAttestationThreshold === false
+  const attestationChecked = profile.meetsAttestationThreshold !== null && profile.meetsAttestationThreshold !== undefined
+
   const tooltipText = [
     `${cfg.label} evaluator`,
     `${accuracyPct}% accuracy across ${profile.totalPositions} evaluation${profile.totalPositions !== 1 ? 's' : ''}`,
-    `Staking weight: ${profile.evaluatorWeight.toFixed(2)}x`,
+    isGated
+      ? `Weight: ${profile.evaluatorWeight.toFixed(2)}x (capped — needs attestation to unlock ${profile.rawEvaluatorWeight.toFixed(2)}x)`
+      : `Staking weight: ${profile.evaluatorWeight.toFixed(2)}x`,
+    attestationChecked && !isGated && profile.meetsAttestationThreshold
+      ? `Attested by ${profile.attestationCount} wallet(s)`
+      : '',
     profile.streakCount > 1 ? `${profile.streakCount} pick streak` : '',
   ].filter(Boolean).join(' · ')
 
@@ -63,7 +71,16 @@ export function EvaluatorBadge({ profile, size = 'md', className }: EvaluatorBad
       {size === 'lg' && (
         <>
           <span className="text-white/30">·</span>
-          <span className={weightColor}>{profile.evaluatorWeight.toFixed(2)}x</span>
+          <span className={isGated ? 'text-white/40 line-through text-[10px]' : weightColor}>
+            {profile.evaluatorWeight.toFixed(2)}x
+          </span>
+          {/* Attestation status indicator */}
+          {attestationChecked && isGated && (
+            <Lock style={{ width: 9, height: 9 }} className="text-white/40" />
+          )}
+          {attestationChecked && !isGated && profile.meetsAttestationThreshold && profile.rawEvaluatorWeight > 1.0 && (
+            <CheckCircle2 style={{ width: 9, height: 9 }} className="text-[#2ECC71]" />
+          )}
         </>
       )}
     </span>

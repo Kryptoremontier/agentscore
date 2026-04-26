@@ -222,10 +222,14 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     setMounted(true)
     if (publicClient) {
-      getFeeConfig(publicClient).then(setPlatformFee).catch(() => {})
+      getFeeConfig(publicClient)
+        .then(fee => { if (!cancelled) setPlatformFee(fee) })
+        .catch(() => {})
     }
+    return () => { cancelled = true }
   }, [publicClient])
 
   // Fetch existing skills for autocomplete (lazy — on first focus)

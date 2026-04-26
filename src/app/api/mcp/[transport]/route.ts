@@ -264,8 +264,11 @@ const handler = createMcpHandler(
         description:
           'Get the accuracy profile and track record of a specific staker/evaluator. ' +
           'Shows: accuracy percentage, evaluator weight (0.5x-1.5x), ' +
-          'tier (Newcomer/Scout/Analyst/Oracle/Sage), and track record ' +
-          '(which agents they backed and whether those picks were correct).',
+          'tier (Newcomer/Scout/Analyst/Oracle/Sage), track record ' +
+          '(which agents they backed and whether those picks were correct), ' +
+          'and attestation gate status (Layer 7 anti-manipulation): ' +
+          'attestationCount, meetsAttestationThreshold, attestationGateActive. ' +
+          'evaluatorWeight is capped at 1.0x if attestation threshold is not met.',
         inputSchema: {
           address: z.string()
             .describe('Wallet address (0x...) of the evaluator'),

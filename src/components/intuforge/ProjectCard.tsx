@@ -56,7 +56,8 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
 
   function onStakeClose() {
     setActiveSide(null)
-    router.refresh() // re-fetch server data to update staker count / score
+    // Small delay so ForgeStakeButtons can unmount cleanly before server re-fetch
+    setTimeout(() => router.refresh(), 150)
   }
 
   return (

@@ -73,10 +73,14 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
   const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     setMounted(true)
     if (publicClient) {
-      getFeeConfig(publicClient).then(setPlatformFee).catch(() => {})
+      getFeeConfig(publicClient)
+        .then(fee => { if (!cancelled) setPlatformFee(fee) })
+        .catch(() => {})
     }
+    return () => { cancelled = true }
   }, [publicClient])
 
   const validateStep = () => {

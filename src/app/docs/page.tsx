@@ -803,7 +803,6 @@ function TabEvaluators() {
                 { picks: '5', acc: '80%', conf: '63%', w: '1.19×', color: '#C8963C' },
                 { picks: '10', acc: '80%', conf: '86%', w: '1.26×', color: '#2ECC71' },
                 { picks: '20', acc: '90%', conf: '98%', w: '1.39×', color: '#2ECC71' },
-                { picks: '10', acc: '20%', conf: '86%', w: '0.74×', color: '#EF4444' },
               ].map((r, i) => (
                 <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                   <td className="px-4 py-2 text-[#9BA5B0]">{r.picks}</td>
@@ -818,6 +817,18 @@ function TabEvaluators() {
         <p className="text-[#6B7480] text-xs mt-3">
           New staker = 1.0× (neutral, no penalty). Random staker at 50% accuracy = 1.0× regardless of sample size.
         </p>
+
+        {/* Bad evaluator contrast example */}
+        <div className="mt-4 rounded-xl px-4 py-3 flex items-center gap-4"
+          style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.18)' }}>
+          <div className="shrink-0 text-xs font-semibold text-[#EF4444] uppercase tracking-wider">Bad evaluator</div>
+          <div className="flex items-center gap-6 text-xs text-[#9BA5B0]">
+            <span>10 picks</span>
+            <span>20% accuracy</span>
+            <span>86% confidence</span>
+          </div>
+          <div className="ml-auto text-sm font-bold text-[#EF4444]">0.74×</div>
+        </div>
       </DocCard>
 
       {/* What counts as a good pick */}

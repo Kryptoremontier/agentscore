@@ -19,6 +19,7 @@ import {
 } from './domain-scoring'
 import { fetchEvaluatorLeaderboard, fetchStakerPositions } from './evaluator-data'
 import { calculateEvaluatorScore, EVALUATOR_TIER_CONFIG, type EvaluatorTier } from './evaluator-score'
+import { getAttestationCount, getAttestationConfig } from './attestation-gate'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from './trust-tiers'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -652,8 +653,11 @@ export async function getEvaluators(options: {
     profiles = profiles.filter(p => tiers.includes(p.evaluatorTier))
   }
 
+  const cfg = getAttestationConfig()
+
   return profiles.slice(0, limit).map((p, i) => {
     const tierConfig = EVALUATOR_TIER_CONFIG[p.evaluatorTier]
+    const isGated = p.rawEvaluatorWeight > 1.0 && !p.meetsAttestationThreshold
     return {
       rank: i + 1,
       address: p.address,
@@ -661,10 +665,15 @@ export async function getEvaluators(options: {
       tierIcon: tierConfig.icon,
       accuracy: p.rawAccuracy,
       evaluatorWeight: p.evaluatorWeight,
+      rawEvaluatorWeight: p.rawEvaluatorWeight,
       totalEvaluations: p.totalPositions,
       correctEvaluations: p.goodPicks,
       streakCount: p.streakCount,
       bestPick: p.bestPick,
+      attestationCount: p.attestationCount,
+      attestationThreshold: cfg.minAttestations,
+      meetsAttestationThreshold: p.meetsAttestationThreshold,
+      attestationGateActive: isGated,
     }
   })
 }
@@ -683,10 +692,11 @@ export async function getEvaluatorLeaderboard(options: {
 }
 
 export async function getEvaluatorProfile(address: string) {
-  // Fetch leaderboard and individual positions in parallel
-  const [leaderboard, positions] = await Promise.all([
+  // Fetch leaderboard, individual positions, and attestation in parallel
+  const [leaderboard, positions, attestation] = await Promise.all([
     fetchEvaluatorLeaderboard(),
     fetchStakerPositions(address),
+    getAttestationCount(address, getAttestationConfig()),
   ])
 
   const leaderboardEntry = leaderboard.find(p => p.address.toLowerCase() === address.toLowerCase())
@@ -695,7 +705,17 @@ export async function getEvaluatorProfile(address: string) {
   if (!leaderboardEntry && positions.length === 0) return null
 
   // Prefer leaderboard (has all data); fall back to computed from positions
-  const profile = leaderboardEntry ?? calculateEvaluatorScore(address, positions)
+  // Always re-apply attestation gate to ensure freshness
+  const baseProfile = leaderboardEntry ?? calculateEvaluatorScore(address, positions)
+  const profile = {
+    ...baseProfile,
+    meetsAttestationThreshold: attestation.meetsThreshold,
+    attestationCount: attestation.attestationCount,
+    // Re-apply gate in case leaderboard cached an outdated attestation state
+    evaluatorWeight: baseProfile.rawEvaluatorWeight > 1.0 && !attestation.meetsThreshold
+      ? 1.0
+      : baseProfile.rawEvaluatorWeight,
+  }
   const tierConfig = EVALUATOR_TIER_CONFIG[profile.evaluatorTier]
 
   const trackRecord = positions.filter(p => !p.isCreator).map(p => ({
@@ -707,6 +727,9 @@ export async function getEvaluatorProfile(address: string) {
       (p.side === 'oppose' && p.currentTrustScore < 50),
   }))
 
+  const cfg = getAttestationConfig()
+  const isGated = profile.rawEvaluatorWeight > 1.0 && !attestation.meetsThreshold
+
   return {
     address: profile.address,
     tier: profile.evaluatorTier,
@@ -715,12 +738,23 @@ export async function getEvaluatorProfile(address: string) {
     adjustedAccuracy: profile.adjustedAccuracy,
     confidence: profile.confidence,
     evaluatorWeight: profile.evaluatorWeight,
+    rawEvaluatorWeight: profile.rawEvaluatorWeight,
     totalEvaluations: profile.totalPositions,
     correctEvaluations: profile.goodPicks,
     streakCount: profile.streakCount,
     bestPick: profile.bestPick,
     worstPick: profile.worstPick,
     trackRecord,
+    // Attestation Gate (Layer 7)
+    attestationCount: attestation.attestationCount,
+    attestationThreshold: cfg.minAttestations,
+    meetsAttestationThreshold: attestation.meetsThreshold,
+    attestationGateActive: isGated,
+    attestationMessage: isGated
+      ? `Evaluator weight capped at 1.0x — needs ${cfg.minAttestations} attestation(s) from distinct wallet(s) to unlock ${profile.rawEvaluatorWeight.toFixed(2)}x amplification`
+      : attestation.meetsThreshold
+        ? `Evaluator weight amplified — ${attestation.attestationCount} attestation(s) verified`
+        : `Evaluator weight at ${profile.evaluatorWeight.toFixed(2)}x (no amplification needed)`,
   }
 }
 

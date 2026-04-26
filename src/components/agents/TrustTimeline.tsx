@@ -159,16 +159,31 @@ export function ScoreTrajectoryChart({
   scoreHistory: { date: string; score: number }[]
   currentScore: number
 }) {
-  const chartData = scoreHistory.map(p => ({
+  const chartData = scoreHistory.map((p, i) => ({
     date: formatDateShort(p.date),
-    score: p.score,
+    // Pin the last point exactly to currentScore so header and chart endpoint match
+    score: i === scoreHistory.length - 1 ? Math.round(currentScore * 10) / 10 : p.score,
   }))
+
+  const scores = chartData.map(p => p.score)
+  const minScore = scores.length > 0 ? Math.min(...scores) : 0
+  const maxScore = scores.length > 0 ? Math.max(...scores) : 100
+  // Auto-scale Y with padding so the curve fills the chart area
+  const yMin = Math.max(0,   Math.floor(minScore - Math.max(5, (maxScore - minScore) * 0.3)))
+  const yMax = Math.min(100, Math.ceil(maxScore  + Math.max(5, (maxScore - minScore) * 0.3)))
 
   const scoreColor = currentScore >= 80 ? '#10b981'
     : currentScore >= 60 ? '#34d399'
     : currentScore >= 40 ? '#f59e0b'
     : currentScore >= 20 ? '#f97316'
     : '#ef4444'
+
+  // Only show threshold lines when they fall inside the visible Y range
+  const show50 = yMin < 50 && yMax > 50
+  const show75 = yMin < 75 && yMax > 75
+
+  // Generate Y-axis ticks within range
+  const yTicks = [0, 25, 50, 75, 100].filter(t => t >= yMin && t <= yMax)
 
   return (
     <div className="h-full flex flex-col">
@@ -177,7 +192,7 @@ export function ScoreTrajectoryChart({
           Score Trajectory
         </p>
         <span className="text-lg font-bold tabular-nums" style={{ color: scoreColor }}>
-          {currentScore}
+          {Math.round(currentScore * 10) / 10}
         </span>
       </div>
 
@@ -198,11 +213,11 @@ export function ScoreTrajectoryChart({
               interval="preserveStartEnd"
             />
             <YAxis
-              domain={[0, 100]}
+              domain={[yMin, yMax]}
               tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 9 }}
               axisLine={false}
               tickLine={false}
-              ticks={[0, 25, 50, 75, 100]}
+              ticks={yTicks}
             />
             <Tooltip
               contentStyle={{
@@ -212,12 +227,14 @@ export function ScoreTrajectoryChart({
                 fontSize: '11px',
                 color: '#fff',
               }}
-              formatter={(value: number | undefined) => [value ?? 0, 'Score']}
+              formatter={(value: number | string | undefined) => [
+                typeof value === 'number' ? (Math.round(value * 10) / 10) : (value ?? '—'),
+                'Score',
+              ]}
               labelStyle={{ color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}
             />
-            {/* Tier threshold lines */}
-            <ReferenceLine y={50} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 3" />
-            <ReferenceLine y={75} stroke="rgba(200,150,60,0.15)" strokeDasharray="4 3" />
+            {show50 && <ReferenceLine y={50} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 3" />}
+            {show75 && <ReferenceLine y={75} stroke="rgba(200,150,60,0.15)" strokeDasharray="4 3" />}
             <Area
               type="monotone"
               dataKey="score"
@@ -231,17 +248,23 @@ export function ScoreTrajectoryChart({
         </ResponsiveContainer>
       </div>
 
-      {/* Legend */}
-      <div className="mt-2 flex gap-4 text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-6 border-t border-dashed" style={{ borderColor: 'rgba(255,255,255,0.15)' }} />
-          Sandbox threshold (50)
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-6 border-t border-dashed" style={{ borderColor: 'rgba(200,150,60,0.3)' }} />
-          Verified threshold (75)
-        </span>
-      </div>
+      {/* Legend — only show lines that are visible */}
+      {(show50 || show75) && (
+        <div className="mt-2 flex gap-4 text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          {show50 && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-6 border-t border-dashed" style={{ borderColor: 'rgba(255,255,255,0.15)' }} />
+              Sandbox (50)
+            </span>
+          )}
+          {show75 && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-6 border-t border-dashed" style={{ borderColor: 'rgba(200,150,60,0.3)' }} />
+              Verified (75)
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -362,10 +385,21 @@ export function TrustTimeline({
         </div>
       </div>
 
-      {/* Two-column layout */}
-      <div className="flex gap-6 min-h-[340px]">
-        {/* Left: Event list */}
-        <div className="flex-1 min-w-0 overflow-y-auto max-h-[480px] pr-1">
+      {/* Two-column layout — chart 50%, events 50% */}
+      <div className="grid grid-cols-2 gap-6" style={{ minHeight: 360 }}>
+        {/* Left: Score chart */}
+        <div
+          className="flex flex-col rounded-xl p-4"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', minHeight: 320 }}
+        >
+          <ScoreTrajectoryChart
+            scoreHistory={timeline.scoreHistory}
+            currentScore={currentScore}
+          />
+        </div>
+
+        {/* Right: Event list */}
+        <div className="overflow-y-auto pr-1" style={{ maxHeight: 480 }}>
           {visibleEvents.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
@@ -385,17 +419,6 @@ export function TrustTimeline({
               ))}
             </div>
           )}
-        </div>
-
-        {/* Right: Score chart — only on md+ */}
-        <div
-          className="hidden md:flex flex-col flex-shrink-0 rounded-xl p-4"
-          style={{ width: 220, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          <ScoreTrajectoryChart
-            scoreHistory={timeline.scoreHistory}
-            currentScore={currentScore}
-          />
         </div>
       </div>
     </div>

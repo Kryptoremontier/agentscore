@@ -30,6 +30,7 @@ import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
 import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
+import { TrustTimeline } from '@/components/agents/TrustTimeline'
 import { CreateClaimForm } from '@/components/claims/CreateClaimForm'
 import { PREDICATES, getPredicateConfig, getAtomName, getAtomType, formatClaimText, type Claim } from '@/types/claim'
 import { cn } from '@/lib/cn'
@@ -158,7 +159,7 @@ function ClaimsPageContent() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
   const [toast, setToast] = useState<string | null>(null)
 
   // Trust data for selected claim
@@ -1013,7 +1014,7 @@ function ClaimsPageContent() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.03 }}
-                    onClick={() => { setSelectedClaim(claim); setActiveTab('overview') }}
+                    onClick={() => { setSelectedClaim(claim); setActiveTab('timeline') }}
                     className="rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
                     style={{
                       background: 'linear-gradient(145deg,#16191E,#1B1F26)',
@@ -1077,7 +1078,7 @@ function ClaimsPageContent() {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.015 }}
-                    onClick={() => { setSelectedClaim(claim); setActiveTab('overview') }}
+                    onClick={() => { setSelectedClaim(claim); setActiveTab('timeline') }}
                     className="grid grid-cols-[1fr_auto_auto] gap-4 items-center px-4 py-3 rounded-xl cursor-pointer transition-all duration-150"
                     style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
                     onMouseEnter={e => {
@@ -1768,6 +1769,7 @@ function ClaimsPageContent() {
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
                     { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'activity', label: 'Activity', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+                    { id: 'timeline', label: 'Timeline', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="4" r="1.5" fill="currentColor" fillOpacity="0.5"/><circle cx="12" cy="20" r="1.5" fill="currentColor" fillOpacity="0.5"/><path d="M12 6v4M12 14v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M7 8h3M14 8h3M7 16h3M14 16h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5"/></svg> },
                   ].map(tab => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
                       className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
@@ -1803,46 +1805,52 @@ function ClaimsPageContent() {
                   const ageLabel = ageDays === 0 ? 'today' : ageDays === 1 ? '1 day' : `${ageDays} days`
                   return (
                     <div className="p-5 space-y-5">
-                      {/* AGENTSCORE Visual */}
+                      {/* Score breakdown: Claim Score / Trust / Composite / Hybrid */}
                       <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
-                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
-                            style={{ backgroundColor: lc.bg, color: lc.text, border: `1px solid ${lc.border}` }}>
-                            {level}
-                          </span>
-                        </div>
-                        <div className="flex items-end gap-4 mb-3">
-                          <p className="text-4xl font-bold text-white leading-none">{typeof score === 'number' ? score.toFixed(1) : score}</p>
-                          <p className="text-[#B5BDC6] text-xs pb-1">/100</p>
-                          {momentum !== 0 && (
-                            <span className={`text-xs font-medium pb-1 ${momentum > 0 ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
-                              {momentum > 0 ? '▲' : '▼'} {Math.abs(momentum).toFixed(1)} momentum
-                            </span>
-                          )}
-                        </div>
-                        <div className="w-full h-2 bg-[#1E2229] rounded-full overflow-hidden mb-2">
-                          <div className="h-full rounded-full transition-all duration-700"
-                            style={{ width: `${score}%`, background: `linear-gradient(90deg, ${lc.text}80, ${lc.text})` }} />
-                        </div>
-                        <div className="flex justify-between text-[10px] text-[#7A838D]">
-                          <span>Critical</span><span>Low</span><span>Moderate</span><span>Good</span><span>Excellent</span>
-                        </div>
-
-                        {/* Components breakdown (only when hybridScore available) */}
-                        {hybridScore != null && claimTrust && compositeTrust && (
-                          <div className="mt-3 pt-3 border-t border-[#C8963C]/10 space-y-1.5">
-                            <p className="text-[#7A838D] text-[10px] uppercase tracking-wider mb-1">Components</p>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-[#B5BDC6]">Economic confidence</span>
-                              <span className="text-white font-semibold">{claimTrust.score}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-[#B5BDC6]">Quality metrics</span>
-                              <span className="text-white font-semibold">{compositeTrust.score.toFixed(1)}</span>
-                            </div>
-                          </div>
-                        )}
+                        {(() => {
+                          const rawScore = t?.score ?? 50
+                          const rawLevel = t?.level ?? 'moderate'
+                          const scoreColor = rawLevel === 'excellent' ? '#2ECC71' : rawLevel === 'good' ? '#22C55E' : rawLevel === 'moderate' ? '#EAB308' : rawLevel === 'low' ? '#F97316' : '#EF4444'
+                          const hybridColor = hybridScore == null ? '#7A838D'
+                            : getHybridLevel(hybridScore) === 'excellent' ? '#2ECC71'
+                            : getHybridLevel(hybridScore) === 'good' ? '#22C55E'
+                            : getHybridLevel(hybridScore) === 'moderate' ? '#EAB308'
+                            : getHybridLevel(hybridScore) === 'low' ? '#F97316'
+                            : '#EF4444'
+                          return (
+                            <>
+                              <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#7A838D]">Claim Score</h3>
+                                <span className="text-2xl font-bold tabular-nums" style={{ color: scoreColor }}>{rawScore}</span>
+                              </div>
+                              <div className="h-[2px] mb-3 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }} />
+                              <div className="space-y-2.5 mb-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-[#7A838D]">Trust Score</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-white tabular-nums">{rawScore}</span>
+                                    <span className="text-xs text-[#4A5260]">(60%)</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-[#7A838D]">Composite</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-white tabular-nums">{compositeTrust != null ? Math.round(compositeTrust.score) : '—'}</span>
+                                    <span className="text-xs text-[#4A5260]">(40%)</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="h-px mb-3" style={{ background: 'rgba(255,255,255,0.07)' }} />
+                              <div className="flex items-center justify-between"
+                                title="Hybrid Score = 60% Trust Score + 40% composite quality (staker diversity, stability, evaluator weights)">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-[#B5BDC6]">Hybrid Score</span>
+                                <span className="text-xl font-bold tabular-nums" style={{ color: hybridColor }}>
+                                  {hybridScore != null ? hybridScore : '—'}
+                                </span>
+                              </div>
+                            </>
+                          )
+                        })()}
                       </div>
 
                       {/* Weighted Trust */}
@@ -2284,6 +2292,21 @@ function ClaimsPageContent() {
                       )
                     })}
                   </div>
+                )}
+
+                {/* Timeline Tab */}
+                {activeTab === 'timeline' && selectedClaim && (
+                  <TrustTimeline
+                    agentId={selectedClaim.term_id}
+                    agentName={formatClaimText(selectedClaim)}
+                    createdAt={selectedClaim.created_at}
+                    currentScore={hybridScore ?? claimTrust?.score ?? 50}
+                    currentTier="unverified"
+                    agentSignals={claimSignals}
+                    counterTermId={claimTriple.counterTermId}
+                    skillTriples={[]}
+                    isA2AReady={false}
+                  />
                 )}
               </div>
             </div>

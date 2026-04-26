@@ -53,9 +53,13 @@ export function ForgeStakeButtons({
 
   // Load fee config once when the amount panel is first shown
   useEffect(() => {
+    let cancelled = false
     if (status === 'amount' && publicClient && !feeConfig) {
-      getFeeConfig(publicClient).then(setFeeConfig).catch(() => {})
+      getFeeConfig(publicClient)
+        .then(cfg => { if (!cancelled) setFeeConfig(cfg) })
+        .catch(() => {})
     }
+    return () => { cancelled = true }
   }, [status, publicClient, feeConfig])
 
   // Real-time fee breakdown
