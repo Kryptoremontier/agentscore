@@ -489,8 +489,11 @@ export function useUserProfile(address?: `0x${string}`) {
     queryFn: () => fetchProfileData(address!),
     enabled: !!address,
     staleTime: 5 * 60_000,
-    gcTime: 10 * 60_000,
+    // 30 min: users tabbing back within a session hit cache, not Hasura
+    gcTime: 30 * 60_000,
     refetchOnWindowFocus: false,
+    // Show previous profile structure while new address loads (e.g. navigating between profiles)
+    placeholderData: (prev) => prev,
   })
 
   const updateMutation = useMutation({
