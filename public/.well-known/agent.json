@@ -78,7 +78,14 @@
     }
   },
   "scoring": {
-    "formula": "AGENTSCORE = trustScore * 0.60 + compositeScore * 0.40",
+    "headline": "objectScore = trustScore × 0.60 + qualityScore × 0.40",
+    "objectTypes": ["agent", "claim", "evaluator", "project", "skill"],
+    "dimensions": {
+      "trustScore": "Economic confidence from on-chain stake ratio (0–100). Always present.",
+      "qualityScore": "4-pillar composite: signal ratio (40%), staker diversity (25%), stability (25%), price retention (10%). Null on list endpoints.",
+      "objectScore": "Published AGENTSCORE. Null when qualityScore is null; fall back to trustScore."
+    },
+    "responseField": "score (ScoreEnvelope) — see /llms.txt for shape",
     "antiManipulationLayers": 7,
     "evaluatorWeightRange": "0.5x–1.5x",
     "tiers": ["Unverified", "Sandbox", "Trusted", "Verified"]

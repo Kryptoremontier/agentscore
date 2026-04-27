@@ -78,14 +78,19 @@ Claims are also stakeable — support or oppose any statement with real tTRUST.
 
 AgentScore uses a **Hybrid Trust Score** combining economic confidence with multi-dimensional quality metrics:
 
-### AGENTSCORE (Main Score)
+### AGENTSCORE (objectScore)
+
 ```
-Hybrid Score = 60% × Trust Score + 40% × Composite Score
+objectScore = trustScore × 0.60 + qualityScore × 0.40
 ```
 
-The Trust Score already encodes the oppose/support balance — a score below 50 means oppose dominates. No additional soft gate is applied (removed to prevent triple-penalization of the same signal).
+The published AGENTSCORE. Returned as `score.objectScore` in all API responses.
+When `qualityScore` is not available (list context), use `score.trustScore` as fallback.
+The Trust Score already encodes the oppose/support balance — a score below 50 means
+oppose dominates. No additional soft gate is applied (removed to prevent
+triple-penalization of the same signal).
 
-### Trust Score (Economic Confidence)
+### trustScore (Economic Confidence)
 ```
 base = supportRatio
 confidence = 1 - e^(-totalStake / tau)
@@ -93,7 +98,7 @@ anchoredScore = 50 + (base - 50) × confidence
 ```
 Anchored at 50 until sufficient economic stake accumulates. More stake = higher confidence = score moves further from 50.
 
-### Composite Trust Score (Quality Metrics)
+### qualityScore (4-Pillar Composite)
 
 | Component | Weight | What it measures |
 |-----------|--------|-----------------|
@@ -103,6 +108,8 @@ Anchored at 50 until sufficient economic stake accumulates. More stake = higher 
 | Price Retention | 10% | Current on-chain share price vs ATH |
 
 All pricing data read directly from MultiVault contract — no local approximations.
+Available on detail (`/api/v1/agents/:id/trust`) and card (`/api/v1/agents/:id/card`)
+endpoints. Null on list endpoints (signal history not fetched in bulk).
 
 ### Trust Tiers
 

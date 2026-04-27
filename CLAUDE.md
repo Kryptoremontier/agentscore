@@ -22,6 +22,24 @@ Three apps live in this repo:
 - Hasura GraphQL for indexed Intuition data
 - mcp-handler for MCP server
 
+## Scoring vocabulary
+
+Three orthogonal dimensions combine into one envelope returned by all API endpoints:
+
+| Term | Type | Meaning |
+|---|---|---|
+| `trustScore` | `number` (0–100) | Economic confidence from on-chain support/oppose stake ratio. Always present. |
+| `qualityScore` | `number \| null` | 4-pillar composite (signal ratio 40%, staker diversity 25%, stability 25%, price retention 10%). **Null on list endpoints** — signal history not fetched in bulk. |
+| `objectScore` | `number \| null` | Published AGENTSCORE = `trustScore × 0.60 + qualityScore × 0.40`. Null when `qualityScore` is null. |
+
+The `score: ScoreEnvelope` field is defined in `src/lib/scoring/types.ts`.
+Use `score.objectScore ?? score.trustScore` as the display/ranking value.
+
+`agentScore: number` (deprecated alias) equals `objectScore ?? trustScore` and is kept for one release.
+
+Cache: `src/lib/scoring/quality-cache.ts` — LRU 500/5min, keyed `${termId}:${lastSignalAt}`.
+Detail calls warm it; list calls read it. Automatic invalidation on new stake.
+
 ## Key files (read these before editing)
 
 - `src/lib/hybrid-trust.ts` — main scoring formula (60/40 split, no soft gate)
