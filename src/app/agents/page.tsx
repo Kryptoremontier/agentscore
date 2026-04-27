@@ -157,7 +157,7 @@ function AgentsPageContent() {
   const [skillTriples, setSkillTriples] = useState<any[]>([])
   // Cache hybrid scores keyed by agent term_id, populated when modal computes them.
   // Cards fall back to trust score until the modal has been opened for that agent.
-  const [hybridByTermId, setHybridByTermId] = useState<Record<string, number>>({})
+  const [objectScoreByTermId, setObjectScoreByTermId] = useState<Record<string, number>>({})
 
   // On-chain buy/sell previews (replace fictional local bonding curve)
   const activeVaultId = selectedAgent?.term_id || undefined
@@ -1321,7 +1321,7 @@ function AgentsPageContent() {
   // for all list cards at once), so we cache lazily from modal opens (Approach B).
   useEffect(() => {
     if (hybridScore != null && selectedAgent?.term_id) {
-      setHybridByTermId(prev => ({ ...prev, [selectedAgent.term_id]: hybridScore }))
+      setObjectScoreByTermId(prev => ({ ...prev, [selectedAgent.term_id]: hybridScore }))
     }
   }, [hybridScore, selectedAgent?.term_id])
 
@@ -1723,11 +1723,11 @@ function AgentsPageContent() {
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ agent, trust: cardTrust }) => {
-                  // Use cached hybrid score (populated after modal opens for this agent).
-                  // Falls back to trust score on first paint — guaranteed match after first modal visit.
-                  const cachedHybrid = hybridByTermId[agent.term_id] ?? null
-                  const displayScore = cachedHybrid ?? cardTrust.score
-                  const effectiveLevel = cachedHybrid != null ? getHybridLevel(cachedHybrid) : cardTrust.level
+                  // objectScore populated after modal opens (client) or from quality cache (server).
+                  // Falls back to trustScore on first paint.
+                  const cachedObjectScore = objectScoreByTermId[agent.term_id] ?? null
+                  const displayScore = cachedObjectScore ?? cardTrust.score
+                  const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const color = effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -1799,9 +1799,9 @@ function AgentsPageContent() {
                   <span className="text-right w-12">Score</span>
                 </div>
                 {sorted.map(({ agent, trust: cardTrust }, i) => {
-                  const cachedHybrid = hybridByTermId[agent.term_id] ?? null
-                  const displayScore = cachedHybrid ?? cardTrust.score
-                  const effectiveLevel = cachedHybrid != null ? getHybridLevel(cachedHybrid) : cardTrust.level
+                  const cachedObjectScore = objectScoreByTermId[agent.term_id] ?? null
+                  const displayScore = cachedObjectScore ?? cardTrust.score
+                  const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const color = effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'

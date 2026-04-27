@@ -15,6 +15,7 @@ import { calculateCompositeTrust, calculateStableDays, findPeakPrice } from './c
 import { calculateWeightedTrust } from './reputation-decay'
 import { getOnChainSharePrice } from './on-chain-pricing'
 import { computeScoreEnvelope } from './scoring/engine'
+import { qualityCacheGet, qualityCacheSet } from './scoring/quality-cache'
 import type { ScoreEnvelope } from './scoring/types'
 import { calculateSkillBreakdown } from './skill-trust'
 import { fetchAgentSkillTriples } from './intuition'
@@ -91,7 +92,7 @@ type AgentRow = {
   emoji?: string
   created_at: string
   creator?: { label: string; id?: string } | null
-  positions_aggregate?: { aggregate: { count: number; sum: { shares: string | null } | null } | null }
+  positions_aggregate?: { aggregate: { count: number; sum: { shares: string | null } | null; max: { created_at: string | null } | null } | null }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
   subjectTriplesCount?: Array<{ id: string }>
 }
@@ -133,6 +134,7 @@ async function fetchAgentRows(limit = 200): Promise<AgentRow[]> {
           aggregate {
             count
             sum { shares }
+            max { created_at }
           }
         }
         as_subject_triples(
@@ -181,14 +183,16 @@ function rowToAgentItem(row: AgentRow, opposeWei: bigint): AgentApiItem {
   const ageDays = getAgentAgeDays(row.created_at)
   const trustTier = calculateTier(stakerCount, totalStakeTtrust, supportRatio, ageDays)
 
+  // Compound key: termId + lastSignalAt — any new stake invalidates automatically.
+  const lastSignalAt = row.positions_aggregate?.aggregate?.max?.created_at ?? ''
+  const cachedQuality = qualityCacheGet(`${row.term_id}:${lastSignalAt}`)
   const score = computeScoreEnvelope({
     objectType: 'agent',
     trustScore: trustResult.score,
-    qualityScore: null,       // signal history not fetched in list path
+    qualityScore: cachedQuality,
     supportRatio: supportRatio / 100,
     softGateActive: supportRatio < 50,
   })
-  // objectScore is null in list context → alias falls back to trustScore
   const agentScore = score.objectScore ?? score.trustScore
 
   return {
@@ -445,6 +449,12 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
     peakPrice,
     recentSells: [],
   })
+
+  // Compound key matches rowToAgentItem read key — automatic invalidation on new stake.
+  const lastSignalAt = positions.length > 0
+    ? positions.reduce((max, p) => (p.created_at > max ? p.created_at : max), '')
+    : ''
+  qualityCacheSet(`${termId}:${lastSignalAt}`, compositeResult.score)
 
   const breakdownScore = computeScoreEnvelope({
     objectType: 'agent',
