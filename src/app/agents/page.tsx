@@ -155,6 +155,9 @@ function AgentsPageContent() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
   const [skillTriples, setSkillTriples] = useState<any[]>([])
+  // Cache hybrid scores keyed by agent term_id, populated when modal computes them.
+  // Cards fall back to trust score until the modal has been opened for that agent.
+  const [hybridByTermId, setHybridByTermId] = useState<Record<string, number>>({})
 
   // On-chain buy/sell previews (replace fictional local bonding curve)
   const activeVaultId = selectedAgent?.term_id || undefined
@@ -1313,6 +1316,15 @@ function AgentsPageContent() {
     }
   }, [agentTrust, compositeTrust, allPositions, agentTriple.termId, agentTriple.counterTermId, evaluatorWeights])
 
+  // Populate hybrid score cache so the card shows the same number as the modal.
+  // compositeScore requires per-agent signal history + on-chain RPC calls (not available
+  // for all list cards at once), so we cache lazily from modal opens (Approach B).
+  useEffect(() => {
+    if (hybridScore != null && selectedAgent?.term_id) {
+      setHybridByTermId(prev => ({ ...prev, [selectedAgent.term_id]: hybridScore }))
+    }
+  }, [hybridScore, selectedAgent?.term_id])
+
   // ─── Skill Trust Breakdown ───
   const skillBreakdown = useMemo((): SkillBreakdownResult | null => {
     try {
@@ -1711,8 +1723,11 @@ function AgentsPageContent() {
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ agent, trust: cardTrust }) => {
-                  const trustScore = cardTrust.score
-                  const effectiveLevel = cardTrust.level
+                  // Use cached hybrid score (populated after modal opens for this agent).
+                  // Falls back to trust score on first paint — guaranteed match after first modal visit.
+                  const cachedHybrid = hybridByTermId[agent.term_id] ?? null
+                  const displayScore = cachedHybrid ?? cardTrust.score
+                  const effectiveLevel = cachedHybrid != null ? getHybridLevel(cachedHybrid) : cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const color = effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -1756,7 +1771,7 @@ function AgentsPageContent() {
                         </div>
                         <div className="text-right">
                           <div className="flex items-baseline justify-end gap-1 mb-0.5">
-                            <p className="text-2xl font-bold leading-none" style={{ color }}>{trustScore}</p>
+                            <p className="text-2xl font-bold leading-none" style={{ color }}>{displayScore}</p>
                             <span className="text-base leading-none" style={{ color: cardMi.color }}>{cardMi.arrow}</span>
                           </div>
                           <p className="text-[10px] text-[#7A838D]">AGENTSCORE</p>
@@ -1767,7 +1782,7 @@ function AgentsPageContent() {
                         <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
                       </div>
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${trustScore}%`, backgroundColor: color }} />
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${displayScore}%`, backgroundColor: color }} />
                       </div>
                     </motion.div>
                   )
@@ -1784,8 +1799,9 @@ function AgentsPageContent() {
                   <span className="text-right w-12">Score</span>
                 </div>
                 {sorted.map(({ agent, trust: cardTrust }, i) => {
-                  const trustScore = cardTrust.score
-                  const effectiveLevel = cardTrust.level
+                  const cachedHybrid = hybridByTermId[agent.term_id] ?? null
+                  const displayScore = cachedHybrid ?? cardTrust.score
+                  const effectiveLevel = cachedHybrid != null ? getHybridLevel(cachedHybrid) : cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
                   const color = effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -1832,7 +1848,7 @@ function AgentsPageContent() {
                       <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{stakers}</span>
                       {/* Score + momentum */}
                       <div className="flex items-center justify-end gap-1 w-12">
-                        <span className="text-sm font-bold font-mono" style={{ color }}>{trustScore}</span>
+                        <span className="text-sm font-bold font-mono" style={{ color }}>{displayScore}</span>
                         <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
                       </div>
                     </motion.div>
