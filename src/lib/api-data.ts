@@ -947,19 +947,9 @@ export async function getPlatformStats() {
     const supportRatio = (supportWei + opposeWei) > 0n
       ? Number((supportWei * 100n) / (supportWei + opposeWei)) : 50
     const tr = calculateTrustScoreFromStakes(supportWei, opposeWei)
-    const stakerDiversityStats = stakerCount <= 1 ? 0
-      : Math.min(100, (Math.log2(stakerCount) / Math.log2(100)) * 100)
-    const qualityScoreStats = stakerCount >= 3
-      ? Math.round(tr.score * 0.40 + stakerDiversityStats * 0.25 + 70 * 0.25 + 100 * 0.10)
-      : null
-    const statsEnvelope = computeScoreEnvelope({
-      objectType: 'agent',
-      trustScore: tr.score,
-      qualityScore: qualityScoreStats,
-      supportRatio: supportRatio / 100,
-      softGateActive: supportRatio < 50,
-    })
-    const score = statsEnvelope.objectScore ?? statsEnvelope.trustScore
+    // List context: qualityScore=null (no signal history). Rank by trustScore.
+    // topAgent.score in the response is therefore trustScore, not a hybrid.
+    const score = tr.score
 
     if (score > topAgentScore) {
       topAgentScore = score
@@ -999,7 +989,7 @@ export async function getPlatformStats() {
       ? { name: topDomain.name, agentCount: topDomain.agentCount }
       : null,
     topAgent: topAgentName
-      ? { name: topAgentName, score: topAgentScore }
+      ? { name: topAgentName, trustScore: topAgentScore }
       : null,
   }
 }

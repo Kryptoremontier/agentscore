@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { apiError } from '@/lib/api-helpers'
-import { getAgentDetail } from '@/lib/api-data'
+import { getAgentDetail, getAgentTrustBreakdown } from '@/lib/api-data'
 import { parseAgentCard, calculateProfileCompleteness } from '@/lib/agent-card'
 
 /**
@@ -9,8 +9,9 @@ import { parseAgentCard, calculateProfileCompleteness } from '@/lib/agent-card'
  * Export agent identity as A2A-compatible card.
  * Machine-readable JSON for agent-to-agent discovery.
  *
- * Includes: capabilities with trust scores, endpoints, source provenance,
- * trust data (AGENTSCORE + tier), and profile completeness.
+ * Fetches both detail (identity, capabilities) and trust breakdown (full
+ * 4-pillar composite) in parallel so the score envelope contains a real
+ * qualityScore and objectScore, not the list-path null values.
  */
 export async function GET(
   _request: NextRequest,
@@ -20,8 +21,16 @@ export async function GET(
     const { id } = await params
     if (!id) return apiError('Agent ID is required', 400)
 
-    const agent = await getAgentDetail(id)
+    const [agent, breakdown] = await Promise.all([
+      getAgentDetail(id),
+      getAgentTrustBreakdown(id),
+    ])
     if (!agent) return apiError('Agent not found', 404)
+
+    // Prefer full composite envelope from breakdown; fall back to list-shape if
+    // breakdown unavailable (e.g. agent has no positions yet).
+    const scoreEnvelope = breakdown?.score ?? agent.score
+    const agentScore = breakdown?.agentScore ?? agent.agentScore
 
     const card = parseAgentCard(agent.rawLabel || agent.name)
     const completeness = calculateProfileCompleteness({ name: agent.name, ...card })
@@ -68,9 +77,11 @@ export async function GET(
       category: card.category || null,
 
       // Trust data (unique to AgentScore)
+      // score.tier is the canonical tier; standalone tier field removed (A2A fresh surface).
       trust: {
-        agentScore: agent.agentScore,
-        tier: agent.trustTier,
+        score: scoreEnvelope,
+        /** @deprecated use trust.score.objectScore ?? trust.score.trustScore */
+        agentScore,
         momentum: agent.momentumDirection,
         evaluatorWeighted: true,
         antiManipulationLayers: 6,
