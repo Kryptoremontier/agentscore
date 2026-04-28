@@ -95,7 +95,9 @@ function parseForgeAtomLabel(label: string): Partial<ForgeProjectRegistrationInp
       hasAPI:      !!parsed.integrations?.hasAPI,
     }
   } catch {
-    return null
+    // Plain-text label (new format): just the project name, no metadata
+    const name = label.trim()
+    return name ? { name } : null
   }
 }
 

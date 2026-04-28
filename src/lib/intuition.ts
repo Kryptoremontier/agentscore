@@ -582,9 +582,7 @@ export async function createAgentAtom(
   cardData: AgentCardData,
   initialDeposit?: bigint
 ) {
-  // Encode as JSON for rich A2A metadata (Phase 2A, Opcja A).
-  // Old agents had plain "Name - description" labels; new agents use JSON.
-  const atomText = serializeAgentCard(cardData)
+  const atomText = cardData.name
   const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
@@ -650,7 +648,7 @@ export async function registerAgentBatch(
   const mvAddress = getMultiVaultAddress(config.publicClient.chain?.id)
 
   // ── Step 1: Pre-compute all termIds (pure, no tx) ─────────────────────────
-  const agentLabel = serializeAgentCard(cardData)
+  const agentLabel = cardData.name
 
   // Shared semantic atoms (usually exist after first registration)
   const SHARED = ['is', 'AI Agent', 'hasAgentSkill', 'Agent Skill'] as const
@@ -822,14 +820,14 @@ export async function registerAgentBatch(
  * Shared semantic atoms ("is", "Intuition Project", "hasForgeCategory", category)
  * are detected via isTermCreated() reads (parallel, no txs) and skipped if they exist.
  *
- * @param atomLabel       Serialized JSON project label (from serializeForgeProject)
+ * @param projectName     Plain project name used as atom label (portal-friendly)
  * @param categoryLabel   Human-readable category, e.g. "AI Agents"
  * @param initialDeposit  Optional initial stake on the project atom (default 0.001 tTRUST)
  * @param onProgress      Optional UI callback
  */
 export async function registerForgeProjectBatch(
   config: WriteConfig,
-  atomLabel: string,        // JSON metadata string (same pattern as Agent Card)
+  projectName: string,      // plain name stored as atom bytes — [is][Intuition Project] triple identifies type
   categoryLabel: string,
   initialDeposit?: bigint,
   onProgress?: (step: string) => void,
@@ -842,14 +840,14 @@ export async function registerForgeProjectBatch(
   // ── Step 1: Pre-compute all termIds (pure view, no tx) ────────────────────
   //
   // Same pattern as registerAgentBatch:
-  //   atomLabel (project atom) — JSON metadata stored in atom data
-  //   shared atoms             — reused across all IntuForge projects
+  //   projectName (project atom) — clean name as atom bytes; type triple identifies it
+  //   shared atoms               — reused across all IntuForge projects
   //
   // Triples (Tx2):
   //   [project][is][Intuition Project]
   //   [project][hasForgeCategory][categoryLabel]
   const SHARED_LABELS = ['is', 'Intuition Project', 'hasForgeCategory', categoryLabel] as const
-  const allLabels     = [atomLabel, ...SHARED_LABELS]
+  const allLabels     = [projectName, ...SHARED_LABELS]
 
   const termIds = allLabels.map(
     label => sdkCalculateAtomId(stringToHex(label) as Hex) as `0x${string}`
@@ -882,7 +880,7 @@ export async function registerForgeProjectBatch(
     onProgress?.(`Creating ${toCreate.length} atom(s) on-chain…`)
 
     const datas    = toCreate.map(label => stringToHex(label))
-    const deposits = toCreate.map(label => label === atomLabel ? deposit : DEFAULT_ATOM_DEPOSIT)
+    const deposits = toCreate.map(label => label === projectName ? deposit : DEFAULT_ATOM_DEPOSIT)
 
     const [atomCost, fees2] = await Promise.all([
       config.publicClient.readContract({
