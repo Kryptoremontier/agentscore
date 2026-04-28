@@ -66,7 +66,15 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
       ) { term_id }
 
       skills: atoms(
-        where: { label: { _ilike: "${SKILL_PREFIX}%" } }
+        where: {
+          _or: [
+            { label: { _ilike: "${SKILL_PREFIX}%" } }
+            { as_subject_triples: {
+                predicate: { label: { _eq: "is" } }
+                object: { label: { _eq: "Agent Skill" } }
+            }}
+          ]
+        }
         limit: 500
       ) { term_id }
 
