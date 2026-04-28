@@ -1001,8 +1001,8 @@ export async function createSkillAtom(
     return { termId: tid, transactionHash: '0x' as `0x${string}`, state: { termId: tid } }
   }
 
-  // Not found → create new atom
-  const atomText = `${metadata.name} - ${metadata.description}`
+  // Not found → create new atom (plain name; triple [skill][is][Agent Skill] identifies type)
+  const atomText = metadata.name
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
   if (userAddress) saveRegistration(result.termId, userAddress, 'skill')
