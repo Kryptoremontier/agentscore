@@ -71,14 +71,22 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
         where: ${AGENT_WHERE_STR}
         limit: 500
       ) {
-        positions(order_by: { created_at: asc }, limit: 1) { account_id }
+        positions(
+          where: { account_id: { _neq: "${FEE_PROXY_LC}" } }
+          order_by: { created_at: asc }
+          limit: 1
+        ) { account_id }
       }
 
       skills: atoms(
         where: ${SKILL_WHERE_STR}
         limit: 500
       ) {
-        positions(order_by: { created_at: asc }, limit: 1) { account_id }
+        positions(
+          where: { account_id: { _neq: "${FEE_PROXY_LC}" } }
+          order_by: { created_at: asc }
+          limit: 1
+        ) { account_id }
       }
 
       claims: triples(
