@@ -89,6 +89,20 @@ AGENTSCORE = trustScore × 0.60 + compositeScore × 0.40
 - Positions are NOT nested in atoms — fetch separately
 - `atom.label` shows "json object" for JSON atoms — read `atom.data` instead
 - `_ilike` for case-insensitive match (creator.id is checksummed)
+- **Deep position JOINs always time out.** `positions(where:{vault:{term:{atom:{...}}}})` is a
+  4-level JOIN that Hasura cannot execute within its timeout. Pattern: fetch atom `term_id`s first
+  (label-prefix filter on atoms), then filter positions by `vault:{term_id:{_in:[...termIds]}}`.
+  This collapses the join to one level and returns in <1s.
+- **Hasura stores Ethereum addresses checksummed (EIP-55).** All `_eq`, `_neq`, `_in` filters
+  MUST use the checksummed form (e.g. `0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41`). A lowercase
+  constant like `FEE_PROXY_LC` will silently never match. Keep a separate `FEE_PROXY_CS`
+  (checksummed) constant for GraphQL filters; use the lowercase one only for JS `.toLowerCase()`
+  comparisons on data returned from the API.
+- **FeeProxy is `creator_id` of atoms, not the first position holder.** When FeeProxy calls
+  `createAtoms(receiver, ...)`, shares go directly to `receiver` (the user wallet) in the same
+  transaction. So `positions[0]` ordered `asc` by `created_at` is the registrant (user), not
+  FeeProxy. Do NOT use `creator_id` to identify who registered an agent/skill — use the first
+  position holder instead.
 
 ## Testing
 
