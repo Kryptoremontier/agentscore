@@ -14,6 +14,7 @@
  * Oppose position tracking is a future enhancement.
  */
 
+import { unstable_cache, revalidateTag } from 'next/cache'
 import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR } from './gql-filters'
 
@@ -176,7 +177,7 @@ export async function fetchStakerPositions(
  *
  * Returns sorted by adjustedAccuracy desc, limited to top 50.
  */
-export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
+async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
   try {
     type PosRow = {
       account_id: string
@@ -340,4 +341,14 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
     console.warn('[fetchEvaluatorLeaderboard] Failed:', error)
     return []
   }
+}
+
+export const fetchEvaluatorLeaderboard = unstable_cache(
+  fetchEvaluatorLeaderboardImpl,
+  ['evaluator-leaderboard'],
+  { revalidate: 300, tags: ['evaluator-leaderboard'] },
+)
+
+export function revalidateEvaluatorLeaderboard() {
+  revalidateTag('evaluator-leaderboard')
 }

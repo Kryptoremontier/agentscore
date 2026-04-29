@@ -772,6 +772,8 @@ export async function getEvaluators(options: {
       attestationThreshold: cfg.minAttestations,
       meetsAttestationThreshold: p.meetsAttestationThreshold,
       attestationGateActive: isGated,
+      adjustedAccuracy: p.adjustedAccuracy,
+      walletPNL: p.walletPNL,
     }
   })
 }

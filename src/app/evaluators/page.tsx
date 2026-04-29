@@ -10,8 +10,24 @@ import {
 import { PageBackground } from '@/components/shared/PageBackground'
 import { EvaluatorBadge } from '@/components/shared/EvaluatorBadge'
 import { cn } from '@/lib/cn'
-import { fetchEvaluatorLeaderboard } from '@/lib/evaluator-data'
 import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile, type EvaluatorTier } from '@/lib/evaluator-score'
+import type { WalletPNL } from '@/lib/pnl-engine'
+
+type ApiEvaluatorRow = {
+  address: string
+  tier: EvaluatorTier
+  accuracy: number
+  adjustedAccuracy: number
+  evaluatorWeight: number
+  rawEvaluatorWeight: number
+  totalEvaluations: number
+  correctEvaluations: number
+  streakCount: number
+  bestPick: string | null
+  attestationCount: number
+  meetsAttestationThreshold: boolean | null
+  walletPNL?: WalletPNL | null
+}
 
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -104,8 +120,28 @@ export default function EvaluatorsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchEvaluatorLeaderboard()
-      .then(setEntries)
+    fetch('/api/v1/evaluators?limit=50')
+      .then(r => r.json())
+      .then((res: { data: ApiEvaluatorRow[] }) => {
+        const rows: EvaluatorProfile[] = (res.data ?? []).map(r => ({
+          address: r.address,
+          evaluatorTier: r.tier,
+          adjustedAccuracy: r.adjustedAccuracy,
+          rawAccuracy: r.accuracy,
+          evaluatorWeight: r.evaluatorWeight,
+          rawEvaluatorWeight: r.rawEvaluatorWeight,
+          totalPositions: r.totalEvaluations,
+          goodPicks: r.correctEvaluations,
+          streakCount: r.streakCount,
+          bestPick: r.bestPick ?? null,
+          worstPick: null,
+          confidence: 0,
+          meetsAttestationThreshold: r.meetsAttestationThreshold ?? null,
+          attestationCount: r.attestationCount,
+          walletPNL: r.walletPNL ?? undefined,
+        }))
+        setEntries(rows)
+      })
       .catch(e => console.error('[EvaluatorsPage]', e))
       .finally(() => setLoading(false))
   }, [])
