@@ -604,17 +604,19 @@ export function ProjectRegistrationForm() {
     setProgressMsg('Preparing registration…')
 
     try {
-      const atomLabel     = serializeForgeProject(form)
+      const metadataJson  = serializeForgeProject(form)
       const categoryDef   = FORGE_CATEGORIES.find(c => c.id === form.category)
       const categoryLabel = categoryDef?.label ?? form.category
       const cfg           = createWriteConfig(walletClient, publicClient)
 
       console.log('[ForgeRegistration] Starting registration', { name: form.name, categoryLabel, chainId })
 
-      // Up to 3 txs: Tx0 (one-time approval), Tx1 batch atoms, Tx2 batch triples
+      // Up to 3 txs: Tx0 (one-time approval), Tx1 batch atoms (name + metadata),
+      // Tx2 batch triples ([is], [related to], [hasForgeCategory])
       const { termId } = await registerForgeProjectBatch(
         cfg,
-        atomLabel,
+        form.name,
+        metadataJson,
         categoryLabel,
         undefined,
         setProgressMsg,

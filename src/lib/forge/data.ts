@@ -17,6 +17,10 @@ import type { ForgeProject, ForgeProjectRegistrationInput } from '@/lib/forge/ty
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
+// "related to" predicate term_id on testnet — used to link name atom → metadata atom.
+// Matches RELATED_TO_TERM_ID in intuition.ts.
+const RELATED_TO_PREDICATE_ID = '0xb76e0b67f4a7477cbdada8179bcdb8444f27684a4cdaf95e34a3109af305d157'
+
 // ─── Serialization ─────────────────────────────────────────────────────────────
 
 /**
@@ -111,10 +115,15 @@ interface RawForgeAtom {
   positions_aggregate: {
     aggregate: { count: number; sum: { shares: string | null } | null } | null
   } | null
-  // [x][is][Intuition Project] triple — used for counter_term_id (staking)
-  as_subject_triples: Array<{
+  // [x][is][Intuition Project] triple — used for counter_term_id (staking vault)
+  type_triple: Array<{
     term_id: string
     counter_term_id: string
+  }>
+  // [x][related to][metadata atom] triple — two-atom arch: metadata atom holds JSON
+  // Empty for old single-atom projects (backward compat: fall back to atom.data)
+  metadata_triple: Array<{
+    object: { term_id: string; data: string }
   }>
 }
 
@@ -228,7 +237,10 @@ function atomToForgeProject(
   opposeWei = 0n,
   positions?: { support: ForgePositionRow[]; oppose: ForgePositionRow[] },
 ): ForgeProject | null {
-  const meta = parseForgeAtomLabel(atom.data)
+  // Two-atom arch: prefer JSON from [related to] metadata atom; fall back to atom.data
+  // for old single-atom projects where atom.data IS the full JSON.
+  const metaSource = atom.metadata_triple?.[0]?.object?.data ?? atom.data
+  const meta = parseForgeAtomLabel(metaSource)
   if (!meta?.name) return null
 
   const supportWei = (() => {
@@ -290,7 +302,7 @@ function atomToForgeProject(
     opposePositions,
   })
 
-  const counterTermId = atom.as_subject_triples?.[0]?.counter_term_id ?? null
+  const counterTermId = atom.type_triple?.[0]?.counter_term_id ?? null
 
   return {
     id:                atom.term_id,
@@ -346,7 +358,7 @@ const FORGE_ATOM_QUERY_FIELDS = `
   created_at
   creator { id }
   positions_aggregate { aggregate { count sum { shares } } }
-  as_subject_triples(
+  type_triple: as_subject_triples(
     where: {
       predicate: { label: { _eq: "is" } }
       object: { label: { _eq: "Intuition Project" } }
@@ -355,6 +367,14 @@ const FORGE_ATOM_QUERY_FIELDS = `
   ) {
     term_id
     counter_term_id
+  }
+  metadata_triple: as_subject_triples(
+    where: {
+      predicate: { term_id: { _eq: "${RELATED_TO_PREDICATE_ID}" } }
+    }
+    limit: 1
+  ) {
+    object { term_id data }
   }
 `
 
@@ -384,13 +404,13 @@ export async function fetchForgeProjectsFromChain(limit = 100): Promise<ForgePro
 
   // Fix 1: batch-fetch oppose vault shares for all projects in one query
   const counterTermIds = data.atoms
-    .map(a => a.as_subject_triples?.[0]?.counter_term_id)
+    .map(a => a.type_triple?.[0]?.counter_term_id)
     .filter((id): id is string => !!id)
   const opposeMap = await batchFetchForgeOpposeShares(counterTermIds)
 
   const projects: ForgeProject[] = []
   for (const atom of data.atoms) {
-    const ctid = atom.as_subject_triples?.[0]?.counter_term_id
+    const ctid = atom.type_triple?.[0]?.counter_term_id
     const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
     const p = atomToForgeProject(atom, opposeWei)
     if (p) projects.push(p)
@@ -420,7 +440,7 @@ export async function fetchForgeProjectById(id: string): Promise<ForgeProject | 
   const atom = data?.atoms?.[0]
   if (!atom) return null
 
-  const ctid = atom.as_subject_triples?.[0]?.counter_term_id ?? null
+  const ctid = atom.type_triple?.[0]?.counter_term_id ?? null
 
   // Fix 1 + Fix 2: fetch oppose shares and individual positions in parallel
   const [opposeMap, positions] = await Promise.all([
