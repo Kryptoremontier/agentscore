@@ -2,6 +2,8 @@ import { type NextRequest } from 'next/server'
 import { apiSuccess, apiError, corsOptions, parsePagination } from '@/lib/api-helpers'
 import { getAgentsWithScores } from '@/lib/api-data'
 
+export const revalidate = 300
+
 const VALID_SORTS = ['score', 'stakers', 'newest'] as const
 type SortOption = typeof VALID_SORTS[number]
 

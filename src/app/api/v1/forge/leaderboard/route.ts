@@ -3,6 +3,8 @@ import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
 import { fetchForgeProjectsFromChain } from '@/lib/forge/data'
 import { ForgeCategory } from '@/lib/forge/types'
 
+export const revalidate = 300
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
