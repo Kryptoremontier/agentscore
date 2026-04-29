@@ -5,10 +5,18 @@
  * and reuse existing scoring engines (zero duplication of business logic).
  */
 
+import { createPublicClient, http } from 'viem'
+import { intuitionTestnet } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR, SKILL_WHERE_STR } from './gql-filters'
 import { calculateTrustScoreFromStakes } from './trust-score-engine'
 import { calculateHybridScore, getHybridLevel } from './hybrid-trust'
+import { calculateCompositeTrust, calculateStableDays, findPeakPrice } from './composite-trust'
+import { calculateWeightedTrust } from './reputation-decay'
+import { getOnChainSharePrice } from './on-chain-pricing'
+import { computeScoreEnvelope } from './scoring/engine'
+import { qualityCacheGet, qualityCacheSet } from './scoring/quality-cache'
+import type { ScoreEnvelope } from './scoring/types'
 import { calculateSkillBreakdown } from './skill-trust'
 import { fetchAgentSkillTriples } from './intuition'
 import {
@@ -24,6 +32,15 @@ import { calculateTier, calculateTierProgress, getAgentAgeDays } from './trust-t
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const TRUST_PREDICATE_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
+
+// Server-side read-only viem client (no wallet, no wagmi).
+// Used only in detail endpoints to fetch on-chain share price.
+const serverPublicClient = createPublicClient({
+  chain: intuitionTestnet,
+  transport: http(
+    process.env.NEXT_PUBLIC_INTUITION_RPC_URL || 'https://testnet.rpc.intuition.systems/http'
+  ),
+})
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -75,7 +92,7 @@ type AgentRow = {
   emoji?: string
   created_at: string
   creator?: { label: string; id?: string } | null
-  positions_aggregate?: { aggregate: { count: number; sum: { shares: string | null } | null } | null }
+  positions_aggregate?: { aggregate: { count: number; sum: { shares: string | null } | null; max: { created_at: string | null } | null } | null }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
   subjectTriplesCount?: Array<{ id: string }>
 }
@@ -86,6 +103,8 @@ export type AgentApiItem = {
   id: string
   name: string
   rawLabel?: string    // original atom label — may be JSON (Phase 2A+) or plain string (legacy)
+  score: ScoreEnvelope
+  /** @deprecated Use score.objectScore ?? score.trustScore instead. Removed in next major. */
   agentScore: number
   trustTier: string
   momentum: number
@@ -115,6 +134,7 @@ async function fetchAgentRows(limit = 200): Promise<AgentRow[]> {
           aggregate {
             count
             sum { shares }
+            max { created_at }
           }
         }
         as_subject_triples(
@@ -145,6 +165,13 @@ async function batchFetchOpposeShares(rows: AgentRow[]): Promise<Map<string, big
   return opposeMap
 }
 
+/**
+ * Builds an AgentApiItem for list contexts.
+ * - qualityScore is always null here: signal history is not fetched in bulk.
+ *   score.objectScore will be null; consumers fall back to trustScore for display.
+ * - For detail contexts use getAgentTrustBreakdown(), which fetches signal
+ *   history and calls calculateCompositeTrust() for the full 4-pillar composite.
+ */
 function rowToAgentItem(row: AgentRow, opposeWei: bigint): AgentApiItem {
   const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
   const stakerCount = row.positions_aggregate?.aggregate?.count || 0
@@ -152,15 +179,27 @@ function rowToAgentItem(row: AgentRow, opposeWei: bigint): AgentApiItem {
   const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
 
   const trustResult = calculateTrustScoreFromStakes(supportWei, opposeWei)
-  const agentScore = calculateHybridScore(trustResult.score, trustResult.score, supportRatio)
   const totalStakeTtrust = weiToFloat(supportWei + opposeWei)
   const ageDays = getAgentAgeDays(row.created_at)
   const trustTier = calculateTier(stakerCount, totalStakeTtrust, supportRatio, ageDays)
+
+  // Compound key: termId + lastSignalAt — any new stake invalidates automatically.
+  const lastSignalAt = row.positions_aggregate?.aggregate?.max?.created_at ?? ''
+  const cachedQuality = qualityCacheGet(`${row.term_id}:${lastSignalAt}`)
+  const score = computeScoreEnvelope({
+    objectType: 'agent',
+    trustScore: trustResult.score,
+    qualityScore: cachedQuality,
+    supportRatio: supportRatio / 100,
+    softGateActive: supportRatio < 50,
+  })
+  const agentScore = score.objectScore ?? score.trustScore
 
   return {
     id: row.term_id,
     name: cleanLabel(row.label),
     rawLabel: row.label,
+    score,
     agentScore,
     trustTier: trustTier.tier,
     momentum: Math.round(trustResult.momentum * 10) / 10,
@@ -247,13 +286,22 @@ export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem
     level: s.level,
   }))
 
-  const agentScore = skillBreakdownResult.hasSkills
-    ? skillBreakdownResult.overallScore
-    : base.agentScore
+  // When skills exist, overallScore replaces qualityScore in the envelope.
+  const detailScore = skillBreakdownResult.hasSkills
+    ? computeScoreEnvelope({
+        objectType: 'agent',
+        trustScore: base.score.trustScore,
+        qualityScore: skillBreakdownResult.overallScore,
+        supportRatio: supportRatio / 100,
+        softGateActive: supportRatio < 50,
+      })
+    : base.score
+  const agentScore = detailScore.objectScore ?? detailScore.trustScore
 
   return {
     ...base,
     id: termId,
+    score: detailScore,
     agentScore,
     skillCount: skillBreakdown.length,
     supportRatio,
@@ -267,6 +315,8 @@ export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem
 export type AgentTrustBreakdown = {
   agentId: string
   agentName: string
+  score: ScoreEnvelope
+  /** @deprecated Use score.objectScore ?? score.trustScore instead. Removed in next major. */
   agentScore: number
   trustScore: {
     raw: number
@@ -324,11 +374,12 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const row = data?.atoms?.[0]
   if (!row) return null
 
-  const [opposeMap, positionsData] = await Promise.all([
+  const [opposeMap, positionsData, sharePriceWei] = await Promise.all([
     batchFetchOpposeShares([row]),
-    gql<{ positions: Array<{ account_id: string; shares: string }> }>(
-      `{ positions(where: { term_id: { _eq: "${termId}" } } order_by: { shares: desc }) { account_id shares } }`
+    gql<{ positions: Array<{ account_id: string; shares: string; created_at: string; delta: string | null; shares_delta: string | null }> }>(
+      `{ positions(where: { term_id: { _eq: "${termId}" } } order_by: { shares: desc }) { account_id shares created_at delta shares_delta } }`
     ),
+    getOnChainSharePrice(serverPublicClient, termId as `0x${string}`).catch(() => null),
   ])
 
   const ctid = row.as_subject_triples?.[0]?.counter_term_id
@@ -340,7 +391,6 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
 
   const trustResult = calculateTrustScoreFromStakes(supportWei, opposeWei)
-  const agentScore = calculateHybridScore(trustResult.score, trustResult.score, supportRatio)
 
   // Soft gate analysis
   const scaleFactor = supportRatio < 50 ? supportRatio / 50 : 1.0
@@ -361,12 +411,59 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   // Diversity-weighted ratio (simplified: support ratio as proxy)
   const diversityWeightedRatio = Math.round(supportRatio * 10) / 10
 
-  // Composite score approximation (full composite needs historical signal data)
-  const stakerDiversity = stakerCount <= 1 ? 0
-    : Math.min(100, (Math.log2(stakerCount) / Math.log2(100)) * 100)
-  const compositeApprox = Math.round(
-    trustResult.score * 0.40 + stakerDiversity * 0.25 + 70 * 0.25 + 100 * 0.10
+  // ── Full 4-pillar composite (detail endpoint only) ────────────────────────
+  // Map positions to signal history for time-decay and stability calculations
+  const signals = positions.map(p => ({
+    timestamp: p.created_at,
+    side: 'support' as const, // all positions here are support-vault positions
+    amount: Math.abs(Number(p.delta ?? p.shares)) / 1e18,
+    shares: Math.abs(Number(p.shares_delta ?? p.shares)) / 1e18,
+  }))
+  const weightedTrust = calculateWeightedTrust(signals)
+  const stableDays = calculateStableDays(signals)
+
+  // Anti-sybil: count qualified stakers (net deposit >= 0.1 tTRUST)
+  const MIN_STAKE = 0.1
+  const walletNetStake = new Map<string, number>()
+  for (const p of positions) {
+    if (!p.account_id) continue
+    walletNetStake.set(
+      p.account_id,
+      (walletNetStake.get(p.account_id) ?? 0) + Math.abs(Number(p.delta ?? p.shares)) / 1e18
+    )
+  }
+  const qualifiedStakers = [...walletNetStake.values()].filter(v => v >= MIN_STAKE).length
+
+  // Price retention: on-chain price (with 15s cache) vs. ATH from signal history
+  const currentPrice = sharePriceWei !== null ? Number(sharePriceWei) / 1e18 : 0.001
+  const peakPrice = Math.max(
+    currentPrice,
+    findPeakPrice(signals.filter(s => s.side === 'support'), 0.001, 0.0001)
   )
+
+  const compositeResult = calculateCompositeTrust({
+    weightedSignalRatio: weightedTrust.weightedRatio,
+    uniqueStakers: qualifiedStakers,
+    stableDays,
+    currentPrice,
+    peakPrice,
+    recentSells: [],
+  })
+
+  // Compound key matches rowToAgentItem read key — automatic invalidation on new stake.
+  const lastSignalAt = positions.length > 0
+    ? positions.reduce((max, p) => (p.created_at > max ? p.created_at : max), '')
+    : ''
+  qualityCacheSet(`${termId}:${lastSignalAt}`, compositeResult.score)
+
+  const breakdownScore = computeScoreEnvelope({
+    objectType: 'agent',
+    trustScore: trustResult.score,
+    qualityScore: compositeResult.score,
+    supportRatio: supportRatio / 100,
+    softGateActive: softGateApplied,
+  })
+  const agentScore = breakdownScore.objectScore ?? breakdownScore.trustScore
 
   // Tier info
   const totalStakeTtrust = weiToFloat(totalWei)
@@ -386,6 +483,7 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   return {
     agentId: termId,
     agentName: cleanLabel(row.label),
+    score: breakdownScore,
     agentScore,
     trustScore: {
       raw: Math.round(trustResult.baseScore * 10) / 10,
@@ -394,11 +492,11 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
       momentum: Math.round(trustResult.momentum * 10) / 10,
     },
     compositeScore: {
-      total: compositeApprox,
-      signalRatio: Math.round(supportRatio),
-      stakerDiversity: Math.round(stakerDiversity),
-      stability: 70,
-      priceRetention: 100,
+      total: Math.round(compositeResult.score),
+      signalRatio: compositeResult.breakdown.signalScore,
+      stakerDiversity: compositeResult.breakdown.stakerScore,
+      stability: Math.round(compositeResult.breakdown.stabilityScore),
+      priceRetention: compositeResult.breakdown.priceScore,
     },
     softGate: {
       supportRatio: Math.round(supportRatio * 10) / 10,
@@ -859,7 +957,9 @@ export async function getPlatformStats() {
     const supportRatio = (supportWei + opposeWei) > 0n
       ? Number((supportWei * 100n) / (supportWei + opposeWei)) : 50
     const tr = calculateTrustScoreFromStakes(supportWei, opposeWei)
-    const score = calculateHybridScore(tr.score, tr.score, supportRatio)
+    // List context: qualityScore=null (no signal history). Rank by trustScore.
+    // topAgent.score in the response is therefore trustScore, not a hybrid.
+    const score = tr.score
 
     if (score > topAgentScore) {
       topAgentScore = score
@@ -899,7 +999,7 @@ export async function getPlatformStats() {
       ? { name: topDomain.name, agentCount: topDomain.agentCount }
       : null,
     topAgent: topAgentName
-      ? { name: topAgentName, score: topAgentScore }
+      ? { name: topAgentName, trustScore: topAgentScore }
       : null,
   }
 }

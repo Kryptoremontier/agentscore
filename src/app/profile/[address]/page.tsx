@@ -25,6 +25,8 @@ export default function PublicProfilePage() {
   const params = useParams()
   const rawAddress = params.address as string
   const { address: myAddress } = useAccount()
+  // mounted guards wagmi-dependent UI (isOwnProfile) to avoid hydration mismatch.
+  // It does NOT gate the whole page — structure renders immediately.
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
@@ -32,6 +34,7 @@ export default function PublicProfilePage() {
   const isValid = rawAddress && isAddress(rawAddress)
   const checksummed = isValid ? getAddress(rawAddress) as `0x${string}` : undefined
 
+  // isOwnProfile only controls the "Go to My Profile" link — deferred until mount.
   const isOwnProfile = mounted && myAddress && checksummed
     && getAddress(myAddress) === checksummed
 
@@ -53,16 +56,16 @@ export default function PublicProfilePage() {
     )
   }
 
-  if (isLoading || !mounted) {
-    return <PublicProfileSkeleton />
-  }
-
+  // Render the full page structure immediately (back link, tabs chrome).
+  // Data-dependent panels show their own skeleton while isLoading is true.
+  // This removes the full-page gate that previously held the page invisible
+  // until both mount AND the heavy GraphQL query completed.
   return (
     <PageBackground image="wave" opacity={0.25}>
       <div className="pt-24 pb-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 
-          {/* Back + Own profile hint */}
+          {/* Back + Own profile hint — always visible */}
           <div className="flex items-center justify-between mb-6">
             <Link
               href="/agents"
@@ -81,13 +84,42 @@ export default function PublicProfilePage() {
             )}
           </div>
 
-          {/* Public Header */}
-          <PublicHeader profile={profile} />
+          {/* Public Header — skeleton while loading */}
+          {isLoading ? (
+            <div className="glass-card p-8 mb-8 animate-pulse">
+              <div className="flex items-center gap-6">
+                <div className="w-24 h-24 rounded-full bg-white/10" />
+                <div className="space-y-3 flex-1">
+                  <div className="h-8 w-48 bg-white/10 rounded" />
+                  <div className="h-4 w-64 bg-white/10 rounded" />
+                  <div className="h-4 w-32 bg-white/10 rounded" />
+                </div>
+                <div className="flex gap-6 text-center">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="space-y-1">
+                      <div className="h-8 w-10 bg-white/10 rounded" />
+                      <div className="h-3 w-10 bg-white/5 rounded" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <PublicHeader profile={profile} />
+          )}
 
-          {/* Stats */}
-          <ProfileStats stats={profile.stats} badges={profile.badges} />
+          {/* Stats — skeleton while loading */}
+          {isLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 animate-pulse">
+              {[1,2,3,4].map(i => (
+                <div key={i} className="glass-card p-6 h-28 bg-white/5 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <ProfileStats stats={profile.stats} badges={profile.badges} />
+          )}
 
-          {/* Tabs (no Settings) */}
+          {/* Tabs chrome renders immediately; content skeletons while loading */}
           <Tabs defaultValue="agents" className="mt-8">
             <TabsList className="glass p-1 mb-6">
               <TabsTrigger value="agents" className="data-[state=active]:bg-white/10">
@@ -109,22 +141,32 @@ export default function PublicProfilePage() {
             </TabsList>
 
             <TabsContent value="agents">
-              <MyAgents agents={profile.registeredAgents} />
+              {isLoading ? <TabContentSkeleton /> : <MyAgents agents={profile.registeredAgents} />}
             </TabsContent>
             <TabsContent value="supporting">
-              <MySupportedAgents supports={profile.supportedAgents} />
+              {isLoading ? <TabContentSkeleton /> : <MySupportedAgents supports={profile.supportedAgents} />}
             </TabsContent>
             <TabsContent value="pnl">
-              <PnLTab positions={profile.pnlPositions} />
+              {isLoading ? <TabContentSkeleton /> : <PnLTab positions={profile.pnlPositions} />}
             </TabsContent>
             <TabsContent value="badges">
-              <MyBadges badges={profile.badges} expertLevel={profile.expertLevel} stats={profile.stats} />
+              {isLoading ? <TabContentSkeleton /> : <MyBadges badges={profile.badges} expertLevel={profile.expertLevel} stats={profile.stats} />}
             </TabsContent>
           </Tabs>
 
         </div>
       </div>
     </PageBackground>
+  )
+}
+
+function TabContentSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3">
+      {[1,2,3].map(i => (
+        <div key={i} className="glass-card h-20 bg-white/5 rounded-xl" />
+      ))}
+    </div>
   )
 }
 
@@ -300,32 +342,5 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
         </div>
       </div>
     </motion.div>
-  )
-}
-
-function PublicProfileSkeleton() {
-  return (
-    <PageBackground image="wave" opacity={0.25}>
-      <div className="pt-24 pb-16">
-        <div className="max-w-6xl mx-auto px-4 animate-pulse">
-          <div className="h-4 w-32 bg-white/10 rounded mb-6" />
-          <div className="glass-card p-8 mb-8">
-            <div className="flex items-center gap-6">
-              <div className="w-24 h-24 rounded-full bg-white/10" />
-              <div className="space-y-3 flex-1">
-                <div className="h-8 w-48 bg-white/10 rounded" />
-                <div className="h-4 w-64 bg-white/10 rounded" />
-                <div className="h-4 w-32 bg-white/10 rounded" />
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => (
-              <div key={i} className="glass-card p-6 h-28 bg-white/5 rounded-xl" />
-            ))}
-          </div>
-        </div>
-      </div>
-    </PageBackground>
   )
 }

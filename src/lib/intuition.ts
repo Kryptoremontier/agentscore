@@ -31,6 +31,11 @@ import { type AgentCardData, serializeAgentCard } from './agent-card'
  */
 export const FEE_PROXY_ADDRESS = '0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41' as const
 
+// "related to" predicate — canonical Intuition ontology atom (testnet).
+// Used to link a forge project's public name atom → private metadata atom.
+// Queried from testnet: atoms(where:{label:{_eq:"related to"}}){term_id}
+const RELATED_TO_TERM_ID = '0xb76e0b67f4a7477cbdada8179bcdb8444f27684a4cdaf95e34a3109af305d157' as `0x${string}`
+
 // ============================================================================
 // MultiVault Approval for FeeProxy
 // ============================================================================
@@ -582,9 +587,7 @@ export async function createAgentAtom(
   cardData: AgentCardData,
   initialDeposit?: bigint
 ) {
-  // Encode as JSON for rich A2A metadata (Phase 2A, Opcja A).
-  // Old agents had plain "Name - description" labels; new agents use JSON.
-  const atomText = serializeAgentCard(cardData)
+  const atomText = cardData.name
   const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
@@ -650,7 +653,7 @@ export async function registerAgentBatch(
   const mvAddress = getMultiVaultAddress(config.publicClient.chain?.id)
 
   // ── Step 1: Pre-compute all termIds (pure, no tx) ─────────────────────────
-  const agentLabel = serializeAgentCard(cardData)
+  const agentLabel = cardData.name
 
   // Shared semantic atoms (usually exist after first registration)
   const SHARED = ['is', 'AI Agent', 'hasAgentSkill', 'Agent Skill'] as const
@@ -822,14 +825,25 @@ export async function registerAgentBatch(
  * Shared semantic atoms ("is", "Intuition Project", "hasForgeCategory", category)
  * are detected via isTermCreated() reads (parallel, no txs) and skipped if they exist.
  *
- * @param atomLabel       Serialized JSON project label (from serializeForgeProject)
+ * Two-atom architecture for forge projects:
+ *   Atom 1 (projectName): plain text → Hasura label = "MyProject" → Portal shows name ✅
+ *   Atom 2 (metadataJson): JSON blob → Hasura label = "json object" → hidden from Portal
+ *   Triple: [Atom1][related to][Atom2] links name → metadata
+ *
+ * Fetch path reads Atom1 via [is][Intuition Project] triple, then follows [related to]
+ * to Atom2 for the full JSON metadata. Backward compat: old single-atom projects
+ * (JSON in Atom1.data) still parse via the parseForgeAtomLabel fallback.
+ *
+ * @param projectName     Clean project name — stored as plain bytes (Portal-friendly)
+ * @param metadataJson    Full JSON from serializeForgeProject() — stored in metadata atom
  * @param categoryLabel   Human-readable category, e.g. "AI Agents"
- * @param initialDeposit  Optional initial stake on the project atom (default 0.001 tTRUST)
+ * @param initialDeposit  Optional initial stake on the name atom (default 0.001 tTRUST)
  * @param onProgress      Optional UI callback
  */
 export async function registerForgeProjectBatch(
   config: WriteConfig,
-  atomLabel: string,        // JSON metadata string (same pattern as Agent Card)
+  projectName: string,
+  metadataJson: string,
   categoryLabel: string,
   initialDeposit?: bigint,
   onProgress?: (step: string) => void,
@@ -841,21 +855,27 @@ export async function registerForgeProjectBatch(
 
   // ── Step 1: Pre-compute all termIds (pure view, no tx) ────────────────────
   //
-  // Same pattern as registerAgentBatch:
-  //   atomLabel (project atom) — JSON metadata stored in atom data
-  //   shared atoms             — reused across all IntuForge projects
+  // Two-atom pattern:
+  //   projectName  — clean name atom (Atom1, what users see and stake on)
+  //   metadataJson — JSON metadata atom (Atom2, hidden; linked via [related to])
+  //   shared atoms — reused across all IntuForge projects
+  //
+  // "related to" predicate already exists on testnet → use hardcoded RELATED_TO_TERM_ID
+  // (do not include in allLabels; existence check skipped)
   //
   // Triples (Tx2):
-  //   [project][is][Intuition Project]
-  //   [project][hasForgeCategory][categoryLabel]
+  //   [Atom1][is][Intuition Project]
+  //   [Atom1][related to][Atom2]
+  //   [Atom1][hasForgeCategory][categoryLabel]
   const SHARED_LABELS = ['is', 'Intuition Project', 'hasForgeCategory', categoryLabel] as const
-  const allLabels     = [atomLabel, ...SHARED_LABELS]
+  const allLabels     = [projectName, metadataJson, ...SHARED_LABELS]
 
   const termIds = allLabels.map(
     label => sdkCalculateAtomId(stringToHex(label) as Hex) as `0x${string}`
   )
 
   const projectTermId = termIds[0]
+  const metaTermId    = termIds[1]
 
   // ── Step 2: Parallel existence checks (read calls, no tx) ─────────────────
   onProgress?.('Checking on-chain state…')
@@ -881,8 +901,9 @@ export async function registerForgeProjectBatch(
   if (toCreate.length > 0) {
     onProgress?.(`Creating ${toCreate.length} atom(s) on-chain…`)
 
-    const datas    = toCreate.map(label => stringToHex(label))
-    const deposits = toCreate.map(label => label === atomLabel ? deposit : DEFAULT_ATOM_DEPOSIT)
+    const datas = toCreate.map(label => stringToHex(label))
+    // Only the name atom (Atom1) gets the user's deposit; metadata atom gets minimal stake
+    const deposits = toCreate.map(label => label === projectName ? deposit : DEFAULT_ATOM_DEPOSIT)
 
     const [atomCost, fees2] = await Promise.all([
       config.publicClient.readContract({
@@ -911,8 +932,9 @@ export async function registerForgeProjectBatch(
   }
 
   // ── Tx 2: Batch-create triples (skip any that already exist) ─────────────
-  //   [project][is][Intuition Project]
-  //   [project][hasForgeCategory][categoryLabel]
+  //   [Atom1][is][Intuition Project]
+  //   [Atom1][related to][Atom2]          ← links name → metadata
+  //   [Atom1][hasForgeCategory][category]
   onProgress?.('Checking existing relationships…')
 
   const isId  = atomMap.get('is')!.termId
@@ -920,10 +942,14 @@ export async function registerForgeProjectBatch(
   const hfcId = atomMap.get('hasForgeCategory')!.termId
   const catId = atomMap.get(categoryLabel)!.termId
 
-  const [typeTripleId, catTripleId] = await Promise.all([
+  const [typeTripleId, metaTripleId, catTripleId] = await Promise.all([
     config.publicClient.readContract({
       address: mvAddress, abi: MultiVaultAbi, functionName: 'calculateTripleId',
       args: [projectTermId, isId, ipId],
+    }) as Promise<`0x${string}`>,
+    config.publicClient.readContract({
+      address: mvAddress, abi: MultiVaultAbi, functionName: 'calculateTripleId',
+      args: [projectTermId, RELATED_TO_TERM_ID, metaTermId],
     }) as Promise<`0x${string}`>,
     config.publicClient.readContract({
       address: mvAddress, abi: MultiVaultAbi, functionName: 'calculateTripleId',
@@ -931,8 +957,9 @@ export async function registerForgeProjectBatch(
     }) as Promise<`0x${string}`>,
   ])
 
-  const [typeExists, catExists] = await Promise.all([
-    (config.publicClient.readContract({ address: mvAddress, abi: MultiVaultAbi, functionName: 'isTermCreated', args: [typeTripleId] }) as Promise<boolean>).catch(() => false),
+  const [typeExists, metaTripleExists, catExists] = await Promise.all([
+    (config.publicClient.readContract({ address: mvAddress, abi: MultiVaultAbi, functionName: 'isTermCreated', args: [typeTripleId]  }) as Promise<boolean>).catch(() => false),
+    (config.publicClient.readContract({ address: mvAddress, abi: MultiVaultAbi, functionName: 'isTermCreated', args: [metaTripleId] }) as Promise<boolean>).catch(() => false),
     (config.publicClient.readContract({ address: mvAddress, abi: MultiVaultAbi, functionName: 'isTermCreated', args: [catTripleId]  }) as Promise<boolean>).catch(() => false),
   ])
 
@@ -941,8 +968,9 @@ export async function registerForgeProjectBatch(
   const tObjects:    `0x${string}`[] = []
   const tDeps:       bigint[]        = []
 
-  if (!typeExists) { tSubjects.push(projectTermId); tPredicates.push(isId);  tObjects.push(ipId);  tDeps.push(DEFAULT_ATOM_DEPOSIT) }
-  if (!catExists)  { tSubjects.push(projectTermId); tPredicates.push(hfcId); tObjects.push(catId); tDeps.push(DEFAULT_ATOM_DEPOSIT) }
+  if (!typeExists)       { tSubjects.push(projectTermId); tPredicates.push(isId);              tObjects.push(ipId);       tDeps.push(DEFAULT_ATOM_DEPOSIT) }
+  if (!metaTripleExists) { tSubjects.push(projectTermId); tPredicates.push(RELATED_TO_TERM_ID); tObjects.push(metaTermId); tDeps.push(DEFAULT_ATOM_DEPOSIT) }
+  if (!catExists)        { tSubjects.push(projectTermId); tPredicates.push(hfcId);             tObjects.push(catId);      tDeps.push(DEFAULT_ATOM_DEPOSIT) }
 
   let lastHash: `0x${string}` = '0x0'
 
@@ -1001,8 +1029,8 @@ export async function createSkillAtom(
     return { termId: tid, transactionHash: '0x' as `0x${string}`, state: { termId: tid } }
   }
 
-  // Not found → create new atom
-  const atomText = `${metadata.name} - ${metadata.description}`
+  // Not found → create new atom (plain name; triple [skill][is][Agent Skill] identifies type)
+  const atomText = metadata.name
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
   if (userAddress) saveRegistration(result.termId, userAddress, 'skill')

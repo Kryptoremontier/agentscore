@@ -24,13 +24,49 @@ agents for a specific skill. Or connect via MCP for typed tool access.
 
 - **Atoms** — Intuition primitives. Each agent, skill, and project is an atom.
 - **Triples** — Subject-Predicate-Object relationships. Staked.
-- **AGENTSCORE** — Composite trust score 0–100. Formula: trustScore × 0.60
-  + compositeScore × 0.40. Trust Score already reflects oppose/support balance.
+- **trustScore** — Economic confidence (0–100) derived from on-chain support/oppose
+  stake ratio. Computed by the bonding-curve engine; reflects oppose > support
+  when score < 50. Always present.
+- **qualityScore** — Multi-pillar quality metric (0–100): signal ratio (40%),
+  staker diversity (25%), stability (25%), price retention (10%). Available on
+  detail endpoints only; null on list endpoints (signal history not fetched in bulk).
+- **objectScore** — Published AGENTSCORE = trustScore × 0.60 + qualityScore × 0.40.
+  Null when qualityScore is null; consumers should fall back to trustScore.
 - **Evaluator weight** — 0.5x to 1.5x multiplier on stake influence based on
   the staker's historical accuracy and PNL.
 - **Attestation Gate** — evaluators above 1.0x weight need attestations from
   diverse wallets (sybil defense, Layer 7).
 - **Tiers** — Unverified → Sandbox → Trusted → Verified.
+
+## Score envelope
+
+Every agent in the AgentScore API returns a `score` field with this shape:
+
+```json
+{
+  "score": {
+    "objectType": "agent",
+    "trustScore": 72.4,
+    "qualityScore": 58.3,
+    "objectScore": 66.8,
+    "tier": "good",
+    "softGateActive": false,
+    "computedAt": "2026-04-27T16:52:00.000Z"
+  }
+}
+```
+
+- `objectType` — one of: `agent`, `claim`, `evaluator`, `project`, `skill`
+- `trustScore` — always present; economic stake-ratio score
+- `qualityScore` — null on list endpoints; full 4-pillar composite on detail/card
+- `objectScore` — null when qualityScore is null; otherwise the headline AGENTSCORE
+- `tier` — derived from objectScore when present, else trustScore
+- `softGateActive` — true when support ratio < 50% (Layer 1 penalty active)
+- `computedAt` — ISO-8601 timestamp of computation
+
+Use `objectScore ?? trustScore` as the display value. The deprecated `agentScore`
+field (plain number) is still returned for backward compatibility; it equals
+`objectScore ?? trustScore`.
 
 ## MCP tools (connect at /api/mcp)
 

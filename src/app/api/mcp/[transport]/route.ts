@@ -33,8 +33,9 @@ const handler = createMcpHandler(
         title: 'Search AI Agents',
         description:
           'Search and list AI agents registered on AgentScore. ' +
-          'Returns agents with their AGENTSCORE (0-100), trust tier, ' +
-          'momentum direction, staker count, and skill count. ' +
+          'Returns agents with a score envelope (trustScore, qualityScore, objectScore) ' +
+          'plus trust tier, momentum direction, staker count, and skill count. ' +
+          'In list context qualityScore is null — use get_agent_trust for the full composite. ' +
           'Sort by score, stakers, or newest. Filter by minimum trust score.',
         inputSchema: {
           sort: z.enum(['score', 'stakers', 'newest']).optional()
@@ -60,6 +61,7 @@ const handler = createMcpHandler(
                 agents: agents.map(a => ({
                   id: a.id,
                   name: a.name,
+                  score: a.score,
                   agentScore: a.agentScore,
                   tier: a.trustTier,
                   momentum: a.momentumDirection,
@@ -86,7 +88,8 @@ const handler = createMcpHandler(
         title: 'Get Agent Trust Breakdown',
         description:
           'Get detailed trust analysis for a specific AI agent. ' +
-          'Returns AGENTSCORE, per-skill breakdown (contextual trust), ' +
+          'Returns a full score envelope (trustScore, qualityScore from 4-pillar composite, objectScore = AGENTSCORE), ' +
+          'per-skill breakdown (contextual trust), ' +
           'trust score components (economic confidence, composite quality), ' +
           'anti-manipulation metrics (whale detection, evaluator weights), ' +
           'and tier progression (what\'s needed for next tier).',
@@ -111,6 +114,7 @@ const handler = createMcpHandler(
                 agent: {
                   id: detail.id,
                   name: detail.name,
+                  score: detail.score,
                   agentScore: detail.agentScore,
                   tier: detail.trustTier,
                 },
@@ -345,7 +349,8 @@ const handler = createMcpHandler(
         title: 'Compare Agents',
         description:
           'Side-by-side comparison of 2-5 agents. ' +
-          'Shows AGENTSCORE, skill breakdown, tier, momentum for each. ' +
+          'Returns score envelope (objectScore = AGENTSCORE), skill breakdown, tier, momentum for each. ' +
+          'qualityScore in the envelope reflects the full 4-pillar composite for each agent. ' +
           'Optionally filter comparison to a specific skill domain. ' +
           'Use this when deciding between multiple agents for a task.',
         inputSchema: {
@@ -372,6 +377,7 @@ const handler = createMcpHandler(
               return {
                 id: detail.id,
                 name: detail.name,
+                score: detail.score,
                 agentScore: detail.agentScore,
                 tier: detail.trustTier,
                 momentum: detail.momentumDirection,
@@ -509,6 +515,8 @@ const handler = createMcpHandler(
           'Get current AgentScore platform statistics: ' +
           'total agents, skills, domains, evaluators, total staked, ' +
           'top domain, and top agent. ' +
+          'topAgent.trustScore is trustScore-based (list context — no quality ' +
+          'composite computed in aggregate; use get_agent_trust for the full envelope). ' +
           'Use this for a quick overview of the ecosystem.',
         inputSchema: {},
       },

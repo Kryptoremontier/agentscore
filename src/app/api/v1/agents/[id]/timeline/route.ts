@@ -23,7 +23,7 @@ export async function GET(
       agentId: rawData.agentId,
       agentName: rawData.agentName,
       createdAt: rawData.createdAt,
-      currentScore: agentDetail?.agentScore ?? 50,
+      currentScore: agentDetail?.score.objectScore ?? agentDetail?.agentScore ?? 50,
       currentTier: agentDetail?.trustTier ?? 'unverified',
       stakingEvents: rawData.stakingEvents,
       skillEvents: rawData.skillEvents,

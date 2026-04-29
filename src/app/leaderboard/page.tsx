@@ -11,12 +11,7 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { cn } from '@/lib/cn'
 
 import { APP_CONFIG } from '@/lib/app-config'
-import {
-  AGENT_WHERE_STR, SKILL_WHERE_STR,
-  AGENT_VAULT_POSITION_STR, SKILL_VAULT_POSITION_STR, CLAIM_VAULT_POSITION_STR,
-  AGENT_SIGNAL_WHERE_STR, SKILL_SIGNAL_WHERE_STR, CLAIM_SIGNAL_WHERE_STR,
-  AGENT_PREFIX, SKILL_PREFIX,
-} from '@/lib/gql-filters'
+import { AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -52,82 +47,96 @@ async function gql<T>(query: string): Promise<T> {
   return json.data as T
 }
 
+// Checksummed for Hasura _neq filters (Hasura stores addresses checksummed)
 const FEE_PROXY_LC = '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41'
+const FEE_PROXY_CS = '0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41'
 
 async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
-  const data = await gql<{
-    agents: Array<{ positions: Array<{ account_id: string }> }>
-    skills: Array<{ positions: Array<{ account_id: string }> }>
+  // Fetch 1: atom term_ids only — label-prefix filter, no nested sub-queries.
+  // Avoids the slow as_subject_triples JOIN on the positions path.
+  const entities = await gql<{
+    agents: Array<{ term_id: string }>
+    skills: Array<{ term_id: string }>
     claims: Array<{ creator_id: string }>
-    agentPositions: Array<{ account_id: string; shares: string }>
-    skillPositions: Array<{ account_id: string; shares: string }>
-    claimPositions: Array<{ account_id: string; shares: string }>
-    agentSignals: Array<{ account_id: string }>
-    skillSignals: Array<{ account_id: string }>
-    claimSignals: Array<{ account_id: string }>
   }>(`
-    query LeaderboardData {
+    query LeaderboardEntities {
       agents: atoms(
-        where: ${AGENT_WHERE_STR}
+        where: { label: { _ilike: "${AGENT_PREFIX}%" } }
         limit: 500
-      ) {
-        positions(order_by: { created_at: asc }, limit: 1) { account_id }
-      }
+      ) { term_id }
 
       skills: atoms(
-        where: ${SKILL_WHERE_STR}
+        where: {
+          _or: [
+            { label: { _ilike: "${SKILL_PREFIX}%" } }
+            { as_subject_triples: {
+                predicate: { label: { _eq: "is" } }
+                object: { label: { _eq: "Agent Skill" } }
+            }}
+          ]
+        }
         limit: 500
-      ) {
-        positions(order_by: { created_at: asc }, limit: 1) { account_id }
-      }
+      ) { term_id }
 
       claims: triples(
         where: {
-          creator_id: { _neq: "${FEE_PROXY_LC}" }
+          creator_id: { _neq: "${FEE_PROXY_CS}" }
           _or: [
             { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } }
             { subject: { label: { _ilike: "${SKILL_PREFIX}%" } } }
-            { subject: { as_subject_triples: { predicate_id: { _eq: "0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba" } } } }
-            { subject: { as_subject_triples: { predicate: { label: { _eq: "is" } } object: { label: { _eq: "Agent Skill" } } } } }
           ]
         }
         limit: 500
       ) { creator_id }
-
-      agentPositions: positions(
-        where: { ${AGENT_VAULT_POSITION_STR} }
-        limit: 1000
-      ) { account_id shares }
-
-      skillPositions: positions(
-        where: { ${SKILL_VAULT_POSITION_STR} }
-        limit: 1000
-      ) { account_id shares }
-
-      claimPositions: positions(
-        where: { ${CLAIM_VAULT_POSITION_STR} }
-        limit: 1000
-      ) { account_id shares }
-
-      agentSignals: signals(
-        where: { ${AGENT_SIGNAL_WHERE_STR} }
-        limit: 3000
-        order_by: { created_at: desc }
-      ) { account_id }
-
-      skillSignals: signals(
-        where: { ${SKILL_SIGNAL_WHERE_STR} }
-        limit: 1000
-        order_by: { created_at: desc }
-      ) { account_id }
-
-      claimSignals: signals(
-        where: { ${CLAIM_SIGNAL_WHERE_STR} }
-        limit: 1000
-        order_by: { created_at: desc }
-      ) { account_id }
     }
   `)
+
+  const agentTermIds = new Set((entities.agents || []).map(a => a.term_id).filter(Boolean))
+  const skillTermIds = new Set((entities.skills || []).map(s => s.term_id).filter(Boolean))
+  const allTermIds = [...agentTermIds, ...skillTermIds]
+
+  // Fetch 2: positions (asc for registrant detection) + signals — vault.term_id filter
+  // instead of the 4-level vault→term→atom JOIN that was timing out on Hasura.
+  let positions: Array<{ account_id: string; shares: string; vault: { term_id: string } }> = []
+  let signals: Array<{ account_id: string }> = []
+
+  if (allTermIds.length > 0) {
+    const termIdList = allTermIds.map(id => `"${id}"`).join(', ')
+    const activity = await gql<{
+      positions: Array<{ account_id: string; shares: string; vault: { term_id: string } }>
+      signals: Array<{ account_id: string }>
+    }>(`
+      query LeaderboardActivity {
+        positions(
+          where: {
+            vault: { term_id: { _in: [${termIdList}] } }
+            shares: { _gt: "0" }
+            account_id: { _neq: "${FEE_PROXY_CS}" }
+          }
+          order_by: { created_at: asc }
+          limit: 2000
+        ) { account_id shares vault { term_id } }
+
+        signals(
+          where: {
+            vault: { term_id: { _in: [${termIdList}] } }
+            account_id: { _neq: "${FEE_PROXY_CS}" }
+          }
+          limit: 5000
+          order_by: { created_at: desc }
+        ) { account_id }
+      }
+    `)
+    positions = activity.positions || []
+    signals = activity.signals || []
+  }
+
+  // First non-FeeProxy position per vault = registrant (positions are asc by created_at)
+  const firstHolderByVault = new Map<string, string>()
+  for (const p of positions) {
+    const vid = p.vault?.term_id
+    if (vid && !firstHolderByVault.has(vid)) firstHolderByVault.set(vid, p.account_id)
+  }
 
   const map = new Map<string, LeaderboardEntry>()
 
@@ -139,24 +148,17 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
     return map.get(addr)!
   }
 
-  // Użyj pierwszego position holdera jako registranta (FeeProxy jako receiver = user jest first holder)
-  for (const a of data.agents || []) {
-    const holder = a.positions?.[0]?.account_id
-    if (holder && holder.toLowerCase() !== FEE_PROXY_LC) ensure(holder).agentsRegistered++
+  for (const termId of agentTermIds) {
+    const holder = firstHolderByVault.get(termId)
+    if (holder) ensure(holder).agentsRegistered++
   }
-  for (const s of data.skills || []) {
-    const holder = s.positions?.[0]?.account_id
-    if (holder && holder.toLowerCase() !== FEE_PROXY_LC) ensure(holder).skillsRegistered++
+  for (const termId of skillTermIds) {
+    const holder = firstHolderByVault.get(termId)
+    if (holder) ensure(holder).skillsRegistered++
   }
-  // Claims: creator_id (legacy, FeeProxy odfiltrowany w query) + TODO: localStorage per-user
-  for (const c of data.claims || []) { if (c.creator_id) ensure(c.creator_id).claimsCreated++ }
+  for (const c of entities.claims || []) { if (c.creator_id) ensure(c.creator_id).claimsCreated++ }
 
-  const allPositions = [
-    ...(data.agentPositions || []),
-    ...(data.skillPositions || []),
-    ...(data.claimPositions || []),
-  ]
-  for (const p of allPositions) {
+  for (const p of positions) {
     if (p.account_id) {
       const e = ensure(p.account_id)
       e.totalPositions++
@@ -164,15 +166,8 @@ async function fetchLeaderboardData(): Promise<LeaderboardEntry[]> {
     }
   }
 
-  const allSignals = [
-    ...(data.agentSignals || []),
-    ...(data.skillSignals || []),
-    ...(data.claimSignals || []),
-  ]
-  for (const sig of allSignals) {
-    if (sig.account_id && sig.account_id.toLowerCase() !== FEE_PROXY_LC) {
-      ensure(sig.account_id).totalSignals++
-    }
+  for (const sig of signals) {
+    if (sig.account_id) ensure(sig.account_id).totalSignals++
   }
 
   return Array.from(map.values())
