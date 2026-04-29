@@ -374,15 +374,17 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const row = data?.atoms?.[0]
   if (!row) return null
 
+  const ctid = row.as_subject_triples?.[0]?.counter_term_id
+
+  const termIds = ctid ? [termId, ctid] : [termId]
   const [opposeMap, positionsData, sharePriceWei] = await Promise.all([
     batchFetchOpposeShares([row]),
-    gql<{ positions: Array<{ account_id: string; shares: string; created_at: string; delta: string | null; shares_delta: string | null }> }>(
-      `{ positions(where: { term_id: { _eq: "${termId}" } } order_by: { shares: desc }) { account_id shares created_at delta shares_delta } }`
+    gql<{ positions: Array<{ term_id: string; account_id: string; shares: string; created_at: string; delta: string | null; shares_delta: string | null }> }>(
+      `{ positions(where: { term_id: { _in: ${JSON.stringify(termIds)} } } order_by: { shares: desc }) { term_id account_id shares created_at delta shares_delta } }`
     ),
     getOnChainSharePrice(serverPublicClient, termId as `0x${string}`).catch(() => null),
   ])
 
-  const ctid = row.as_subject_triples?.[0]?.counter_term_id
   const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
   const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
   const stakerCount = row.positions_aggregate?.aggregate?.count || 0
@@ -396,12 +398,14 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const scaleFactor = supportRatio < 50 ? supportRatio / 50 : 1.0
   const softGateApplied = supportRatio < 50
 
-  // Whale detection from positions (top-level query)
+  // Whale detection — support vault only (oppose shares must not be compared
+  // against the support vault's totalSupply)
   const positions = positionsData?.positions || []
+  const supportPositions = positions.filter(p => !ctid || p.term_id !== ctid)
   const totalSupply = Number(supportWei) // support vault supply
   let largestShare = 0
-  if (positions.length > 0 && totalSupply > 0) {
-    const largest = Math.max(...positions.map(p => {
+  if (supportPositions.length > 0 && totalSupply > 0) {
+    const largest = Math.max(...supportPositions.map(p => {
       try { return Number(BigInt(p.shares)) } catch { return 0 }
     }))
     largestShare = Math.round((largest / totalSupply) * 100) / 100
@@ -412,21 +416,22 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const diversityWeightedRatio = Math.round(supportRatio * 10) / 10
 
   // ── Full 4-pillar composite (detail endpoint only) ────────────────────────
-  // Map positions to signal history for time-decay and stability calculations
+  // Map positions to signal history — include both support and oppose vaults
+  // so calculateWeightedTrust / calculateStableDays receive a meaningful ratio.
   const signals = positions.map(p => ({
     timestamp: p.created_at,
-    side: 'support' as const, // all positions here are support-vault positions
+    side: (ctid && p.term_id === ctid) ? 'oppose' as const : 'support' as const,
     amount: Math.abs(Number(p.delta ?? p.shares)) / 1e18,
     shares: Math.abs(Number(p.shares_delta ?? p.shares)) / 1e18,
   }))
   const weightedTrust = calculateWeightedTrust(signals)
   const stableDays = calculateStableDays(signals)
 
-  // Anti-sybil: count qualified stakers (net deposit >= 0.1 tTRUST)
+  // Anti-sybil: count qualified stakers from the support vault only
   const MIN_STAKE = 0.1
   const walletNetStake = new Map<string, number>()
   for (const p of positions) {
-    if (!p.account_id) continue
+    if (!p.account_id || (ctid && p.term_id === ctid)) continue
     walletNetStake.set(
       p.account_id,
       (walletNetStake.get(p.account_id) ?? 0) + Math.abs(Number(p.delta ?? p.shares)) / 1e18
