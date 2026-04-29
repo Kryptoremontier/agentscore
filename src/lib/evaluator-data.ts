@@ -18,11 +18,6 @@ import { unstable_cache, revalidateTag } from 'next/cache'
 import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR } from './gql-filters'
 
-// Lightweight position filter for leaderboard — label prefix only.
-// AGENT_VAULT_POSITION_STR includes as_subject_triples in WHERE which causes
-// GraphQL timeouts at limit:1500. Label prefix is fast (indexed) and covers
-// all AgentScore-created agents on testnet.
-const LEADERBOARD_POSITION_FILTER = `shares: { _gt: "0" } vault: { term: { atom: { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } } } }`
 import { calculateEvaluatorScore, type StakerPosition, type EvaluatorProfile } from './evaluator-score'
 import { batchGetAttestationCounts, getAttestationConfig } from './attestation-gate'
 import { fetchPositionPNL, computePositionPNL, type PositionPNL } from './pnl-engine'
@@ -199,11 +194,30 @@ async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
       } | null
     }
 
+    // Step 1: fetch all agent term_ids via the full AGENT_WHERE_STR filter.
+    // This collapses the vault join to a single _in lookup (no timeout).
+    // See CLAUDE.md: "Deep position JOINs always time out."
+    const agentData = await gql<{ atoms: { term_id: string }[] }>(`
+      {
+        atoms(where: ${AGENT_WHERE_STR} limit: 500) {
+          term_id
+        }
+      }
+    `)
+    const agentTermIds = agentData?.atoms?.map(a => a.term_id) ?? []
+    if (agentTermIds.length === 0) return []
+
+    // Step 2: fetch positions for those vaults (1-level join, no timeout).
+    // limit: 800 covers all active positions on testnet with headroom.
+    // Replace with cursor pagination on mainnet.
     const data = await gql<{ positions: PosRow[] }>(`
       {
         positions(
-          where: { ${LEADERBOARD_POSITION_FILTER} }
-          limit: 1500
+          where: {
+            shares: { _gt: "0" }
+            vault: { term_id: { _in: ${JSON.stringify(agentTermIds)} } }
+          }
+          limit: 800
         ) {
           account_id
           shares
