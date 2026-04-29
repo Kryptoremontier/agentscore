@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn'
 import { ForgeCategory, ProjectStage, FORGE_CATEGORIES, PROJECT_STAGE_LABELS } from '@/lib/forge/types'
 import { CATEGORY_ICON_MAP, CATEGORY_HEX } from './CategoryPill'
 import { calculateForgeCompleteness } from '@/lib/forge/completeness'
+import { serializeForgeProject } from '@/lib/forge/data'
 import { registerForgeProjectBatch } from '@/lib/forge/chain'
 import { createWriteConfig } from '@/lib/intuition'
 
@@ -603,6 +604,7 @@ export function ProjectRegistrationForm() {
     setProgressMsg('Preparing registration…')
 
     try {
+      const atomLabel     = serializeForgeProject(form)
       const categoryDef   = FORGE_CATEGORIES.find(c => c.id === form.category)
       const categoryLabel = categoryDef?.label ?? form.category
       const cfg           = createWriteConfig(walletClient, publicClient)
@@ -612,7 +614,7 @@ export function ProjectRegistrationForm() {
       // Up to 3 txs: Tx0 (one-time approval), Tx1 batch atoms, Tx2 batch triples
       const { termId } = await registerForgeProjectBatch(
         cfg,
-        form.name,
+        atomLabel,
         categoryLabel,
         undefined,
         setProgressMsg,
