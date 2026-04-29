@@ -163,12 +163,31 @@ export async function fetchStakerPositions(
   }
 }
 
+// Cached separately from the leaderboard (900s > leaderboard 300s TTL) so it
+// is always warm when the leaderboard cache expires. Agent registrations are
+// rare — a 15-minute staleness window is fine.
+const fetchAgentTermIds = unstable_cache(
+  async (): Promise<string[]> => {
+    const data = await gql<{ atoms: { term_id: string }[] }>(`
+      {
+        atoms(where: ${AGENT_WHERE_STR} limit: 500) {
+          term_id
+        }
+      }
+    `)
+    return data?.atoms?.map(a => a.term_id) ?? []
+  },
+  ['agent-term-ids'],
+  { revalidate: 900, tags: ['agent-term-ids'] },
+)
+
 /**
  * Fetch all evaluator profiles for the leaderboard.
  *
- * Strategy (efficient — 2 queries total):
- *  1. Fetch all agent atom positions (up to 1500) with atom info
- *  2. Group by account_id, compute evaluator score for each
+ * Strategy (2 queries):
+ *  1. Fetch agent atom term_ids (cached 900s via fetchAgentTermIds)
+ *  2. Fetch positions filtered by vault.term_id _in (1-level join, fast)
+ *  3. Group by account_id, compute evaluator score for each
  *
  * Returns sorted by adjustedAccuracy desc, limited to top 50.
  */
@@ -194,17 +213,9 @@ async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
       } | null
     }
 
-    // Step 1: fetch all agent term_ids via the full AGENT_WHERE_STR filter.
-    // This collapses the vault join to a single _in lookup (no timeout).
-    // See CLAUDE.md: "Deep position JOINs always time out."
-    const agentData = await gql<{ atoms: { term_id: string }[] }>(`
-      {
-        atoms(where: ${AGENT_WHERE_STR} limit: 500) {
-          term_id
-        }
-      }
-    `)
-    const agentTermIds = agentData?.atoms?.map(a => a.term_id) ?? []
+    // Step 1: fetch agent term_ids (cached 900s — longer than leaderboard 300s,
+    // so it is always warm when the leaderboard cache expires every 5 min).
+    const agentTermIds = await fetchAgentTermIds()
     if (agentTermIds.length === 0) return []
 
     // Step 2: fetch positions for those vaults (1-level join, no timeout).
@@ -245,6 +256,7 @@ async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
       }
     `)
 
+    console.timeEnd('[leaderboard] q2-positions')
     const positions = data?.positions || []
 
     // Collect all counter_term_ids to batch-fetch oppose shares
