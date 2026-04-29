@@ -2,6 +2,8 @@ import { type NextRequest } from 'next/server'
 import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
 import { getPlatformStats } from '@/lib/api-data'
 
+export const revalidate = 300
+
 export async function GET(_request: NextRequest) {
   try {
     const stats = await getPlatformStats()

@@ -5,6 +5,8 @@ import { fetchForgeProjectsFromChain } from '@/lib/forge/data'
 import { calculateForgeCompleteness } from '@/lib/forge/completeness'
 import { ForgeCategory, ProjectStage } from '@/lib/forge/types'
 
+export const revalidate = 300
+
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 const TeamMemberSchema = z.object({

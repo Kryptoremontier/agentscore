@@ -3,6 +3,8 @@ import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
 import { getEvaluators } from '@/lib/api-data'
 import type { EvaluatorTier } from '@/lib/evaluator-score'
 
+export const revalidate = 300
+
 const VALID_TIERS: EvaluatorTier[] = ['newcomer', 'scout', 'analyst', 'oracle', 'sage']
 
 export async function GET(request: NextRequest) {

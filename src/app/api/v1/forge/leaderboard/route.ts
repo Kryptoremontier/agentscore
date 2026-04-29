@@ -3,12 +3,14 @@ import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
 import { fetchForgeProjectsFromChain } from '@/lib/forge/data'
 import { ForgeCategory } from '@/lib/forge/types'
 
+export const revalidate = 300
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category') as ForgeCategory | null
 
-    let projects = await fetchForgeProjectsFromChain(100)
+    let projects = await fetchForgeProjectsFromChain(20)
 
     if (category && Object.values(ForgeCategory).includes(category)) {
       projects = projects.filter(p => p.category === category)

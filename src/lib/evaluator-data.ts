@@ -14,14 +14,10 @@
  * Oppose position tracking is a future enhancement.
  */
 
+import { unstable_cache, revalidateTag } from 'next/cache'
 import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR } from './gql-filters'
 
-// Lightweight position filter for leaderboard — label prefix only.
-// AGENT_VAULT_POSITION_STR includes as_subject_triples in WHERE which causes
-// GraphQL timeouts at limit:1500. Label prefix is fast (indexed) and covers
-// all AgentScore-created agents on testnet.
-const LEADERBOARD_POSITION_FILTER = `shares: { _gt: "0" } vault: { term: { atom: { label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" } } } }`
 import { calculateEvaluatorScore, type StakerPosition, type EvaluatorProfile } from './evaluator-score'
 import { batchGetAttestationCounts, getAttestationConfig } from './attestation-gate'
 import { fetchPositionPNL, computePositionPNL, type PositionPNL } from './pnl-engine'
@@ -167,16 +163,35 @@ export async function fetchStakerPositions(
   }
 }
 
+// Cached separately from the leaderboard (900s > leaderboard 300s TTL) so it
+// is always warm when the leaderboard cache expires. Agent registrations are
+// rare — a 15-minute staleness window is fine.
+const fetchAgentTermIds = unstable_cache(
+  async (): Promise<string[]> => {
+    const data = await gql<{ atoms: { term_id: string }[] }>(`
+      {
+        atoms(where: ${AGENT_WHERE_STR} limit: 500) {
+          term_id
+        }
+      }
+    `)
+    return data?.atoms?.map(a => a.term_id) ?? []
+  },
+  ['agent-term-ids'],
+  { revalidate: 900, tags: ['agent-term-ids'] },
+)
+
 /**
  * Fetch all evaluator profiles for the leaderboard.
  *
- * Strategy (efficient — 2 queries total):
- *  1. Fetch all agent atom positions (up to 1500) with atom info
- *  2. Group by account_id, compute evaluator score for each
+ * Strategy (2 queries):
+ *  1. Fetch agent atom term_ids (cached 900s via fetchAgentTermIds)
+ *  2. Fetch positions filtered by vault.term_id _in (1-level join, fast)
+ *  3. Group by account_id, compute evaluator score for each
  *
  * Returns sorted by adjustedAccuracy desc, limited to top 50.
  */
-export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
+async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
   try {
     type PosRow = {
       account_id: string
@@ -198,11 +213,22 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
       } | null
     }
 
+    // Step 1: fetch agent term_ids (cached 900s — longer than leaderboard 300s,
+    // so it is always warm when the leaderboard cache expires every 5 min).
+    const agentTermIds = await fetchAgentTermIds()
+    if (agentTermIds.length === 0) return []
+
+    // Step 2: fetch positions for those vaults (1-level join, no timeout).
+    // limit: 800 covers all active positions on testnet with headroom.
+    // Replace with cursor pagination on mainnet.
     const data = await gql<{ positions: PosRow[] }>(`
       {
         positions(
-          where: { ${LEADERBOARD_POSITION_FILTER} }
-          limit: 1500
+          where: {
+            shares: { _gt: "0" }
+            vault: { term_id: { _in: ${JSON.stringify(agentTermIds)} } }
+          }
+          limit: 800
         ) {
           account_id
           shares
@@ -230,6 +256,7 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
       }
     `)
 
+    console.timeEnd('[leaderboard] q2-positions')
     const positions = data?.positions || []
 
     // Collect all counter_term_ids to batch-fetch oppose shares
@@ -340,4 +367,14 @@ export async function fetchEvaluatorLeaderboard(): Promise<EvaluatorProfile[]> {
     console.warn('[fetchEvaluatorLeaderboard] Failed:', error)
     return []
   }
+}
+
+export const fetchEvaluatorLeaderboard = unstable_cache(
+  fetchEvaluatorLeaderboardImpl,
+  ['evaluator-leaderboard'],
+  { revalidate: 300, tags: ['evaluator-leaderboard'] },
+)
+
+export function revalidateEvaluatorLeaderboard() {
+  revalidateTag('evaluator-leaderboard')
 }

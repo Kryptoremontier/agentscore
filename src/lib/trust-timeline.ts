@@ -210,7 +210,7 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
       description: `Capability claim created: "${input.agentName} has skill ${skill.skillName}". This enables domain-specific scoring in the ${skill.skillName} leaderboard.`,
       scoreAtEvent: null,
       scoreDelta: null,
-      icon: 'skill',
+      icon: '⚡',
       severity: 'positive',
       metadata: { skillName: skill.skillName, skillId: skill.skillId },
     })

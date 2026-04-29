@@ -22,13 +22,15 @@ interface Entry {
 const store = new Map<string, Entry>()
 
 export function qualityCacheSet(termId: string, qualityScore: number): void {
-  // evict oldest entry when at capacity (Map iterates insertion order)
+  // Remove existing entry first so the size check below is accurate when
+  // updating a key that is already in the cache (avoids evicting an unrelated
+  // entry when the cache is at capacity but the key already exists).
+  store.delete(termId)
+  // Evict oldest entry when at capacity (Map iterates insertion order)
   if (store.size >= MAX_ENTRIES) {
     const oldestKey = store.keys().next().value
     if (oldestKey !== undefined) store.delete(oldestKey)
   }
-  // re-insert to move to end (most-recently-used position)
-  store.delete(termId)
   store.set(termId, { qualityScore, ts: Date.now() })
 }
 

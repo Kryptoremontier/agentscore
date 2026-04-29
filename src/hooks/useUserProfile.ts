@@ -484,7 +484,7 @@ const emptyProfile = (address: `0x${string}`): UserProfile => ({
 export function useUserProfile(address?: `0x${string}`) {
   const queryClient = useQueryClient()
 
-  const { data: profile, isLoading, error } = useQuery({
+  const { data: profile, isLoading, isPlaceholderData, error } = useQuery({
     queryKey: ['userProfile', address],
     queryFn: () => fetchProfileData(address!),
     enabled: !!address,
@@ -518,7 +518,7 @@ export function useUserProfile(address?: `0x${string}`) {
 
   return {
     profile: profile || emptyProfile(address || '0x0000000000000000000000000000000000000000' as `0x${string}`),
-    isLoading,
+    isLoading: isLoading || isPlaceholderData,
     error,
     updateProfile: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
