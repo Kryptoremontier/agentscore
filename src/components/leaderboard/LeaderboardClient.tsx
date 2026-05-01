@@ -14,10 +14,10 @@ import type { LeaderboardEntry } from '@/lib/leaderboard-data'
 type SortKey = 'score' | 'entities' | 'staked' | 'signals'
 
 const TABS: { id: SortKey; label: string; icon: React.ElementType; color: string; desc: string }[] = [
-  { id: 'score',    label: 'Overall',   icon: Trophy,     color: '#C8963C', desc: 'Composite score' },
-  { id: 'entities', label: 'Builders',  icon: Blocks,     color: '#2EE6D6', desc: 'Entities created' },
+  { id: 'score',    label: 'Overall',   icon: Trophy,     color: '#C8963C', desc: 'Activity score' },
+  { id: 'entities', label: 'Builders',  icon: Blocks,     color: '#2EE6D6', desc: 'Entities registered' },
   { id: 'staked',   label: 'Stakers',   icon: TrendingUp, color: '#A78BFA', desc: 'tTRUST staked' },
-  { id: 'signals',  label: 'Explorers', icon: Zap,        color: '#38B6FF', desc: 'On-chain activity' },
+  { id: 'signals',  label: 'Explorers', icon: Zap,        color: '#38B6FF', desc: 'On-chain events' },
 ]
 
 type ColumnConfig = {
@@ -71,15 +71,16 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
   const { address } = useAccount()
   const [tab, setTab] = useState<SortKey>('score')
 
-  const sorted = [...initialData].sort((a, b) => {
-    if (tab === 'entities') return b.totalEntities - a.totalEntities
-    if (tab === 'staked')   return b.tTrustStaked - a.tTrustStaked
-    if (tab === 'signals')  return b.totalSignals - a.totalSignals || b.totalPositions - a.totalPositions
+  const allParticipants = [...initialData].sort((a, b) => {
+    if (tab === 'entities') return (b.totalEntities - a.totalEntities) || (b.score - a.score)
+    if (tab === 'staked')   return (b.tTrustStaked - a.tTrustStaked) || (b.totalPositions - a.totalPositions)
+    if (tab === 'signals')  return (b.totalSignals - a.totalSignals) || (b.totalPositions - a.totalPositions)
     return b.score - a.score
-  }).slice(0, 50)
+  })
+  const sorted = allParticipants.slice(0, 50)
 
   const myRank = address
-    ? sorted.findIndex(e => e.address.toLowerCase() === address.toLowerCase()) + 1
+    ? allParticipants.findIndex(e => e.address.toLowerCase() === address.toLowerCase()) + 1
     : 0
 
   const activeTab = TABS.find(t => t.id === tab)!
@@ -116,7 +117,7 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
                 <Star className="w-4 h-4 text-[#C8963C]" />
                 <span className="text-sm text-[#B5BDC6]">Your position</span>
               </div>
-              <span className="font-bold text-[#C8963C]">#{myRank} of {sorted.length}</span>
+              <span className="font-bold text-[#C8963C]">#{myRank} of {allParticipants.length}</span>
             </div>
           )}
 
@@ -223,19 +224,24 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs text-[#7A838D]">
             <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <p className="font-medium text-[#B5BDC6] mb-1">Overall Score</p>
-              <p>Agent×15 + Skill×15 + Claim×10 + Position×5 + Staked×20 + Signal×1</p>
+              <p className="leading-relaxed">
+                Participation score across all activity types.<br />
+                Agent +15 · Skill +15 · Claim +10<br />
+                Active position +5 · tTRUST staked ×20<br />
+                On-chain event +1
+              </p>
             </div>
             <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <p className="font-medium text-[#2EE6D6] mb-1">Builders</p>
-              <p>Ranked by total entities registered (agents + skills + claims)</p>
+              <p className="leading-relaxed">Ranked by total entities registered on-chain. Agents + Skills + Claims. Tiebreaker: Overall Score.</p>
             </div>
             <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <p className="font-medium text-[#A78BFA] mb-1">Stakers</p>
-              <p>Ranked by total tTRUST staked across all AgentScore vaults. Positions = number of distinct vaults with active stake.</p>
+              <p className="leading-relaxed">Ranked by tTRUST staked across AgentScore vaults. Positions = distinct vaults with active stake. Tiebreaker: Positions desc.</p>
             </div>
             <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <p className="font-medium text-[#38B6FF] mb-1">Explorers</p>
-              <p>Ranked by on-chain activity on AgentScore vaults. Events = deposits and redeems. Vaults = distinct vaults interacted with.</p>
+              <p className="leading-relaxed">Ranked by on-chain events (deposits + redeems) on AgentScore vaults. Vaults = distinct vaults with active stake. Tiebreaker: Vaults desc.</p>
             </div>
           </div>
 
