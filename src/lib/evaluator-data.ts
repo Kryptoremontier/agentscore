@@ -256,7 +256,6 @@ async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
       }
     `)
 
-    console.timeEnd('[leaderboard] q2-positions')
     const positions = data?.positions || []
 
     // Collect all counter_term_ids to batch-fetch oppose shares
