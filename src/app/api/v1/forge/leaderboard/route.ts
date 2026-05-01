@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category') as ForgeCategory | null
 
-    let projects = await fetchForgeProjectsFromChain(20)
+    let projects = await fetchForgeProjectsFromChain()
 
     if (category && Object.values(ForgeCategory).includes(category)) {
       projects = projects.filter(p => p.category === category)

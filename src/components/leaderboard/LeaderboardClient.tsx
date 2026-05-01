@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import Link from 'next/link'
 import {
   Trophy, Medal, Users, TrendingUp, Zap, Blocks,
-  Crown, Bot, MessageSquare, Star,
+  Crown, Bot, MessageSquare, Star, Layers,
 } from 'lucide-react'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { cn } from '@/lib/cn'
@@ -17,8 +17,44 @@ const TABS: { id: SortKey; label: string; icon: React.ElementType; color: string
   { id: 'score',    label: 'Overall',   icon: Trophy,     color: '#C8963C', desc: 'Composite score' },
   { id: 'entities', label: 'Builders',  icon: Blocks,     color: '#2EE6D6', desc: 'Entities created' },
   { id: 'staked',   label: 'Stakers',   icon: TrendingUp, color: '#A78BFA', desc: 'tTRUST staked' },
-  { id: 'signals',  label: 'Explorers', icon: Zap,        color: '#38B6FF', desc: 'On-chain signals' },
+  { id: 'signals',  label: 'Explorers', icon: Zap,        color: '#38B6FF', desc: 'On-chain activity' },
 ]
+
+type ColumnConfig = {
+  header: React.ReactNode
+  value: (e: LeaderboardEntry) => React.ReactNode
+  highlight?: boolean
+}
+
+const COLUMN_CONFIGS: Record<SortKey, ColumnConfig[]> = {
+  score: [
+    { header: <><Bot className="w-3 h-3 text-[#C8963C]" />Agents</>,          value: e => e.agentsRegistered },
+    { header: <><Zap className="w-3 h-3 text-[#2EE6D6]" />Skills</>,          value: e => e.skillsRegistered },
+    { header: <><MessageSquare className="w-3 h-3 text-[#38B6FF]" />Claims</>, value: e => e.claimsCreated },
+    { header: <><Trophy className="w-3 h-3" />Score</>,                        value: e => e.score, highlight: true },
+  ],
+  entities: [
+    { header: <><Bot className="w-3 h-3 text-[#C8963C]" />Agents</>,          value: e => e.agentsRegistered },
+    { header: <><Zap className="w-3 h-3 text-[#2EE6D6]" />Skills</>,          value: e => e.skillsRegistered },
+    { header: <><MessageSquare className="w-3 h-3 text-[#38B6FF]" />Claims</>, value: e => e.claimsCreated },
+    { header: <><Blocks className="w-3 h-3" />Entities</>,                     value: e => e.totalEntities, highlight: true },
+  ],
+  staked: [
+    { header: <><TrendingUp className="w-3 h-3" />Positions</>, value: e => e.totalPositions },
+    { header: <><Star className="w-3 h-3" />tTRUST</>,          value: e => e.tTrustStaked.toFixed(4), highlight: true },
+  ],
+  signals: [
+    { header: <><Layers className="w-3 h-3" />Vaults</>, value: e => e.totalPositions },
+    { header: <><Zap className="w-3 h-3" />Events</>,    value: e => e.totalSignals, highlight: true },
+  ],
+}
+
+const GRID_TEMPLATES: Record<SortKey, string> = {
+  score:    'grid-cols-[40px_1fr_80px_80px_80px_90px]',
+  entities: 'grid-cols-[40px_1fr_80px_80px_80px_90px]',
+  staked:   'grid-cols-[40px_1fr_120px_120px]',
+  signals:  'grid-cols-[40px_1fr_120px_120px]',
+}
 
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -38,7 +74,7 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
   const sorted = [...initialData].sort((a, b) => {
     if (tab === 'entities') return b.totalEntities - a.totalEntities
     if (tab === 'staked')   return b.tTrustStaked - a.tTrustStaked
-    if (tab === 'signals')  return b.totalSignals - a.totalSignals
+    if (tab === 'signals')  return b.totalSignals - a.totalSignals || b.totalPositions - a.totalPositions
     return b.score - a.score
   }).slice(0, 50)
 
@@ -47,6 +83,8 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
     : 0
 
   const activeTab = TABS.find(t => t.id === tab)!
+  const columns = COLUMN_CONFIGS[tab]
+  const gridTemplate = GRID_TEMPLATES[tab]
 
   return (
     <PageBackground image="wave" opacity={0.2}>
@@ -109,15 +147,18 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
           <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(200,150,60,0.15)' }}>
 
             {/* Header row */}
-            <div className="grid grid-cols-[40px_1fr_80px_80px_80px_90px] gap-3 px-5 py-3 text-[11px] font-medium text-[#7A838D] uppercase tracking-wider border-b border-white/5">
+            <div className={cn('grid gap-3 px-5 py-3 text-[11px] font-medium text-[#7A838D] uppercase tracking-wider border-b border-white/5', gridTemplate)}>
               <span>#</span>
               <span>Address</span>
-              <span className="text-right flex items-center justify-end gap-1"><Bot className="w-3 h-3 text-[#C8963C]" />Agents</span>
-              <span className="text-right flex items-center justify-end gap-1"><Zap className="w-3 h-3 text-[#2EE6D6]" />Skills</span>
-              <span className="text-right flex items-center justify-end gap-1"><MessageSquare className="w-3 h-3 text-[#38B6FF]" />Claims</span>
-              <span className="text-right flex items-center justify-end gap-1" style={{ color: activeTab.color }}>
-                <activeTab.icon className="w-3 h-3" />{activeTab.label}
-              </span>
+              {columns.map((col, i) => (
+                <span
+                  key={i}
+                  className="text-right flex items-center justify-end gap-1"
+                  style={col.highlight ? { color: activeTab.color } : undefined}
+                >
+                  {col.header}
+                </span>
+              ))}
             </div>
 
             {sorted.length === 0 ? (
@@ -129,16 +170,13 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
               sorted.map((e, i) => {
                 const rank = i + 1
                 const isMe = address && e.address.toLowerCase() === address.toLowerCase()
-                const value = tab === 'entities' ? e.totalEntities
-                  : tab === 'staked' ? e.tTrustStaked.toFixed(4)
-                  : tab === 'signals' ? e.totalSignals
-                  : e.score
 
                 return (
                   <div
                     key={e.address}
                     className={cn(
-                      'grid grid-cols-[40px_1fr_80px_80px_80px_90px] gap-3 px-5 py-3.5 border-b border-white/[0.04] transition-colors hover:bg-white/[0.03]',
+                      'grid gap-3 px-5 py-3.5 border-b border-white/[0.04] transition-colors hover:bg-white/[0.03]',
+                      gridTemplate,
                       isMe && 'bg-[#C8963C]/[0.06]',
                       rank <= 3 && 'bg-white/[0.02]'
                     )}
@@ -164,10 +202,17 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
                       </Link>
                     </div>
 
-                    <span className="text-right text-sm text-[#B5BDC6] self-center">{e.agentsRegistered}</span>
-                    <span className="text-right text-sm text-[#B5BDC6] self-center">{e.skillsRegistered}</span>
-                    <span className="text-right text-sm text-[#B5BDC6] self-center">{e.claimsCreated}</span>
-                    <span className="text-right text-sm font-semibold self-center" style={{ color: activeTab.color }}>{value}</span>
+                    {columns.map((col, ci) => (
+                      <span
+                        key={ci}
+                        className="text-right text-sm self-center"
+                        style={col.highlight
+                          ? { color: activeTab.color, fontWeight: 600 }
+                          : { color: '#B5BDC6' }}
+                      >
+                        {col.value(e)}
+                      </span>
+                    ))}
                   </div>
                 )
               })
@@ -186,11 +231,11 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
             </div>
             <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <p className="font-medium text-[#A78BFA] mb-1">Stakers</p>
-              <p>Ranked by total tTRUST currently staked in active positions</p>
+              <p>Ranked by total tTRUST staked across all AgentScore vaults. Positions = number of distinct vaults with active stake.</p>
             </div>
             <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <p className="font-medium text-[#38B6FF] mb-1">Explorers</p>
-              <p>Ranked by total on-chain signals sent across all vaults</p>
+              <p>Ranked by on-chain activity on AgentScore vaults. Events = deposits and redeems. Vaults = distinct vaults interacted with.</p>
             </div>
           </div>
 
