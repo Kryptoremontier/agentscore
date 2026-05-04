@@ -13,7 +13,7 @@ import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import Link from 'next/link'
 import {
   CheckCircle2, XCircle, Loader2, ExternalLink, Plus, ShieldAlert,
-  RefreshCw, ChevronRight, Code2, Copy, AlertTriangle,
+  RefreshCw, ChevronRight, Code2, Copy, AlertTriangle, Trash2, ChevronDown,
 } from 'lucide-react'
 import { stringToHex, type Hex } from 'viem'
 import { calculateAtomId as sdkCalculateAtomId } from '@0xintuition/sdk'
@@ -24,6 +24,7 @@ import { createSimpleAtom, createWriteConfig } from '@/lib/intuition'
 import {
   PREDICATE_INVENTORY,
   LAUNCH_PREDICATES,
+  DEFAULT_PREDICATE_IMAGE,
   groupedInventory,
   activeLabel,
   buildPredicateJsonLd,
@@ -79,6 +80,225 @@ async function fetchExistingAtoms(
     if (!labelMap.has(a.label)) labelMap.set(a.label, a.term_id)
   }
   return { termIdSet, labelMap }
+}
+
+// ─── Custom predicates panel (shared) ────────────────────────────────────────
+
+interface CustomPredicateEntry {
+  id: string
+  name: string
+  description: string
+  termId: string
+  notes: string
+  addedAt: number
+}
+
+const EMPTY_FORM = { name: '', description: '', termId: '', notes: '' }
+
+function CustomPredicatesPanel({ storageKey, network }: { storageKey: string; network: 'testnet' | 'mainnet' }) {
+  const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient()
+  const { address, isConnected } = useAccount()
+
+  const [entries, setEntries] = useState<CustomPredicateEntry[]>([])
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [registering, setRegistering] = useState(false)
+  const [regError, setRegError] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (raw) setEntries(JSON.parse(raw))
+    } catch { /* ignore */ }
+  }, [storageKey])
+
+  const persist = (next: CustomPredicateEntry[]) => {
+    setEntries(next)
+    localStorage.setItem(storageKey, JSON.stringify(next))
+  }
+
+  const handleAdd = (termId?: string) => {
+    if (!form.name.trim()) return
+    const entry: CustomPredicateEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: form.name.trim(),
+      description: form.description.trim(),
+      termId: (termId ?? form.termId).trim(),
+      notes: form.notes.trim(),
+      addedAt: Date.now(),
+    }
+    persist([entry, ...entries])
+    setForm(EMPTY_FORM)
+    setOpen(false)
+  }
+
+  const handleRegisterAndAdd = async () => {
+    if (!walletClient || !publicClient || !address || !form.name.trim()) return
+    setRegistering(true)
+    setRegError(null)
+    try {
+      const payload = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Thing',
+        description: form.description.trim() || form.name.trim(),
+        image: DEFAULT_PREDICATE_IMAGE,
+        name: form.name.trim(),
+        url: null,
+      })
+      const config = createWriteConfig(walletClient, publicClient)
+      const result = await createSimpleAtom(config, payload)
+      handleAdd(result.termId)
+    } catch (err) {
+      setRegError(err instanceof Error ? err.message : 'Transaction failed')
+    } finally {
+      setRegistering(false)
+    }
+  }
+
+  const handleDelete = (id: string) => persist(entries.filter(e => e.id !== id))
+
+  const explorerBase = network === 'mainnet'
+    ? 'https://explorer.intuition.systems'
+    : 'https://testnet.explorer.intuition.systems'
+
+  return (
+    <div
+      className="rounded-2xl mb-6 overflow-hidden"
+      style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(46,230,214,0.2)' }}
+    >
+      {/* Header */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full px-5 py-3.5 flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Plus className="w-4 h-4 text-[#2EE6D6]" />
+          <span className="text-sm font-semibold text-white">Custom Predicates</span>
+          {entries.length > 0 && (
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{ background: 'rgba(46,230,214,0.15)', color: '#2EE6D6' }}
+            >
+              {entries.length}
+            </span>
+          )}
+        </div>
+        <ChevronDown
+          className="w-4 h-4 text-[#7A838D] transition-transform"
+          style={{ transform: open ? 'rotate(180deg)' : 'none' }}
+        />
+      </button>
+
+      {/* Saved entries */}
+      {entries.length > 0 && (
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {entries.map(e => (
+            <div
+              key={e.id}
+              className="px-5 py-3 flex items-center gap-3"
+              style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <code className="text-sm font-mono font-semibold text-white">{e.name}</code>
+                  {e.termId ? (
+                    <a
+                      href={`${explorerBase}/atom/${e.termId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-[#C8963C] hover:text-[#E8B84B] font-mono inline-flex items-center gap-1"
+                    >
+                      {e.termId.slice(0, 14)}…{e.termId.slice(-8)}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <span className="text-[10px] text-[#4A5260] italic">term_id pending</span>
+                  )}
+                </div>
+                {e.notes && <div className="text-[11px] text-[#7A838D] mt-0.5">{e.notes}</div>}
+              </div>
+              <button onClick={() => handleDelete(e.id)} className="text-[#4A5260] hover:text-red-400 shrink-0">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add form */}
+      {open && (
+        <div className="px-5 py-4 space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] text-[#7A838D] mb-1 block">Name / Label *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. has domain expertise"
+                className="w-full text-xs font-mono rounded-lg px-3 py-2 bg-[#0f1113] border border-[rgba(255,255,255,0.10)] text-[#B5BDC6] placeholder-[#4A5260] focus:outline-none focus:border-[#2EE6D6]"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-[#7A838D] mb-1 block">Term ID (paste if known)</label>
+              <input
+                type="text"
+                value={form.termId}
+                onChange={e => setForm(f => ({ ...f, termId: e.target.value }))}
+                placeholder="0x..."
+                className="w-full text-xs font-mono rounded-lg px-3 py-2 bg-[#0f1113] border border-[rgba(255,255,255,0.10)] text-[#B5BDC6] placeholder-[#4A5260] focus:outline-none focus:border-[#2EE6D6]"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] text-[#7A838D] mb-1 block">Description</label>
+            <input
+              type="text"
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="Describes the relationship this predicate encodes"
+              className="w-full text-xs rounded-lg px-3 py-2 bg-[#0f1113] border border-[rgba(255,255,255,0.10)] text-[#B5BDC6] placeholder-[#4A5260] focus:outline-none focus:border-[#2EE6D6]"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-[#7A838D] mb-1 block">Notes</label>
+            <input
+              type="text"
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="e.g. REUSE from portal / CREATE new / post-launch"
+              className="w-full text-xs rounded-lg px-3 py-2 bg-[#0f1113] border border-[rgba(255,255,255,0.10)] text-[#B5BDC6] placeholder-[#4A5260] focus:outline-none focus:border-[#2EE6D6]"
+            />
+          </div>
+          {regError && <div className="text-xs text-red-400">⚠ {regError}</div>}
+          <div className="flex gap-2 flex-wrap">
+            {network === 'testnet' && (
+              <Button
+                size="sm"
+                onClick={handleRegisterAndAdd}
+                disabled={!form.name.trim() || !isConnected || !walletClient || registering}
+              >
+                {registering ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Plus className="w-3 h-3 mr-1" />}
+                Register on-chain + Add
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleAdd()}
+              disabled={!form.name.trim()}
+            >
+              Add manually
+            </Button>
+            <button onClick={() => { setOpen(false); setForm(EMPTY_FORM) }} className="text-xs text-[#7A838D] hover:text-[#B5BDC6] px-2">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Testnet tab ─────────────────────────────────────────────────────────────
@@ -199,6 +419,8 @@ function TestnetTabContent() {
 
   return (
     <>
+      <CustomPredicatesPanel storageKey="testnet_custom_predicates" network="testnet" />
+
       {!isConnected && (
         <div
           className="rounded-2xl p-5 mb-6 flex items-center gap-3"
@@ -595,6 +817,8 @@ function MainnetTabContent() {
 
   return (
     <>
+      <CustomPredicatesPanel storageKey="mainnet_custom_predicates" network="mainnet" />
+
       {/* Consult Saulo banner */}
       <div
         className="rounded-2xl p-5 mb-6 flex items-start gap-3"
