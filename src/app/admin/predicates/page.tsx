@@ -100,8 +100,27 @@ function TestnetTabContent() {
   const [statuses, setStatuses] = useState<Record<string, PredicateStatus>>({})
   const [refreshing, setRefreshing] = useState(false)
   const [previewKey, setPreviewKey] = useState<string | null>(null)
+  const [savedTermIds, setSavedTermIds] = useState<Record<string, string>>({})
+  const [termIdInputs, setTermIdInputs] = useState<Record<string, string>>({})
 
   const explorerBase = 'https://testnet.explorer.intuition.systems'
+
+  useEffect(() => {
+    const saved: Record<string, string> = {}
+    for (const entry of PREDICATE_INVENTORY) {
+      const v = localStorage.getItem(`testnet_termid_${entry.key}`)
+      if (v) saved[entry.key] = v
+    }
+    setSavedTermIds(saved)
+  }, [])
+
+  const handleSaveTermId = (key: string) => {
+    const val = termIdInputs[key]?.trim()
+    if (!val) return
+    localStorage.setItem(`testnet_termid_${key}`, val)
+    setSavedTermIds(prev => ({ ...prev, [key]: val }))
+    setTermIdInputs(prev => ({ ...prev, [key]: '' }))
+  }
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true)
@@ -238,6 +257,9 @@ function TestnetTabContent() {
               >
                 {entries.map((entry, i) => {
                   const status = statuses[entry.key] || { registered: false, loading: true }
+                  const savedTermId = savedTermIds[entry.key]
+                  const effectiveTermId = status.termId ?? savedTermId
+                  const isRegistered = status.registered || !!savedTermId
                   const label = activeLabel(entry)
                   const isLast = i === entries.length - 1
                   const isPreviewOpen = previewKey === entry.key
@@ -252,7 +274,7 @@ function TestnetTabContent() {
                         <div className="shrink-0 w-6 flex justify-center">
                           {status.loading ? (
                             <Loader2 className="w-5 h-5 text-[#7A838D] animate-spin" />
-                          ) : status.registered ? (
+                          ) : isRegistered ? (
                             <CheckCircle2 className="w-5 h-5 text-[#2ECC71]" />
                           ) : (
                             <XCircle className="w-5 h-5 text-[#7A838D]" />
@@ -286,14 +308,14 @@ function TestnetTabContent() {
                             {entry.description.replace(/\n/g, ' ')}
                           </div>
                           <div className="flex items-center gap-3 mt-1">
-                            {status.termId && (
+                            {effectiveTermId && (
                               <a
-                                href={`${explorerBase}/atom/${status.termId}`}
+                                href={`${explorerBase}/atom/${effectiveTermId}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[10px] text-[#C8963C] hover:text-[#E8B84B] font-mono inline-flex items-center gap-1"
                               >
-                                {status.termId.slice(0, 14)}…{status.termId.slice(-8)}
+                                {effectiveTermId.slice(0, 14)}…{effectiveTermId.slice(-8)}
                                 <ExternalLink className="w-3 h-3" />
                               </a>
                             )}
@@ -308,10 +330,42 @@ function TestnetTabContent() {
                           {status.error && (
                             <div className="text-xs text-red-400 mt-1">⚠ {status.error}</div>
                           )}
+                          {/* Manual term_id entry — shown when not yet registered */}
+                          {!isRegistered && !status.loading && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <input
+                                type="text"
+                                value={termIdInputs[entry.key] ?? ''}
+                                onChange={e => setTermIdInputs(prev => ({ ...prev, [entry.key]: e.target.value }))}
+                                placeholder="Paste term_id after registering (0x...)"
+                                className="flex-1 text-xs font-mono rounded-lg px-3 py-1.5 bg-[#0f1113] border border-[rgba(255,255,255,0.10)] text-[#B5BDC6] placeholder-[#4A5260] focus:outline-none focus:border-[#C8963C]"
+                                onKeyDown={e => e.key === 'Enter' && handleSaveTermId(entry.key)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSaveTermId(entry.key)}
+                                disabled={!termIdInputs[entry.key]?.trim()}
+                              >
+                                Save
+                              </Button>
+                            </div>
+                          )}
+                          {savedTermId && (
+                            <button
+                              onClick={() => {
+                                localStorage.removeItem(`testnet_termid_${entry.key}`)
+                                setSavedTermIds(prev => { const n = { ...prev }; delete n[entry.key]; return n })
+                              }}
+                              className="text-[10px] text-[#4A5260] hover:text-[#7A838D] mt-1 block"
+                            >
+                              Clear saved term_id
+                            </button>
+                          )}
                         </div>
 
                         <div className="shrink-0">
-                          {status.registered ? (
+                          {isRegistered ? (
                             <span className="text-xs text-[#2ECC71] font-medium">Registered</span>
                           ) : status.loading ? (
                             <span className="text-xs text-[#7A838D]">Checking…</span>
