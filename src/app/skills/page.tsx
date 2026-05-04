@@ -1076,7 +1076,8 @@ function SkillsPageContent() {
     return '#cd5c5c'
   }
 
-  const getSkillName = (label: string): string => {
+  const getSkillName = (label: string | null | undefined): string => {
+    if (!label || typeof label !== 'string') return 'Unnamed'
     let name = label.replace(/^Skill:(?:\w+:)?\s*/i, '')
     if (name.includes(' - ')) name = name.split(' - ')[0]
     return name.trim()

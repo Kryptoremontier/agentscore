@@ -31,6 +31,56 @@ const TIER_HEX: Record<EvaluatorTier, string> = {
   sage:     '#2ECC71',
 }
 
+const EVALUATOR_GUIDES = [
+  {
+    icon: TrendingUp,
+    color: '#C8963C',
+    rgb: '200,150,60',
+    title: 'Your stake can count more',
+    desc: 'A stronger track record gives your future stakes more influence in trust scoring.',
+  },
+  {
+    icon: Target,
+    color: '#2EE6D6',
+    rgb: '46,230,214',
+    title: 'Accuracy builds reputation',
+    desc: 'Back agents that keep trust, or challenge agents that lose it, to improve your evaluator weight.',
+  },
+  {
+    icon: Flame,
+    color: '#2ECC71',
+    rgb: '46,204,113',
+    title: 'Good picks move you up',
+    desc: 'Consistent, correct signals help you climb from Newcomer toward Sage.',
+  },
+]
+
+const TIER_GUIDES: Record<EvaluatorTier, {
+  headline: string
+  detail: string
+}> = {
+  newcomer: {
+    headline: 'Start here',
+    detail: 'Make your first few picks and build history.',
+  },
+  scout: {
+    headline: 'Getting active',
+    detail: 'Enough activity to start measuring accuracy.',
+  },
+  analyst: {
+    headline: 'Reliable signals',
+    detail: '60%+ accuracy after at least 5 picks.',
+  },
+  oracle: {
+    headline: 'Expert evaluator',
+    detail: '75%+ accuracy after at least 10 picks.',
+  },
+  sage: {
+    headline: 'Top reputation',
+    detail: '85%+ accuracy after at least 20 picks.',
+  },
+}
+
 function TierIcon({ tier, size = 14 }: { tier: EvaluatorTier; size?: number }) {
   const Icon = TIER_ICONS[tier]
   return <Icon style={{ width: size, height: size, color: TIER_HEX[tier] }} />
@@ -150,40 +200,18 @@ export function EvaluatorsClient({ initialData }: { initialData: EvaluatorProfil
             </div>
           )}
 
-          {/* ── Formula cards ────────────────────────────────────────────── */}
+          {/* ── Guide cards ──────────────────────────────────────────────── */}
           <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[
-              {
-                icon: TrendingUp,
-                color: '#C8963C',
-                rgb: '200,150,60',
-                title: 'effectiveStake',
-                desc: 'amount × diversityWeight × evaluatorWeight',
-              },
-              {
-                icon: Target,
-                color: '#2EE6D6',
-                rgb: '46,230,214',
-                title: 'Evaluator Weight',
-                desc: '0.5× (bad) → 1.0× (neutral) → 1.5× (excellent)',
-              },
-              {
-                icon: Flame,
-                color: '#2ECC71',
-                rgb: '46,204,113',
-                title: 'Good Pick',
-                desc: 'Support high-trust agent OR oppose low-trust agent',
-              },
-            ].map(item => (
+            {EVALUATOR_GUIDES.map(item => (
               <div key={item.title} className="px-4 py-3.5 rounded-xl flex items-start gap-3"
                 style={{ background: `rgba(${item.rgb},0.06)`, border: `1px solid rgba(${item.rgb},0.18)` }}>
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
                   style={{ background: `rgba(${item.rgb},0.12)`, border: `1px solid rgba(${item.rgb},0.25)` }}>
                   <item.icon className="w-4 h-4" style={{ color: item.color }} />
                 </div>
-                <div>
-                  <p className="text-xs font-semibold mb-0.5" style={{ color: item.color }}>{item.title}</p>
-                  <p className="text-[11px] text-[#7A838D] leading-snug">{item.desc}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold mb-1" style={{ color: item.color }}>{item.title}</p>
+                  <p className="text-[11px] text-[#8F98A3] leading-snug">{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -351,10 +379,22 @@ export function EvaluatorsClient({ initialData }: { initialData: EvaluatorProfil
             })}
           </div>
 
-          {/* ── Tier legend ──────────────────────────────────────────────── */}
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {/* ── Tier guide ───────────────────────────────────────────────── */}
+          <div className="mt-5 rounded-2xl p-5 sm:p-6" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#7A838D]">Evaluator path</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">Climb tiers by making accurate picks.</h2>
+              </div>
+              <p className="max-w-sm text-sm leading-relaxed text-[#8F98A3]">
+                Higher tiers can unlock stronger staking weight, so reputation comes from quality, not just activity.
+              </p>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-2">
             {(Object.entries(EVALUATOR_TIER_CONFIG) as [EvaluatorTier, typeof EVALUATOR_TIER_CONFIG[EvaluatorTier]][]).map(([tier, cfg]) => {
               const hex = TIER_HEX[tier]
+              const guide = TIER_GUIDES[tier]
               return (
                 <div key={tier} className="px-3 py-3 rounded-xl text-center"
                   style={{ background: `${hex}0D`, border: `1px solid ${hex}2E` }}>
@@ -362,10 +402,12 @@ export function EvaluatorsClient({ initialData }: { initialData: EvaluatorProfil
                     <TierIcon tier={tier} size={16} />
                   </div>
                   <p className="text-xs font-semibold mb-0.5" style={{ color: hex }}>{cfg.label}</p>
-                  <p className="text-[10px] text-[#7A838D] leading-tight">{cfg.description}</p>
+                  <p className="text-[10px] font-medium text-[#B5BDC6] leading-tight">{guide.headline}</p>
+                  <p className="mt-1 text-[10px] text-[#7A838D] leading-tight">{guide.detail}</p>
                 </div>
               )
             })}
+            </div>
           </div>
 
         </div>

@@ -166,8 +166,10 @@ export function calculateProfileCompleteness(card: AgentCardData): ProfileComple
  * New agents: label is JSON  → full card parsed.
  * Old agents: label is plain string "Name - description" → backward compat.
  */
-export function parseAgentCard(atomLabel: string): Partial<AgentCardData> {
-  // Try JSON (new format)
+export function parseAgentCard(atomLabel: string | null | undefined): Partial<AgentCardData> {
+  if (!atomLabel || typeof atomLabel !== 'string') {
+    return { name: 'Unnamed' }
+  }
   try {
     const data = JSON.parse(atomLabel)
     if (typeof data === 'object' && data !== null && typeof data.name === 'string') {
@@ -177,7 +179,6 @@ export function parseAgentCard(atomLabel: string): Partial<AgentCardData> {
     // not JSON — fall through
   }
 
-  // Fallback: plain string "Name - description" (old format)
   if (atomLabel.includes(' - ')) {
     const [namePart, ...rest] = atomLabel.split(' - ')
     const name = namePart.replace(/^Agent:(?:\w+:)?\s*/i, '').trim()
@@ -185,7 +186,6 @@ export function parseAgentCard(atomLabel: string): Partial<AgentCardData> {
     return { name, description }
   }
 
-  // Bare name
   const name = atomLabel.replace(/^Agent:(?:\w+:)?\s*/i, '').trim()
   return { name }
 }
@@ -194,7 +194,8 @@ export function parseAgentCard(atomLabel: string): Partial<AgentCardData> {
  * Extract the agent name from an atom label.
  * Handles JSON labels (new) and plain string labels (old).
  */
-export function agentNameFromLabel(label: string): string {
+export function agentNameFromLabel(label: string | null | undefined): string {
+  if (!label || typeof label !== 'string') return 'Unnamed'
   const card = parseAgentCard(label)
   return card.name || label.split(' - ')[0].replace(/^Agent:(?:\w+:)?\s*/i, '').trim() || label
 }

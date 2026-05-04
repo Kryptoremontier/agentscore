@@ -11,16 +11,29 @@ import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
 import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
 import { cleanAtomName } from '@/types/claim'
+import { formatPredicateLabel } from '@/lib/predicate-display'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 interface FeaturedItem {
   term_id: string
-  label: string
+  label: string | null
+  data?: string | null
   created_at: string
   creator?: { label: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+}
+
+/**
+ * Get effective label - JSON for agents may be in `data` field when label is "json object"
+ */
+function effectiveItemLabel(item: { label?: string | null; data?: string | null }): string {
+  const l = item.label
+  if (!l || l === 'json object' || l === '[json object]') {
+    return item.data || ''
+  }
+  return l
 }
 
 interface FeaturedClaim {
@@ -40,7 +53,8 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: 'claims', label: 'Claims', icon: MessageSquare, accentRgb: '56,182,255', accentHex: '#38B6FF', prefix: '' },
 ]
 
-const getDescription = (label: string, prefix: string) => {
+const getDescription = (label: string | null | undefined, prefix: string) => {
+  if (!label || typeof label !== 'string') return null
   try {
     const parsed = JSON.parse(label)
     if (parsed?.description) return parsed.description as string
@@ -94,7 +108,7 @@ export function FeaturedAgents() {
               where: ${whereStr}
               limit: 8 order_by: { created_at: desc }
             ) {
-              term_id label created_at
+              term_id label data created_at
               creator { label }
               positions_aggregate { aggregate { count sum { shares } } }
               as_subject_triples(
@@ -287,7 +301,7 @@ export function FeaturedAgents() {
                         const sharesWei = BigInt(claim.positions_aggregate?.aggregate?.sum?.shares || '0')
                         const totalStaked = Number(sharesWei) / 1e18
                         const subjectLabel = claim.subject?.label ?? '—'
-                        const predicateLabel = claim.predicate?.label ?? '—'
+                        const predicateLabel = formatPredicateLabel(claim.predicate?.label)
                         const objectLabel = claim.object?.label ?? '—'
                         return (
                           <motion.div key={claim.term_id}
@@ -333,8 +347,9 @@ export function FeaturedAgents() {
                       })
                     : items.map((item, i) => {
                         const cfg = TABS.find(t => t.id === activeTab)!
-                        const name = cleanAtomName(item.label)
-                        const description = getDescription(item.label, cfg.prefix)
+                        const effLabel = effectiveItemLabel(item)
+                        const name = cleanAtomName(effLabel)
+                        const description = getDescription(effLabel, cfg.prefix)
                         const stakers = item.positions_aggregate?.aggregate?.count || 0
                         const sharesWei = BigInt(item.positions_aggregate?.aggregate?.sum?.shares || '0')
                         const totalStaked = Number(sharesWei) / 1e18

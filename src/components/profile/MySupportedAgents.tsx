@@ -43,7 +43,8 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(days / 30)}mo ago`
 }
 
-function entityDisplayName(label: string): string {
+function entityDisplayName(label: string | null | undefined): string {
+  if (!label || typeof label !== 'string') return 'Unnamed'
   return label.replace(/^(?:Agent|Skill):(?:\w+:)?\s*/i, '').split(' - ')[0].trim()
 }
 

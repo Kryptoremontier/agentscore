@@ -37,7 +37,8 @@ async function gql<T>(query: string, variables?: Record<string, unknown>): Promi
   return json.data as T
 }
 
-function cleanName(label: string): string {
+function cleanName(label: string | null | undefined): string {
+  if (!label || typeof label !== 'string') return 'Unnamed'
   try {
     const parsed = JSON.parse(label)
     if (typeof parsed === 'object' && parsed !== null && typeof parsed.name === 'string') {

@@ -44,7 +44,7 @@ const SAT_ANGLES = [
 ]
 
 interface NodeAvatarProps {
-  label: string
+  label: string | null | undefined
   size?: 'sm' | 'md' | 'lg'
   /** Number of connections shown as satellite dots (0-6, default auto from stakers) */
   connections?: number
@@ -61,10 +61,11 @@ export function NodeAvatar({ label, size = 'md', connections = 3, className }: N
   const s = SIZE_MAP[size]
   const cx = s.box / 2
   const cy = s.box / 2
-  const palette = getPalette(label)
-  const initials = getInitials(label.replace(/^(?:Agent|Skill):(?:\w+:)?\s*/i, ''))
+  const safeLabel = label || 'Unnamed'
+  const palette = getPalette(safeLabel)
+  const initials = getInitials(safeLabel.replace(/^(?:Agent|Skill):(?:\w+:)?\s*/i, ''))
   const satCount = Math.min(connections, 6)
-  const gradId = `ng-${hashStr(label) % 9999}`
+  const gradId = `ng-${hashStr(safeLabel) % 9999}`
 
   return (
     <div

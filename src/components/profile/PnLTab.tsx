@@ -15,6 +15,7 @@ import type { PnLPosition } from '@/types/user'
 import { getAtomName, getAtomType, getPredicateConfig } from '@/types/claim'
 import { getBuyCost, getSellProceeds, getCurrentPrice } from '@/lib/bonding-curve'
 import { cn } from '@/lib/cn'
+import { formatPredicateLabel } from '@/lib/predicate-display'
 
 // Same as Claims Registry — for Subject → Predicate → Object pills
 const PRED_ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -82,7 +83,7 @@ function ClaimTriplePills({ subject, predicate, object, compact = false }: { sub
       <span className="text-[#4A5260] text-xs">→</span>
       <span className={cn(pillCls)} style={{ backgroundColor: PRED_COLOR.bg, border: `1px solid ${PRED_COLOR.border}`, color: PRED_COLOR.text }}>
         <PredicateIcon name={predCfg?.icon} color={PRED_COLOR.text} size={10} />
-        {predicate || '—'}
+        {formatPredicateLabel(predicate)}
       </span>
       <span className="text-[#4A5260] text-xs">→</span>
       <span className={cn(pillCls)} style={{ backgroundColor: OBJECT_COLOR.bg, border: `1px solid ${OBJECT_COLOR.border}`, color: OBJECT_COLOR.text }}>
@@ -148,9 +149,9 @@ function formatShares(n: number): string {
 function getDisplayName(pos: PnLPosition): string {
   if (pos.type === 'claim') {
     const subject = (pos.claimSubject || '').replace(/^(?:Agent|Skill):(?:\w+:)?\s*/i, '')
-    return `${subject} ${pos.claimPredicate || ''} ${pos.claimObject || ''}`.trim()
+    return `${subject} ${formatPredicateLabel(pos.claimPredicate)} ${pos.claimObject || ''}`.trim()
   }
-  return pos.label.replace(/^(?:Agent|Skill):(?:\w+:)?\s*/i, '').split(' - ')[0].trim()
+  return (pos.label || '').replace(/^(?:Agent|Skill):(?:\w+:)?\s*/i, '').split(' - ')[0].trim() || 'Unnamed'
 }
 
 function getHref(pos: PnLPosition): string {
