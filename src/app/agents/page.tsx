@@ -33,6 +33,7 @@ import { APP_CONFIG } from '@/lib/app-config'
 import { AGENT_WHERE_STR } from '@/lib/gql-filters'
 import { calculateSkillBreakdown, type SkillBreakdownResult } from '@/lib/skill-trust'
 import { fetchAgentSkillTriples } from '@/lib/intuition'
+import { effectiveLabel } from '@/lib/api-data'
 import { SkillBreakdown } from '@/components/SkillBreakdown'
 import { TrustSparkline } from '@/components/TrustSparkline'
 import { AgentRadar } from '@/components/AgentRadar'
@@ -53,17 +54,6 @@ interface GraphQLAgent {
   as_subject_triples?: Array<{ counter_term_id: string }> | null
 }
 
-/**
- * Get the effective label/JSON for an atom.
- * When label is "json object" or empty, the actual JSON is stored in `data` field.
- */
-function getEffectiveLabel(atom: { label?: string | null; data?: string | null }): string {
-  const label = atom.label
-  if (!label || label === 'json object' || label === '[json object]') {
-    return atom.data || ''
-  }
-  return label
-}
 
 export default function AgentsPage() {
   return (
@@ -1212,7 +1202,7 @@ function AgentsPageContent() {
 
   // Wrapper that handles atoms where label is "json object" and JSON is in data field
   const getAgentNameFromAtom = (atom: { label?: string | null; data?: string | null }): string => {
-    return getAgentName(getEffectiveLabel(atom))
+    return getAgentName(effectiveLabel(atom))
   }
 
   // Build trust ratio chart data from signals
@@ -1937,7 +1927,7 @@ function AgentsPageContent() {
                 {/* Description */}
                 <p className="text-[#B5BDC6] text-sm leading-relaxed mb-5">
                   {(() => {
-                    const lbl = getEffectiveLabel(selectedAgent)
+                    const lbl = effectiveLabel(selectedAgent)
                     if (lbl) {
                       try {
                         const p = JSON.parse(lbl)
@@ -2530,7 +2520,7 @@ function AgentsPageContent() {
 
               {/* === AGENT CARD (metadata) === */}
               {(() => {
-                const card = parseAgentCard(getEffectiveLabel(selectedAgent))
+                const card = parseAgentCard(effectiveLabel(selectedAgent))
                 const hasMetadata = !!(
                   card.description || card.category || card.endpoints || card.source || card.social
                 )
@@ -3621,7 +3611,7 @@ function AgentsPageContent() {
 
                 {/* Timeline Tab */}
                 {activeTab === 'timeline' && selectedAgent && (() => {
-                  const agentCard = parseAgentCard(getEffectiveLabel(selectedAgent))
+                  const agentCard = parseAgentCard(effectiveLabel(selectedAgent))
                   const completeness = calculateProfileCompleteness({ name: agentCard.name ?? '', ...agentCard })
                   const score = hybridScore ?? agentTrust?.score ?? 50
                   const tier = agentTrustTier?.tier?.tier ?? 'unverified'

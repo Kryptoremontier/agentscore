@@ -38,8 +38,6 @@ function ProfilePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { address, isConnected } = useAccount()
-  const { profile, isLoading, updateProfile } = useUserProfile(address)
-  const { profile: evaluatorProfile, loading: evaluatorLoading } = useEvaluatorScore(address)
   const [mounted, setMounted] = useState(false)
 
   const defaultTab = useMemo(() => {
@@ -49,6 +47,9 @@ function ProfilePageContent() {
   }, [searchParams])
 
   const [activeTab, setActiveTab] = useState<typeof PROFILE_TABS[number]['id']>(defaultTab)
+
+  const { profile, isLoading, positionsLoading, updateProfile } = useUserProfile(address, activeTab)
+  const { profile: evaluatorProfile, loading: evaluatorLoading } = useEvaluatorScore(address)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -111,19 +112,19 @@ function ProfilePageContent() {
           })}
         </div>
 
-        {/* Tab content — show skeleton per-section while loading */}
+        {/* Tab content — Phase 1 tabs show immediately; Phase 2 tabs wait for positions */}
         {activeTab === 'agents' && (
           isLoading
             ? <TabSkeleton />
             : <MyAgents agents={profile.registeredAgents} />
         )}
         {activeTab === 'supporting' && (
-          isLoading
+          positionsLoading
             ? <TabSkeleton />
             : <MySupportedAgents supports={profile.supportedAgents} />
         )}
         {activeTab === 'pnl' && (
-          isLoading
+          positionsLoading
             ? <TabSkeleton />
             : <PnLTab positions={profile.pnlPositions} />
         )}
