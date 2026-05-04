@@ -2,7 +2,7 @@
  * Central inventory of all canonical predicates AgentScore depends on.
  *
  * Used by:
- *   - /admin/predicates page — register missing predicates on mainnet
+ *   - /admin/predicates page — testnet registration + mainnet status tracker
  *   - Indexers / health checks — verify ontology completeness
  *
  * Format (mainnet):
@@ -13,7 +13,7 @@
  *
  * Example on-chain payload:
  *   {"@context":"https://schema.org","@type":"Thing","name":"has agent skill",
- *    "description":"...","image":"ipfs://...","url":"null"}
+ *    "description":"...","image":"ipfs://...","url":null}
  */
 
 export type PredicateGroup =
@@ -39,6 +39,12 @@ export interface PredicateEntry {
   required: boolean
   /** Optional IPFS image — defaults to AgentScore generic predicate icon */
   image?: string
+  /** 'launch' = needed before mainnet go-live. 'post-launch' = add on demand. */
+  scope: 'launch' | 'post-launch'
+  /** Known mainnet term_id if already registered or found on portal */
+  mainnetTermId?: string
+  /** Notes about this predicate's mainnet status */
+  mainnetNote?: string
 }
 
 /**
@@ -56,6 +62,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'hasAgentSkill',
     group: 'core',
     required: true,
+    scope: 'launch',
+    mainnetNote: 'Already registered on mainnet — find term_id on portal',
     description:
       'Declares that an Agent possesses a specific Skill or capability.\n' +
       'Usage: [Agent] — has agent skill — [Skill]. Powers AgentScore Domain\n' +
@@ -68,6 +76,9 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'trusts',
     group: 'core',
     required: true,
+    scope: 'launch',
+    mainnetTermId: '0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9',
+    mainnetNote: '✅ REUSE — found on portal, lowercase, well-described',
     description:
       'Positive trust attestation toward an entity.\n' +
       'Usage: [Person/Agent] — trusts — [Agent]. Stakes on this triple count\n' +
@@ -80,6 +91,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'opposes',
     group: 'core',
     required: true,
+    scope: 'launch',
+    mainnetNote: '⚠️ CREATE lowercase canonical — portal has Opposes (capital O) which breaks convention. PR to Intuition Ontology after registration.',
     description:
       'Negative attestation against an entity.\n' +
       'Usage: [Person/Agent] — opposes — [Agent]. Counter-vault to `trusts`;\n' +
@@ -92,6 +105,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'evaluatedBy',
     group: 'core',
     required: true,
+    scope: 'launch',
+    mainnetNote: '🆕 CREATE — AgentScore-specific, not found on portal',
     description:
       'Links an Agent to a community evaluator who reviewed it.\n' +
       'Usage: [Agent] — evaluated by — [Evaluator]. Powers the Evaluator\n' +
@@ -104,6 +119,7 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'delegatedTo',
     group: 'core',
     required: false,
+    scope: 'post-launch',
     description:
       'One Agent delegates trust authority to another.\n' +
       'Usage: [Agent] — delegated to — [Agent]. Used for agent-to-agent\n' +
@@ -117,7 +133,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     mainnet: 'is certified by',
     testnet: 'isCertifiedBy',
     group: 'capability',
-    required: true,
+    required: false,
+    scope: 'post-launch',
     description:
       'Records that an Agent or Skill has been formally certified.\n' +
       'Usage: [Agent/Skill] — is certified by — [Authority]. Consumers should\n' +
@@ -131,7 +148,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     mainnet: 'works well with',
     testnet: 'worksWellWith',
     group: 'relationship',
-    required: true,
+    required: false,
+    scope: 'post-launch',
     description:
       'Confirms two Agents are compatible in a workflow.\n' +
       'Usage: [Agent] — works well with — [Agent]. Drives discovery in the\n' +
@@ -143,7 +161,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     mainnet: 'is alternative to',
     testnet: 'isAlternativeTo',
     group: 'relationship',
-    required: true,
+    required: false,
+    scope: 'post-launch',
     description:
       'Marks two Agents as serving a similar function.\n' +
       'Usage: [Agent] — is alternative to — [Agent]. Useful for substitute\n' +
@@ -156,6 +175,7 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'dependsOn',
     group: 'relationship',
     required: false,
+    scope: 'post-launch',
     description:
       'Records a runtime or capability dependency between Agents.\n' +
       'Usage: [Agent] — depends on — [Agent/Skill]. Helps users understand\n' +
@@ -168,6 +188,7 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'enhances',
     group: 'relationship',
     required: false,
+    scope: 'post-launch',
     description:
       'One Agent extends or improves the capabilities of another.\n' +
       'Usage: [Agent] — enhances — [Agent]. Distinct from `depends on` —\n' +
@@ -181,6 +202,7 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'isBetterThan',
     group: 'opinion',
     required: false,
+    scope: 'post-launch',
     description:
       'Subjective comparison between two Agents or Skills.\n' +
       'Usage: [Agent] — is better than — [Agent]. Stakeable opinion — the\n' +
@@ -193,6 +215,7 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'worksBadWith',
     group: 'opinion',
     required: false,
+    scope: 'post-launch',
     description:
       'Confirms two Agents are incompatible or conflict in workflows.\n' +
       'Usage: [Agent] — works bad with — [Agent]. Inverse of `works well\n' +
@@ -204,6 +227,7 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     testnet: 'endorses',
     group: 'opinion',
     required: false,
+    scope: 'post-launch',
     description:
       'Public endorsement from one entity to another.\n' +
       'Usage: [Person/Agent] — endorses — [Agent/Skill]. Lighter weight than\n' +
@@ -214,9 +238,10 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
   {
     key: 'verifiedBy',
     mainnet: 'verified by',
-    testnet: 'verified_by',
+    testnet: 'verified by',
     group: 'attestation',
-    required: true,
+    required: false,
+    scope: 'post-launch',
     description:
       'Identity or claim verified by an authority.\n' +
       'Usage: [Subject] — verified by — [Verifier]. Used for KYC-style\n' +
@@ -226,9 +251,10 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
   {
     key: 'vouchesFor',
     mainnet: 'vouches for',
-    testnet: 'vouches_for',
+    testnet: 'vouches for',
     group: 'attestation',
     required: false,
+    scope: 'post-launch',
     description:
       'Personal vouch — softer than certification.\n' +
       'Usage: [Person] — vouches for — [Agent/Person]. Useful for web-of-\n' +
@@ -238,39 +264,20 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
 
   // ─── REPORTS ────────────────────────────────────────────────────────────
   {
-    key: 'reportedForScam',
-    mainnet: 'reported for scam',
-    testnet: 'reported_for_scam',
+    key: 'reportedFor',
+    mainnet: 'reported for',
+    testnet: 'reportedFor',
     group: 'report',
     required: true,
+    scope: 'launch',
+    mainnetNote: '🆕 CREATE — replaces 3 separate report predicates. Objects: Scam, Spam, Injection atoms.',
     description:
-      'Flags an Agent for confirmed or suspected scam behaviour.\n' +
-      'Usage: [Reporter] — reported for scam — [Agent]. Aggregated reports\n' +
-      'feed into the negative attestation pillar of the Trust Score.\n' +
-      'Consumers should weight by reporter reputation to avoid abuse.',
-  },
-  {
-    key: 'reportedForSpam',
-    mainnet: 'reported for spam',
-    testnet: 'reported_for_spam',
-    group: 'report',
-    required: true,
-    description:
-      'Flags an Agent for spam or low-quality output.\n' +
-      'Usage: [Reporter] — reported for spam — [Agent]. Lighter penalty\n' +
-      'than `reported for scam`; aggregated as quality signal.',
-  },
-  {
-    key: 'reportedForInjection',
-    mainnet: 'reported for injection',
-    testnet: 'reported_for_injection',
-    group: 'report',
-    required: true,
-    description:
-      'Flags an Agent for prompt injection vulnerabilities or unsafe\n' +
-      'behaviour. Usage: [Reporter] — reported for injection — [Agent].\n' +
-      'Critical safety signal for AI agents; consumers should treat any\n' +
-      'unweighted report as a strong negative.',
+      'Flags an entity for a specific type of misconduct or safety issue.\n' +
+      'Usage: [Reporter] — reported for — [Object], where Object is a\n' +
+      'canonical atom such as Scam, Spam, or Injection. Aggregated reports\n' +
+      'feed the negative attestation pillar of the Trust Score. Weight\n' +
+      'reports by reporter reputation to avoid abuse — anyone can write\n' +
+      'this triple.',
   },
 ]
 
@@ -285,6 +292,12 @@ export function activeLabel(entry: PredicateEntry): string {
 export function requiredPredicates(): PredicateEntry[] {
   return PREDICATE_INVENTORY.filter(p => p.required)
 }
+
+/** Predicates needed before mainnet go-live (5 total). */
+export const LAUNCH_PREDICATES = PREDICATE_INVENTORY.filter(p => p.scope === 'launch')
+
+/** Predicates to add on-demand after launch (11 total). */
+export const POST_LAUNCH_PREDICATES = PREDICATE_INVENTORY.filter(p => p.scope === 'post-launch')
 
 /** Group inventory entries by their PredicateGroup (preserving order). */
 export function groupedInventory(): Array<{ group: PredicateGroup; entries: PredicateEntry[] }> {
@@ -303,13 +316,18 @@ export function groupedInventory(): Array<{ group: PredicateGroup; entries: Pred
  * this would change the on-chain atom_id.
  */
 export function buildPredicateJsonLd(entry: PredicateEntry): string {
-  const payload = {
+  // url must be JSON null (not the string "null") to match the standard
+  // Schema.org convention used by other Intuition protocol predicates.
+  // Changing this affects the keccak256 term_id — atoms already registered
+  // with url:"null" (string) have a different term_id than atoms registered
+  // with url:null (JSON null). Always verify via Phase 0 portal discovery.
+  const payload: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Thing',
     description: entry.description,
     image: entry.image ?? DEFAULT_PREDICATE_IMAGE,
     name: entry.mainnet,
-    url: 'null',
+    url: null,
   }
   return JSON.stringify(payload)
 }

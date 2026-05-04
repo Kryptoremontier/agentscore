@@ -12,6 +12,7 @@ import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
 import { cleanAtomName } from '@/types/claim'
 import { formatPredicateLabel } from '@/lib/predicate-display'
+import { effectiveLabel } from '@/lib/api-data'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -25,16 +26,6 @@ interface FeaturedItem {
   as_subject_triples?: Array<{ counter_term_id: string }> | null
 }
 
-/**
- * Get effective label - JSON for agents may be in `data` field when label is "json object"
- */
-function effectiveItemLabel(item: { label?: string | null; data?: string | null }): string {
-  const l = item.label
-  if (!l || l === 'json object' || l === '[json object]') {
-    return item.data || ''
-  }
-  return l
-}
 
 interface FeaturedClaim {
   term_id: string
@@ -347,7 +338,7 @@ export function FeaturedAgents() {
                       })
                     : items.map((item, i) => {
                         const cfg = TABS.find(t => t.id === activeTab)!
-                        const effLabel = effectiveItemLabel(item)
+                        const effLabel = effectiveLabel(item)
                         const name = cleanAtomName(effLabel)
                         const description = getDescription(effLabel, cfg.prefix)
                         const stakers = item.positions_aggregate?.aggregate?.count || 0

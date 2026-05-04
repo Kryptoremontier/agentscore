@@ -46,12 +46,3 @@ export const PREDICATES_CONFIG = IS_MAINNET ? MAINNET_LABELS : TESTNET_LABELS
 
 export type PredicateKey = keyof typeof PREDICATES_CONFIG
 export type PredicateAtomLabel = (typeof PREDICATES_CONFIG)[PredicateKey]
-
-/**
- * Both label sets — for migration tools, indexers, and the display formatter
- * that needs to recognize labels from BOTH eras.
- */
-export const ALL_PREDICATE_LABELS = {
-  mainnet: MAINNET_LABELS,
-  testnet: TESTNET_LABELS,
-} as const

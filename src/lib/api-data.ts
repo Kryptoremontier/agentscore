@@ -100,10 +100,12 @@ type AgentRow = {
 
 /**
  * Get the effective label/JSON for an atom row.
- * Hasura returns label = "json object" when JSON is too long;
- * actual JSON is then in `data` field.
+ * Hasura returns label = "json object" when the payload is too long;
+ * actual content is then in the `data` field.
+ *
+ * Exported so components can use the same logic without duplicating it.
  */
-function effectiveLabel(row: { label?: string | null; data?: string | null }): string {
+export function effectiveLabel(row: { label?: string | null; data?: string | null }): string {
   const l = row.label
   if (!l || l === 'json object' || l === '[json object]') {
     return row.data || ''

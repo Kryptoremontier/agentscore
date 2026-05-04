@@ -97,17 +97,35 @@ interface GqlProfileData {
   myReports: { aggregate: { count: number } }
 }
 
-async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
+// ─── Types for the two-phase fetch ────────────────────────────────────────────
+
+interface GqlMetaData {
+  myAgents: GqlAtomData[]
+  ownedAgentAtoms: GqlAtomDataWithFirstPos[]
+  mySkillAtoms: GqlAtomData[]
+  ownedSkillAtoms: GqlAtomDataWithFirstPos[]
+  mySkills: { aggregate: { count: number } }
+  myClaims: { aggregate: { count: number } }
+  mySignals: { aggregate: { count: number } }
+  myReports: { aggregate: { count: number } }
+}
+
+// ─── Phase 1 — atoms + aggregates (fast, ~200ms, no deep position JOINs) ─────
+
+async function fetchProfileMeta(address: `0x${string}`): Promise<{
+  agentMap: Map<string, GqlAtomData>
+  skillMap: Map<string, GqlAtomData>
+  legacySkillsCount: number
+  legacyClaimsCount: number
+  totalSignals: number
+  reportsSubmitted: number
+  addrLc: string
+}> {
   const checksummed = getAddress(address)
   const addrLc = address.toLowerCase()
 
-  // localStorage count for claims (triples are harder to detect via positions)
-  const localClaimsCount = getUserRegistrationsByType(address, 'claim').length
-
-  // Use both checksummed and lowercase — indexer may store account_id in either format
-  const addrLcForQuery = checksummed.toLowerCase()
-  const data = await gql<GqlProfileData>(`
-    query ProfileData($address: String!, $addressLc: String!) {
+  const data = await gql<GqlMetaData>(`
+    query ProfileMeta($address: String!) {
       myAgents: atoms(
         where: {
           label: { _ilike: "${APP_CONFIG.AGENT_PREFIX}%" }
@@ -158,35 +176,6 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
         }
       }
 
-      myPositions: positions(
-        where: {
-          _and: [
-            { shares: { _gt: "0" } },
-            { _or: [
-              { account_id: { _eq: $address } },
-              { account_id: { _eq: $addressLc } }
-            ]}
-          ]
-        }
-        order_by: { updated_at: desc }
-        limit: 200
-      ) {
-        term_id shares updated_at
-        vault {
-          term_id total_shares
-          term {
-            id type
-            atom { term_id label emoji }
-            triple {
-              term_id counter_term_id
-              subject { term_id label emoji }
-              predicate { label }
-              object { label }
-            }
-          }
-        }
-      }
-
       mySkills: atoms_aggregate(
         where: {
           ${SKILL_ATOM_INLINE}
@@ -217,11 +206,8 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
         }
       ) { aggregate { count } }
     }
-  `, { address: checksummed, addressLc: addrLcForQuery })
+  `, { address: checksummed })
 
-  // Merge sources, deduplicate by term_id:
-  // 1. myAgents: legacy (creator_id = user, pre-FeeProxy)
-  // 2. ownedAgentAtoms filtered to first-position-holder = user (FeeProxy registrations)
   const firstPositionAgents = (data.ownedAgentAtoms || []).filter(
     a => a.firstPosition?.[0]?.account_id?.toLowerCase() === addrLc
   )
@@ -238,22 +224,64 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     if (!skillMap.has(a.term_id)) skillMap.set(a.term_id, a)
   }
 
-  const registeredAgents: RegisteredAgent[] = Array.from(agentMap.values()).map(a => ({
-    termId: a.term_id,
-    label: a.label,
-    emoji: a.emoji || undefined,
-    createdAt: a.created_at,
-    trustScore: 50,
-    stakers: a.positions_aggregate?.aggregate?.count || 0,
-    totalStaked: a.positions_aggregate?.aggregate?.sum?.shares || '0',
-  }))
+  return {
+    agentMap,
+    skillMap,
+    legacySkillsCount: data.mySkills?.aggregate?.count || 0,
+    legacyClaimsCount: data.myClaims?.aggregate?.count || 0,
+    totalSignals: data.mySignals?.aggregate?.count || 0,
+    reportsSubmitted: data.myReports?.aggregate?.count || 0,
+    addrLc,
+  }
+}
 
-  // Build a set of all platform atom IDs (from agent + skill maps).
-  // Used to recognise prefix-less atoms registered via FeeProxy.
-  const platformAtomIds = new Set<string>([
-    ...Array.from(agentMap.keys()),
-    ...Array.from(skillMap.keys()),
-  ])
+// ─── Phase 2 — positions (lazy, deep nested, only for Supporting / PnL tabs) ──
+
+interface GqlPositionsData {
+  myPositions: GqlPosition[]
+}
+
+async function fetchProfilePositions(
+  address: `0x${string}`,
+  platformAtomIds: Set<string>,
+  agentMap: Map<string, GqlAtomData>,
+  skillMap: Map<string, GqlAtomData>,
+): Promise<{ agentPositions: AgentSupport[]; pnlPositions: PnLPosition[]; totalStaked: bigint }> {
+  const checksummed = getAddress(address)
+  const addrLcForQuery = checksummed.toLowerCase()
+
+  const data = await gql<GqlPositionsData>(`
+    query ProfilePositions($address: String!, $addressLc: String!) {
+      myPositions: positions(
+        where: {
+          _and: [
+            { shares: { _gt: "0" } },
+            { _or: [
+              { account_id: { _eq: $address } },
+              { account_id: { _eq: $addressLc } }
+            ]}
+          ]
+        }
+        order_by: { updated_at: desc }
+        limit: 200
+      ) {
+        term_id shares updated_at
+        vault {
+          term_id total_shares
+          term {
+            id type
+            atom { term_id label emoji }
+            triple {
+              term_id counter_term_id
+              subject { term_id label emoji }
+              predicate { label }
+              object { label }
+            }
+          }
+        }
+      }
+    }
+  `, { address: checksummed, addressLc: addrLcForQuery })
 
   const pnlPositions: PnLPosition[] = []
   const agentPositions: AgentSupport[] = []
@@ -263,12 +291,9 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
   for (const pos of (data.myPositions || [])) {
     const shares = BigInt(pos.shares || '0')
     if (shares <= 0n) continue
-
     const term = pos.vault?.term
     if (!term) continue
 
-    // Check if this position belongs to an INTU-scoped entity.
-    // Recognises both legacy prefix atoms and new prefix-less platform atoms.
     const atomLabel = term.atom?.label || ''
     const atomTermId = term.atom?.term_id || ''
     const tripleSubjectLabel = term.triple?.subject?.label || ''
@@ -312,7 +337,6 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
       const isForVault = t.term_id === pos.vault.term_id
       const side = isForVault ? 'for' : 'against'
       const key = `triple-${t.subject.term_id}-${side}`
-
       if (!seenKeys.has(key)) {
         seenKeys.add(key)
         agentPositions.push({
@@ -326,73 +350,86 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
       }
     }
 
-    // P&L: collect all positions with totalShares for bonding curve calc
-    {
-      const totalShares = pos.vault?.total_shares || '0'
-      if (term.atom) {
-        const label = term.atom.label || ''
-        const tid = term.atom.term_id || ''
-        const type = (label.startsWith(APP_CONFIG.AGENT_PREFIX) || agentMap.has(tid))
-          ? 'agent'
-          : (label.startsWith(APP_CONFIG.SKILL_PREFIX) || skillMap.has(tid))
-            ? 'skill'
-            : null
-        if (type) {
-          pnlPositions.push({
-            termId: pos.term_id,
-            vaultTermId: pos.vault.term_id,
-            label,
-            emoji: term.atom.emoji || undefined,
-            type,
-            side: 'for',
-            shares: pos.shares,
-            totalShares,
-            updatedAt: pos.updated_at,
-          })
-        }
-      } else if (term.triple) {
-        const t = term.triple
-        const subjectLabel = t.subject?.label || ''
-        const subjectTermId = t.subject?.term_id || ''
-        // Only include claims where subject is an INTU-tagged entity
-        if (
-          subjectLabel.startsWith(APP_CONFIG.AGENT_PREFIX) ||
-          subjectLabel.startsWith(APP_CONFIG.SKILL_PREFIX) ||
-          platformAtomIds.has(subjectTermId)
-        ) {
-          const isForVault = t.term_id === pos.vault.term_id
-          const side = isForVault ? 'for' : 'against'
-          pnlPositions.push({
-            termId: pos.term_id,
-            vaultTermId: pos.vault.term_id,
-            label: `${subjectLabel} ${t.predicate?.label || ''} ${t.object?.label || ''}`.trim(),
-            type: 'claim',
-            side,
-            shares: pos.shares,
-            totalShares,
-            updatedAt: pos.updated_at,
-            claimSubject: subjectLabel,
-            claimPredicate: t.predicate?.label,
-            claimObject: t.object?.label,
-          })
-        }
+    const totalShares = pos.vault?.total_shares || '0'
+    if (term.atom) {
+      const label = term.atom.label || ''
+      const tid = term.atom.term_id || ''
+      const type = (label.startsWith(APP_CONFIG.AGENT_PREFIX) || agentMap.has(tid))
+        ? 'agent'
+        : (label.startsWith(APP_CONFIG.SKILL_PREFIX) || skillMap.has(tid))
+          ? 'skill'
+          : null
+      if (type) {
+        pnlPositions.push({
+          termId: pos.term_id,
+          vaultTermId: pos.vault.term_id,
+          label,
+          emoji: term.atom.emoji || undefined,
+          type,
+          side: 'for',
+          shares: pos.shares,
+          totalShares,
+          updatedAt: pos.updated_at,
+        })
+      }
+    } else if (term.triple) {
+      const t = term.triple
+      const subjectLabel = t.subject?.label || ''
+      const subjectTermId = t.subject?.term_id || ''
+      if (
+        subjectLabel.startsWith(APP_CONFIG.AGENT_PREFIX) ||
+        subjectLabel.startsWith(APP_CONFIG.SKILL_PREFIX) ||
+        platformAtomIds.has(subjectTermId)
+      ) {
+        const isForVault = t.term_id === pos.vault.term_id
+        const side = isForVault ? 'for' : 'against'
+        pnlPositions.push({
+          termId: pos.term_id,
+          vaultTermId: pos.vault.term_id,
+          label: `${subjectLabel} ${t.predicate?.label || ''} ${t.object?.label || ''}`.trim(),
+          type: 'claim',
+          side,
+          shares: pos.shares,
+          totalShares,
+          updatedAt: pos.updated_at,
+          claimSubject: subjectLabel,
+          claimPredicate: t.predicate?.label,
+          claimObject: t.object?.label,
+        })
       }
     }
   }
 
-  const totalSignals = data.mySignals?.aggregate?.count || 0
-  const totalAttestations = agentPositions.length
-  const reportsSubmitted = data.myReports?.aggregate?.count || 0
-  // Distinct vault positions (agents, skills, claims) — avoid double-counting
+  return { agentPositions, pnlPositions, totalStaked }
+}
+
+// ─── Assemble full profile from meta + optional positions ─────────────────────
+
+function assembleProfile(
+  address: `0x${string}`,
+  meta: Awaited<ReturnType<typeof fetchProfileMeta>>,
+  positions: { agentPositions: AgentSupport[]; pnlPositions: PnLPosition[]; totalStaked: bigint } | null,
+  localClaimsCount: number,
+): UserProfile {
+  const { agentMap, skillMap, legacySkillsCount, legacyClaimsCount, totalSignals, reportsSubmitted } = meta
+  const agentPositions = positions?.agentPositions ?? []
+  const pnlPositions = positions?.pnlPositions ?? []
+  const totalStaked = positions?.totalStaked ?? BigInt(0)
+
+  const registeredAgents: RegisteredAgent[] = Array.from(agentMap.values()).map(a => ({
+    termId: a.term_id,
+    label: a.label,
+    emoji: a.emoji || undefined,
+    createdAt: a.created_at,
+    trustScore: 50,
+    stakers: a.positions_aggregate?.aggregate?.count || 0,
+    totalStaked: a.positions_aggregate?.aggregate?.sum?.shares || '0',
+  }))
+
+  const totalSkillsRegistered = Math.max(legacySkillsCount, skillMap.size)
+  const totalClaimsCreated = Math.max(legacyClaimsCount, localClaimsCount)
   const totalPositions = pnlPositions.length
   const tTrustStakedNum = Number(totalStaked) / 1e18
-
-  // Warstwa 1+2: skills i claims łączą creator_id (legacy) z localStorage (FeeProxy)
-  const legacySkillsCount = data.mySkills?.aggregate?.count || 0
-  const totalSkillsRegistered = Math.max(legacySkillsCount, skillMap.size)
-
-  const legacyClaimsCount = data.myClaims?.aggregate?.count || 0
-  const totalClaimsCreated = Math.max(legacyClaimsCount, localClaimsCount)
 
   const earliestDate = [
     ...registeredAgents.map(a => a.createdAt),
@@ -411,7 +448,7 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     totalSkillsRegistered,
     totalClaimsCreated,
     totalTrustStaked: totalStaked,
-    totalAttestations,
+    totalAttestations: agentPositions.length,
     trustReceived: BigInt(0),
     reputation: 50,
     totalSignals,
@@ -434,16 +471,16 @@ async function fetchProfileData(address: `0x${string}`): Promise<UserProfile> {
     + Math.min(10, daysActive * 0.5)
   ))
 
-  const meta = loadProfileMeta(address)
+  const profileMeta = loadProfileMeta(address)
 
   return {
     address,
-    name: meta.name,
-    bio: meta.bio,
-    avatar: meta.avatar,
-    website: meta.website,
-    twitter: meta.twitter,
-    farcaster: meta.farcaster,
+    name: profileMeta.name,
+    bio: profileMeta.bio,
+    avatar: profileMeta.avatar,
+    website: profileMeta.website,
+    twitter: profileMeta.twitter,
+    farcaster: profileMeta.farcaster,
     stats,
     badges,
     expertLevel,
@@ -481,24 +518,55 @@ const emptyProfile = (address: `0x${string}`): UserProfile => ({
   lastActiveAt: new Date(),
 })
 
-export function useUserProfile(address?: `0x${string}`) {
+/**
+ * Two-phase profile loader:
+ *   Phase 1 (always): atoms + aggregates — fast, no deep position JOINs.
+ *   Phase 2 (lazy):   positions — triggered only when Supporting or P&L tab is active.
+ *
+ * Pass `activeTab` so the hook knows when to fire the slow positions query.
+ * The page renders immediately after Phase 1; Supporting/PnL tabs show their
+ * own skeleton only while Phase 2 is in flight.
+ */
+export function useUserProfile(address?: `0x${string}`, activeTab?: string) {
   const queryClient = useQueryClient()
+  const needsPositions = activeTab === 'supporting' || activeTab === 'pnl'
 
-  const { data: profile, isLoading, isPlaceholderData, error } = useQuery({
-    queryKey: ['userProfile', address],
-    queryFn: () => fetchProfileData(address!),
+  // Phase 1 — fast query
+  const metaQuery = useQuery({
+    queryKey: ['userProfileMeta', address],
+    queryFn: () => fetchProfileMeta(address!),
     enabled: !!address,
     staleTime: 5 * 60_000,
-    // 30 min: users tabbing back within a session hit cache, not Hasura
     gcTime: 30 * 60_000,
     refetchOnWindowFocus: false,
-    // Show previous profile structure while new address loads (e.g. navigating between profiles)
-    placeholderData: (prev) => prev,
   })
+
+  // Phase 2 — lazy positions query (fires when user navigates to Supporting/PnL)
+  const positionsQuery = useQuery({
+    queryKey: ['userProfilePositions', address],
+    queryFn: () => {
+      const meta = metaQuery.data!
+      const platformAtomIds = new Set<string>([
+        ...Array.from(meta.agentMap.keys()),
+        ...Array.from(meta.skillMap.keys()),
+      ])
+      return fetchProfilePositions(address!, platformAtomIds, meta.agentMap, meta.skillMap)
+    },
+    enabled: !!address && needsPositions && !!metaQuery.data,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+  })
+
+  const localClaimsCount = address ? getUserRegistrationsByType(address, 'claim').length : 0
+
+  const profile = metaQuery.data
+    ? assembleProfile(address!, metaQuery.data, positionsQuery.data ?? null, localClaimsCount)
+    : emptyProfile(address || '0x0000000000000000000000000000000000000000' as `0x${string}`)
 
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<UserProfile>) => {
-      const merged = { ...(profile || emptyProfile(address!)), ...updates }
+      const merged = { ...profile, ...updates }
       if (address) {
         saveProfileMeta(address, {
           name: merged.name,
@@ -512,14 +580,18 @@ export function useUserProfile(address?: `0x${string}`) {
       return merged
     },
     onSuccess: (newProfile) => {
+      queryClient.setQueryData(['userProfileMeta', address], metaQuery.data)
       queryClient.setQueryData(['userProfile', address], newProfile)
     },
   })
 
   return {
-    profile: profile || emptyProfile(address || '0x0000000000000000000000000000000000000000' as `0x${string}`),
-    isLoading: isLoading || isPlaceholderData,
-    error,
+    profile,
+    // isLoading: true only until Phase 1 resolves — tabs that need positions
+    // show their own skeleton via positionsLoading
+    isLoading: metaQuery.isLoading,
+    positionsLoading: needsPositions && positionsQuery.isLoading,
+    error: metaQuery.error,
     updateProfile: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
   }
