@@ -70,6 +70,21 @@ Likely AgentScore-specific (probably need to register):
 - `opposes` — negative trust (might exist as generic)
 - `reported for scam` / `reported for spam` / `reported for injection` — moderation specific
 
+### Saulo consultation draft (send before registering anything new)
+
+> Hi Saulo — before AgentScore mainnet launch I'm planning to wire up a small
+> set of predicates. Here's what I found in Phase 0 discovery:
+>
+> - `trusts` → **found, will REUSE** ✅ (term_id: `0x3a73f3b1...`)
+> - `opposes` → **found as `Opposes`** (capital O) — wrong lowercase convention.
+>   Planning to create canonical lowercase `opposes` and open a PR to the
+>   Intuition Ontology repo, same pattern as PR #7 for `resolved to`. Does that
+>   make sense, or is there a preferred existing atom I should reuse instead?
+> - `has agent skill`, `evaluated by`, `reported for` — AgentScore-specific,
+>   will create fresh.
+>
+> Happy to sync on Discord if easier. Thanks!
+
 ### What if my description differs from the existing atom?
 
 **Use the existing atom anyway.** The `description` field on a predicate atom
@@ -539,33 +554,20 @@ After registration:
 
 ---
 
-## TermID Tracker (fill in after Phase 0 discovery + registration)
+## TermID Tracker
 
 **Legend:**
-- ✅ REUSE — already exists on mainnet, copy term_id from portal
+- ✅ DONE / REUSE — confirmed on mainnet, term_id known
 - 🆕 CREATE — needs to be registered fresh (Phases 1–3)
 - ⏳ TBD — not yet checked on portal
 
-| # | Name | Group | Status | term_id (mainnet) | Notes |
-|---|------|-------|--------|-------------------|-------|
-| 1  | has agent skill        | core         | ⏳ TBD | `0x...` | likely 🆕 (AgentScore-specific) |
-| 2  | trusts                 | core         | ⏳ TBD | `0x...` | likely ✅ (generic) |
-| 3  | opposes                | core         | ⏳ TBD | `0x...` | check both |
-| 4  | evaluated by           | core         | ⏳ TBD | `0x...` | likely 🆕 |
-| 5  | delegated to           | core         | ⏳ TBD | `0x...` | check both, optional |
-| 6  | is certified by        | capability   | ⏳ TBD | `0x...` | likely ✅ (generic) |
-| 7  | works well with        | relationship | ⏳ TBD | `0x...` | likely ✅ (generic) |
-| 8  | is alternative to      | relationship | ⏳ TBD | `0x...` | likely ✅ (generic) |
-| 9  | depends on             | relationship | ⏳ TBD | `0x...` | likely ✅ (generic), optional |
-| 10 | enhances               | relationship | ⏳ TBD | `0x...` | check both, optional |
-| 11 | is better than         | opinion      | ✅ REUSE | `0x...` (find on portal) | **EXISTS** — `0x9F23...e3B1`, 9 holders, 3.32K $TRUST |
-| 12 | works bad with         | opinion      | ⏳ TBD | `0x...` | likely 🆕, optional |
-| 13 | endorses               | opinion      | ⏳ TBD | `0x...` | likely ✅ (generic), optional |
-| 14 | verified by            | attestation  | ⏳ TBD | `0x...` | likely ✅ (generic) |
-| 15 | vouches for            | attestation  | ⏳ TBD | `0x...` | likely ✅ (generic), optional |
-| 16 | reported for scam      | report       | ⏳ TBD | `0x...` | likely 🆕 |
-| 17 | reported for spam      | report       | ⏳ TBD | `0x...` | likely 🆕 |
-| 18 | reported for injection | report       | ⏳ TBD | `0x...` | likely 🆕 (AgentScore-specific) |
+| # | Name | Status | term_id (mainnet) |
+|---|------|--------|-------------------|
+| 1 | `has agent skill` | ✅ DONE | check portal |
+| 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
+| 3 | `opposes` | 🆕 CREATE | pending |
+| 4 | `evaluated by` | 🆕 CREATE | pending |
+| 5 | `reported for` | 🆕 CREATE | pending |
 
 ### How to find term_id on the portal
 
@@ -582,26 +584,53 @@ For 🆕 CREATE atoms, term_id appears in the success toast after the
 
 ---
 
-## Quick Reference — Required for Launch (11)
+## Launch Scope — Minimum Viable Predicates
 
-These MUST be wired up (either reused or created) before AgentScore mainnet goes live:
+These are the only predicates needed before AgentScore mainnet goes live.
+Everything else is post-launch on-demand.
 
-1. has agent skill
-2. trusts
-3. opposes
-4. evaluated by
-5. is certified by
-6. works well with
-7. is alternative to
-8. verified by
-9. reported for scam
-10. reported for spam
-11. reported for injection
+| # | Name | Status | term_id / Notes |
+|---|------|--------|-----------------|
+| 1 | `has agent skill` | ✅ DONE | check portal for term_id |
+| 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
+| 3 | `opposes` | 🆕 CREATE (lowercase) | Exists as `Opposes` (capital O) — wrong convention. Create canonical lowercase. |
+| 4 | `evaluated by` | 🆕 CREATE | AgentScore-specific evaluator system driver |
+| 5 | `reported for` | 🆕 CREATE | One predicate, objects: Scam / Spam / Injection atoms |
 
-The other 7 (`delegated to`, `depends on`, `enhances`, `is better than`,
-`works bad with`, `endorses`, `vouches for`) are optional — can be added
-post-launch as community use cases emerge.
+**Total new registrations needed: 3** (opposes, evaluated by, reported for)
 
 > **Note:** "Wired up" means recorded in `src/lib/predicate-mainnet-ids.ts` —
-> NOT necessarily registered fresh. Many of these likely already exist as
-> Recommended Predicates and just need to be discovered + reused.
+> NOT necessarily registered fresh. `trusts` just needs its term_id copied from
+> the portal; `has agent skill` is already registered.
+
+---
+
+## Discovery Notes
+
+Results from Phase 0 portal search on mainnet.
+
+### `trusts` — ✅ REUSE
+
+- **term_id:** `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9`
+- **Label:** `trusts` (lowercase ✅)
+- **Description:** "Reflects confidence or reliance on another entity's integrity or actions."
+- **Verdict:** Generic, well-described, perfect fit. No new registration needed.
+
+### `opposes` — ⚠️ CREATE NEW (lowercase canonical)
+
+- **Found:** `Opposes` (capital O) — `0x5af444aa5692474d28e32b79160a93370030d4d57f77cdb6c613b05354e70612`
+- **Problems:**
+  1. Capital O breaks lowercase convention used by all Saulo predicates
+  2. Description "Oppose means to disagree" lacks counter-vault context and publisher filter warning
+- **Verdict:** Create canonical lowercase `opposes` + open PR to Intuition Ontology repo
+  (same pattern as PR #7 for `resolved to`). Do NOT reuse the capital-O version.
+
+---
+
+## Corrections from Previous Version
+
+| Previous assumption | What portal discovery found |
+|---------------------|-----------------------------|
+| `trusts` — likely ✅ (generic) | Confirmed ✅ REUSE — `0x3a73f3...` |
+| `opposes` — assume REUSE | Found `Opposes` (wrong case) — create lowercase canonical |
+| 3 separate report predicates (`reported for scam/spam/injection`) | Consolidate into one `reported for` predicate, use Scam/Spam/Injection as objects |
