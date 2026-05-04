@@ -72,13 +72,13 @@ async function fetchLeaderboardDataImpl(): Promise<LeaderboardEntry[]> {
   const skillTermIds = new Set((entities.skills || []).map(s => s.term_id).filter(Boolean))
   const allTermIds = [...agentTermIds, ...skillTermIds]
 
-  let positions: Array<{ account_id: string; shares: string; vault: { term_id: string } }> = []
+  let positions: Array<{ account_id: string; shares: string; total_deposit_assets_after_total_fees: string; vault: { term_id: string } }> = []
   let signals: Array<{ account_id: string }> = []
 
   if (allTermIds.length > 0) {
     const termIdList = allTermIds.map(id => `"${id}"`).join(', ')
     const activity = await gql<{
-      positions: Array<{ account_id: string; shares: string; vault: { term_id: string } }>
+      positions: Array<{ account_id: string; shares: string; total_deposit_assets_after_total_fees: string; vault: { term_id: string } }>
       signals: Array<{ account_id: string }>
     }>(`
       query LeaderboardActivity {
@@ -90,7 +90,7 @@ async function fetchLeaderboardDataImpl(): Promise<LeaderboardEntry[]> {
           }
           order_by: { created_at: asc }
           limit: 2000
-        ) { account_id shares vault { term_id } }
+        ) { account_id shares total_deposit_assets_after_total_fees vault { term_id } }
 
         signals(
           where: {
@@ -136,7 +136,7 @@ async function fetchLeaderboardDataImpl(): Promise<LeaderboardEntry[]> {
     if (p.account_id) {
       const e = ensure(p.account_id)
       e.totalPositions++
-      e.tTrustStaked += Number(p.shares) / 1e18
+      e.tTrustStaked += Number(p.total_deposit_assets_after_total_fees) / 1e18
     }
   }
 
