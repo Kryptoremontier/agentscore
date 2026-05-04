@@ -34,6 +34,7 @@ import { TrustTimeline } from '@/components/agents/TrustTimeline'
 import { CreateClaimForm } from '@/components/claims/CreateClaimForm'
 import { PREDICATES, getPredicateConfig, getAtomName, getAtomType, formatClaimText, type Claim } from '@/types/claim'
 import { cn } from '@/lib/cn'
+import { formatPredicateLabel } from '@/lib/predicate-display'
 import {
   Bot, Zap, MessageSquare, Globe, Layers,
   Flame, HeartHandshake, TrendingUp, Link as LinkIcon,
@@ -1063,7 +1064,7 @@ function ClaimsPageContent() {
                       </span>
                       <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: PRED_COLOR.bg, border: `1px solid ${PRED_COLOR.border}`, color: PRED_COLOR.text }}>
                         <PredicateIcon name={predCfg?.icon} color={PRED_COLOR.text} size={3} />
-                        {claim.predicate.label}
+                        {formatPredicateLabel(claim.predicate.label)}
                       </span>
                       <span className="flex items-center px-2 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: OBJECT_COLOR.bg, border: `1px solid ${OBJECT_COLOR.border}`, color: OBJECT_COLOR.text }}>
                         <AtomTypeIcon type={claim.object.type} color={OBJECT_COLOR.text} />
@@ -1131,7 +1132,7 @@ function ClaimsPageContent() {
                       <span className="text-[#4A5260] text-xs">→</span>
                       <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap" style={{ backgroundColor: PRED_COLOR.bg, border: `1px solid ${PRED_COLOR.border}`, color: PRED_COLOR.text }}>
                         <PredicateIcon name={predCfg?.icon} color={PRED_COLOR.text} size={3} />
-                        {claim.predicate.label}
+                        {formatPredicateLabel(claim.predicate.label)}
                       </span>
                       <span className="text-[#4A5260] text-xs">→</span>
                       <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap" style={{ backgroundColor: OBJECT_COLOR.bg, border: `1px solid ${OBJECT_COLOR.border}`, color: OBJECT_COLOR.text }}>
@@ -1228,7 +1229,7 @@ function ClaimsPageContent() {
                           </span>
                           <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: PRED_COLOR.bg, border: `1px solid ${PRED_COLOR.border}`, color: PRED_COLOR.text }}>
                             <PredicateIcon name={predCfg?.icon} color={PRED_COLOR.text} size={3} />
-                            {selectedClaim.predicate.label}
+                            {formatPredicateLabel(selectedClaim.predicate.label)}
                           </span>
                           <span className="flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ backgroundColor: OBJECT_COLOR.bg, border: `1px solid ${OBJECT_COLOR.border}`, color: OBJECT_COLOR.text }}>
                             <AtomTypeIcon type={selectedClaim.object.type} color={OBJECT_COLOR.text} />

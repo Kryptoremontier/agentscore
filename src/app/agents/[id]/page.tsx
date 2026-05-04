@@ -12,46 +12,83 @@ import { AgentTabs } from '@/components/agents/AgentTabs'
 import { TrustButton } from '@/components/trust/TrustButton'
 import { Button } from '@/components/ui/button'
 import { PageHeaderSkeleton, LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
-import { agentIdToAtomId } from '@/lib/utils'
 import type { Agent } from '@/types/agent'
+import type { AgentDetailApiItem } from '@/lib/api-data'
 
-// Mock data - replace with real data fetching
-const getMockAgent = (id: string): Agent => ({
-  id,
-  atomId: agentIdToAtomId(id), // Use consistent hash function
-  name: `CodeHelper AI ${id}`,
-  description: 'An advanced AI assistant specialized in helping developers write better code, debug issues, and learn new programming concepts. Supports multiple programming languages and frameworks.',
-  platform: 'mcp',
-  walletAddress: '0x1234567890123456789012345678901234567890',
-  createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-  verificationLevel: 'wallet',
-  owner: {
-    address: '0x1234567890123456789012345678901234567890',
-    name: 'AI Developer',
-    expertLevel: 'expert' as const,
-  },
-  trustScore: 85,
-  positiveStake: BigInt(250000 * 1e18),
-  negativeStake: BigInt(15000 * 1e18),
-  attestationCount: 342,
-  reportCount: 5,
-  stakerCount: 127,
-})
+// Convert API response to Agent type
+function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
+  return {
+    id: apiAgent.id,
+    atomId: apiAgent.id,
+    name: apiAgent.name,
+    description: '', // Will be populated from agent card data if available
+    platform: 'intuition',
+    walletAddress: '0x0000000000000000000000000000000000000000',
+    createdAt: new Date(apiAgent.createdAt),
+    verificationLevel: 'wallet',
+    owner: {
+      address: '0x0000000000000000000000000000000000000000',
+      name: 'Agent Owner',
+      expertLevel: 'intermediate' as const,
+    },
+    trustScore: Math.round(apiAgent.score.objectScore ?? apiAgent.score.trustScore),
+    positiveStake: BigInt(Math.round(apiAgent.supportStake * 1e18)),
+    negativeStake: BigInt(Math.round(apiAgent.opposeStake * 1e18)),
+    attestationCount: 0,
+    reportCount: 0,
+    stakerCount: apiAgent.stakerCount,
+  }
+}
 
 export default function AgentDetailPage() {
   const params = useParams()
   const agentId = params['id'] as string
   const [loading, setLoading] = useState(true)
   const [agent, setAgent] = useState<Agent | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setAgent(getMockAgent(agentId))
-      setLoading(false)
-    }, 1000)
+    let cancelled = false
 
-    return () => clearTimeout(timer)
+    async function fetchAgent() {
+      try {
+        setLoading(true)
+        setError(null)
+
+        const response = await fetch(`/api/v1/agents/${agentId}`)
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error('Agent not found')
+          }
+          throw new Error('Failed to load agent')
+        }
+
+        const data = await response.json()
+        
+        if (cancelled) return
+
+        if (data.success && data.data) {
+          setAgent(apiToAgent(data.data))
+        } else {
+          throw new Error('Invalid response format')
+        }
+      } catch (err) {
+        if (cancelled) return
+        console.error('Error fetching agent:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load agent')
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchAgent()
+
+    return () => {
+      cancelled = true
+    }
   }, [agentId])
 
   const handleShare = () => {
@@ -76,12 +113,37 @@ export default function AgentDetailPage() {
     )
   }
 
-  if (!agent) {
+  if (error || !agent) {
     return (
       <PageBackground image="hero" opacity={0.35}>
         <div className="pt-24 pb-16">
           <div className="container">
-            <p>Agent not found</p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-xl p-8 text-center max-w-md mx-auto"
+            >
+              <div className="mb-4">
+                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+                  <Flag className="w-8 h-8 text-red-500" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2">Agent Not Found</h2>
+                <p className="text-text-muted mb-6">
+                  {error || 'The agent you are looking for could not be found. It may not exist yet or the data is still being indexed.'}
+                </p>
+              </div>
+              <div className="flex gap-3 justify-center">
+                <Button asChild variant="outline">
+                  <Link href="/agents">
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back to Explorer
+                  </Link>
+                </Button>
+                <Button onClick={() => window.location.reload()}>
+                  Try Again
+                </Button>
+              </div>
+            </motion.div>
           </div>
         </div>
       </PageBackground>

@@ -14,11 +14,43 @@ import type { LeaderboardEntry } from '@/lib/leaderboard-data'
 type SortKey = 'score' | 'entities' | 'staked' | 'signals'
 
 const TABS: { id: SortKey; label: string; icon: React.ElementType; color: string; desc: string }[] = [
-  { id: 'score',    label: 'Overall',   icon: Trophy,     color: '#C8963C', desc: 'Activity score' },
-  { id: 'entities', label: 'Builders',  icon: Blocks,     color: '#2EE6D6', desc: 'Entities registered' },
-  { id: 'staked',   label: 'Stakers',   icon: TrendingUp, color: '#A78BFA', desc: 'tTRUST staked' },
-  { id: 'signals',  label: 'Explorers', icon: Zap,        color: '#38B6FF', desc: 'On-chain events' },
+  { id: 'score',    label: 'Overall',   icon: Trophy,     color: '#C8963C', desc: 'Best all-round' },
+  { id: 'entities', label: 'Builders',  icon: Blocks,     color: '#2EE6D6', desc: 'Creates things' },
+  { id: 'staked',   label: 'Stakers',   icon: TrendingUp, color: '#A78BFA', desc: 'Backs agents' },
+  { id: 'signals',  label: 'Explorers', icon: Zap,        color: '#38B6FF', desc: 'Uses protocol' },
 ]
+
+const LEADERBOARD_GUIDES: Record<SortKey, {
+  title: string
+  tagline: string
+  bestFor: string
+  signals: string[]
+}> = {
+  score: {
+    title: 'Overall',
+    tagline: 'The default view for the most active wallets across AgentScore.',
+    bestFor: 'Finding well-rounded participants who build, stake, and interact on-chain.',
+    signals: ['Agents, skills, and claims', 'Active stake', 'Protocol activity'],
+  },
+  entities: {
+    title: 'Builders',
+    tagline: 'Highlights wallets that create the most useful on-chain objects.',
+    bestFor: 'Discovering people shipping agents, skills, and claims into the network.',
+    signals: ['Registered agents', 'Registered skills', 'Created claims'],
+  },
+  staked: {
+    title: 'Stakers',
+    tagline: 'Shows who is putting the most tTRUST behind agents and claims.',
+    bestFor: 'Spotting wallets with the strongest economic conviction.',
+    signals: ['Total tTRUST staked', 'Active positions', 'Distinct vaults backed'],
+  },
+  signals: {
+    title: 'Explorers',
+    tagline: 'Rewards hands-on usage of AgentScore vaults and staking flows.',
+    bestFor: 'Finding wallets that actively explore, deposit, redeem, and test the protocol.',
+    signals: ['Deposits', 'Redeems', 'Vault interactions'],
+  },
+}
 
 type ColumnConfig = {
   header: React.ReactNode
@@ -220,28 +252,48 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
             )}
           </div>
 
-          {/* Legend */}
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs text-[#7A838D]">
-            <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <p className="font-medium text-[#B5BDC6] mb-1">Overall Score</p>
-              <p className="leading-relaxed">
-                Participation score across all activity types.<br />
-                Agent +15 · Skill +15 · Claim +10<br />
-                Active position +5 · tTRUST staked ×20<br />
-                On-chain event +1
-              </p>
+          {/* Ranking guide */}
+          <div className="mt-6 rounded-2xl p-5 sm:p-6" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#7A838D]">How to read this</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">
+                  Choose the ranking that matches what you care about.
+                </h2>
+              </div>
+              <span
+                className="inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+                style={{ background: `${activeTab.color}18`, color: activeTab.color, border: `1px solid ${activeTab.color}35` }}
+              >
+                <activeTab.icon className="w-3.5 h-3.5" />
+                Showing {LEADERBOARD_GUIDES[tab].title}
+              </span>
             </div>
-            <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <p className="font-medium text-[#2EE6D6] mb-1">Builders</p>
-              <p className="leading-relaxed">Ranked by total entities registered on-chain. Agents + Skills + Claims. Tiebreaker: Overall Score.</p>
-            </div>
-            <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <p className="font-medium text-[#A78BFA] mb-1">Stakers</p>
-              <p className="leading-relaxed">Ranked by tTRUST staked across AgentScore vaults. Positions = distinct vaults with active stake. Tiebreaker: Positions desc.</p>
-            </div>
-            <div className="px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <p className="font-medium text-[#38B6FF] mb-1">Explorers</p>
-              <p className="leading-relaxed">Ranked by on-chain events (deposits + redeems) on AgentScore vaults. Vaults = distinct vaults with active stake. Tiebreaker: Vaults desc.</p>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="rounded-xl p-4" style={{ background: 'rgba(15,17,19,0.65)', border: `1px solid ${activeTab.color}30` }}>
+                <p className="text-sm font-semibold" style={{ color: activeTab.color }}>
+                  {LEADERBOARD_GUIDES[tab].tagline}
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-[#B5BDC6]">
+                  {LEADERBOARD_GUIDES[tab].bestFor}
+                </p>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ background: 'rgba(15,17,19,0.45)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <p className="text-xs font-medium uppercase tracking-wider text-[#7A838D]">Main signals</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {LEADERBOARD_GUIDES[tab].signals.map(signal => (
+                    <span
+                      key={signal}
+                      className="rounded-full px-3 py-1.5 text-xs text-[#B5BDC6]"
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+                    >
+                      {signal}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

@@ -149,4 +149,5 @@ giga-prompt*.md
 # MAINNET PLANNING (private — never push)
 # ═══════════════════════════════════════════
 MAINNET_*.md
+!docs/MAINNET_*.md
 wiki/

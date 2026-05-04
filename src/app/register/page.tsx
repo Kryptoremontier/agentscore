@@ -89,7 +89,7 @@ function RegisterContent() {
 
               {/* Action buttons */}
               <div className="flex gap-3 justify-center mb-10">
-                <Link href={isSkill ? `/skills?open=${encodeURIComponent(agentId)}` : `/agents?open=${encodeURIComponent(agentId)}`}>
+                <Link href={isSkill ? `/skills/${agentId}` : `/agents/${agentId}`}>
                   <Button size="lg">
                     {isSkill ? 'View Skill' : 'View Agent'}
                     <ArrowRight className="w-4 h-4 ml-2" />

@@ -64,8 +64,8 @@ function weiToFloat(wei: bigint): number {
   return Math.round((Number(wei) / 1e18) * 1e6) / 1e6
 }
 
-function cleanLabel(label: string): string {
-  // New agents: label is JSON → extract name field
+function cleanLabel(label: string | null | undefined): string {
+  if (!label || typeof label !== 'string') return 'Unnamed'
   try {
     const parsed = JSON.parse(label)
     if (typeof parsed === 'object' && parsed !== null && typeof parsed.name === 'string') {
@@ -87,7 +87,8 @@ function momentumLabel(momentum: number): string {
 
 type AgentRow = {
   term_id: string
-  label: string
+  label: string | null
+  data?: string | null
   type: string
   emoji?: string
   created_at: string
@@ -95,6 +96,19 @@ type AgentRow = {
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string | null } | null; max: { created_at: string | null } | null } | null }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
   subjectTriplesCount?: Array<{ id: string }>
+}
+
+/**
+ * Get the effective label/JSON for an atom row.
+ * Hasura returns label = "json object" when JSON is too long;
+ * actual JSON is then in `data` field.
+ */
+function effectiveLabel(row: { label?: string | null; data?: string | null }): string {
+  const l = row.label
+  if (!l || l === 'json object' || l === '[json object]') {
+    return row.data || ''
+  }
+  return l
 }
 
 // ─── Agents ───────────────────────────────────────────────────────────────────
@@ -126,6 +140,7 @@ async function fetchAgentRows(limit = 200): Promise<AgentRow[]> {
       ) {
         term_id
         label
+        data
         type
         emoji
         created_at
@@ -195,10 +210,11 @@ function rowToAgentItem(row: AgentRow, opposeWei: bigint): AgentApiItem {
   })
   const agentScore = score.objectScore ?? score.trustScore
 
+  const effLabel = effectiveLabel(row)
   return {
     id: row.term_id,
-    name: cleanLabel(row.label),
-    rawLabel: row.label,
+    name: cleanLabel(effLabel),
+    rawLabel: effLabel,
     score,
     agentScore,
     trustTier: trustTier.tier,
@@ -359,6 +375,7 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
       ) {
         term_id
         label
+        data
         created_at
         positions_aggregate {
           aggregate { count sum { shares } }
@@ -487,7 +504,7 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
 
   return {
     agentId: termId,
-    agentName: cleanLabel(row.label),
+    agentName: cleanLabel(effectiveLabel(row)),
     score: breakdownScore,
     agentScore,
     trustScore: {
@@ -970,7 +987,7 @@ export async function getPlatformStats() {
 
     if (score > topAgentScore) {
       topAgentScore = score
-      topAgentName = cleanLabel(row.label)
+      topAgentName = cleanLabel(effectiveLabel(row))
     }
 
     // Count unique stakers (use staker count as proxy — no address list in batch)

@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn'
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { AGENT_WHERE_STR, TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
+import { formatPredicateLabel } from '@/lib/predicate-display'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -132,11 +133,13 @@ async function fetchSkillsFromIntuition(search: string): Promise<AgentResult[]> 
   return data.data?.atoms ?? []
 }
 
-function agentName(label: string) {
+function agentName(label: string | null | undefined) {
+  if (!label || typeof label !== 'string') return 'Unnamed'
   return label.replace(/^Agent:(?:\w+:)?\s*/i, '').split(' - ')[0].trim()
 }
 
-function skillName(label: string) {
+function skillName(label: string | null | undefined) {
+  if (!label || typeof label !== 'string') return 'Unnamed'
   return label.replace(/^Skill:(?:\w+:)?\s*/i, '').split(' - ')[0].trim()
 }
 
@@ -442,9 +445,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                     </div>
                     {displayClaims.map((claim) => {
                       const idx = globalIndex++
-                      const subjName = claim.subject.label.replace(/^(Agent|Skill):\s*/i, '').split(' - ')[0].trim()
-                      const objName  = claim.object.label.replace(/^(Agent|Skill):\s*/i, '').split(' - ')[0].trim()
-                      const predLabel = claim.predicate.label
+                      const subjName = (claim.subject?.label || '').replace(/^(Agent|Skill):\s*/i, '').split(' - ')[0].trim() || 'Unnamed'
+                      const objName  = (claim.object?.label || '').replace(/^(Agent|Skill):\s*/i, '').split(' - ')[0].trim() || 'Unnamed'
+                      const predLabel = formatPredicateLabel(claim.predicate?.label)
                       const score = Math.min(100, Math.round(Number(claim.positions_aggregate?.aggregate?.sum?.shares ?? 0) / 1e18))
 
                       return (

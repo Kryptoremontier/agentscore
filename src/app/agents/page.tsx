@@ -44,12 +44,25 @@ const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 interface GraphQLAgent {
   term_id: string
   label: string
+  data?: string | null
   type: string
   created_at: string
   emoji?: string
   creator?: { label: string; id?: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+}
+
+/**
+ * Get the effective label/JSON for an atom.
+ * When label is "json object" or empty, the actual JSON is stored in `data` field.
+ */
+function getEffectiveLabel(atom: { label?: string | null; data?: string | null }): string {
+  const label = atom.label
+  if (!label || label === 'json object' || label === '[json object]') {
+    return atom.data || ''
+  }
+  return label
 }
 
 export default function AgentsPage() {
@@ -235,6 +248,7 @@ function AgentsPageContent() {
               ) {
                 term_id
                 label
+                data
                 type
                 emoji
                 created_at
@@ -1181,7 +1195,8 @@ function AgentsPageContent() {
   }
 
   // Helper: clean agent name (remove "Agent: " prefix and description)
-  const getAgentName = (label: string): string => {
+  const getAgentName = (label: string | null | undefined): string => {
+    if (!label || typeof label !== 'string') return 'Unnamed'
     // New format: JSON label
     try {
       const parsed = JSON.parse(label)
@@ -1192,7 +1207,12 @@ function AgentsPageContent() {
     // Old format: "Name - description"
     let name = label.replace(/^Agent:(?:\w+:)?\s*/i, '')
     if (name.includes(' - ')) name = name.split(' - ')[0]
-    return name.trim()
+    return name.trim() || 'Unnamed'
+  }
+
+  // Wrapper that handles atoms where label is "json object" and JSON is in data field
+  const getAgentNameFromAtom = (atom: { label?: string | null; data?: string | null }): string => {
+    return getAgentName(getEffectiveLabel(atom))
   }
 
   // Build trust ratio chart data from signals
@@ -1405,7 +1425,7 @@ function AgentsPageContent() {
       }))
       const tl = buildAgentTimeline({
         agentId: selectedAgent.term_id,
-        agentName: selectedAgent.label,
+        agentName: getAgentNameFromAtom(selectedAgent),
         createdAt: selectedAgent.created_at,
         currentScore: score,
         currentTier: tier,
@@ -1736,7 +1756,7 @@ function AgentsPageContent() {
                     : '#ef4444'
                   const cardMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
-                  const name = getAgentName(agent.label)
+                  const name = getAgentNameFromAtom(agent)
 
                   return (
                     <motion.div
@@ -1809,7 +1829,7 @@ function AgentsPageContent() {
                     : effectiveLevel === 'low' ? '#f97316' : '#ef4444'
                   const listMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
-                  const name = getAgentName(agent.label)
+                  const name = getAgentNameFromAtom(agent)
 
                   return (
                     <motion.div
@@ -1886,7 +1906,7 @@ function AgentsPageContent() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h2 className="text-xl font-bold text-white">
-                        {getAgentName(selectedAgent.label)}
+                        {getAgentNameFromAtom(selectedAgent)}
                       </h2>
                       {agentTrustTier && (
                         <TrustTierBadgeWithProgress
@@ -1917,13 +1937,17 @@ function AgentsPageContent() {
                 {/* Description */}
                 <p className="text-[#B5BDC6] text-sm leading-relaxed mb-5">
                   {(() => {
-                    try {
-                      const p = JSON.parse(selectedAgent.label)
-                      if (p?.description) return p.description
-                    } catch { /* not JSON */ }
-                    return selectedAgent.label.includes(' - ')
-                      ? selectedAgent.label.split(' - ').slice(1).join(' - ')
-                      : 'AI Agent registered on Intuition Protocol.'
+                    const lbl = getEffectiveLabel(selectedAgent)
+                    if (lbl) {
+                      try {
+                        const p = JSON.parse(lbl)
+                        if (p?.description) return p.description
+                      } catch { /* not JSON */ }
+                      if (lbl.includes(' - ')) {
+                        return lbl.split(' - ').slice(1).join(' - ')
+                      }
+                    }
+                    return 'AI Agent registered on Intuition Protocol.'
                   })()}
                 </p>
 
@@ -2506,13 +2530,13 @@ function AgentsPageContent() {
 
               {/* === AGENT CARD (metadata) === */}
               {(() => {
-                const card = parseAgentCard(selectedAgent.label)
+                const card = parseAgentCard(getEffectiveLabel(selectedAgent))
                 const hasMetadata = !!(
                   card.description || card.category || card.endpoints || card.source || card.social
                 )
                 if (!hasMetadata) return null
 
-                const completeness = calculateProfileCompleteness({ name: card.name || getAgentName(selectedAgent.label), ...card })
+                const completeness = calculateProfileCompleteness({ name: card.name || getAgentNameFromAtom(selectedAgent), ...card })
                 const categoryInfo = card.category ? AGENT_CATEGORIES.find(c => c.id === card.category) : null
 
                 const LinkItem = ({ href, label }: { href: string; label: string }) => (
@@ -3597,14 +3621,14 @@ function AgentsPageContent() {
 
                 {/* Timeline Tab */}
                 {activeTab === 'timeline' && selectedAgent && (() => {
-                  const agentCard = parseAgentCard(selectedAgent.label)
+                  const agentCard = parseAgentCard(getEffectiveLabel(selectedAgent))
                   const completeness = calculateProfileCompleteness({ name: agentCard.name ?? '', ...agentCard })
                   const score = hybridScore ?? agentTrust?.score ?? 50
                   const tier = agentTrustTier?.tier?.tier ?? 'unverified'
                   return (
                     <TrustTimeline
                       agentId={selectedAgent.term_id}
-                      agentName={agentCard.name ?? selectedAgent.label}
+                      agentName={agentCard.name ?? getAgentNameFromAtom(selectedAgent)}
                       createdAt={selectedAgent.created_at}
                       currentScore={score}
                       currentTier={tier}
@@ -3668,7 +3692,7 @@ function AgentsPageContent() {
                   Report Agent
                 </h2>
                 <p className="text-[#B5BDC6] text-sm">
-                  Report <span className="text-white font-medium">{getAgentName(selectedAgent.label)}</span>
+                  Report <span className="text-white font-medium">{getAgentNameFromAtom(selectedAgent)}</span>
                 </p>
               </div>
               <button
@@ -3774,7 +3798,7 @@ function AgentsPageContent() {
               <p className="text-[#B5BDC6] text-sm">
                 Choose what you want to attest about{' '}
                 <span className="text-white font-medium">
-                  {getAgentName(pendingVote.agent.label)}
+                  {getAgentNameFromAtom(pendingVote.agent)}
                 </span>
               </p>
             </div>
@@ -3936,7 +3960,7 @@ function AgentsPageContent() {
               <div className="flex justify-between items-center px-4 py-3 border-b border-[#C8963C]/12">
                 <span className="text-[#B5BDC6] text-sm">Agent</span>
                 <span className="text-white text-sm font-semibold text-right max-w-[180px] truncate">
-                  {getAgentName(pendingVote.agent.label)}
+                  {getAgentNameFromAtom(pendingVote.agent)}
                 </span>
               </div>
 

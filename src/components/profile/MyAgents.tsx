@@ -42,7 +42,8 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(days / 30)}mo ago`
 }
 
-function agentDisplayName(label: string): string {
+function agentDisplayName(label: string | null | undefined): string {
+  if (!label || typeof label !== 'string') return 'Unnamed'
   return label.replace(/^Agent:(?:\w+:)?\s*/i, '').split(' - ')[0].trim()
 }
 
@@ -200,7 +201,7 @@ export function MyAgents({ agents }: MyAgentsProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
               >
-                <Link href={`/agents?open=${encodeURIComponent(agent.termId)}`}>
+                <Link href={`/agents/${agent.termId}`}>
                   <div
                     className="group rounded-2xl p-5 transition-all cursor-pointer hover:scale-[1.01]"
                     style={{ background: 'rgba(15,17,19,0.85)', border: '1px solid rgba(255,255,255,0.08)' }}
@@ -289,7 +290,7 @@ export function MyAgents({ agents }: MyAgentsProps) {
                 animate={{ opacity: 1 }}
                 transition={{ delay: i * 0.03 }}
               >
-                <Link href={`/agents?open=${encodeURIComponent(agent.termId)}`}>
+                <Link href={`/agents/${agent.termId}`}>
                   <div
                     className="group grid grid-cols-[1fr_80px_80px_90px] gap-3 px-5 py-3 transition-colors cursor-pointer hover:bg-white/[0.03]"
                     style={{ borderBottom: i < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}

@@ -16,8 +16,10 @@ export type PredicateId =
 
 export interface PredicateConfig {
   id: PredicateId
-  label: string        // Human-readable: "has agent skill"
-  atomLabel: string    // On-chain atom label: "hasAgentSkill"
+  label: string                  // Human-readable display label: "has agent skill"
+  atomLabel: string              // On-chain atom label (network-aware)
+  atomLabelMainnet: string       // Canonical label used on mainnet (lowercase + spaces)
+  atomLabelTestnet: string       // Legacy label used on testnet (camelCase)
   icon: string
   color: string
   description: string
@@ -25,12 +27,21 @@ export interface PredicateConfig {
   group: 'capability' | 'relationship' | 'opinion'
 }
 
+const NETWORK = (typeof process !== 'undefined' ? process.env['NEXT_PUBLIC_NETWORK'] : undefined) ?? 'testnet'
+const IS_MAINNET = NETWORK === 'mainnet'
+
+function pickLabel(mainnet: string, testnet: string): string {
+  return IS_MAINNET ? mainnet : testnet
+}
+
 export const PREDICATES: PredicateConfig[] = [
   // ⚡ CAPABILITY — powers scoring & domains
   {
     id: 'has-agent-skill',
     label: 'has agent skill',
-    atomLabel: 'hasAgentSkill',
+    atomLabel: pickLabel('has agent skill', 'hasAgentSkill'),
+    atomLabelMainnet: 'has agent skill',
+    atomLabelTestnet: 'hasAgentSkill',
     icon: 'ShieldCheck',
     color: '#F59E0B',
     description: 'Agent has this skill or capability',
@@ -40,7 +51,9 @@ export const PREDICATES: PredicateConfig[] = [
   {
     id: 'is-certified-by',
     label: 'is certified by',
-    atomLabel: 'isCertifiedBy',
+    atomLabel: pickLabel('is certified by', 'isCertifiedBy'),
+    atomLabelMainnet: 'is certified by',
+    atomLabelTestnet: 'isCertifiedBy',
     icon: 'BadgeCheck',
     color: '#2ECC71',
     description: 'Officially certified or approved by entity',
@@ -51,7 +64,9 @@ export const PREDICATES: PredicateConfig[] = [
   {
     id: 'works-well-with',
     label: 'works well with',
-    atomLabel: 'worksWellWith',
+    atomLabel: pickLabel('works well with', 'worksWellWith'),
+    atomLabelMainnet: 'works well with',
+    atomLabelTestnet: 'worksWellWith',
     icon: 'HeartHandshake',
     color: '#2ECC71',
     description: 'Compatible agents',
@@ -61,7 +76,9 @@ export const PREDICATES: PredicateConfig[] = [
   {
     id: 'is-alternative-to',
     label: 'is alternative to',
-    atomLabel: 'isAlternativeTo',
+    atomLabel: pickLabel('is alternative to', 'isAlternativeTo'),
+    atomLabelMainnet: 'is alternative to',
+    atomLabelTestnet: 'isAlternativeTo',
     icon: 'ArrowLeftRight',
     color: '#B5BDC6',
     description: 'Similar function',
@@ -71,7 +88,9 @@ export const PREDICATES: PredicateConfig[] = [
   {
     id: 'depends-on',
     label: 'depends on',
-    atomLabel: 'dependsOn',
+    atomLabel: pickLabel('depends on', 'dependsOn'),
+    atomLabelMainnet: 'depends on',
+    atomLabelTestnet: 'dependsOn',
     icon: 'Link',
     color: '#B5BDC6',
     description: 'Requires this to work',
@@ -82,6 +101,8 @@ export const PREDICATES: PredicateConfig[] = [
     id: 'enhances',
     label: 'enhances',
     atomLabel: 'enhances',
+    atomLabelMainnet: 'enhances',
+    atomLabelTestnet: 'enhances',
     icon: 'Sparkles',
     color: '#C9A84C',
     description: 'Makes the other better',
@@ -92,7 +113,9 @@ export const PREDICATES: PredicateConfig[] = [
   {
     id: 'is-better-than',
     label: 'is better than',
-    atomLabel: 'isBetterThan',
+    atomLabel: pickLabel('is better than', 'isBetterThan'),
+    atomLabelMainnet: 'is better than',
+    atomLabelTestnet: 'isBetterThan',
     icon: 'TrendingUp',
     color: '#38B6FF',
     description: 'Direct comparison',
@@ -102,7 +125,9 @@ export const PREDICATES: PredicateConfig[] = [
   {
     id: 'works-bad-with',
     label: 'works bad with',
-    atomLabel: 'worksBadWith',
+    atomLabel: pickLabel('works bad with', 'worksBadWith'),
+    atomLabelMainnet: 'works bad with',
+    atomLabelTestnet: 'worksBadWith',
     icon: 'Swords',
     color: '#FF4D4F',
     description: 'Incompatible',
@@ -113,6 +138,8 @@ export const PREDICATES: PredicateConfig[] = [
     id: 'endorses',
     label: 'endorses',
     atomLabel: 'endorses',
+    atomLabelMainnet: 'endorses',
+    atomLabelTestnet: 'endorses',
     icon: 'ThumbsUp',
     color: '#38B6FF',
     description: 'Public endorsement',
@@ -124,6 +151,8 @@ export const PREDICATES: PredicateConfig[] = [
     id: 'custom',
     label: 'custom predicate',
     atomLabel: '',
+    atomLabelMainnet: '',
+    atomLabelTestnet: '',
     icon: 'MessageSquare',
     color: '#6b7280',
     description: 'Custom relationship',
@@ -192,20 +221,29 @@ export function formatClaimText(claim: Claim): string {
 }
 
 export function getPredicateConfig(predicateLabel: string): PredicateConfig | undefined {
+  if (!predicateLabel) return undefined
   return PREDICATES.find(p =>
     p.label === predicateLabel ||
     p.atomLabel === predicateLabel ||
+    p.atomLabelMainnet === predicateLabel ||
+    p.atomLabelTestnet === predicateLabel ||
     p.id === predicateLabel
   )
 }
 
-export function getAtomType(label: string): 'agent' | 'skill' | 'unknown' {
+export function getAtomType(label: string | null | undefined): 'agent' | 'skill' | 'unknown' {
+  if (!label || typeof label !== 'string') return 'unknown'
   if (/^Agent:/i.test(label)) return 'agent'
   if (/^Skill:/i.test(label)) return 'skill'
   return 'unknown'
 }
 
-export function getAtomName(label: string): string {
+export function getAtomName(label: string | null | undefined): string {
+  // Handle null/undefined labels
+  if (!label || typeof label !== 'string') {
+    return 'Unnamed'
+  }
+  
   // JSON label (new format): {"name":"...","description":"..."}
   try {
     const parsed = JSON.parse(label)
