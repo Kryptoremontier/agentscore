@@ -502,6 +502,72 @@ caution or report flag, professional moderation icon, balanced symmetry.
 After all 4 are on-chain, paste their term_ids into the tracker below
 AND into `src/lib/predicate-mainnet-ids.ts` (see migration checklist).
 
+---
+
+## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## TAG ATOM — In Use By AgentScore
+## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> One atom, added as a **tag** to all 8 registered atoms above
+> (5 predicates + 3 object atoms). Keeps the predicate descriptions
+> generic for ecosystem reuse while still visibly marking what
+> AgentScore actively depends on.
+
+### Name
+```
+In Use By AgentScore
+```
+
+(Title Case — matches portal tag convention: `Recommended Predicates`, not lowercase predicate style)
+
+### Description
+```
+Tag indicating this atom is actively used by the AgentScore application —
+a decentralized trust scoring layer for AI agents built on Intuition Protocol.
+See the AgentScore app for usage context.
+```
+
+### Icon prompt
+```
+Minimal flat vector icon, 1024x1024 SQUARE aspect ratio, solid black background,
+single recognizable symbol centered, soft outer glow, web3 cyberpunk style,
+no text, professional, clean lines, dark-mode optimized.
+Subject: the AgentScore logo mark — a stylized "A" or shield with a score/meter
+inside, amber-gold color (#C8963C), representing verified agent reputation,
+trust scoring aesthetic.
+```
+
+### Registration (portal)
+
+| Field | Value |
+|-------|-------|
+| **Type** | `Thing` |
+| **Name** | `In Use By AgentScore` |
+| **Description** | (see above) |
+| **Image** | Generate with prompt above, upload to IPFS → paste CID |
+| **URL** | leave blank |
+
+### After registration — apply to all 8 atoms
+
+Open each atom on portal → **Add Tag** → select `In Use By AgentScore`:
+
+| Atom | Portal URL |
+|------|-----------|
+| `has agent skill` | (find on portal) |
+| `trusts` | `portal.intuition.systems/atom/0x3a73f3b1...` |
+| `opposes` | `portal.intuition.systems/atom/0x3ce0f03b...` |
+| `evaluated by` | `portal.intuition.systems/atom/0xb769bc51...` |
+| `reported for` | `portal.intuition.systems/atom/0x51f1feba...` |
+| `Scam` | `portal.intuition.systems/atom/0x27f33aaa...` |
+| `Spam` | `portal.intuition.systems/atom/0x6ae6a378...` |
+| `Injection` | `portal.intuition.systems/atom/0x8e7674f0...` |
+
+### term_id tracker
+
+| Atom | term_id |
+|------|---------|
+| `In Use By AgentScore` | ⏳ pending registration |
+
 #### Migration checklist — code changes after registration
 
 > Testnet currently uses 3 separate predicates
