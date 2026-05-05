@@ -6,17 +6,16 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/cn'
 import { EXPERT_WEIGHT } from '@/types/user'
 import type { Attestation, AttestationPredicate } from '@/types/attestation'
+import { isReportedFor, reportObject } from '@/lib/predicates'
 
 interface AttestationCardProps {
   attestation: Attestation
   index?: number
 }
 
-const predicateConfig: Record<AttestationPredicate, {
-  icon: any
-  color: string
-  label: string
-}> = {
+type PredicateDisplayConfig = { icon: any; color: string; label: string }
+
+const BASE_PREDICATE_CONFIG: Partial<Record<AttestationPredicate, PredicateDisplayConfig>> = {
   trusts: {
     icon: ThumbsUp,
     color: 'text-trust-good',
@@ -27,6 +26,7 @@ const predicateConfig: Record<AttestationPredicate, {
     color: 'text-trust-critical',
     label: 'Distrusts',
   },
+  // testnet report predicates
   reported_for_scam: {
     icon: AlertTriangle,
     color: 'text-trust-critical',
@@ -42,6 +42,12 @@ const predicateConfig: Record<AttestationPredicate, {
     color: 'text-trust-critical',
     label: 'Reported for Injection',
   },
+  // mainnet unified report predicate
+  reported_for: {
+    icon: AlertTriangle,
+    color: 'text-trust-critical',
+    label: 'Reported for',
+  },
   verified_by: {
     icon: CheckCircle,
     color: 'text-trust-excellent',
@@ -54,10 +60,25 @@ const predicateConfig: Record<AttestationPredicate, {
   },
 }
 
+function getPredicateConfig(attestation: Attestation): PredicateDisplayConfig {
+  const base = BASE_PREDICATE_CONFIG[attestation.predicate]
+  if (base) {
+    // For mainnet "reported_for", suffix the label with the object atom label
+    if (attestation.predicate === 'reported_for') {
+      const category = reportObject(attestation.predicate, attestation.object.id)
+      return { ...base, label: `Reported for ${category}` }
+    }
+    return base
+  }
+  // Fallback for unknown predicates
+  return { icon: AlertTriangle, color: 'text-text-muted', label: attestation.predicate }
+}
+
 export function AttestationCard({ attestation, index = 0 }: AttestationCardProps) {
-  const config = predicateConfig[attestation.predicate]
+  const config = getPredicateConfig(attestation)
   const Icon = config.icon
   const isPositive = ['trusts', 'verified_by', 'vouches_for'].includes(attestation.predicate)
+  const isReport = isReportedFor(attestation.predicate)
 
   return (
     <motion.div
@@ -70,7 +91,7 @@ export function AttestationCard({ attestation, index = 0 }: AttestationCardProps
         {/* Icon */}
         <div className={cn(
           'p-2 rounded-lg',
-          isPositive ? 'bg-trust-good/10' : 'bg-trust-critical/10'
+          isPositive ? 'bg-trust-good/10' : isReport ? 'bg-trust-low/10' : 'bg-trust-critical/10'
         )}>
           <Icon className={cn('w-5 h-5', config.color)} />
         </div>
@@ -111,7 +132,7 @@ export function AttestationCard({ attestation, index = 0 }: AttestationCardProps
 
             {/* Stake Amount */}
             <Badge
-              variant={isPositive ? 'success' : 'destructive'}
+              variant={isPositive ? 'success' : isReport ? 'secondary' : 'destructive'}
               className="flex-shrink-0"
             >
               {isPositive ? '+' : '-'}{formatStake(attestation.stakeAmount)} $TRUST

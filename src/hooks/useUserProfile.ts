@@ -202,7 +202,10 @@ async function fetchProfileMeta(address: `0x${string}`): Promise<{
       myReports: triples_aggregate(
         where: {
           creator_id: { _eq: $address }
-          predicate: { label: { _ilike: "reported_for_%" } }
+          _or: [
+            { predicate: { label: { _ilike: "reported_for_%" } } }
+            { predicate: { id: { _eq: "0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d" } } }
+          ]
         }
       ) { aggregate { count } }
     }

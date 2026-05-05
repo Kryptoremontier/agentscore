@@ -1100,20 +1100,26 @@ function AgentsPageContent() {
             triples(
               where: {
                 subject_id: { _eq: $termId },
-                predicate: { label: { _ilike: "reported_for_%" } }
+                _or: [
+                  { predicate: { label: { _ilike: "reported_for_%" } } }
+                  { predicate: { id: { _eq: "0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d" } } }
+                ]
               }
               order_by: { created_at: desc }
               limit: 20
             ) {
               id
-              predicate { label }
-              object { label }
+              predicate { id label }
+              object { id label }
               creator { label id }
               created_at
             }
             triples_aggregate(where: {
               subject_id: { _eq: $termId },
-              predicate: { label: { _ilike: "reported_for_%" } }
+              _or: [
+                { predicate: { label: { _ilike: "reported_for_%" } } }
+                { predicate: { id: { _eq: "0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d" } } }
+              ]
             }) {
               aggregate { count }
             }
@@ -3269,8 +3275,11 @@ function AgentsPageContent() {
                         </div>
                         <div className="space-y-2">
                           {agentReports.map((report, i) => {
-                            const predLabel = (report.predicate?.label || '').replace('reported_for_', '').replace(/_/g, ' ')
-                            const reason = report.object?.label || ''
+                            const isMainnetReport = report.predicate?.id === '0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d'
+                            const predLabel = isMainnetReport
+                              ? (report.object?.label || 'unknown')
+                              : (report.predicate?.label || '').replace('reported_for_', '').replace(/_/g, ' ')
+                            const reason = isMainnetReport ? '' : (report.object?.label || '')
                             const reporter = report.creator?.label || report.creator?.id?.slice(0, 10) || '?'
                             const isENS = reporter.includes('.eth')
                             const displayReporter = isENS

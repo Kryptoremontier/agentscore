@@ -8,13 +8,14 @@ import { Badge } from '@/components/ui/badge'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
 import type { Attestation, AttestationPredicate } from '@/types/attestation'
+import { isReportedFor } from '@/lib/predicates'
 import type { ExpertLevel } from '@/types/user'
 
 interface AttestationListProps {
   agentId: string
 }
 
-// Mock data generator
+// Mock data generator — TEST ENVIRONMENT ONLY
 const generateMockAttestations = (agentId: string, count: number): Attestation[] => {
   const predicates: AttestationPredicate[] = [
     'trusts', 'distrusts', 'reported_for_scam', 'reported_for_spam',
@@ -75,9 +76,7 @@ export function AttestationList({ agentId }: AttestationListProps) {
           ['distrusts'].includes(a.predicate)
         )
       case 'reports':
-        return attestations.filter(a =>
-          a.predicate.startsWith('reported_')
-        )
+        return attestations.filter(a => isReportedFor(a.predicate))
       default:
         return attestations
     }
@@ -91,9 +90,7 @@ export function AttestationList({ agentId }: AttestationListProps) {
     const negative = attestations.filter(a =>
       ['distrusts'].includes(a.predicate)
     )
-    const reports = attestations.filter(a =>
-      a.predicate.startsWith('reported_')
-    )
+    const reports = attestations.filter(a => isReportedFor(a.predicate))
 
     return {
       total: attestations.length,

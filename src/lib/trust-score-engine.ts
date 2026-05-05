@@ -45,12 +45,16 @@ const SUPPORT_PREDICATES = new Set([
 
 const OPPOSE_PREDICATES = new Set([
   'distrusts',
+  // testnet report predicates
   'reported_for_scam',
   'reported_for_spam',
   'reported_for_injection',
   'untrustworthy',
   'is_untrustworthy',
 ])
+
+// mainnet "reported for" predicate term_id — treated as oppose signal
+const MAINNET_REPORTED_FOR_TERM_ID = '0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d'
 
 const IS_TESTNET = process.env.NEXT_PUBLIC_CHAIN_ENV !== 'mainnet'
 
@@ -67,7 +71,8 @@ export function isSupportPredicate(label: string): boolean {
   return SUPPORT_PREDICATES.has(label.toLowerCase())
 }
 
-export function isOpposePredicate(label: string): boolean {
+export function isOpposePredicate(label: string, predicateId?: string): boolean {
+  if (predicateId && predicateId === MAINNET_REPORTED_FOR_TERM_ID) return true
   return OPPOSE_PREDICATES.has(label.toLowerCase())
 }
 
@@ -172,7 +177,8 @@ export function calculateAgentTrustScore(
 export function countReportedTriples(subjectTriples?: GraphQLTriple[]): number {
   if (!subjectTriples) return 0
   return subjectTriples.filter(triple =>
-    triple.predicate.label.toLowerCase().includes('reported')
+    triple.predicate.label.toLowerCase().includes('reported') ||
+    triple.predicate.id === MAINNET_REPORTED_FOR_TERM_ID
   ).length
 }
 

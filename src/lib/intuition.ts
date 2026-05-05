@@ -1877,7 +1877,8 @@ export async function findClaimTriple(
 
 export type ReportCategory = 'scam' | 'spam' | 'prompt_injection' | 'impersonation'
 
-const REPORT_PREDICATE_LABELS: Record<ReportCategory, string> = {
+// Testnet: one predicate per category (legacy camelCase atoms)
+const REPORT_PREDICATE_LABELS_TESTNET: Record<ReportCategory, string> = {
   scam: 'reported_for_scam',
   spam: 'reported_for_spam',
   prompt_injection: 'reported_for_injection',
@@ -1935,8 +1936,10 @@ export async function findOrCreateAtom(
 }
 
 /**
- * Submit a report: [Agent] [reported_for_X] [reason text]
- * Creates predicate & object atoms if they don't exist, then the triple.
+ * Submit a report triple.
+ *
+ * Mainnet: [Agent] → "reported for" (fixed term_id) → Scam|Spam|Injection (fixed term_id)
+ * Testnet: [Agent] → "reported_for_X" (find-or-create) → reason text (find-or-create)
  */
 export async function submitReport(
   agentTermId: `0x${string}`,
@@ -1944,12 +1947,19 @@ export async function submitReport(
   reason: string,
   cfg: WriteConfig
 ): Promise<void> {
-  const predicateLabel = REPORT_PREDICATE_LABELS[category]
-  const objectLabel = reason.trim() || `${category} report`
-
-  const predicateTermId = await findOrCreateAtom(cfg, predicateLabel)
-  const objectTermId = await findOrCreateAtom(cfg, objectLabel)
-
+  const IS_MAINNET = (process.env['NEXT_PUBLIC_NETWORK'] ?? 'testnet') === 'mainnet'
   const REPORT_DEPOSIT = parseEther('0.01')
-  await createTriple(cfg, agentTermId, predicateTermId, objectTermId, REPORT_DEPOSIT)
+
+  if (IS_MAINNET) {
+    const { MAINNET_TERM_IDS, REPORT_CATEGORY_TO_MAINNET_OBJECT } = await import('./predicate-mainnet-ids')
+    const predicateTermId = MAINNET_TERM_IDS.reportedFor as `0x${string}`
+    const objectTermId = (REPORT_CATEGORY_TO_MAINNET_OBJECT[category] ?? MAINNET_TERM_IDS.spam) as `0x${string}`
+    await createTriple(cfg, agentTermId, predicateTermId, objectTermId, REPORT_DEPOSIT)
+  } else {
+    const predicateLabel = REPORT_PREDICATE_LABELS_TESTNET[category]
+    const objectLabel = reason.trim() || `${category} report`
+    const predicateTermId = await findOrCreateAtom(cfg, predicateLabel)
+    const objectTermId = await findOrCreateAtom(cfg, objectLabel)
+    await createTriple(cfg, agentTermId, predicateTermId, objectTermId, REPORT_DEPOSIT)
+  }
 }

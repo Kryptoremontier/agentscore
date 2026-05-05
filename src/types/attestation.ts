@@ -35,11 +35,17 @@ export interface Attestation {
 export type AttestationPredicate =
   | 'trusts'
   | 'distrusts'
+  // testnet: one predicate per category
   | 'reported_for_scam'
   | 'reported_for_spam'
   | 'reported_for_injection'
+  // mainnet: single predicate, category carried by object atom
+  | 'reported_for'
   | 'verified_by'
   | 'vouches_for'
+
+/** Mainnet: object atom label for a "reported for" triple */
+export type ReportObject = 'Scam' | 'Spam' | 'Injection'
 
 export type ReportType =
   | 'scam'
