@@ -565,7 +565,7 @@ After registration:
 |---|------|--------|-------------------|
 | 1 | `has agent skill` | ✅ DONE | check portal |
 | 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
-| 3 | `opposes` | 🆕 CREATE | pending |
+| 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
 | 4 | `evaluated by` | 🆕 CREATE | pending |
 | 5 | `reported for` | 🆕 CREATE | pending |
 
@@ -593,11 +593,11 @@ Everything else is post-launch on-demand.
 |---|------|--------|-----------------|
 | 1 | `has agent skill` | ✅ DONE | check portal for term_id |
 | 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
-| 3 | `opposes` | 🆕 CREATE (lowercase) | Exists as `Opposes` (capital O) — wrong convention. Create canonical lowercase. |
+| 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
 | 4 | `evaluated by` | 🆕 CREATE | AgentScore-specific evaluator system driver |
 | 5 | `reported for` | 🆕 CREATE | One predicate, objects: Scam / Spam / Injection atoms |
 
-**Total new registrations needed: 3** (opposes, evaluated by, reported for)
+**Total new registrations needed: 2** (evaluated by, reported for)
 
 > **Note:** "Wired up" means recorded in `src/lib/predicate-mainnet-ids.ts` —
 > NOT necessarily registered fresh. `trusts` just needs its term_id copied from
@@ -616,14 +616,15 @@ Results from Phase 0 portal search on mainnet.
 - **Description:** "Reflects confidence or reliance on another entity's integrity or actions."
 - **Verdict:** Generic, well-described, perfect fit. No new registration needed.
 
-### `opposes` — ⚠️ CREATE NEW (lowercase canonical)
+### `opposes` — ✅ DONE
 
-- **Found:** `Opposes` (capital O) — `0x5af444aa5692474d28e32b79160a93370030d4d57f77cdb6c613b05354e70612`
-- **Problems:**
-  1. Capital O breaks lowercase convention used by all Saulo predicates
-  2. Description "Oppose means to disagree" lacks counter-vault context and publisher filter warning
-- **Verdict:** Create canonical lowercase `opposes` + open PR to Intuition Ontology repo
-  (same pattern as PR #7 for `resolved to`). Do NOT reuse the capital-O version.
+- **Registered:** `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7`
+- **Old version:** `Opposes` (capital O) — `0x5af444aa5692474d28e32b79160a93370030d4d57f77cdb6c613b05354e70612`
+- **Why fresh registration:**
+  1. Capital O broke lowercase convention used by all Saulo predicates
+  2. Old description "Oppose means to disagree" lacked counter-vault context and publisher filter warning
+- **Next:** Open PR to Intuition Ontology repo to make this the recommended lowercase canonical
+  (same pattern as PR #7 for `resolved to`).
 
 **Registration description (generic — no app-specific references):**
 ```

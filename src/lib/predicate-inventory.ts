@@ -92,7 +92,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     group: 'core',
     required: true,
     scope: 'launch',
-    mainnetNote: '⚠️ CREATE lowercase canonical — portal has Opposes (capital O) which breaks convention. PR to Intuition Ontology after registration.',
+    mainnetTermId: '0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7',
+    mainnetNote: '✅ DONE — registered as canonical lowercase. Capital-O Opposes still exists; ours is the recommended one.',
     description:
       'Negative attestation against an entity. Signals disagreement or opposition\n' +
       'toward a subject. Counter-signal to `trusts` — stake on this triple reduces\n' +
