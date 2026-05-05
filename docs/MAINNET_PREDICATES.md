@@ -566,7 +566,7 @@ Open each atom on portal → **Add Tag** → select `In Use By AgentScore`:
 
 | Atom | term_id |
 |------|---------|
-| `In Use By AgentScore` | ⏳ pending registration |
+| `In Use By AgentScore` | `0xed484ed04e06699c7815f18654c0f48f3e3ba32d25bd5d7289c92532b1910b89` |
 
 #### Migration checklist — code changes after registration
 
