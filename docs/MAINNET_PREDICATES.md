@@ -566,7 +566,7 @@ After registration:
 | 1 | `has agent skill` | ✅ DONE | check portal |
 | 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
 | 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
-| 4 | `evaluated by` | 🆕 CREATE | pending |
+| 4 | `evaluated by` | ✅ DONE | `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226` |
 | 5 | `reported for` | 🆕 CREATE | pending |
 
 ### How to find term_id on the portal
@@ -594,10 +594,10 @@ Everything else is post-launch on-demand.
 | 1 | `has agent skill` | ✅ DONE | check portal for term_id |
 | 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
 | 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
-| 4 | `evaluated by` | 🆕 CREATE | AgentScore-specific evaluator system driver |
+| 4 | `evaluated by` | ✅ DONE | `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226` |
 | 5 | `reported for` | 🆕 CREATE | One predicate, objects: Scam / Spam / Injection atoms |
 
-**Total new registrations needed: 2** (evaluated by, reported for)
+**Total new registrations needed: 1** (reported for)
 
 > **Note:** "Wired up" means recorded in `src/lib/predicate-mainnet-ids.ts` —
 > NOT necessarily registered fresh. `trusts` just needs its term_id copied from
@@ -634,10 +634,11 @@ the subject's aggregate trust score in stake-weighted scoring systems.
 Anyone can write this triple; consumers should filter by trusted publisher.
 ```
 
-### `evaluated by` — 🆕 CREATE
+### `evaluated by` — ✅ DONE
 
-- **Found:** `was evaluated by` (id: `0xadcd017236b0574ea39c507cc6802820fea5a5251cc03d66d53260c3c7d7bd81`) — Saulo confirmed "was" is unnecessary and noisy, zero stakes.
-- **Verdict:** Create clean `evaluated by` — Saulo explicitly recommended it.
+- **Registered:** `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226`
+- **Old version:** `was evaluated by` (id: `0xadcd017236b0574ea39c507cc6802820fea5a5251cc03d66d53260c3c7d7bd81`) — Saulo confirmed "was" is unnecessary and noisy, zero stakes.
+- **Status:** Saulo explicitly recommended creating this clean version. Will be the canonical going forward.
 
 **Registration description (generic — no app-specific references):**
 ```

@@ -107,7 +107,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     group: 'core',
     required: true,
     scope: 'launch',
-    mainnetNote: '🆕 CREATE — AgentScore-specific, not found on portal',
+    mainnetTermId: '0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226',
+    mainnetNote: '✅ DONE — registered fresh. `was evaluated by` exists but Saulo confirmed "was" is noisy and unused.',
     description:
       'Records that an entity was reviewed or assessed by an evaluator.\n' +
       'Usage: [Subject] — evaluated by — [Evaluator]. Links a subject to the\n' +
