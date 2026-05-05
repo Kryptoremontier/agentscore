@@ -63,12 +63,13 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     group: 'core',
     required: true,
     scope: 'launch',
-    mainnetNote: 'Already registered on mainnet — find term_id on portal',
+    mainnetTermId: '0x638fd866e4564e213a11ebeb98bbaea58e81f677860d90fa4ad01e50bb007108',
+    mainnetNote: 'Registered on mainnet ✅',
     description:
       'Declares that an Agent possesses a specific Skill or capability.\n' +
-      'Usage: [Agent] — has agent skill — [Skill]. Powers AgentScore Domain\n' +
-      'Leaderboards by aggregating skill-tagged agents per knowledge domain.\n' +
-      'Stake-weighted: more support increases the agent\'s score in that skill.',
+      'Usage: [Agent] — has agent skill — [Skill].\n' +
+      'Stake-weighted attestation: supporters increase the agent\'s credibility\n' +
+      'in that skill domain; opponents decrease it.',
   },
   {
     key: 'personTrustsAgent',

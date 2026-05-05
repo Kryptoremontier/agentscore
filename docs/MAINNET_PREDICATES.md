@@ -648,7 +648,7 @@ After registration:
 
 | # | Name | Status | term_id (mainnet) |
 |---|------|--------|-------------------|
-| 1 | `has agent skill` | ✅ DONE | check portal |
+| 1 | `has agent skill` | ✅ DONE | `0x638fd866e4564e213a11ebeb98bbaea58e81f677860d90fa4ad01e50bb007108` |
 | 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
 | 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
 | 4 | `evaluated by` | ✅ DONE | `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226` |
@@ -676,7 +676,7 @@ Everything else is post-launch on-demand.
 
 | # | Name | Status | term_id / Notes |
 |---|------|--------|-----------------|
-| 1 | `has agent skill` | ✅ DONE | check portal for term_id |
+| 1 | `has agent skill` | ✅ DONE | `0x638fd866e4564e213a11ebeb98bbaea58e81f677860d90fa4ad01e50bb007108` |
 | 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
 | 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
 | 4 | `evaluated by` | ✅ DONE | `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226` |
