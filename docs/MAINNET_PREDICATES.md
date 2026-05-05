@@ -456,59 +456,41 @@ vouching, sincere gesture.
 ## REPORTS — Moderation & Safety
 ## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-### 16. reported for scam ⭐ REQUIRED
+### 16. reported for ⭐ REQUIRED
 
-**Description:**
-```
-Flags an Agent for confirmed or suspected scam behaviour.
-Usage: [Reporter] — reported for scam — [Agent]. Aggregated reports
-feed into the negative attestation pillar of the Trust Score.
-Consumers should weight by reporter reputation to avoid abuse.
-```
+> **Mainnet consolidation:** replaces the 3 testnet predicates
+> (`reported_for_scam`, `reported_for_spam`, `reported_for_injection`).
+> One generic predicate + dedicated Object atoms per category — Saulo's
+> recommendation. New categories can be added later (e.g. `Impersonation`,
+> `Plagiarism`) without registering new predicates.
 
-**Icon prompt:**
+**Description (generic — registered as-is on portal):**
 ```
-[universal prefix] a warning triangle with a dollar sign and slash
-through it, alert red color (#EF4444), representing fraudulent
-financial behaviour, danger aesthetic.
-```
-
----
-
-### 17. reported for spam ⭐ REQUIRED
-
-**Description:**
-```
-Flags an Agent for spam or low-quality output.
-Usage: [Reporter] — reported for spam — [Agent]. Lighter penalty
-than `reported for scam`; aggregated as quality signal.
+Flags an entity for a specific category of concern or misconduct.
+Usage: [Reporter] — reported for — [Object], where Object is an atom
+describing the issue type (e.g. Scam, Spam, Injection). Anyone can write
+this triple; consumers should weight reports by reporter reputation
+to prevent abuse.
 ```
 
 **Icon prompt:**
 ```
-[universal prefix] a no-mail symbol — envelope with a slash through it,
-warm orange color (#F97316), representing unwanted or noisy content,
-moderation context.
+[universal prefix] a warning triangle with an exclamation mark inside,
+flat amber-to-red gradient (#F59E0B → #EF4444), representing a generic
+caution or report flag, professional moderation icon, balanced symmetry.
 ```
 
----
+**Required Object atoms (register separately, type: Thing):**
 
-### 18. reported for injection ⭐ REQUIRED
+| Object | Description (generic) | Icon prompt |
+|--------|----------------------|-------------|
+| `Scam` | Fraudulent behaviour or attempt to deceive others for financial or personal gain. | `[universal prefix] a dollar sign with a slash through it inside a warning triangle, alert red (#EF4444), representing fraudulent intent.` |
+| `Spam` | Repetitive, low-quality, or unsolicited content that adds no value. | `[universal prefix] an envelope with a slash through it, warm orange (#F97316), representing unwanted noise or junk content.` |
+| `Injection` | Prompt injection, jailbreak attempt, or other adversarial input designed to manipulate AI behaviour. | `[universal prefix] a syringe needle entering a chat bubble with a faint warning glow, alert red (#EF4444), representing prompt injection and AI safety threats.` |
 
-**Description:**
-```
-Flags an Agent for prompt injection vulnerabilities or unsafe
-behaviour. Usage: [Reporter] — reported for injection — [Agent].
-Critical safety signal for AI agents; consumers should treat any
-unweighted report as a strong negative.
-```
-
-**Icon prompt:**
-```
-[universal prefix] a syringe needle entering a chat bubble with a
-warning glow, alert red color (#EF4444), representing prompt injection
-and AI safety threats, technical/clinical feel.
-```
+> **Note:** Register the predicate first, then the 3 Object atoms.
+> Each Object becomes the rightmost term in triples like
+> `Agent — reported for — Scam`.
 
 ---
 
