@@ -485,7 +485,7 @@ caution or report flag, professional moderation icon, balanced symmetry.
 | Object | Description (generic) | Icon prompt |
 |--------|----------------------|-------------|
 | `Scam` ✅ `0x27f33aaa8e3ff821e0eff6fedfec0b20a29164e21848c5f33e736eede13c39ba` | Fraudulent behaviour or attempt to deceive others for financial or personal gain. | `[universal prefix] a dollar sign with a slash through it inside a warning triangle, alert red (#EF4444), representing fraudulent intent.` |
-| `Spam` | Repetitive, low-quality, or unsolicited content that adds no value. | `[universal prefix] an envelope with a slash through it, warm orange (#F97316), representing unwanted noise or junk content.` |
+| `Spam` ✅ `0x6ae6a37850484a61d76ad868c83d1bbe4d6975fa29cd724d7485141a03cde78f` | Repetitive, low-quality, or unsolicited content that adds no value. | `[universal prefix] an envelope with a slash through it, warm orange (#F97316), representing unwanted noise or junk content.` |
 | `Injection` | Prompt injection, jailbreak attempt, or other adversarial input designed to manipulate AI behaviour. | `[universal prefix] a syringe needle entering a chat bubble with a faint warning glow, alert red (#EF4444), representing prompt injection and AI safety threats.` |
 
 > **Note:** Register the predicate first, then the 3 Object atoms.
