@@ -197,10 +197,10 @@ warm and reassuring.
 
 **Description:**
 ```
-Negative attestation against an entity.
-Usage: [Person/Agent] — opposes — [Agent]. Counter-vault to `trusts`;
-stake here pushes the Trust Score down. Used by AgentScore for the
-support-vs-oppose ratio that drives the scoring envelope.
+Negative attestation against an entity. Signals disagreement or opposition
+toward a subject. Counter-signal to `trusts` — stake on this triple reduces
+the subject's aggregate trust score in stake-weighted scoring systems.
+Anyone can write this triple; consumers should filter by trusted publisher.
 ```
 
 **Icon prompt:**
@@ -216,10 +216,10 @@ slight outline.
 
 **Description:**
 ```
-Links an Agent to a community evaluator who reviewed it.
-Usage: [Agent] — evaluated by — [Evaluator]. Powers the Evaluator
-leaderboard (accuracy-weighted reputation 0.5x–1.5x). Higher-tier
-evaluators carry more weight per stake unit.
+Records that an entity was reviewed or assessed by an evaluator.
+Usage: [Subject] — evaluated by — [Evaluator]. Links a subject to the
+party responsible for its quality or reliability assessment. Consumers
+may weight evaluations by evaluator reputation.
 ```
 
 **Icon prompt:**
@@ -624,6 +624,41 @@ Results from Phase 0 portal search on mainnet.
   2. Description "Oppose means to disagree" lacks counter-vault context and publisher filter warning
 - **Verdict:** Create canonical lowercase `opposes` + open PR to Intuition Ontology repo
   (same pattern as PR #7 for `resolved to`). Do NOT reuse the capital-O version.
+
+**Registration description (generic — no app-specific references):**
+```
+Negative attestation against an entity. Signals disagreement or opposition
+toward a subject. Counter-signal to `trusts` — stake on this triple reduces
+the subject's aggregate trust score in stake-weighted scoring systems.
+Anyone can write this triple; consumers should filter by trusted publisher.
+```
+
+### `evaluated by` — 🆕 CREATE
+
+- **Found:** `was evaluated by` (id: `0xadcd017236b0574ea39c507cc6802820fea5a5251cc03d66d53260c3c7d7bd81`) — Saulo confirmed "was" is unnecessary and noisy, zero stakes.
+- **Verdict:** Create clean `evaluated by` — Saulo explicitly recommended it.
+
+**Registration description (generic — no app-specific references):**
+```
+Records that an entity was reviewed or assessed by an evaluator.
+Usage: [Subject] — evaluated by — [Evaluator]. Links a subject to the
+party responsible for its quality or reliability assessment. Consumers
+may weight evaluations by evaluator reputation.
+```
+
+### `reported for` — 🆕 CREATE
+
+- **Found:** No alternative on portal.
+- **Verdict:** Create fresh. Saulo: *"if anyone wants to create similar ones they would use yours since you were first."*
+
+**Registration description (generic — no app-specific references):**
+```
+Flags an entity for a specific category of concern or misconduct.
+Usage: [Reporter] — reported for — [Object], where Object is an atom
+describing the issue type (e.g. Scam, Spam, Injection). Anyone can write
+this triple; consumers should weight reports by reporter reputation
+to prevent abuse.
+```
 
 ---
 

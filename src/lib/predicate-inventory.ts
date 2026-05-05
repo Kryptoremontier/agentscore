@@ -94,10 +94,10 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     scope: 'launch',
     mainnetNote: '⚠️ CREATE lowercase canonical — portal has Opposes (capital O) which breaks convention. PR to Intuition Ontology after registration.',
     description:
-      'Negative attestation against an entity.\n' +
-      'Usage: [Person/Agent] — opposes — [Agent]. Counter-vault to `trusts`;\n' +
-      'stake here pushes the Trust Score down. Used by AgentScore for the\n' +
-      'support-vs-oppose ratio that drives the scoring envelope.',
+      'Negative attestation against an entity. Signals disagreement or opposition\n' +
+      'toward a subject. Counter-signal to `trusts` — stake on this triple reduces\n' +
+      'the subject\'s aggregate trust score in stake-weighted scoring systems.\n' +
+      'Anyone can write this triple; consumers should filter by trusted publisher.',
   },
   {
     key: 'agentEvaluatedBy',
@@ -108,10 +108,10 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     scope: 'launch',
     mainnetNote: '🆕 CREATE — AgentScore-specific, not found on portal',
     description:
-      'Links an Agent to a community evaluator who reviewed it.\n' +
-      'Usage: [Agent] — evaluated by — [Evaluator]. Powers the Evaluator\n' +
-      'leaderboard (accuracy-weighted reputation 0.5x–1.5x). Higher-tier\n' +
-      'evaluators carry more weight per stake unit.',
+      'Records that an entity was reviewed or assessed by an evaluator.\n' +
+      'Usage: [Subject] — evaluated by — [Evaluator]. Links a subject to the\n' +
+      'party responsible for its quality or reliability assessment. Consumers\n' +
+      'may weight evaluations by evaluator reputation.',
   },
   {
     key: 'agentDelegatedTo',
@@ -272,12 +272,11 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     scope: 'launch',
     mainnetNote: '🆕 CREATE — replaces 3 separate report predicates. Objects: Scam, Spam, Injection atoms.',
     description:
-      'Flags an entity for a specific type of misconduct or safety issue.\n' +
-      'Usage: [Reporter] — reported for — [Object], where Object is a\n' +
-      'canonical atom such as Scam, Spam, or Injection. Aggregated reports\n' +
-      'feed the negative attestation pillar of the Trust Score. Weight\n' +
-      'reports by reporter reputation to avoid abuse — anyone can write\n' +
-      'this triple.',
+      'Flags an entity for a specific category of concern or misconduct.\n' +
+      'Usage: [Reporter] — reported for — [Object], where Object is an atom\n' +
+      'describing the issue type (e.g. Scam, Spam, Injection). Anyone can write\n' +
+      'this triple; consumers should weight reports by reporter reputation\n' +
+      'to prevent abuse.',
   },
 ]
 
