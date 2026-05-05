@@ -586,7 +586,7 @@ After registration:
 | 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
 | 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
 | 4 | `evaluated by` | ✅ DONE | `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226` |
-| 5 | `reported for` | 🆕 CREATE | pending |
+| 5 | `reported for` | ✅ DONE | `0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d` |
 
 ### How to find term_id on the portal
 
@@ -614,9 +614,9 @@ Everything else is post-launch on-demand.
 | 2 | `trusts` | ✅ REUSE | `0x3a73f3b1613d166eea141a25a2adc70db9304ab3c4e90daecad05f86487c3ee9` |
 | 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
 | 4 | `evaluated by` | ✅ DONE | `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226` |
-| 5 | `reported for` | 🆕 CREATE | One predicate, objects: Scam / Spam / Injection atoms |
+| 5 | `reported for` | ✅ DONE | `0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d` |
 
-**Total new registrations needed: 1** (reported for)
+**All 5 launch predicates registered. ✅ Next: register 3 Object atoms (Scam, Spam, Injection) for use as triple targets.**
 
 > **Note:** "Wired up" means recorded in `src/lib/predicate-mainnet-ids.ts` —
 > NOT necessarily registered fresh. `trusts` just needs its term_id copied from
@@ -667,10 +667,11 @@ party responsible for its quality or reliability assessment. Consumers
 may weight evaluations by evaluator reputation.
 ```
 
-### `reported for` — 🆕 CREATE
+### `reported for` — ✅ DONE
 
-- **Found:** No alternative on portal.
-- **Verdict:** Create fresh. Saulo: *"if anyone wants to create similar ones they would use yours since you were first."*
+- **Registered:** `0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d`
+- **Status:** First-mover for moderation reporting predicate. Saulo: *"if anyone wants to create similar ones they would use yours since you were first."*
+- **Next:** Register 3 Object atoms (`Scam`, `Spam`, `Injection`) for use as triple targets.
 
 **Registration description (generic — no app-specific references):**
 ```

@@ -272,7 +272,8 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
     group: 'report',
     required: true,
     scope: 'launch',
-    mainnetNote: '🆕 CREATE — replaces 3 separate report predicates. Objects: Scam, Spam, Injection atoms.',
+    mainnetTermId: '0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d',
+    mainnetNote: '✅ DONE — replaces 3 separate testnet predicates. Object atoms (Scam/Spam/Injection) need separate registration.',
     description:
       'Flags an entity for a specific category of concern or misconduct.\n' +
       'Usage: [Reporter] — reported for — [Object], where Object is an atom\n' +
