@@ -20,7 +20,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-3.0.0-C8963C?style=flat-square" alt="Version" />
-  <img src="https://img.shields.io/badge/license-Proprietary-red?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/license-BUSL--1.1-C8963C?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/built%20on-Intuition%20Protocol-8A63D2?style=flat-square" alt="Built on Intuition" />
   <img src="https://img.shields.io/badge/network-Intuition%20Testnet-blue?style=flat-square" alt="Network" />
   <img src="https://img.shields.io/badge/status-testnet%20alpha-orange?style=flat-square" alt="Status" />
@@ -459,7 +459,10 @@ npm start            # Run production server
 
 ## Contributing
 
-We welcome contributions!
+Contributions are welcome under the project's [BUSL 1.1 License](LICENSE).
+
+By submitting a pull request, you agree that your contribution will be
+licensed under the same terms as the rest of the project.
 
 ```bash
 git checkout -b feature/your-feature
@@ -472,7 +475,18 @@ git push origin feature/your-feature
 
 ## License
 
-Proprietary — see [LICENSE](LICENSE) for details.
+AgentScore is licensed under the **[Business Source License 1.1](LICENSE)** (BUSL 1.1).
+
+- **You CAN:** read the source, fork, modify, contribute, run for non-production use,
+  use for personal projects, integrate via API/MCP, build educational tools.
+- **You CANNOT:** offer a hosted commercial service that competes with AgentScore
+  using this code (until 2030-05-05).
+- **On 2030-05-05** the license automatically converts to MIT — fully permissive.
+
+For commercial licensing inquiries before the Change Date, open an issue on the
+project repository.
+
+This is the same license model used by Uniswap V3, Sentry, MariaDB, and CockroachDB.
 
 ---
 
