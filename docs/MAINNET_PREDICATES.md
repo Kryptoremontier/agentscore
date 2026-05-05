@@ -160,9 +160,9 @@ explicit "1024x1024 SQUARE" instruction.
 **Description:**
 ```
 Declares that an Agent possesses a specific Skill or capability.
-Usage: [Agent] — has agent skill — [Skill]. Powers AgentScore Domain
-Leaderboards by aggregating skill-tagged agents per knowledge domain.
-Stake-weighted: more support increases the agent's score in that skill.
+Usage: [Agent] — has agent skill — [Skill].
+Stake-weighted attestation: supporters increase the agent's credibility
+in that skill domain; opponents decrease it.
 ```
 
 **Icon prompt:**
@@ -179,9 +179,9 @@ faceted geometric shape.
 **Description:**
 ```
 Positive trust attestation toward an entity.
-Usage: [Person/Agent] — trusts — [Agent]. Stakes on this triple count
-as positive signal in the Trust Score formula. Pairs with `opposes`
-as a counter-vault for balanced scoring.
+Usage: [Person/Agent] — trusts — [Agent]. Stake on this triple signals
+confidence in the subject. Pairs with `opposes` as a counter-vault for
+balanced, stake-weighted trust signals.
 ```
 
 **Icon prompt:**
