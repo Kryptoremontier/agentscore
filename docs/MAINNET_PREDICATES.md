@@ -492,6 +492,43 @@ caution or report flag, professional moderation icon, balanced symmetry.
 > Each Object becomes the rightmost term in triples like
 > `Agent — reported for — Scam`.
 
+#### Registration order (4 atoms total)
+
+1. **Predicate**: `reported for` (Type: `Thing`, generic description above)
+2. **Object 1**: `Scam` (Type: `Thing`)
+3. **Object 2**: `Spam` (Type: `Thing`)
+4. **Object 3**: `Injection` (Type: `Thing`)
+
+After all 4 are on-chain, paste their term_ids into the tracker below
+AND into `src/lib/predicate-mainnet-ids.ts` (see migration checklist).
+
+#### Migration checklist — code changes after registration
+
+> Testnet currently uses 3 separate predicates
+> (`reported_for_scam` / `_spam` / `_injection`). Mainnet uses 1 predicate
+> + 3 Objects. When `NEXT_PUBLIC_NETWORK=mainnet` flips, these files need
+> network-aware logic. Until then, leave testnet code as-is.
+
+| Step | File | Change |
+|------|------|--------|
+| 1 | `src/lib/predicate-mainnet-ids.ts` *(create if missing)* | Export `MAINNET_TERM_IDS` map: `reportedFor`, `scam`, `spam`, `injection` term_ids |
+| 2 | `src/lib/intuition.ts:1875-1949` | Make `submitReport()` network-aware — on mainnet build triple `[Agent] → reportedForTermId → categoryObjectTermId`; on testnet keep current 3-predicate path |
+| 3 | `src/lib/trust-score-engine.ts:48-50, 89` | Mainnet path: count triples where `predicate.term_id === reportedForTermId` AND `object.term_id IN (scam, spam, injection)`; testnet keep `_ilike` |
+| 4 | `src/hooks/useUserProfile.ts:205` | Same network branch — mainnet filter by predicate term_id, testnet keep `_ilike: "reported_for_%"` |
+| 5 | `src/app/agents/page.tsx:1103, 1116, 3272` | Same — branch read query + label rendering by `object.label` (mainnet) vs predicate suffix (testnet) |
+| 6 | `src/app/skills/page.tsx:998, 1011, 2833` | Same |
+| 7 | `src/lib/graphql.ts:185` | Replace `predicate_in: [...reported_for_*]` with mainnet-aware list including the consolidated term_id |
+| 8 | `src/components/attestations/AttestationCard.tsx:30-40` | Pick icon by `object.label` on mainnet (Scam/Spam/Injection) vs predicate suffix on testnet |
+| 9 | `src/components/attestations/AttestationList.tsx:20-21` | Update predicate filter list per network |
+| 10 | `src/lib/predicate-display.ts:46-48` | Add mainnet `'reported for'` mapping (already supported via canonical lowercase) |
+| 11 | `src/lib/constants.ts:5-7` | Replace 3 keys with 1 `reportedFor` weight + 3 object multipliers if differential weighting is desired |
+| 12 | `src/types/attestation.ts:38-40` | Replace 3 union variants with `'reported_for'` + add `ReportObject = 'Scam' \| 'Spam' \| 'Injection'` |
+
+> **Tip:** The cleanest pattern is to add a single helper in
+> `src/lib/predicates.ts` — `isReportedFor(triple)` and `reportObject(triple)`
+> — branched by `NEXT_PUBLIC_NETWORK`. Each consumer above reduces to a
+> 1-line call.
+
 ---
 
 ## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
