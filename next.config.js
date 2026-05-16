@@ -1,4 +1,12 @@
 /** @type {import('next').NextConfig} */
+
+// On some corporate/VPN networks the Node TLS stack can't verify Intuition's
+// testnet certificate chain. Disable verification in dev only so server-side
+// fetches to Hasura succeed. NEVER set this in production.
+if (process.env.NODE_ENV === 'development') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+}
+
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,

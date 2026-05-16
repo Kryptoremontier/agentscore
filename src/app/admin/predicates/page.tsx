@@ -310,6 +310,7 @@ const GROUP_LABELS: Record<PredicateGroup, { title: string; subtitle: string; co
   opinion:      { title: 'Opinion',      subtitle: 'Stakeable community sentiment',     color: '#38B6FF' },
   attestation:  { title: 'Attestation',  subtitle: 'Identity verification & vouches',   color: '#A78BFA' },
   report:       { title: 'Report',       subtitle: 'Moderation & abuse reporting',      color: '#EF4444' },
+  identity:     { title: 'Identity',     subtitle: 'Entity equivalence (sameAs)',       color: '#C8963C' },
 }
 
 function TestnetTabContent() {
