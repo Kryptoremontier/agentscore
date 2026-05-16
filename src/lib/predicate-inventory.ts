@@ -23,6 +23,7 @@ export type PredicateGroup =
   | 'opinion'       // community sentiment
   | 'attestation'   // verification, vouching
   | 'report'        // moderation reports
+  | 'identity'      // identity equivalence (sameAs, aliases)
 
 export interface PredicateEntry {
   /** Stable internal identifier */
@@ -265,6 +266,23 @@ export const PREDICATE_INVENTORY: PredicateEntry[] = [
       'weight when aggregated.',
   },
 
+  // ─── IDENTITY ───────────────────────────────────────────────────────────
+  {
+    key: 'sameAs',
+    mainnet: 'same as',
+    testnet: 'sameAs',
+    group: 'identity',
+    required: false,
+    scope: 'launch',
+    mainnetTermId: '0xbeebfb7d177cbd96ffc239d2196c72ec346efe81f39dc595773f13d83506f5f0',
+    mainnetNote: 'Registered on mainnet ✅ — canonical ecosystem primitive, used by HiveMindHQ / SOF',
+    description:
+      'Expresses that subject and object are different identifiers for the same underlying entity. ' +
+      'Classic schema.org sameAs pattern. Use when one identifier may be mutable (e.g. social handle, ' +
+      'username, display name) and another is immutable (e.g. canonical user ID, contract address). ' +
+      'The triple survives changes to the mutable side because the immutable side stays stable.',
+  },
+
   // ─── REPORTS ────────────────────────────────────────────────────────────
   {
     key: 'reportedFor',
@@ -304,7 +322,7 @@ export const POST_LAUNCH_PREDICATES = PREDICATE_INVENTORY.filter(p => p.scope ==
 
 /** Group inventory entries by their PredicateGroup (preserving order). */
 export function groupedInventory(): Array<{ group: PredicateGroup; entries: PredicateEntry[] }> {
-  const groups: PredicateGroup[] = ['core', 'capability', 'relationship', 'opinion', 'attestation', 'report']
+  const groups: PredicateGroup[] = ['core', 'capability', 'relationship', 'opinion', 'attestation', 'report', 'identity']
   return groups.map(group => ({
     group,
     entries: PREDICATE_INVENTORY.filter(p => p.group === group),

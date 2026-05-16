@@ -29,6 +29,10 @@ export const MAINNET_TERM_IDS = {
   /** "Injection" object atom — used as: [Agent] → reported for → Injection */
   injection:      '0x8e7674f0813f000a12951d8bf1ea4c8ffac05a2ab5d56fc4f9550a0a19a5887a',
 
+  // ─── Identity ─────────────────────────────────────────────────────────────
+  /** "same as" — canonical schema.org sameAs identity equivalence primitive */
+  sameAs:            '0xbeebfb7d177cbd96ffc239d2196c72ec346efe81f39dc595773f13d83506f5f0',
+
   // ─── Tag Atom ─────────────────────────────────────────────────────────────
   /** "In Use By AgentScore" — tag applied to all 8 atoms above */
   inUseByAgentScore: '0xed484ed04e06699c7815f18654c0f48f3e3ba32d25bd5d7289c92532b1910b89',

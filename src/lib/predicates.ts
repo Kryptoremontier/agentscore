@@ -28,6 +28,7 @@ const MAINNET_LABELS = {
   personOpposesAgent: 'opposes',
   agentEvaluatedBy:   'evaluated by',
   agentDelegatedTo:   'delegated to',
+  sameAs:             'same as',
 } as const
 
 /**
@@ -40,6 +41,7 @@ const TESTNET_LABELS = {
   personOpposesAgent: 'opposes',
   agentEvaluatedBy:   'evaluatedBy',
   agentDelegatedTo:   'delegatedTo',
+  sameAs:             'sameAs',
 } as const
 
 export const PREDICATES_CONFIG = IS_MAINNET ? MAINNET_LABELS : TESTNET_LABELS

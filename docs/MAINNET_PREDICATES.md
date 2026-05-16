@@ -505,6 +505,35 @@ AND into `src/lib/predicate-mainnet-ids.ts` (see migration checklist).
 ---
 
 ## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## IDENTITY — Entity Equivalence
+## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+### 17. same as ✅ DONE
+
+- **term_id:** `0xbeebfb7d177cbd96ffc239d2196c72ec346efe81f39dc595773f13d83506f5f0`
+- **Portal:** https://portal.intuition.systems/explore/atom/0xbeebfb7d177cbd96ffc239d2196c72ec346efe81f39dc595773f13d83506f5f0
+- **Status:** Registered on mainnet ✅ — canonical ecosystem primitive, used by HiveMindHQ / SOF
+
+**Description:**
+```
+Expresses that subject and object are different identifiers for the same underlying entity.
+Classic schema.org sameAs pattern. Use when one identifier may be mutable (e.g. social handle,
+username, display name) and another is immutable (e.g. canonical user ID, contract address).
+The triple survives changes to the mutable side because the immutable side stays stable.
+```
+
+**Icon prompt:**
+```
+Minimal flat vector icon, 1024x1024 SQUARE aspect ratio, solid black background,
+no text, dark-mode optimized, professional, clean lines.
+Subject: two overlapping circles or rings (Venn diagram style) with an equals sign
+or link/chain in the overlap area, amber-gold color (#C8963C), representing
+identity equivalence between two entities. Clean geometric, no gradients.
+```
+
+---
+
+## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ## TAG ATOM — In Use By AgentScore
 ## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -653,6 +682,7 @@ After registration:
 | 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
 | 4 | `evaluated by` | ✅ DONE | `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226` |
 | 5 | `reported for` | ✅ DONE | `0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d` |
+| 6 | `same as` | ✅ DONE | `0xbeebfb7d177cbd96ffc239d2196c72ec346efe81f39dc595773f13d83506f5f0` |
 
 ### How to find term_id on the portal
 
@@ -681,8 +711,9 @@ Everything else is post-launch on-demand.
 | 3 | `opposes` | ✅ DONE | `0x3ce0f03b579b0b3d2dcbfbbfb7adb0dd00ab2cf3393ab7201518fabae6dc05f7` |
 | 4 | `evaluated by` | ✅ DONE | `0xb769bc51460e2dc29927c825f743238174c02901603a0c9604dd2e8ea40f8226` |
 | 5 | `reported for` | ✅ DONE | `0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d` |
+| 6 | `same as` | ✅ DONE | `0xbeebfb7d177cbd96ffc239d2196c72ec346efe81f39dc595773f13d83506f5f0` |
 
-**All 5 launch predicates registered. ✅ Next: register 3 Object atoms (Scam, Spam, Injection) for use as triple targets.**
+**All 6 launch predicates registered. ✅ Next: register 3 Object atoms (Scam, Spam, Injection) for use as triple targets.**
 
 > **Note:** "Wired up" means recorded in `src/lib/predicate-mainnet-ids.ts` —
 > NOT necessarily registered fresh. `trusts` just needs its term_id copied from
