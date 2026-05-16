@@ -19,7 +19,7 @@ import type { AgentDetailApiItem } from '@/lib/api-data'
 function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
   return {
     id: apiAgent.id,
-    atomId: apiAgent.id,
+    atomId: BigInt(apiAgent.id),
     name: apiAgent.name,
     description: '', // Will be populated from agent card data if available
     platform: 'intuition',
@@ -29,7 +29,7 @@ function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
     owner: {
       address: '0x0000000000000000000000000000000000000000',
       name: 'Agent Owner',
-      expertLevel: 'intermediate' as const,
+      expertLevel: 'contributor' as const,
     },
     trustScore: Math.round(apiAgent.score.objectScore ?? apiAgent.score.trustScore),
     positiveStake: BigInt(Math.round(apiAgent.supportStake * 1e18)),

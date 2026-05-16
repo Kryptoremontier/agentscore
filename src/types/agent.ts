@@ -34,6 +34,7 @@ export interface Agent {
 }
 
 export type AgentPlatform =
+  | 'intuition'
   | 'mcp'
   | 'openai-gpts'
   | 'openclaw'
