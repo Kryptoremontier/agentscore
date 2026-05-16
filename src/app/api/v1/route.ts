@@ -19,6 +19,7 @@ export async function GET(_request: NextRequest) {
       evaluators: '/api/v1/evaluators',
       evaluator_profile: '/api/v1/evaluators/:address',
       trust_query: '/api/v1/trust/query',
+      leaderboard: '/api/v1/leaderboard',
       stats: '/api/v1/stats',
     },
   })
