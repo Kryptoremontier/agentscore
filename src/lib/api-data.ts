@@ -98,14 +98,31 @@ type AgentRow = {
   subjectTriplesCount?: Array<{ id: string }>
 }
 
+/** True when `data` holds JSON atom bytes (schema.org or legacy custom JSON). */
+function looksLikeJsonAtomPayload(data: string | null | undefined): boolean {
+  if (!data || typeof data !== 'string') return false
+  const trimmed = data.trimStart()
+  if (!trimmed.startsWith('{')) return false
+  if (trimmed.includes('@context') || trimmed.includes('@type')) return true
+  try {
+    const parsed = JSON.parse(trimmed) as { name?: unknown }
+    return typeof parsed === 'object' && parsed !== null && typeof parsed.name === 'string'
+  } catch {
+    return false
+  }
+}
+
 /**
  * Get the effective label/JSON for an atom row.
  * Hasura returns label = "json object" when the payload is too long;
- * actual content is then in the `data` field.
+ * actual content is then in the `data` field. When label is a short
+ * display name but data holds full JSON (schema.org Thing), prefer data.
  *
  * Exported so components can use the same logic without duplicating it.
  */
 export function effectiveLabel(row: { label?: string | null; data?: string | null }): string {
+  const d = row.data
+  if (looksLikeJsonAtomPayload(d)) return d!
   const l = row.label
   if (!l || l === 'json object' || l === '[json object]') {
     return row.data || ''

@@ -31,6 +31,10 @@ import { type AgentCardData, serializeAgentCard } from './agent-card'
  */
 export const FEE_PROXY_ADDRESS = '0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41' as const
 
+const debugLog = (...args: unknown[]) => {
+  if (process.env.NODE_ENV === 'development') console.log(...args)
+}
+
 // "related to" predicate — canonical Intuition ontology atom (testnet).
 // Used to link a forge project's public name atom → private metadata atom.
 // Queried from testnet: atoms(where:{label:{_eq:"related to"}}){term_id}
@@ -293,7 +297,7 @@ async function createAtomViaProxy(
   const fees = await getFeeConfig(config.publicClient)
   const totalValue = calcFeeProxyValue(baseCost, fees)
 
-  console.log('createAtom fee debug:', {
+  debugLog('createAtom fee debug:', {
     atomCost: atomCost.toString(),
     depositAmount: depositAmount.toString(),
     baseCost: baseCost.toString(),
@@ -408,9 +412,9 @@ export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array
     }> = data?.data?.triples || []
 
     // DEBUG: log all predicate labels so we can see what's on-chain
-    console.log(`[fetchAgentSkillTriples] agent=${agentTermId} — ${triples.length} triples total:`)
+    debugLog(`[fetchAgentSkillTriples] agent=${agentTermId} — ${triples.length} triples total:`)
     triples.forEach(t =>
-      console.log(`  predicate="${t.predicate?.label}" object="${t.object?.label}"`)
+      debugLog(`  predicate="${t.predicate?.label}" object="${t.object?.label}"`)
     )
 
     if (triples.length === 0) return []
@@ -577,8 +581,8 @@ export async function createAccountAtom(
  * Create Agent Atom with full metadata via FeeProxy.
  * Platform fee applies (collected on registration).
  *
- * Accepts AgentCardData — encoded as JSON in the atom label.
- * Old AgentMetadata callers: pass { name, description, ... } — still compatible.
+ * Atom payload = schema.org Thing JSON (name + description + image only).
+ * Endpoints, source, and social go as separate triples via registerAgentBatch().
  *
  * @param initialDeposit — optional; defaults to 0.001 tTRUST. Pass more to auto-stake.
  */
@@ -587,7 +591,7 @@ export async function createAgentAtom(
   cardData: AgentCardData,
   initialDeposit?: bigint
 ) {
-  const atomText = cardData.name
+  const atomText = serializeAgentCard({ name: cardData.name, description: cardData.description, image: cardData.image })
   const deposit = initialDeposit ?? DEFAULT_ATOM_DEPOSIT
   const result = await createAtomViaProxy(config, atomText, deposit)
   const userAddress = config.walletClient.account?.address
@@ -653,12 +657,42 @@ export async function registerAgentBatch(
   const mvAddress = getMultiVaultAddress(config.publicClient.chain?.id)
 
   // ── Step 1: Pre-compute all termIds (pure, no tx) ─────────────────────────
-  const agentLabel = cardData.name
+  // Agent atom payload = schema.org Thing JSON (name + description + image only).
+  // termId = hash of bytes payload — must be identical to what is sent on-chain.
+  const agentPayload = serializeAgentCard({
+    name: cardData.name,
+    description: cardData.description,
+    image: cardData.image,
+  })
 
   // Shared semantic atoms (usually exist after first registration)
   const SHARED = ['is', 'AI Agent', 'hasAgentSkill', 'Agent Skill'] as const
 
-  const allLabels: string[] = [agentLabel, ...SHARED, ...skills]
+  // Collect metadata predicate + value pairs for endpoints/source/social triples.
+  // These become separate atoms + triples so the main agent atom stays schema.org clean.
+  const metadataFields: Array<{ predicate: string; value: string }> = []
+  const { endpoints, source, social } = cardData
+  if (endpoints?.api)      metadataFields.push({ predicate: 'hasApiEndpoint', value: endpoints.api })
+  if (endpoints?.mcp)      metadataFields.push({ predicate: 'hasMcpEndpoint', value: endpoints.mcp })
+  if (endpoints?.a2aCard)  metadataFields.push({ predicate: 'hasA2aCard',     value: endpoints.a2aCard })
+  if (endpoints?.website)  metadataFields.push({ predicate: 'hasWebsite',     value: endpoints.website })
+  if (endpoints?.docs)     metadataFields.push({ predicate: 'hasDocs',        value: endpoints.docs })
+  if (source?.github)      metadataFields.push({ predicate: 'hasGithub',      value: source.github })
+  if (source?.version)     metadataFields.push({ predicate: 'hasVersion',     value: source.version })
+  if (source?.license)     metadataFields.push({ predicate: 'hasLicense',     value: source.license })
+  if (source?.framework)   metadataFields.push({ predicate: 'hasFramework',   value: source.framework })
+  if (social?.twitter)     metadataFields.push({ predicate: 'hasTwitter',     value: social.twitter })
+  if (social?.discord)     metadataFields.push({ predicate: 'hasDiscord',     value: social.discord })
+  if (social?.telegram)    metadataFields.push({ predicate: 'hasTelegram',    value: social.telegram })
+
+  // Build deduplicated label list: agent payload + shared + skills + metadata atoms
+  const extraLabels = new Set<string>()
+  for (const { predicate, value } of metadataFields) {
+    extraLabels.add(predicate)
+    extraLabels.add(value)
+  }
+
+  const allLabels: string[] = [agentPayload, ...SHARED, ...skills, ...Array.from(extraLabels)]
 
   const termIds = allLabels.map(label =>
     sdkCalculateAtomId(stringToHex(label) as Hex) as `0x${string}`
@@ -683,7 +717,7 @@ export async function registerAgentBatch(
     allLabels.map((label, i) => [label, { termId: termIds[i], exists: existsArr[i] }])
   )
 
-  const agentTermId = atomMap.get(agentLabel)!.termId
+  const agentTermId = atomMap.get(agentPayload)!.termId
 
   // ── Tx 1: Batch-create all missing atoms ───────────────────────────────────
   const toCreate = allLabels.filter(label => !atomMap.get(label)!.exists)
@@ -692,7 +726,9 @@ export async function registerAgentBatch(
     onProgress?.(`Creating ${toCreate.length} atom(s) on-chain…`)
 
     const datas    = toCreate.map(label => stringToHex(label))
-    const deposits = toCreate.map(label => label === agentLabel ? deposit : DEFAULT_ATOM_DEPOSIT)
+    const deposits = toCreate.map(label => label === agentPayload ? deposit : DEFAULT_ATOM_DEPOSIT)
+    debugLog('AGENT_PAYLOAD:', agentPayload)
+    debugLog('DATAS (first):', datas[0]?.slice(0, 80))
 
     const [atomCost, fees] = await Promise.all([
       config.publicClient.readContract({
@@ -704,6 +740,8 @@ export async function registerAgentBatch(
     ])
 
     const totalValue = calcBatchCreationValue(atomCost, BigInt(toCreate.length), deposits, fees)
+    // Scale gas for large batches (metadata can add up to 24+ atoms)
+    const atomGas = toCreate.length > 5 ? 800_000n : 500_000n
 
     const hash = await config.walletClient.writeContract({
       address: FEE_PROXY_ADDRESS,
@@ -713,7 +751,7 @@ export async function registerAgentBatch(
       value: totalValue,
       account: config.walletClient.account!,
       chain: config.walletClient.chain ?? intuitionTestnet,
-      gas: 500_000n,
+      gas: atomGas,
     })
     await config.publicClient.waitForTransactionReceipt({ hash })
   }
@@ -721,6 +759,7 @@ export async function registerAgentBatch(
   // ── Tx 2: Batch-create triples (skip any that already exist) ─────────────
   // Always:   [agent][is][AI Agent]
   // Per skill: [agent][hasAgentSkill][skill]  +  [skill][is][Agent Skill]
+  // Per metadata field: [agent][predicateAtom][valueAtom]
   onProgress?.('Checking existing relationships…')
 
   const isId       = atomMap.get('is')!.termId
@@ -739,6 +778,12 @@ export async function registerAgentBatch(
       { s: agentTermId, p: hasSkillId, o: skillId,    dep: DEFAULT_ATOM_DEPOSIT },
       { s: skillId,     p: isId,       o: agSkillId,  dep: DEFAULT_ATOM_DEPOSIT },
     )
+  }
+  // Add metadata triples: [agent][hasXxx][value]
+  for (const { predicate, value } of metadataFields) {
+    const predicateId = atomMap.get(predicate)!.termId
+    const valueId     = atomMap.get(value)!.termId
+    candidates.push({ s: agentTermId, p: predicateId, o: valueId, dep: DEFAULT_ATOM_DEPOSIT })
   }
 
   // Compute all triple IDs in parallel (pure view, no tx)
@@ -789,6 +834,8 @@ export async function registerAgentBatch(
 
     const M      = BigInt(missing.length)
     const tTotal = calcBatchCreationValue(tripleCost, M, tDeposits, fees)
+    // Scale gas for large batches (metadata triples can add up to 12+ triples)
+    const tripleGas = missing.length > 5 ? 800_000n : 500_000n
 
     tripleHash = await config.walletClient.writeContract({
       address: FEE_PROXY_ADDRESS,
@@ -798,7 +845,7 @@ export async function registerAgentBatch(
       value: tTotal,
       account: config.walletClient.account!,
       chain: config.walletClient.chain ?? intuitionTestnet,
-      gas: 500_000n,
+      gas: tripleGas,
     })
     await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
   } else {
@@ -1021,7 +1068,7 @@ export async function createSkillAtom(
   // On testnet this will usually return null → creates new as before
   const existing = await findAtomByLabel(metadata.name)
   if (existing) {
-    console.log(`[createSkillAtom] Reusing existing atom "${metadata.name}" → ${existing.id}`)
+    debugLog(`[createSkillAtom] Reusing existing atom "${metadata.name}" → ${existing.id}`)
     const tid = existing.id as `0x${string}`
     const userAddress = config.walletClient.account?.address
     if (userAddress) saveRegistration(tid, userAddress, 'skill')
@@ -1070,7 +1117,7 @@ export async function createTriple(
   const fees = await getFeeConfig(config.publicClient)
   const totalValue = calcFeeProxyValue(baseCost, fees)
 
-  console.log('createTriple fee debug:', {
+  debugLog('createTriple fee debug:', {
     tripleCost: tripleCost.toString(),
     depositAmount: depositAmount.toString(),
     baseCost: baseCost.toString(),
@@ -1773,7 +1820,7 @@ export async function createTripleClaim(
 
   // Triple IS on-chain (tx receipt confirmed) — indexer just hasn't caught up.
   // Return success with placeholder; the claims list will pick it up on next refresh.
-  console.log('[createTripleClaim] Triple confirmed on-chain, indexer still catching up')
+  debugLog('[createTripleClaim] Triple confirmed on-chain, indexer still catching up')
   return {
     termId: '0x0' as `0x${string}`,
     counterTermId: '0x0' as `0x${string}`,
@@ -1908,7 +1955,7 @@ export async function findOrCreateAtom(
       args: [predictedTermId],
     }) as boolean
     if (exists) {
-      console.log(`[findOrCreateAtom] "${label}" already exists on-chain: ${predictedTermId}`)
+      debugLog(`[findOrCreateAtom] "${label}" already exists on-chain: ${predictedTermId}`)
       return predictedTermId
     }
   } catch (e) {
@@ -1930,7 +1977,7 @@ export async function findOrCreateAtom(
 
   // 3. Atom doesn't exist — create it (this is a wallet tx)
   onProgress?.(`Creating predicate atom "${label}"...`)
-  console.log(`[findOrCreateAtom] Creating atom "${label}"...`)
+  debugLog(`[findOrCreateAtom] Creating atom "${label}"...`)
   const atomResult = await createAtomViaProxy(cfg, label, parseEther('0.001'))
   return atomResult.termId
 }
