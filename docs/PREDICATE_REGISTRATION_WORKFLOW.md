@@ -1,6 +1,6 @@
-# AgentScore � Predicate Registration Workflow
+# AgentScore � Predicate Registration Workflow
 
-> **INTERNAL** � registration workflow for new predicate atoms on Intuition Portal.
+> **INTERNAL** � registration workflow for new predicate atoms on Intuition Portal.
 > For integration 	erm_ids, GraphQL patterns, and publisher filters, see
 > [PREDICATE_INTEGRATION_GUIDE.md](./PREDICATE_INTEGRATION_GUIDE.md).
 
@@ -8,8 +8,9 @@
 ## ⚠️ CRITICAL — Check for Existing Atoms FIRST
 
 **The Intuition Protocol is a SHARED ontology.** Many of these predicates may
-already exist on mainnet, created by Saulo, the Intuition team, or other
-community members. **Never duplicate** — always reuse.
+already exist on mainnet — created by community contributors (e.g. PR #7 by
+kryptoremontier.eth), curated as Recommended Predicates by the Intuition team
+(Saulo), or by others. **Never duplicate** — always reuse.
 
 ### Why this matters
 
@@ -30,10 +31,12 @@ Based on portal observation:
 | Name | Creator | Status | Recommended Action |
 |------|---------|--------|--------------------|
 | `is better than`     | `0x9F23...e3B1` | ✅ Exists, 9 holders, 3.32K $TRUST | **REUSE term_id** |
-| `belongs to`         | (Saulo)         | ✅ Recommended Predicate | **REUSE term_id** |
-| `related to`         | (Saulo)         | ✅ Recommended Predicate | **REUSE term_id** |
-| `resolved to`        | (Saulo)         | ✅ Recommended Predicate | (not in our list) |
-| `true` / `false`     | (Saulo)         | ✅ Recommended Predicate | (not predicates) |
+| `belongs to`         | kryptoremontier.eth (PR #7) | ✅ Recommended Predicate | **REUSE term_id** |
+| `related to`         | kryptoremontier.eth (PR #7) | ✅ Recommended Predicate | **REUSE term_id** |
+| `resolved to`        | kryptoremontier.eth (PR #7) | ✅ Recommended Predicate | (not in our list) |
+| `true` / `false`     | kryptoremontier.eth (PR #7) | ✅ Recommended Predicate | (not predicates) |
+
+> **Note:** The 5 canonical atoms above (belongs to, related to, resolved to, true, false) were created on Intuition mainnet by `kryptoremontier.eth` (`0x139219107C1eBE569f543C581b3B807Cf6740006`) and submitted via [PR #7](https://github.com/intuition-box/Ontology/pull/7). Saulo (Intuition core team) reviewed, merged the PR, and staked on the atoms — he is the ontology curator, not the on-chain creator.
 
 ### Phase 0 — Discovery Workflow (DO THIS FIRST)
 
