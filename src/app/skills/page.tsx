@@ -31,6 +31,9 @@ import { APP_CONFIG } from '@/lib/app-config'
 import { SKILL_WHERE_STR } from '@/lib/gql-filters'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
+const debugLog = (...args: unknown[]) => {
+  if (process.env.NODE_ENV === 'development') console.log(...args)
+}
 
 interface GraphQLSkill {
   term_id: string
@@ -355,7 +358,7 @@ function SkillsPageContent() {
         againstShares = (agSharesRaw && agBigInt > 0n) ? agSharesRaw : null
       }
 
-      console.log('fetchUserPosition:', { termId: skillTermId, counterTermId, forShares, againstShares })
+      debugLog('fetchUserPosition:', { termId: skillTermId, counterTermId, forShares, againstShares })
       return { forShares, againstShares, rawPositions: forPos, againstRawPositions }
     } catch (e) {
       console.error('fetchUserPosition error:', e)
@@ -618,11 +621,11 @@ function SkillsPageContent() {
   }, [signalSide])
 
   const executeVote = async () => {
-    console.log('executeVote called with type:', pendingVote?.type)
-    console.log('walletClient:', !!walletClient, 'publicClient:', !!publicClient)
+    debugLog('executeVote called with type:', pendingVote?.type)
+    debugLog('walletClient:', !!walletClient, 'publicClient:', !!publicClient)
 
     if (isExecutingRef.current) {
-      console.log('Already executing, skipping')
+      debugLog('Already executing, skipping')
       return
     }
 
@@ -639,7 +642,7 @@ function SkillsPageContent() {
     let intuitionLib: any
     try {
       intuitionLib = await import('@/lib/intuition')
-      console.log('✅ import succeeded, keys:', Object.keys(intuitionLib))
+      debugLog('✅ import succeeded, keys:', Object.keys(intuitionLib))
     } catch (importErr: any) {
       console.error('❌ import failed:', importErr?.message)
       alert('Import error: ' + importErr?.message)
@@ -653,20 +656,20 @@ function SkillsPageContent() {
       const { getWalletClient } = await import('@wagmi/core')
       const { config: wagmiConfig } = await import('@/lib/wagmi')
       const freshWalletClient = walletClient ?? await getWalletClient(wagmiConfig)
-      console.log('walletClient fresh:', !!freshWalletClient)
+      debugLog('walletClient fresh:', !!freshWalletClient)
 
       if (!freshWalletClient) {
         throw new Error('Wallet client unavailable — please reconnect your wallet')
       }
 
       const cfg = createWriteConfig(freshWalletClient, publicClient)
-      console.log('✅ cfg created:', cfg)
+      debugLog('✅ cfg created:', cfg)
 
       const agent = pendingVote.agent
 
       if (pendingVote.type === 'redeem_trust' || pendingVote.type === 'redeem_distrust') {
-        console.log('=== REDEEM CASE ENTERED ===')
-        console.log('type:', pendingVote.type, 'agent term_id:', agent.term_id, 'address:', address)
+        debugLog('=== REDEEM CASE ENTERED ===')
+        debugLog('type:', pendingVote.type, 'agent term_id:', agent.term_id, 'address:', address)
 
         let freshSharesRaw: string
         let redeemVaultId: `0x${string}`
@@ -693,7 +696,7 @@ function SkillsPageContent() {
         }
 
         const freshShares = BigInt(freshSharesRaw)
-        console.log('redeemVaultId:', redeemVaultId, 'freshSharesRaw:', freshSharesRaw, '→ BigInt:', freshShares.toString())
+        debugLog('redeemVaultId:', redeemVaultId, 'freshSharesRaw:', freshSharesRaw, '→ BigInt:', freshShares.toString())
 
         if (freshShares === 0n) {
           alert(pendingVote.type === 'redeem_trust'
@@ -716,7 +719,7 @@ function SkillsPageContent() {
           sharesToRedeem,
           address as `0x${string}`
         )
-        console.log('✅ Redeem TX:', tx)
+        debugLog('✅ Redeem TX:', tx)
 
         const updated = await fetchUserPosition(agent.term_id, address!, pendingVote.counterTermId)
         setUserPosition(updated)
@@ -736,8 +739,8 @@ function SkillsPageContent() {
           alert('Oppose vault is not fully initialized. Please reopen the skill modal and try again.')
           return
         }
-        console.log('distrust counterTermId:', counterTermId)
-        console.log('distrust tripleTermId:', tripleTermId)
+        debugLog('distrust counterTermId:', counterTermId)
+        debugLog('distrust tripleTermId:', tripleTermId)
 
         // MultiVault_HasCounterStake: must clear ALL support positions before depositing Oppose
         // Support shares live in the ATOM vault (agent.term_id), not in tripleTermId
@@ -746,7 +749,7 @@ function SkillsPageContent() {
           : 0n
 
         if (existingAtomShares > 0n) {
-          console.log(`[Oppose] Clearing ${existingAtomShares} support shares from atom vault before Oppose deposit...`)
+          debugLog(`[Oppose] Clearing ${existingAtomShares} support shares from atom vault before Oppose deposit...`)
           try {
             await redeemFromVault(
               cfg,
@@ -754,7 +757,7 @@ function SkillsPageContent() {
               existingAtomShares,
               address as `0x${string}`
             )
-            console.log('✅ Atom vault cleared — proceeding to Oppose deposit')
+            debugLog('✅ Atom vault cleared — proceeding to Oppose deposit')
           } catch (redeemErr: any) {
             console.error('❌ Failed to clear atom vault:', redeemErr)
             throw new Error(
@@ -769,10 +772,10 @@ function SkillsPageContent() {
             ? await fetchVaultSharesForUser(tripleTermId, address)
             : 0n
           if (existingTripleShares > 0n) {
-            console.log(`[Oppose] Clearing ${existingTripleShares} shares from triple FOR vault...`)
+            debugLog(`[Oppose] Clearing ${existingTripleShares} shares from triple FOR vault...`)
             try {
               await redeemFromVault(cfg, tripleTermId as `0x${string}`, existingTripleShares, address as `0x${string}`)
-              console.log('✅ Triple FOR vault cleared')
+              debugLog('✅ Triple FOR vault cleared')
             } catch (redeemErr: any) {
               console.error('❌ Failed to clear triple FOR vault:', redeemErr)
               throw new Error(`Failed to clear triple FOR shares: ${redeemErr?.message || 'unknown'}`)

@@ -7,6 +7,8 @@ import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
 import { calculateHybridScore } from '@/lib/hybrid-trust'
 import { calculateCompositeTrust } from '@/lib/composite-trust'
 import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
+import { computeScoreEnvelope } from '@/lib/scoring/engine'
+import type { ForgeProject } from '@/lib/forge/types'
 
 export interface ForgeTrustInput {
   supportStakeWei: bigint
@@ -64,7 +66,7 @@ export function calculateForgeTrustScore(input: ForgeTrustInput): ForgeTrustResu
     recentSells,
   })
 
-  // 4. Hybrid score (60% trust, 40% composite) with soft gate
+  // 4. Hybrid score (60% trust, 40% composite; no soft gate)
   const supportRatio = trustResult.baseScore
   const finalScore = calculateHybridScore(trustResult.score, compositeResult.score, supportRatio)
 
@@ -78,6 +80,15 @@ export function calculateForgeTrustScore(input: ForgeTrustInput): ForgeTrustResu
     finalScore: Math.round(finalScore),
     momentum,
   }
+}
+
+export function getForgeProjectScore(project: Pick<ForgeProject, 'trustScore' | 'compositeScore'>) {
+  return computeScoreEnvelope({
+    objectType: 'project',
+    trustScore: project.trustScore,
+    qualityScore: project.compositeScore,
+    softGateActive: false,
+  })
 }
 
 /**

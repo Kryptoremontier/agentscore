@@ -1,6 +1,7 @@
 import { type NextRequest } from 'next/server'
 import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
 import { fetchForgeProjectById } from '@/lib/forge/data'
+import { getForgeProjectScore } from '@/lib/forge/scoring'
 
 export async function GET(
   _request: NextRequest,
@@ -11,6 +12,7 @@ export async function GET(
     if (!project) return apiError('Project not found', 404)
 
     return apiSuccess({
+      score:          getForgeProjectScore(project),
       trustScore:     project.trustScore,
       compositeScore: project.compositeScore,
       finalScore:     project.finalScore,

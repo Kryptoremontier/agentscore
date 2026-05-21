@@ -16,6 +16,10 @@ const INTUITION_TESTNET_ID = 13579
 import { CategoryPill } from './CategoryPill'
 import type { ForgeProjectRegistrationInput } from '@/lib/forge/types'
 
+const debugLog = (...args: unknown[]) => {
+  if (process.env.NODE_ENV === 'development') console.log(...args)
+}
+
 const ALL_STAGES = Object.values(ProjectStage)
 
 const STEP_LABELS = ['Basics', 'Details', 'Preview & List']
@@ -609,7 +613,7 @@ export function ProjectRegistrationForm() {
       const categoryLabel = categoryDef?.label ?? form.category
       const cfg           = createWriteConfig(walletClient, publicClient)
 
-      console.log('[ForgeRegistration] Starting registration', { name: form.name, categoryLabel, chainId })
+      debugLog('[ForgeRegistration] Starting registration', { name: form.name, categoryLabel, chainId })
 
       // Up to 3 txs: Tx0 (one-time approval), Tx1 batch atoms (name + metadata),
       // Tx2 batch triples ([is], [related to], [hasForgeCategory])
@@ -622,7 +626,7 @@ export function ProjectRegistrationForm() {
         setProgressMsg,
       )
 
-      console.log('[ForgeRegistration] Success, termId:', termId)
+      debugLog('[ForgeRegistration] Success, termId:', termId)
       setProgressMsg('Project registered! Redirecting…')
       router.push(`/explore/intuforge/${termId}?new=1`)
     } catch (err: unknown) {

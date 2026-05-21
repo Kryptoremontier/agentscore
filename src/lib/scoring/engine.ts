@@ -27,7 +27,7 @@ export interface ComputeScoreInput {
    * currently unused there (soft gate removed Apr 2026). Keep for forward compat.
    */
   supportRatio?: number
-  /** True when Layer 1 soft gate is actively lowering the score (support ratio < 50%). */
+  /** Legacy flag; keep false because the separate soft gate was removed. */
   softGateActive?: boolean
 }
 

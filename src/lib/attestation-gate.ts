@@ -191,11 +191,13 @@ export async function getAttestationCount(
       config: cfg,
     }
 
-    console.log(
-      `[attestation-gate] ${wallet.slice(0, 8)}…: ` +
-      `attestationCount=${result.attestationCount}, ` +
-      `meetsThreshold=${result.meetsThreshold}`,
-    )
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        `[attestation-gate] ${wallet.slice(0, 8)}…: ` +
+        `attestationCount=${result.attestationCount}, ` +
+        `meetsThreshold=${result.meetsThreshold}`,
+      )
+    }
 
     setCache(wallet, result)
     return result

@@ -45,7 +45,7 @@ export interface ScoreEnvelope {
   objectScore: ObjectScore | null
   /** Human-readable tier derived from objectScore (or trustScore when objectScore is null). */
   tier: TrustLevel
-  /** Whether soft gate (Layer 1) is currently lowering the score (support ratio < 50%). */
+  /** Legacy field; always false because the separate soft gate was removed. */
   softGateActive: boolean
   /** ISO-8601 timestamp when this envelope was computed. */
   computedAt: string

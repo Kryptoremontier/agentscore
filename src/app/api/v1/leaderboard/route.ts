@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       trustScore: agent.score.trustScore,
       qualityScore: agent.score.qualityScore,
       objectScore: agent.score.objectScore,
+      score: agent.score,
       domain: null,
       stakerCount: agent.stakerCount,
       totalStaked: Math.round((agent.supportStake + agent.opposeStake) * 1000) / 1000,

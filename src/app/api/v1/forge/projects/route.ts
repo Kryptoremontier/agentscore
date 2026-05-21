@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { apiSuccess, apiError, corsOptions, parsePagination } from '@/lib/api-helpers'
 import { fetchForgeProjectsFromChain } from '@/lib/forge/data'
 import { calculateForgeCompleteness } from '@/lib/forge/completeness'
+import { getForgeProjectScore } from '@/lib/forge/scoring'
 import { ForgeCategory, ProjectStage } from '@/lib/forge/types'
 
 export const revalidate = 300
@@ -78,7 +79,12 @@ export async function GET(request: NextRequest) {
     })
 
     const total = projects.length
-    const paginated = projects.slice(offset, offset + limit)
+    const paginated = projects
+      .slice(offset, offset + limit)
+      .map(project => ({
+        ...project,
+        score: getForgeProjectScore(project),
+      }))
 
     return apiSuccess({ projects: paginated, total, limit, offset })
   } catch (error) {
@@ -142,10 +148,10 @@ export async function POST(request: NextRequest) {
         suggestions: completenessResult.suggestions,
         instructions: [
           '1. Connect wallet on Intuition Testnet (Chain ID 13579)',
-          '2. Call MultiVault.createAtom(atomLabel) — FREE, creator = your wallet',
-          '3. Note the returned termId (atom ID)',
-          '4. Create triple: [termId] [is] [Intuition Project]',
-          '5. Create triple: [termId] [hasForgeCategory] [category atom]',
+          '2. Use the AgentScore IntuForge registration flow or existing app helpers so createAtom/createTriple route through FeeProxy',
+          '3. Fund the wallet with tTRUST for protocol costs, initial stake, and the FeeProxy platform fee',
+          '4. Create the project atom from atomLabel, then tag it with [termId] [is] [Intuition Project] via FeeProxy',
+          '5. Optionally create category/metadata triples through the same FeeProxy-backed flow',
           '6. Your project will appear on IntuForge after indexer sync (~30s)',
         ],
         network: 'testnet',

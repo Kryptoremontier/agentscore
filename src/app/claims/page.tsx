@@ -64,6 +64,9 @@ import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
+const debugLog = (...args: unknown[]) => {
+  if (process.env.NODE_ENV === 'development') console.log(...args)
+}
 
 interface GraphQLTriple {
   term_id: string
@@ -758,10 +761,10 @@ function ClaimsPageContent() {
           ? await fetchVaultSharesForUser(pendingVote.claim.term_id, address)
           : 0n
         if (existingAtomShares > 0n) {
-          console.log(`[Oppose/Claim] Clearing ${existingAtomShares} support shares before Oppose deposit...`)
+          debugLog(`[Oppose/Claim] Clearing ${existingAtomShares} support shares before Oppose deposit...`)
           try {
             await redeemFromVault(cfg, pendingVote.claim.term_id as `0x${string}`, existingAtomShares, address as `0x${string}`)
-            console.log('✅ Claim FOR vault cleared — proceeding to Oppose deposit')
+            debugLog('✅ Claim FOR vault cleared — proceeding to Oppose deposit')
           } catch (redeemErr: any) {
             throw new Error(`MultiVault requires clearing all Support shares before Opposing. Sell failed: ${redeemErr?.message || 'unknown'}`)
           }
