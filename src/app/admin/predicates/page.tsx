@@ -5,7 +5,7 @@
  *
  * TESTNET TAB — register any of the 16 predicates on testnet for development.
  * MAINNET TAB — status tracker for the 5 launch-scope predicates. Registration
- * is done manually on https://portal.intuition.systems per docs/MAINNET_PREDICATES.md.
+ * is done manually on https://portal.intuition.systems per docs/PREDICATE_REGISTRATION_WORKFLOW.md.
  */
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
@@ -830,7 +830,7 @@ function MainnetTabContent() {
           <div className="font-semibold text-white mb-1">Consult Saulo before registering new predicates</div>
           <div className="text-[#B5BDC6]">
             Mainnet atoms are <strong>immutable</strong>. Check{' '}
-            <code className="text-[#C8963C]">docs/MAINNET_PREDICATES.md</code> for the full
+            <code className="text-[#C8963C]">docs/PREDICATE_REGISTRATION_WORKFLOW.md</code> for the full
             protocol and Saulo consultation draft before touching the portal.
           </div>
         </div>
@@ -867,7 +867,7 @@ function MainnetTabContent() {
       >
         <div className="font-semibold text-white mb-2">Mainnet workflow</div>
         <ol className="space-y-1.5 list-decimal pl-5">
-          <li>Consult Saulo on Discord — send the Phase 0 draft from <code>docs/MAINNET_PREDICATES.md</code>.</li>
+          <li>Consult Saulo on Discord — send the Phase 0 draft from <code>docs/PREDICATE_REGISTRATION_WORKFLOW.md</code>.</li>
           <li>For each <strong>CREATE</strong> predicate: generate icon (1024×1024), upload to IPFS, then register on portal.</li>
           <li>Paste the resulting term_id into the input below the card — it saves to localStorage and marks the badge ✅ DONE.</li>
           <li>Copy all confirmed term_ids into <code>src/lib/predicate-mainnet-ids.ts</code> for use in triple creation.</li>

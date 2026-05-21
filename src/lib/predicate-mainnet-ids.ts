@@ -5,11 +5,23 @@
  * of each atom registered on Base Mainnet via Intuition Protocol.
  *
  * DO NOT edit these values — they are on-chain facts.
- * Source of truth: docs/MAINNET_PREDICATES.md (TermID Tracker)
+ * Source of truth: docs/PREDICATE_INTEGRATION_GUIDE.md (Quick Reference)
  */
 
 export const MAINNET_TERM_IDS = {
-  // ─── Predicates ───────────────────────────────────────────────────────────
+  // ─── Canonical Ontology (PR #7 — Intuition Ontology, do not duplicate) ───
+  /** "resolved to" — authoritative finality; filter by trusted publisher */
+  resolvedTo:  '0x2c76a5344a15f60565878c8657463f0e2fb201eb05158cf41ad77f8b9d084be1',
+  /** "related to" — general association (e.g. name atom → metadata atom) */
+  relatedTo:   '0xa1fadfcf5e29bd37e048625f1deee9a6374b249fcda4905649a85022c74070ec',
+  /** "belongs to" — membership / grouping */
+  belongsTo:   '0x3317b232b1d59ae421283a4ce4d8bef0f739574c3a53386d5d8597d4b272d4e8',
+  /** "true" object atom — resolution anchor for [Subject] → resolved to → true */
+  trueAtom:    '0x4f2874d4ad8b146c86ac84188e86635a794ddbfa4cfc40670a70467e08db36a2',
+  /** "false" object atom — resolution anchor for [Subject] → resolved to → false */
+  falseAtom:   '0xa8cc267d1c74e7cd83cc8706fc1eb8d732bc5fa3bc4c8f37b2b992a819b9b550',
+
+  // ─── AgentScore Predicates ────────────────────────────────────────────────
   /** "has agent skill" — AgentScore + ecosystem use */
   hasAgentSkill:  '0x638fd866e4564e213a11ebeb98bbaea58e81f677860d90fa4ad01e50bb007108',
   /** "trusts" — REUSE from Intuition Ontology */

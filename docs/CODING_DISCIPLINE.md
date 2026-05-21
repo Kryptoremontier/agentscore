@@ -152,7 +152,8 @@ CLAUDE.md (root)                    ← AgentScore architectural rules
    ▼
 docs/                               ← Human-facing documentation
    ├── CODING_DISCIPLINE.md         ← THIS file (mirror for human review)
-   └── MAINNET_PREDICATES.md
+   ├── PREDICATE_INTEGRATION_GUIDE.md   # external builders — term_ids + GraphQL
+   └── PREDICATE_REGISTRATION_WORKFLOW.md  # internal — portal registration
 ```
 
 The skill auto-loads for AI agents; this `docs/` file makes the same content
