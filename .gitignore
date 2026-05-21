@@ -75,6 +75,10 @@ desktop.ini
 # ═══════════════════════════════════════════
 coverage/
 .nyc_output/
+card_response.json
+new_agent.json
+xyz_card.json
+data/feedback.json
 
 # ═══════════════════════════════════════════
 # MISC
