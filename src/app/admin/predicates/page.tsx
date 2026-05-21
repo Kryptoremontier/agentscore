@@ -422,19 +422,6 @@ function TestnetTabContent() {
     <>
       <CustomPredicatesPanel storageKey="testnet_custom_predicates" network="testnet" />
 
-      {!isConnected && (
-        <div
-          className="rounded-2xl p-5 mb-6 flex items-center gap-3"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}
-        >
-          <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
-          <div className="text-sm">
-            <div className="font-semibold text-white">Wallet not connected</div>
-            <div className="text-[#B5BDC6]">Connect your admin wallet to register testnet predicates.</div>
-          </div>
-        </div>
-      )}
-
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         {[

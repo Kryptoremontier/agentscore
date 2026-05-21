@@ -1,3 +1,11 @@
+/** On-chain admin wallet — sole address allowed to see /admin UI in navigation. */
+export const ADMIN_WALLET = '0x139219107C1eBE569f543C581b3B807Cf6740006' as const
+
+export function isAdminWallet(address?: string | null): boolean {
+  if (!address) return false
+  return address.toLowerCase() === ADMIN_WALLET.toLowerCase()
+}
+
 // Atom IDs for predicates (to be filled after creation on testnet)
 export const PREDICATE_ATOMS = {
   trusts: BigInt(0),              // [trusts] predicate

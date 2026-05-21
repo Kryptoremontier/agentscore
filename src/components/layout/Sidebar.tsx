@@ -10,6 +10,7 @@ import {
   Bug, ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { isAdminWallet } from '@/lib/constants'
 import { BugReportModal } from '@/components/shared/BugReportModal'
 
 const EXPLORE_ITEMS = [
@@ -92,6 +93,7 @@ export function Sidebar() {
     pathname === href || (href !== '/' && pathname.startsWith(href.split('?')[0]))
 
   const registerActive = pathname?.startsWith('/register')
+  const isAdmin = mounted && isAdminWallet(address)
 
   return (
     <aside
@@ -233,22 +235,25 @@ export function Sidebar() {
           </span>
         </button>
 
-        {/* ADMIN */}
-        <GroupLabel label="Admin" />
-        <NavLink
-          href="/admin/predicates"
-          label="Predicates"
-          icon={ShieldAlert}
-          color="#C8963C"
-          pathname={pathname}
-        />
-        <NavLink
-          href="/admin/feedback"
-          label="Bug Reports"
-          icon={Bug}
-          color="#EF4444"
-          pathname={pathname}
-        />
+        {isAdmin && (
+          <>
+            <GroupLabel label="Admin" />
+            <NavLink
+              href="/admin/predicates"
+              label="Predicates"
+              icon={ShieldAlert}
+              color="#C8963C"
+              pathname={pathname}
+            />
+            <NavLink
+              href="/admin/feedback"
+              label="Bug Reports"
+              icon={Bug}
+              color="#EF4444"
+              pathname={pathname}
+            />
+          </>
+        )}
 
       </div>
 
