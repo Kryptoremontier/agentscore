@@ -15,6 +15,7 @@ export interface AgentCardData {
   // Identity (required)
   name: string
   description?: string
+  image?: string
   category?: AgentCategory
 
   // Capabilities (powers Domain Leaderboards & scoring)
@@ -163,8 +164,9 @@ export function calculateProfileCompleteness(card: AgentCardData): ProfileComple
 /**
  * Parse an atom label into AgentCardData.
  *
- * New agents: label is JSON  → full card parsed.
- * Old agents: label is plain string "Name - description" → backward compat.
+ * New format:  schema.org JSON { "@type": "Thing", "name": ..., ... }  → name, description, image.
+ * Old format:  custom JSON (no @type)                                   → full card (backward compat).
+ * Plain string: "Name - description" or "Agent:Name"                   → backward compat.
  */
 export function parseAgentCard(atomLabel: string | null | undefined): Partial<AgentCardData> {
   if (!atomLabel || typeof atomLabel !== 'string') {
@@ -172,8 +174,18 @@ export function parseAgentCard(atomLabel: string | null | undefined): Partial<Ag
   }
   try {
     const data = JSON.parse(atomLabel)
-    if (typeof data === 'object' && data !== null && typeof data.name === 'string') {
-      return data as Partial<AgentCardData>
+    if (typeof data === 'object' && data !== null) {
+      // New schema.org Thing format
+      if (data['@type'] === 'Thing' && typeof data.name === 'string') {
+        const card: Partial<AgentCardData> = { name: data.name }
+        if (typeof data.description === 'string') card.description = data.description
+        if (typeof data.image === 'string') card.image = data.image
+        return card
+      }
+      // Old custom JSON format — return as-is
+      if (typeof data.name === 'string') {
+        return data as Partial<AgentCardData>
+      }
     }
   } catch {
     // not JSON — fall through
@@ -201,39 +213,19 @@ export function agentNameFromLabel(label: string | null | undefined): string {
 }
 
 /**
- * Serialize AgentCardData to a JSON atom label.
- * Strips empty/undefined fields to keep it compact.
+ * Serialize AgentCardData to a schema.org Thing JSON atom payload.
+ *
+ * Only name, description, and image go into the atom bytes.
+ * All other fields (endpoints, source, social) are stored as separate triples
+ * by registerAgentBatch() — see AGENT_CARD_PREDICATES.
  */
-export function serializeAgentCard(card: AgentCardData): string {
-  const clean = (obj: Record<string, unknown>): Record<string, unknown> | undefined => {
-    const result: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(obj)) {
-      if (v === null || v === undefined || v === '') continue
-      if (typeof v === 'object' && !Array.isArray(v)) {
-        const cleaned = clean(v as Record<string, unknown>)
-        if (cleaned && Object.keys(cleaned).length > 0) result[k] = cleaned
-      } else if (Array.isArray(v) && v.length === 0) {
-        continue
-      } else {
-        result[k] = v
-      }
-    }
-    return Object.keys(result).length > 0 ? result : undefined
-  }
-
+export function serializeAgentCard(card: Pick<AgentCardData, 'name' | 'description' | 'image' | 'category'>): string {
   const payload: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Thing',
     name: card.name,
   }
   if (card.description) payload.description = card.description
-  if (card.category)    payload.category    = card.category
-
-  const endpoints = card.endpoints ? clean(card.endpoints as Record<string, unknown>) : undefined
-  const source    = card.source    ? clean(card.source    as Record<string, unknown>) : undefined
-  const social    = card.social    ? clean(card.social    as Record<string, unknown>) : undefined
-
-  if (endpoints) payload.endpoints = endpoints
-  if (source)    payload.source    = source
-  if (social)    payload.social    = social
-
+  if (card.image)       payload.image       = card.image
   return JSON.stringify(payload)
 }

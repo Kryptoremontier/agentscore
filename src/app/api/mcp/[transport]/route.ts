@@ -21,6 +21,25 @@ import {
   type AgentCategory,
 } from '@/lib/agent-card'
 
+const MCP_CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version',
+  'Access-Control-Expose-Headers': 'Mcp-Session-Id',
+}
+
+function withCors(response: Response): Response {
+  const headers = new Headers(response.headers)
+  for (const [key, value] of Object.entries(MCP_CORS_HEADERS)) {
+    headers.set(key, value)
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 const handler = createMcpHandler(
   (server) => {
 
@@ -248,7 +267,7 @@ const handler = createMcpHandler(
                 query: { skill, minTrust, minStakers, sort },
                 results: result.results,
                 total: result.total,
-                info: 'Scores include 6-layer anti-manipulation: soft gate, log diversity, min stake, variance penalty, whale detection, evaluator accuracy weighting',
+                info: 'Scores include 7-layer anti-manipulation with attestation gate; no separate soft gate is applied.',
               }, null, 2),
             }],
           }
@@ -488,9 +507,9 @@ const handler = createMcpHandler(
                 missingFields: completeness.missingFields,
                 nextSteps: [
                   '1. Connect wallet to Intuition Testnet (Chain ID: 13579)',
-                  '2. Sign and submit createAtom transaction with the atomLabel',
-                  '3. Create type triple: [Agent] [is] [AI Agent]',
-                  '4. Create skill triples using linkSkillToAgent() for each skill',
+                  '2. Use the AgentScore registration flow/helpers so createAtom routes through FeeProxy',
+                  '3. Create type triple: [Agent] [is] [AI Agent] through FeeProxy',
+                  '4. Create skill triples using the existing FeeProxy-backed helper for each skill',
                   '5. Profile will appear on AgentScore once indexed',
                 ],
                 registrationUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://agentscore-gilt.vercel.app'}/register`,
@@ -623,4 +642,12 @@ const handler = createMcpHandler(
   }
 )
 
-export { handler as GET, handler as POST }
+async function handlerWithCors(...args: Parameters<typeof handler>): Promise<Response> {
+  return withCors(await handler(...args))
+}
+
+export { handlerWithCors as GET, handlerWithCors as POST }
+
+export async function OPTIONS() {
+  return new Response(null, { headers: MCP_CORS_HEADERS })
+}

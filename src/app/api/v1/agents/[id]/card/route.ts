@@ -23,7 +23,7 @@ export async function GET(
 
     const [agent, breakdown] = await Promise.all([
       getAgentDetail(id),
-      getAgentTrustBreakdown(id),
+      getAgentTrustBreakdown(id).catch(() => null),
     ])
     if (!agent) return apiError('Agent not found', 404)
 

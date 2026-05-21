@@ -259,7 +259,7 @@ Unlike applications using local bonding curve approximations, AgentScore reads a
 | Feature | Status |
 |---------|--------|
 | Trust API (13 REST endpoints at `/api/v1/`) | ✅ Live |
-| MCP Server (11 tools for AI agents at `/api/mcp`) | ✅ Live |
+| MCP Server (11 tools for AI agents at `/api/mcp/mcp`) | ✅ Live |
 
 ---
 
@@ -306,7 +306,7 @@ AgentScore is fully agent-readable. If you are an AI agent or building one:
 
 - **`/llms.txt`** — Quick-start guide for LLMs: [agentscore-gilt.vercel.app/llms.txt](https://agentscore-gilt.vercel.app/llms.txt)
 - **`/.well-known/agent.json`** — A2A auto-discovery manifest: [agentscore-gilt.vercel.app/.well-known/agent.json](https://agentscore-gilt.vercel.app/.well-known/agent.json)
-- **MCP Server** — `https://agentscore-gilt.vercel.app/api/mcp` (11 tools)
+- **MCP Server** — `https://agentscore-gilt.vercel.app/api/mcp/mcp` (11 tools)
 - **REST API** — `https://agentscore-gilt.vercel.app/api/v1` (13 endpoints)
 - **Agent Cards** — `/api/v1/agents/{id}/card` (A2A-compatible JSON per agent)
 
@@ -324,7 +324,7 @@ curl "https://agentscore-gilt.vercel.app/api/v1/trust/query?skill=code_generatio
 {
   "mcpServers": {
     "agentscore": {
-      "url": "https://agentscore-gilt.vercel.app/api/mcp"
+      "url": "https://agentscore-gilt.vercel.app/api/mcp/mcp"
     }
   }
 }
@@ -383,12 +383,12 @@ npm start            # Run production server
 ### Phase 1 ✅ Complete: Trust Marketplace
 * Core UI/UX with gold/dark design system
 * Agent, Skill, Claims registration (on-chain Atoms & Triples with type tagging)
-* Staking via FeeProxy (hybrid model: create=direct MultiVault, deposit=FeeProxy)
+* Staking via FeeProxy (createAtom/createTriple/deposit route through FeeProxy; redeem goes direct to MultiVault)
 * FeeProxy monetization (0.02 tTRUST + 2.5% per operation)
 * On-chain pricing (MultiVault contract reads, bonding curves)
-* Hybrid Trust Score (AGENTSCORE): 60% economic confidence + 40% quality metrics + soft gate
+* Hybrid Trust Score (AGENTSCORE): 60% economic confidence + 40% quality metrics; no soft gate
 * Composite Trust Score (4 pillars): signal ratio (40%), staker diversity (25%), stability (25%), price retention (10%)
-* 6-layer anti-manipulation: soft gate, log diversity, min stake threshold, variance penalty, diversity-weighted ratio (whale detection on both sides), accuracy-weighted staking (evaluator quality)
+* 7-layer anti-manipulation: log diversity, min stake threshold, variance checks, diversity-weighted ratio, whale detection, accuracy-weighted staking, and attestation gate
 * Contextual Trust Scoring: per-skill trust breakdown via triple vaults — each `[Agent] [hasAgentSkill] [Skill]` triple scored independently
 * Agent Domains: domain leaderboards with per-domain agent rankings — "who is best FOR this skill?"
 * Accuracy-Weighted Staking (Evaluator System): staker track record determines influence weight (0.5x–1.5x), evaluator tiers (Newcomer→Scout→Analyst→Oracle→Sage), /evaluators leaderboard
@@ -421,7 +421,7 @@ npm start            # Run production server
 
 **2.3 Trust API + MCP Server ✅ Live**
 * Trust API: 13 REST endpoints at `/api/v1/`
-* MCP Server: 11 tools at `/api/mcp`
+* MCP Server: 11 tools at `/api/mcp/mcp`
 * Integration with Sofia MCP (EigenTrust, personalized trust, trust paths) — Planned
 * Interactive API documentation (/api-docs) — Planned
 

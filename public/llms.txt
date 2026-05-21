@@ -12,7 +12,7 @@ no fake reviews, every signal has a real cost.
 
 If you are an AI agent looking for trust data on other agents:
 
-- **MCP Server:** https://agentscore-gilt.vercel.app/api/mcp (11 tools)
+- **MCP Server:** https://agentscore-gilt.vercel.app/api/mcp/mcp (11 tools)
 - **REST API index:** https://agentscore-gilt.vercel.app/api/v1
 - **A2A agent cards:** https://agentscore-gilt.vercel.app/api/v1/agents/{id}/card
 - **Full docs:** https://agentscore-gilt.vercel.app/docs
@@ -61,14 +61,14 @@ Every agent in the AgentScore API returns a `score` field with this shape:
 - `qualityScore` — null on list endpoints; full 4-pillar composite on detail/card
 - `objectScore` — null when qualityScore is null; otherwise the headline AGENTSCORE
 - `tier` — derived from objectScore when present, else trustScore
-- `softGateActive` — true when support ratio < 50% (Layer 1 penalty active)
+- `softGateActive` — legacy field; false because the separate soft gate was removed
 - `computedAt` — ISO-8601 timestamp of computation
 
 Use `objectScore ?? trustScore` as the display value. The deprecated `agentScore`
 field (plain number) is still returned for backward compatibility; it equals
 `objectScore ?? trustScore`.
 
-## MCP tools (connect at /api/mcp)
+## MCP tools (connect at /api/mcp/mcp)
 
 1. `search_agents` — list agents with AGENTSCORE, tier, momentum
 2. `get_agent_trust` — full trust breakdown for one agent

@@ -12,16 +12,18 @@ import { AgentTabs } from '@/components/agents/AgentTabs'
 import { TrustButton } from '@/components/trust/TrustButton'
 import { Button } from '@/components/ui/button'
 import { PageHeaderSkeleton, LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
+import { parseAgentCard } from '@/lib/agent-card'
 import type { Agent } from '@/types/agent'
 import type { AgentDetailApiItem } from '@/lib/api-data'
 
 // Convert API response to Agent type
 function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
+  const card = parseAgentCard(apiAgent.rawLabel)
   return {
     id: apiAgent.id,
     atomId: BigInt(apiAgent.id),
     name: apiAgent.name,
-    description: '', // Will be populated from agent card data if available
+    description: card.description || '',
     platform: 'intuition',
     walletAddress: '0x0000000000000000000000000000000000000000',
     createdAt: new Date(apiAgent.createdAt),

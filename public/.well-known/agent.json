@@ -47,7 +47,7 @@
   ],
   "endpoints": {
     "mcp": {
-      "url": "https://agentscore-gilt.vercel.app/api/mcp",
+      "url": "https://agentscore-gilt.vercel.app/api/mcp/mcp",
       "transport": "streamable-http",
       "description": "Model Context Protocol server — 11 tools for agent discovery and trust queries"
     },
@@ -87,6 +87,7 @@
     },
     "responseField": "score (ScoreEnvelope) — see /llms.txt for shape",
     "antiManipulationLayers": 7,
+    "softGate": "removed; trustScore already reflects oppose > support",
     "evaluatorWeightRange": "0.5x–1.5x",
     "tiers": ["Unverified", "Sandbox", "Trusted", "Verified"]
   },

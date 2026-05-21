@@ -208,7 +208,7 @@ function rowToAgentItem(row: AgentRow, opposeWei: bigint): AgentApiItem {
     trustScore: trustResult.score,
     qualityScore: cachedQuality,
     supportRatio: supportRatio / 100,
-    softGateActive: supportRatio < 50,
+    softGateActive: false,
   })
   const agentScore = score.objectScore ?? score.trustScore
 
@@ -311,7 +311,7 @@ export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem
         trustScore: base.score.trustScore,
         qualityScore: skillBreakdownResult.overallScore,
         supportRatio: supportRatio / 100,
-        softGateActive: supportRatio < 50,
+        softGateActive: false,
       })
     : base.score
   const agentScore = detailScore.objectScore ?? detailScore.trustScore
@@ -398,8 +398,8 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const termIds = ctid ? [termId, ctid] : [termId]
   const [opposeMap, positionsData, sharePriceWei] = await Promise.all([
     batchFetchOpposeShares([row]),
-    gql<{ positions: Array<{ term_id: string; account_id: string; shares: string; created_at: string; delta: string | null; shares_delta: string | null }> }>(
-      `{ positions(where: { term_id: { _in: ${JSON.stringify(termIds)} } } order_by: { shares: desc }) { term_id account_id shares created_at delta shares_delta } }`
+    gql<{ positions: Array<{ term_id: string; account_id: string; shares: string; created_at: string }> }>(
+      `{ positions(where: { term_id: { _in: ${JSON.stringify(termIds)} } } order_by: { shares: desc }) { term_id account_id shares created_at } }`
     ),
     getOnChainSharePrice(serverPublicClient, termId as `0x${string}`).catch(() => null),
   ])
@@ -413,9 +413,9 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
 
   const trustResult = calculateTrustScoreFromStakes(supportWei, opposeWei)
 
-  // Soft gate analysis
-  const scaleFactor = supportRatio < 50 ? supportRatio / 50 : 1.0
-  const softGateApplied = supportRatio < 50
+  // Soft gate was removed; trustScore already encodes oppose > support.
+  const scaleFactor = 1.0
+  const softGateApplied = false
 
   // Whale detection — support vault only (oppose shares must not be compared
   // against the support vault's totalSupply)
@@ -440,8 +440,8 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const signals = positions.map(p => ({
     timestamp: p.created_at,
     side: (ctid && p.term_id === ctid) ? 'oppose' as const : 'support' as const,
-    amount: Math.abs(Number(p.delta ?? p.shares)) / 1e18,
-    shares: Math.abs(Number(p.shares_delta ?? p.shares)) / 1e18,
+    amount: Math.abs(Number(p.shares)) / 1e18,
+    shares: Math.abs(Number(p.shares)) / 1e18,
   }))
   const weightedTrust = calculateWeightedTrust(signals)
   const stableDays = calculateStableDays(signals)
@@ -453,7 +453,7 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
     if (!p.account_id || (ctid && p.term_id === ctid)) continue
     walletNetStake.set(
       p.account_id,
-      (walletNetStake.get(p.account_id) ?? 0) + Math.abs(Number(p.delta ?? p.shares)) / 1e18
+      (walletNetStake.get(p.account_id) ?? 0) + Math.abs(Number(p.shares)) / 1e18
     )
   }
   const qualifiedStakers = [...walletNetStake.values()].filter(v => v >= MIN_STAKE).length
@@ -924,9 +924,16 @@ export async function trustQuery(params: {
     const domainName = cleanDomainName(domainTriples.find(t => t.skillId === domainId)?.skillName || skill)
 
     const results = agents.slice(0, limit).map(a => ({
+      score: computeScoreEnvelope({
+        objectType: 'agent',
+        trustScore: a.domainScore,
+        qualityScore: null,
+        softGateActive: false,
+      }),
       agentId: a.agentId,
       agentName: a.agentName,
-      score: a.domainScore,
+      domainScore: a.domainScore,
+      agentScore: a.domainScore,
       stakerCount: a.stakerCount,
       domain: domainName,
       level: a.level,
@@ -940,9 +947,10 @@ export async function trustQuery(params: {
     if (minStakers > 0) filtered = filtered.filter(a => a.stakerCount >= minStakers)
 
     const results = filtered.slice(0, limit).map(a => ({
+      score: a.score,
       agentId: a.id,
       agentName: a.name,
-      score: a.agentScore,
+      agentScore: a.agentScore,
       stakerCount: a.stakerCount,
       domain: null,
       level: getHybridLevel(a.agentScore),

@@ -6,10 +6,11 @@ import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, Zap, Trophy, Target, MessageSquare, Crown,
-  PenSquare, BookOpen, User, Menu, X, Hammer,
+  PenSquare, BookOpen, User, Menu, X, Hammer, Bug,
 } from 'lucide-react'
 import { WalletButton } from '@/components/wallet/WalletButton'
 import { cn } from '@/lib/cn'
+import { BugReportModal } from '@/components/shared/BugReportModal'
 
 const BOTTOM_TABS = [
   { href: '/agents',     label: 'Agents',      icon: Bot,          color: '#C8963C' },
@@ -54,6 +55,7 @@ const MENU_GROUPS = [
 
 export function MobileBottomNav() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [bugModalOpen, setBugModalOpen] = useState(false)
   const pathname = usePathname()
 
   const isActive = (href: string) =>
@@ -197,6 +199,25 @@ export function MobileBottomNav() {
                   </div>
                 ))}
 
+                {/* Report Bug */}
+                <div className="mt-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/20 px-2 mb-1">
+                    Actions
+                  </p>
+                  <button
+                    onClick={() => { setMenuOpen(false); setBugModalOpen(true) }}
+                    className="flex items-center gap-3 px-3 py-3 rounded-xl transition-colors hover:bg-white/[0.04] w-full"
+                  >
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }}
+                    >
+                      <Bug className="w-4 h-4" style={{ color: '#EF4444' }} />
+                    </div>
+                    <span className="text-sm font-medium text-white/60">Report Bug</span>
+                  </button>
+                </div>
+
                 {/* Wallet */}
                 <div className="mt-5 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                   <WalletButton />
@@ -209,6 +230,8 @@ export function MobileBottomNav() {
           </>
         )}
       </AnimatePresence>
+
+      <BugReportModal open={bugModalOpen} onClose={() => setBugModalOpen(false)} />
     </>
   )
 }

@@ -143,35 +143,55 @@ describe('parseAgentCard', () => {
     // no .name field → treated as plain string
     expect(card.name).toBe('{"foo": "bar"}')
   })
+
+  test('parses new schema.org Thing format (name + description + image only)', () => {
+    const json = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Thing',
+      name: 'SchemaAgent',
+      description: 'Built with schema.org',
+      image: 'https://example.com/icon.png',
+    })
+    const card = parseAgentCard(json)
+    expect(card.name).toBe('SchemaAgent')
+    expect(card.description).toBe('Built with schema.org')
+    expect(card.image).toBe('https://example.com/icon.png')
+    // endpoints/source/social not in atom — come from triples in Phase 2
+    expect(card.endpoints).toBeUndefined()
+    expect(card.category).toBeUndefined()
+  })
 })
 
 describe('serializeAgentCard', () => {
-  test('serializes to valid JSON', () => {
+  test('produces schema.org Thing format', () => {
     const card: AgentCardData = {
       name: 'TestAgent',
       description: 'A test agent',
     }
     const json = serializeAgentCard(card)
     const parsed = JSON.parse(json)
+    expect(parsed['@context']).toBe('https://schema.org')
+    expect(parsed['@type']).toBe('Thing')
     expect(parsed.name).toBe('TestAgent')
     expect(parsed.description).toBe('A test agent')
   })
 
-  test('omits empty/undefined fields', () => {
+  test('omits description when absent; never includes endpoints/source/social', () => {
     const card: AgentCardData = {
       name: 'TestAgent',
       description: undefined,
-      endpoints: {},
-      social: { twitter: '' },
+      endpoints: { api: 'https://api.test.com' },
+      social: { twitter: '@test' },
     }
     const json = serializeAgentCard(card)
     const parsed = JSON.parse(json)
     expect(parsed.description).toBeUndefined()
+    // endpoints and social go as separate triples — not in atom payload
     expect(parsed.endpoints).toBeUndefined()
     expect(parsed.social).toBeUndefined()
   })
 
-  test('roundtrip: serialize → parse', () => {
+  test('roundtrip: serialize → parse preserves name and description', () => {
     const original: AgentCardData = {
       name: 'CodeBuddy',
       description: 'AI code review',
@@ -181,10 +201,11 @@ describe('serializeAgentCard', () => {
     }
     const json   = serializeAgentCard(original)
     const parsed = parseAgentCard(json)
+    // Only name and description are stored in the atom; rest become triples
     expect(parsed.name).toBe(original.name)
     expect(parsed.description).toBe(original.description)
-    expect(parsed.category).toBe(original.category)
-    expect(parsed.endpoints?.api).toBe(original.endpoints?.api)
-    expect(parsed.source?.github).toBe(original.source?.github)
+    expect(parsed.category).toBeUndefined()
+    expect(parsed.endpoints).toBeUndefined()
+    expect(parsed.source).toBeUndefined()
   })
 })

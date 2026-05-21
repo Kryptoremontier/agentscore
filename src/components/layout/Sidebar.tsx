@@ -7,8 +7,10 @@ import { useAccount } from 'wagmi'
 import {
   Bot, Zap, Trophy, Target, MessageSquare, Crown,
   PenSquare, BookOpen, User, Plus, ChevronDown, Hammer,
+  Bug, ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { BugReportModal } from '@/components/shared/BugReportModal'
 
 const EXPLORE_ITEMS = [
   { href: '/agents',              label: 'Agents',      icon: Bot,          color: '#C8963C' },
@@ -83,6 +85,7 @@ export function Sidebar() {
   const { address } = useAccount()
   const [registerOpen, setRegisterOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [bugModalOpen, setBugModalOpen] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
   const isActive = (href: string) =>
@@ -216,7 +219,40 @@ export function Sidebar() {
         <GroupLabel label="Info" />
         {INFO_ITEMS.map(item => <NavLink key={item.href} {...item} pathname={pathname} />)}
 
+        {/* Report Bug */}
+        <button
+          onClick={() => setBugModalOpen(true)}
+          className="relative flex items-center gap-3 mx-2 px-2 py-2.5 rounded-lg w-[calc(100%-16px)] transition-colors duration-150 group hover:bg-white/[0.04]"
+        >
+          <Bug
+            className="w-5 h-5 shrink-0 transition-colors duration-150"
+            style={{ color: '#EF4444' }}
+          />
+          <span className="text-sm font-medium whitespace-nowrap text-white/50 group-hover:text-white/80 transition-colors leading-none">
+            Report Bug
+          </span>
+        </button>
+
+        {/* ADMIN */}
+        <GroupLabel label="Admin" />
+        <NavLink
+          href="/admin/predicates"
+          label="Predicates"
+          icon={ShieldAlert}
+          color="#C8963C"
+          pathname={pathname}
+        />
+        <NavLink
+          href="/admin/feedback"
+          label="Bug Reports"
+          icon={Bug}
+          color="#EF4444"
+          pathname={pathname}
+        />
+
       </div>
+
+      <BugReportModal open={bugModalOpen} onClose={() => setBugModalOpen(false)} />
 
       {/* Profile (bottom, wallet connected only) */}
       {mounted && address && (
