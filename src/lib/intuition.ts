@@ -264,6 +264,15 @@ function calcBatchCreationValue(
   return multiVaultCost + fee
 }
 
+function assertTransactionSucceeded(
+  receipt: { status: string },
+  label: string,
+): void {
+  if (receipt.status === 'reverted') {
+    throw new Error(`${label} transaction reverted on-chain`)
+  }
+}
+
 /**
  * Internal helper: create a single Atom via FeeProxy (full model).
  * All write operations route through FeeProxy.
@@ -740,8 +749,11 @@ export async function registerAgentBatch(
     ])
 
     const totalValue = calcBatchCreationValue(atomCost, BigInt(toCreate.length), deposits, fees)
-    // Scale gas for large batches (metadata can add up to 24+ atoms)
-    const atomGas = toCreate.length > 5 ? 800_000n : 500_000n
+    // Scale gas for batches — 3-atom metadata batch estimates ~1.27M on testnet (500k OOG reverts)
+    const atomGas =
+      toCreate.length > 5 ? 2_000_000n
+      : toCreate.length > 1 ? 1_500_000n
+      : 500_000n
 
     const hash = await config.walletClient.writeContract({
       address: FEE_PROXY_ADDRESS,
@@ -753,7 +765,8 @@ export async function registerAgentBatch(
       chain: config.walletClient.chain ?? intuitionTestnet,
       gas: atomGas,
     })
-    await config.publicClient.waitForTransactionReceipt({ hash })
+    const atomReceipt = await config.publicClient.waitForTransactionReceipt({ hash })
+    assertTransactionSucceeded(atomReceipt, 'createAtoms')
   }
 
   // ── Tx 2: Batch-create triples (skip any that already exist) ─────────────
@@ -834,8 +847,11 @@ export async function registerAgentBatch(
 
     const M      = BigInt(missing.length)
     const tTotal = calcBatchCreationValue(tripleCost, M, tDeposits, fees)
-    // Scale gas for large batches (metadata triples can add up to 12+ triples)
-    const tripleGas = missing.length > 5 ? 800_000n : 500_000n
+    // Scale gas for triple batches — 4 triples estimates ~2.15M on testnet (500k OOG reverts)
+    const tripleGas =
+      missing.length > 5 ? 2_500_000n
+      : missing.length > 1 ? 2_200_000n
+      : 500_000n
 
     tripleHash = await config.walletClient.writeContract({
       address: FEE_PROXY_ADDRESS,
@@ -847,7 +863,8 @@ export async function registerAgentBatch(
       chain: config.walletClient.chain ?? intuitionTestnet,
       gas: tripleGas,
     })
-    await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
+    const tripleReceipt = await config.publicClient.waitForTransactionReceipt({ hash: tripleHash })
+    assertTransactionSucceeded(tripleReceipt, 'createTriples')
   } else {
     onProgress?.('All relationships already exist on-chain…')
   }
