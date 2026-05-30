@@ -49,9 +49,19 @@ Copy-paste table for integrators. All values are immutable on-chain facts.
 | Label | term_id | Notes |
 |-------|---------|-------|
 | `reported for` | `0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d` | Generic predicate — object atom carries category. |
-| `Scam` (object) | `0x27f33aaa8e3ff821e0eff6fedfec0b20a29164e21848c5f33e736eede13c39ba` | `[Subject] — reported for — Scam` |
-| `Spam` (object) | `0x6ae6a37850484a61d76ad868c83d1bbe4d6975fa29cd724d7485141a03cde78f` | `[Subject] — reported for — Spam` |
-| `Injection` (object) | `0x8e7674f0813f000a12951d8bf1ea4c8ffac05a2ab5d56fc4f9550a0a19a5887a` | `[Subject] — reported for — Injection` |
+| `Scam` (object) | `0x27f33aaa8e3ff821e0eff6fedfec0b20a29164e21848c5f33e736eede13c39ba` | `[Subject] — reported for — Scam`. General fraud — use when no narrower category fits. |
+| `Spam` (object) | `0x6ae6a37850484a61d76ad868c83d1bbe4d6975fa29cd724d7485141a03cde78f` | `[Subject] — reported for — Spam`. Volume/noise — distinct from `Sybil` (identity inflation). |
+| `Injection` (object) | `0x8e7674f0813f000a12951d8bf1ea4c8ffac05a2ab5d56fc4f9550a0a19a5887a` | `[Subject] — reported for — Injection`. Prompt injection / instruction hijack. |
+| `Phishing` (object) | `0x17ea05befad2c4ab6dd95a41177a6a0657ea31966c15ceb6939ed63c2c0fe00b` | `[Subject] — reported for — Phishing`. Credential/signature theft via deceptive UI — distinct from `Drainer`. |
+| `Drainer` (object) | `0xb695c13188f0a67f36a7d13f21859900bd929a3793b95b9aab574db7b6b36529` | `[Subject] — reported for — Drainer`. Wallet-draining contract / approval abuse — distinct from `Phishing` (which captures credentials first). |
+| `Honeypot` (object) | `0xfe8368e39da75a1b43d80633d8ea865456713be53e4e61493f43845c89c29e26` | `[Subject] — reported for — Honeypot`. Accepts deposits, blocks withdrawals. |
+| `Exploit` (object) | `0x21d9e43be9d812babe25a7dcf0dafed4552dfd1dca1109b37b07125744eeef7d` | `[Subject] — reported for — Exploit`. Known vulnerability or active exploit in deployed code. |
+| `Sybil` (object) | `0xc16b37fb39ec7b14ad3309f0192cc8a3bf32a2eaa1195f137f12d515cd591bea` | `[Subject] — reported for — Sybil`. Coordinated multi-identity manipulation — distinct from `Spam` (which is about volume, not identity). |
+
+> **Category semantics — pick the narrowest fit:**
+> - `Scam` is the general/fallback fraud label. Use `Drainer`, `Phishing`, `Honeypot`, or `Exploit` when the attack vector is known.
+> - `Drainer` ≠ `Phishing`: phishing captures credentials/signatures via deceptive UI; drainer is the on-chain contract or approval pattern that empties the wallet (often the next step after phishing).
+> - `Sybil` ≠ `Spam`: spam is volume/noise from any source; sybil is coordinated identity inflation (one operator behind many wallets).
 
 ### Tag
 
@@ -242,7 +252,7 @@ query AgentWithSkills($agentTermId: String!) {
 
 ### b) Safety check — is an address reported?
 
-Check for active reports: `subject = agent`, `predicate = reported for`, `object IN (Scam, Spam, Injection)`.
+Check for active reports: `subject = agent`, `predicate = reported for`, `object IN (Scam, Spam, Injection, Phishing, Drainer, Honeypot, Exploit, Sybil)`.
 
 ```graphql
 query ActiveReports($agentTermId: String!) {
@@ -252,7 +262,12 @@ query ActiveReports($agentTermId: String!) {
     object_id: { _in: [
       "0x27f33aaa8e3ff821e0eff6fedfec0b20a29164e21848c5f33e736eede13c39ba",
       "0x6ae6a37850484a61d76ad868c83d1bbe4d6975fa29cd724d7485141a03cde78f",
-      "0x8e7674f0813f000a12951d8bf1ea4c8ffac05a2ab5d56fc4f9550a0a19a5887a"
+      "0x8e7674f0813f000a12951d8bf1ea4c8ffac05a2ab5d56fc4f9550a0a19a5887a",
+      "0x17ea05befad2c4ab6dd95a41177a6a0657ea31966c15ceb6939ed63c2c0fe00b",
+      "0xb695c13188f0a67f36a7d13f21859900bd929a3793b95b9aab574db7b6b36529",
+      "0xfe8368e39da75a1b43d80633d8ea865456713be53e4e61493f43845c89c29e26",
+      "0x21d9e43be9d812babe25a7dcf0dafed4552dfd1dca1109b37b07125744eeef7d",
+      "0xc16b37fb39ec7b14ad3309f0192cc8a3bf32a2eaa1195f137f12d515cd591bea"
     ]}
   }) {
     term_id
@@ -264,11 +279,18 @@ query ActiveReports($agentTermId: String!) {
 }
 ```
 
+> **Category overlap is intentional but not redundant.** `Scam` is the general/fallback
+> label; prefer the narrower attack-vector categories when known:
+> - `Drainer` ≠ `Phishing` — phishing captures credentials via deceptive UI; drainer is the
+>   on-chain contract / approval pattern that empties the wallet (often the next step).
+> - `Sybil` ≠ `Spam` — spam is volume from any source; sybil is one operator behind many
+>   wallets coordinating to inflate signal.
+
 **Recommended:** apply publisher/reporter reputation filter in application code
 (see [Publisher Filter Pattern](#publisher-filter-pattern)). Counter-vault stake on
 `[Agent] — reported for — [Scam]` means "I dispute this report" — well-defined semantics.
 
-TypeScript constants: `src/lib/predicate-mainnet-ids.ts` (`MAINNET_TERM_IDS.reportedFor`, `.scam`, `.spam`, `.injection`).
+TypeScript constants: `src/lib/predicate-mainnet-ids.ts` (`MAINNET_TERM_IDS.reportedFor`, `.scam`, `.spam`, `.injection`, `.phishing`, `.drainer`, `.honeypot`, `.exploit`, `.sybil`).
 
 ### c) Deep JOIN workaround — positions vs creator_id
 
