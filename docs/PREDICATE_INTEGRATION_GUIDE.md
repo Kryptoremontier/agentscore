@@ -63,6 +63,20 @@ Copy-paste table for integrators. All values are immutable on-chain facts.
 > - `Drainer` ≠ `Phishing`: phishing captures credentials/signatures via deceptive UI; drainer is the on-chain contract or approval pattern that empties the wallet (often the next step after phishing).
 > - `Sybil` ≠ `Spam`: spam is volume/noise from any source; sybil is coordinated identity inflation (one operator behind many wallets).
 
+### Soft Signals (early warnings)
+
+| Label | term_id | Notes |
+|-------|---------|-------|
+| `flagged as` | `0x4bc48a76db9b2b59cdbcab3fec1c405e0208210525e6aa9f23aa0354e04e1a51` | Soft-signal predicate — lower bar than `reported for`. Use `[Subject] — flagged as — [suspicious/malicious]`. |
+| `suspicious` (object) | `0xaecfd2369dfe4bc0160b46b8a13dad8e406cc5f183f667af629393ea3241fd0a` | `[Subject] — flagged as — suspicious`. Unverified, worth caution. |
+| `malicious` (object) | `0xa752a727906d11fffb3f00ba239c2db126a499f151972fc997ce8be7c167b5f6` | `[Subject] — flagged as — malicious`. Believed harmful, vector unknown. |
+
+> **Two-tier safety model — pick the right tier:**
+> - `reported for` is the **hard / categorical** tier: the reporter commits to a specific attack vector (`Scam`, `Drainer`, `Phishing`, `Honeypot`, `Exploit`, `Sybil`, `Spam`, `Injection`). Use when the vector is known.
+> - `flagged as` is the **soft / early-warning** tier: the reporter has a hunch but not enough evidence to pick a category. Use when something looks off but you cannot yet say *why*.
+> - **Severity hierarchy:** `suspicious` < `malicious` < `reported for`. Consumers should weight `flagged as` triples lower than `reported for` triples, and `suspicious` lower than `malicious`.
+> - **Promotion path:** a triple flagged as `malicious` today may be promoted to a categorical `reported for — [Drainer]` triple tomorrow once the vector is confirmed. Both triples coexist on-chain — query both when assessing risk.
+
 ### Tag
 
 | Label | term_id | Notes |

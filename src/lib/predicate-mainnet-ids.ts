@@ -51,6 +51,20 @@ export const MAINNET_TERM_IDS = {
   /** "Sybil" object atom — coordinated multi-identity manipulation. Distinct from Spam (volume) — Sybil is identity inflation. */
   sybil:          '0xc16b37fb39ec7b14ad3309f0192cc8a3bf32a2eaa1195f137f12d515cd591bea',
 
+  // ─── Soft Signals ─────────────────────────────────────────────────────────
+  // Two-tier safety signal: `flagged as` is the soft/early-warning predicate.
+  // Hierarchy of severity: suspicious < malicious < reported for (hard category).
+  // Use `flagged as` when you have a hunch but not enough evidence to commit
+  // to a specific Report Object category (Scam, Drainer, Phishing, etc.).
+  /** "flagged as" predicate — soft-signal early warning.
+      Used as [Subject] flagged as [suspicious/malicious].
+      Lower bar than reported for. */
+  flaggedAs:      '0x4bc48a76db9b2b59cdbcab3fec1c405e0208210525e6aa9f23aa0354e04e1a51',
+  /** "suspicious" object — unverified, worth caution */
+  suspicious:     '0xaecfd2369dfe4bc0160b46b8a13dad8e406cc5f183f667af629393ea3241fd0a',
+  /** "malicious" object — believed harmful, vector unknown */
+  malicious:      '0xa752a727906d11fffb3f00ba239c2db126a499f151972fc997ce8be7c167b5f6',
+
   // ─── Identity ─────────────────────────────────────────────────────────────
   /** "same as" — canonical schema.org sameAs identity equivalence primitive */
   sameAs:            '0xbeebfb7d177cbd96ffc239d2196c72ec346efe81f39dc595773f13d83506f5f0',
