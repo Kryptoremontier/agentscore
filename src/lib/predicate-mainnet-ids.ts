@@ -51,6 +51,19 @@ export const MAINNET_TERM_IDS = {
   /** "Sybil" object atom — coordinated multi-identity manipulation. Distinct from Spam (volume) — Sybil is identity inflation. */
   sybil:          '0xc16b37fb39ec7b14ad3309f0192cc8a3bf32a2eaa1195f137f12d515cd591bea',
 
+  // ─── Evidence ─────────────────────────────────────────────────────────────
+  // Clean inverse pair for sourcing claims. Active voice (Saulo convention):
+  // the source is the subject, the claim is the object — direction source→claim.
+  // Use these to link a primary source (article, tx, on-chain event, repo commit)
+  // to the claim it backs or contradicts.
+  /** "evidences" predicate — source provides evidence FOR a claim.
+      Direction: source→claim. Example: [Source] evidences [Claim]. */
+  evidences:      '0xfae0ca2e6c4acd598b0fb6afc3e95547b1b132b1152ac8af88abe01b3fba9576',
+  /** "refutes" predicate — source provides evidence AGAINST a claim.
+      Direction: source→claim. Example: [Source] refutes [Claim].
+      Clean inverse of `evidences` (active voice). */
+  refutes:        '0xa982de7666bbde2df1e01a5435199911a8a7441ae9b300d0bf4156709d3331db',
+
   // ─── Soft Signals ─────────────────────────────────────────────────────────
   // Two-tier safety signal: `flagged as` is the soft/early-warning predicate.
   // Hierarchy of severity: suspicious < malicious < reported for (hard category).

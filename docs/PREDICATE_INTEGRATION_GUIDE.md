@@ -63,6 +63,20 @@ Copy-paste table for integrators. All values are immutable on-chain facts.
 > - `Drainer` ≠ `Phishing`: phishing captures credentials/signatures via deceptive UI; drainer is the on-chain contract or approval pattern that empties the wallet (often the next step after phishing).
 > - `Sybil` ≠ `Spam`: spam is volume/noise from any source; sybil is coordinated identity inflation (one operator behind many wallets).
 
+### Evidence
+
+| Label | term_id | Notes |
+|-------|---------|-------|
+| `evidences` | `0xfae0ca2e6c4acd598b0fb6afc3e95547b1b132b1152ac8af88abe01b3fba9576` | Source provides evidence **FOR** a claim. Direction: `source→claim`. Use as `[Source] — evidences — [Claim]`. |
+| `refutes` | `0xa982de7666bbde2df1e01a5435199911a8a7441ae9b300d0bf4156709d3331db` | Source provides evidence **AGAINST** a claim. Direction: `source→claim`. Use as `[Source] — refutes — [Claim]`. Clean inverse of `evidences`. |
+
+> **Direction & voice:** Both predicates are **active-voice** (Saulo convention) and read
+> `source→claim` — the subject is the primary source (article, tx, repo commit, oracle
+> reading), the object is the claim being backed or contradicted. This mirrors the
+> active-voice pairing used elsewhere in the AgentScore ontology (e.g. `trusts` /
+> `opposes`, `reported for` + object atom). `evidences` and `refutes` form a clean
+> inverse pair: a single source can do exactly one of the two for any given claim.
+
 ### Soft Signals (early warnings)
 
 | Label | term_id | Notes |
