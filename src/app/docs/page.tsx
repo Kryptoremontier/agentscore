@@ -1240,7 +1240,7 @@ function TabApiMcp() {
         <div className="p-3 rounded-xl text-xs text-[#6B7480]"
           style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
           Compatible with Claude Desktop, Claude Code, Cursor, and any MCP-enabled client.
-          Tools include 6-layer anti-manipulation scoring data.
+          Tools include 7-layer anti-manipulation scoring data, including the attestation gate.
         </div>
       </DocCard>
 
