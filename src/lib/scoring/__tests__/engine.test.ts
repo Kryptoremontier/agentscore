@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { computeScoreEnvelope } from '../engine'
 
 // Pin computedAt so snapshot tests don't flicker

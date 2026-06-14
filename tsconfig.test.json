@@ -1,0 +1,8 @@
+{
+  // Type-checks the test files that the main tsconfig excludes.
+  // Used by CI (and locally): tsc -p tsconfig.test.json --noEmit
+  // Does NOT affect `next build` — the main tsconfig.json keeps its exclusion.
+  "extends": "./tsconfig.json",
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules"]
+}
