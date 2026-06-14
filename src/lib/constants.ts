@@ -35,7 +35,10 @@ export const CONTRACTS = {
 export const API = {
   graphql: {
     testnet: 'https://api.testnet.intuition.systems/graphql',
-    mainnet: 'https://api.intuition.systems/graphql',
+    // Working mainnet Hasura endpoint (verified live Jun 2026). The previous
+    // value `https://api.intuition.systems/graphql` returned HTTP 404 — dead.
+    // Mirrors the testnet `.sh` pattern. Required by the domain-score PoC.
+    mainnet: 'https://mainnet.intuition.sh/v1/graphql',
   },
 } as const
 
