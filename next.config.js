@@ -66,7 +66,10 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
     NEXT_PUBLIC_INTUITION_API_URL: process.env.NEXT_PUBLIC_INTUITION_API_URL || 'https://api.testnet.intuition.systems',
-    NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID || '8453', // Base mainnet
+    // No default on purpose: a missing NEXT_PUBLIC_CHAIN_ID must never
+    // silently select a network. Consumers fail safe to testnet (see
+    // src/lib/attestation-gate.ts getAttestationConfig).
+    NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
   },
 
   // Webpack configuration

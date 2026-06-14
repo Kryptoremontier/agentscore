@@ -63,8 +63,16 @@ export const ATTESTATION_CONFIG_MAINNET: AttestationConfig = {
 }
 
 export function getAttestationConfig(): AttestationConfig {
-  const isMainnet = process.env.NEXT_PUBLIC_CHAIN_ID !== '13579'
-  return isMainnet ? ATTESTATION_CONFIG_MAINNET : ATTESTATION_CONFIG_TESTNET
+  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID
+  if (!chainId) {
+    // Fail safe: a missing env var must never silently enable mainnet gating.
+    console.warn(
+      '[attestation-gate] NEXT_PUBLIC_CHAIN_ID not set — defaulting to TESTNET gating. ' +
+        'Set NEXT_PUBLIC_CHAIN_ID explicitly (13579 = Intuition Testnet; anything else = mainnet gating).'
+    )
+    return ATTESTATION_CONFIG_TESTNET
+  }
+  return chainId === '13579' ? ATTESTATION_CONFIG_TESTNET : ATTESTATION_CONFIG_MAINNET
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

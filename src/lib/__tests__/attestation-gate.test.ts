@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import {
   applyAttestationGate,
   getAttestationConfig,
@@ -74,6 +74,24 @@ describe('Attestation Gate', () => {
     const cfg = getAttestationConfig()
     expect(cfg.minAttestations).toBe(3)
     process.env.NEXT_PUBLIC_CHAIN_ID = original
+  })
+
+  test('getAttestationConfig FAILS SAFE to testnet config + warns when CHAIN_ID is unset', () => {
+    const original = process.env.NEXT_PUBLIC_CHAIN_ID
+    delete process.env.NEXT_PUBLIC_CHAIN_ID
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const cfg = getAttestationConfig()
+    expect(cfg).toEqual(ATTESTATION_CONFIG_TESTNET)
+    expect(warnSpy).toHaveBeenCalledOnce()
+    expect(warnSpy.mock.calls[0][0]).toContain('NEXT_PUBLIC_CHAIN_ID not set')
+
+    warnSpy.mockRestore()
+    if (original === undefined) {
+      delete process.env.NEXT_PUBLIC_CHAIN_ID
+    } else {
+      process.env.NEXT_PUBLIC_CHAIN_ID = original
+    }
   })
 
   // ─── Gate semantics ───────────────────────────────────────────────────────

@@ -5,7 +5,15 @@ export async function graphqlRequest<T = any>(
   variables?: Record<string, any>,
   options?: RequestInit
 ): Promise<T> {
-  const isTestnet = process.env.NEXT_PUBLIC_NETWORK === 'testnet'
+  const network = process.env.NEXT_PUBLIC_NETWORK
+  if (!network) {
+    // Fail safe: a missing env var must never silently route to mainnet.
+    console.warn(
+      '[graphql-client] NEXT_PUBLIC_NETWORK not set — defaulting to TESTNET endpoint. ' +
+        "Set NEXT_PUBLIC_NETWORK explicitly ('testnet' = Intuition Testnet; anything else = mainnet)."
+    )
+  }
+  const isTestnet = network ? network === 'testnet' : true
   const endpoint = isTestnet ? API.graphql.testnet : API.graphql.mainnet
 
   const response = await fetch(endpoint, {
