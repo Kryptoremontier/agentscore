@@ -44,10 +44,21 @@ function rankColor(rank: number): string {
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
+// Faza 0.5a — skill-domain predicate, matched by TERM_ID (not label).
+// "is skilled in" is the cross-network canonical skill predicate: SAME term_id
+// on testnet (75 triples) AND mainnet (134 triples), so it works on the current
+// testnet and survives the testnet→mainnet migration. Matching by term_id avoids
+// the brittle label-string matching that previously missed mainnet entirely.
+// Faza 0.5b (future, mainnet layer): also fold in "is best at"
+// (0xe39dc1c656b35d408dd772007f77cffddfa4e720b3cff91ef3c82cdbd65c7447) — it is
+// mainnet-only (0 testnet triples), so it is intentionally NOT added here yet.
+const IS_SKILLED_IN_PREDICATE_ID =
+  '0xe332e7d663cda20970d2e9a9278b6a5be9575c0514379e8574aa61203c549103'
+
 async function fetchDomainTriples(): Promise<DomainTripleData[]> {
   if (!GRAPHQL_URL) return []
   try {
-    // Step 1: fetch all hasAgentSkill triples
+    // Step 1: fetch all skill triples ("is skilled in" by term_id + legacy isTrustedFor)
     const res = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -57,8 +68,7 @@ async function fetchDomainTriples(): Promise<DomainTripleData[]> {
             triples(
               where: {
                 _or: [
-                  { predicate: { label: { _eq: "hasAgentSkill" } } }
-                  { predicate: { label: { _eq: "has-agent-skill" } } }
+                  { predicate_id: { _eq: "${IS_SKILLED_IN_PREDICATE_ID}" } }
                   { predicate: { label: { _eq: "isTrustedFor" } } }
                 ]
               }
