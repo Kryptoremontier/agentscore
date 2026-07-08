@@ -10,6 +10,7 @@ import { AgentHeader } from '@/components/agents/AgentHeader'
 import { AgentStats } from '@/components/agents/AgentStats'
 import { AgentTabs } from '@/components/agents/AgentTabs'
 import { TrustButton } from '@/components/trust/TrustButton'
+import { AttestButton } from '@/components/attest/AttestButton'
 import { Button } from '@/components/ui/button'
 import { PageHeaderSkeleton, LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { parseAgentCard } from '@/lib/agent-card'
@@ -192,6 +193,8 @@ export default function AgentDetailPage() {
             transition={{ delay: 0.1 }}
           >
             <TrustButton agentId={agent.id} />
+            {/* Etap 1 — attest competence in a canonical domain (testnet write path) */}
+            <AttestButton agentId={agent.id} agentName={agent.name} className="mt-3" />
           </motion.div>
 
           {/* Stats */}

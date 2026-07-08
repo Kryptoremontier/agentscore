@@ -55,7 +55,8 @@ const RELATED_TO_TERM_ID = '0xb76e0b67f4a7477cbdada8179bcdb8444f27684a4cdaf95e34
  */
 const LS_KEY_FEE_PROXY_APPROVED = 'agentscore_feeproxy_approved'
 
-function isFeeProxyApproved(userAddress: string): boolean {
+/** Read-only: has this wallet already cached a FeeProxy DEPOSIT approval? */
+export function isFeeProxyApproved(userAddress: string): boolean {
   if (typeof window === 'undefined') return false
   return localStorage.getItem(`${LS_KEY_FEE_PROXY_APPROVED}_${userAddress.toLowerCase()}`) === '1'
 }
