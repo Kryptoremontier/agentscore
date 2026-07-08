@@ -25,6 +25,7 @@ import {
   cleanDomainName,
   type DomainTripleData,
 } from './domain-scoring'
+import { refineSkillTriples, mapSkillToBucket } from './skill-domain-map'
 import { fetchEvaluatorLeaderboard, fetchStakerPositions } from './evaluator-data'
 import { calculateEvaluatorScore, EVALUATOR_TIER_CONFIG, type EvaluatorTier } from './evaluator-score'
 import { getAttestationCount, getAttestationConfig } from './attestation-gate'
@@ -580,7 +581,11 @@ const IS_SKILLED_IN_PREDICATE_ID =
 // (0xe39dc1c656b35d408dd772007f77cffddfa4e720b3cff91ef3c82cdbd65c7447) — it is
 // mainnet-only (0 testnet triples), so it is intentionally NOT added here yet.
 
-async function fetchDomainTriplesInternal(): Promise<DomainTripleData[]> {
+async function fetchDomainTriplesInternal(): Promise<{
+  triples: DomainTripleData[]
+  /** Folded-away skillId → representative skillId (see refineSkillTriples). */
+  foldedSkillIds: ReadonlyMap<string, string>
+}> {
   // Step 1: fetch all skill triples ("is skilled in" by term_id + legacy isTrustedFor)
   const res = await gql<{
     triples: Array<{
@@ -611,7 +616,7 @@ async function fetchDomainTriplesInternal(): Promise<DomainTripleData[]> {
   `)
 
   const triples = res?.triples || []
-  if (triples.length === 0) return []
+  if (triples.length === 0) return { triples: [], foldedSkillIds: new Map() }
 
   const vaultIds: string[] = []
   for (const t of triples) {
@@ -636,7 +641,7 @@ async function fetchDomainTriplesInternal(): Promise<DomainTripleData[]> {
     } catch { /* skip */ }
   }
 
-  return triples.map(t => {
+  const raw = triples.map(t => {
     const forVault = vaultMap.get(t.term_id) || { totalShares: 0n, count: 0 }
     const againstVault = t.counter_term_id
       ? (vaultMap.get(t.counter_term_id) || { totalShares: 0n, count: 0 })
@@ -654,6 +659,15 @@ async function fetchDomainTriplesInternal(): Promise<DomainTripleData[]> {
       opposePositionCount: againstVault.count,
     }
   })
+
+  // Faza 1 — shared quality/structure layer: junk-filter + case/duplicate-atom
+  // folding. Applied at the fetch boundary so ALL consumers (skills, domains,
+  // trust_query, platform stats, MCP) see identical refined data. The page's
+  // own fetcher (src/app/domains/page.tsx) applies the same function.
+  // TODO(dedup): fetchDomainTriples in page.tsx duplicates this whole fetcher —
+  // fold both onto one shared implementation.
+  const refined = refineSkillTriples(raw)
+  return { triples: refined.triples, foldedSkillIds: refined.foldedSkillIds }
 }
 
 export async function getSkills(): Promise<SkillApiItem[]> {
@@ -672,7 +686,7 @@ export async function getSkills(): Promise<SkillApiItem[]> {
   const skillAtoms = data?.atoms || []
 
   // Get domain triples to compute agent count + stake per skill
-  const domainTriples = await fetchDomainTriplesInternal()
+  const { triples: domainTriples } = await fetchDomainTriplesInternal()
   const domains = aggregateDomains(domainTriples)
 
   const domainMap = new Map(domains.map(d => [d.id, d]))
@@ -704,8 +718,10 @@ export async function getSkillDetail(skillTermId: string): Promise<SkillDetailAp
   const skill = skills.find(s => s.id === skillTermId)
   if (!skill) return null
 
-  const domainTriples = await fetchDomainTriplesInternal()
-  const filtered = domainTriples.filter(t => t.skillId === skillTermId)
+  const { triples: domainTriples, foldedSkillIds } = await fetchDomainTriplesInternal()
+  // Resolve folded duplicate atoms to their representative (merge, don't lose)
+  const resolvedId = foldedSkillIds.get(skillTermId) ?? skillTermId
+  const filtered = domainTriples.filter(t => t.skillId === resolvedId)
   const agents = scoreDomainAgents(filtered)
 
   return {
@@ -723,18 +739,24 @@ export async function getSkillDetail(skillTermId: string): Promise<SkillDetailAp
 // ─── Domains ─────────────────────────────────────────────────────────────────
 
 export async function getDomains() {
-  const domainTriples = await fetchDomainTriplesInternal()
+  const { triples: domainTriples } = await fetchDomainTriplesInternal()
   const domains = aggregateDomains(domainTriples)
 
-  return domains.map(d => ({
-    id: d.id,
-    name: d.name,
-    agentCount: d.agentCount,
-    totalStake: weiToFloat(d.totalShares),
-    totalStakers: d.totalStakers,
-    topAgent: d.topAgent,
-    topAgentScore: d.topAgentScore,
-  }))
+  return domains.map(d => {
+    // Faza 1 — canonical bucket grouping (additive fields; same mapping as /domains page)
+    const mapping = mapSkillToBucket(d.name)
+    return {
+      id: d.id,
+      name: d.name,
+      agentCount: d.agentCount,
+      totalStake: weiToFloat(d.totalShares),
+      totalStakers: d.totalStakers,
+      topAgent: d.topAgent,
+      topAgentScore: d.topAgentScore,
+      bucket: mapping.bucket,
+      bucketStatus: mapping.status,
+    }
+  })
 }
 
 export async function getDomainAgents(
@@ -751,14 +773,17 @@ export async function getDomainAgents(
 }> {
   const { minTrust = 0, limit = 20 } = options
 
-  const domainTriples = await fetchDomainTriplesInternal()
-  const domainTriple = domainTriples.find(t => t.skillId === domainId)
+  const { triples: domainTriples, foldedSkillIds } = await fetchDomainTriplesInternal()
+  // Resolve folded duplicate atoms to their representative (merge, don't lose):
+  // a link to a folded-away term_id lands on the merged leaderboard.
+  const resolvedId = foldedSkillIds.get(domainId) ?? domainId
+  const domainTriple = domainTriples.find(t => t.skillId === resolvedId)
 
-  if (!domainTriple && domainTriples.filter(t => t.skillId === domainId).length === 0) {
+  if (!domainTriple) {
     return { domain: null, agents: [], total: 0 }
   }
 
-  const filtered = domainTriples.filter(t => t.skillId === domainId)
+  const filtered = domainTriples.filter(t => t.skillId === resolvedId)
   let agents = scoreDomainAgents(filtered)
 
   if (minTrust > 0) {
@@ -766,10 +791,11 @@ export async function getDomainAgents(
   }
 
   const total = agents.length
-  const domainName = domainTriple ? cleanDomainName(domainTriple.skillName) : ''
+  const domainName = cleanDomainName(domainTriple.skillName)
 
   return {
-    domain: { id: domainId, name: domainName },
+    // id is the REPRESENTATIVE term_id (may differ from the queried, folded id)
+    domain: { id: resolvedId, name: domainName },
     agents: agents.slice(0, limit).map(a => ({
       rank: a.rank,
       agentId: a.agentId,
@@ -923,7 +949,7 @@ export async function trustQuery(params: {
 
   if (skill) {
     // Domain-scoped query
-    const domainTriples = await fetchDomainTriplesInternal()
+    const { triples: domainTriples } = await fetchDomainTriplesInternal()
 
     // Match domain by name (case-insensitive, slug-friendly)
     const normalizeSkill = (s: string) => s.toLowerCase().replace(/[-_\s]+/g, '-')
@@ -991,7 +1017,7 @@ export async function trustQuery(params: {
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export async function getPlatformStats() {
-  const [agentRows, skillData, evaluatorProfiles, domainTriples] = await Promise.all([
+  const [agentRows, skillData, evaluatorProfiles, { triples: domainTriples }] = await Promise.all([
     fetchAgentRows(500),
     gql<{ atoms: Array<{ term_id: string }> }>(`
       query ApiSkillCount {
