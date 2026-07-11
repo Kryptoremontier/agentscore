@@ -15,7 +15,7 @@
  * additionally disables the confirm button on a wrong network.
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Award, Loader2, Check, AlertTriangle, ExternalLink } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient, useBalance } from 'wagmi'
@@ -38,13 +38,35 @@ interface AttestButtonProps {
   agentId: string
   agentName: string
   className?: string
+  /**
+   * Trigger styling only — the modal flow is identical for every variant.
+   * 'hero' = filled primary action (agent header / empty-state CTA),
+   * 'bar'  = large trigger for the mobile sticky action bar,
+   * 'card' = original subtle outline (default, backwards compatible).
+   */
+  variant?: 'hero' | 'bar' | 'card'
+}
+
+const TRIGGER_STYLES: Record<NonNullable<AttestButtonProps['variant']>, { className: string; style: CSSProperties }> = {
+  hero: {
+    className: 'w-full py-3 rounded-xl text-sm md:text-base font-semibold transition-all hover:scale-[1.01] hover:brightness-110 flex items-center justify-center gap-2',
+    style: { background: '#8B5CF6', color: '#FFFFFF', boxShadow: '0 4px 20px rgba(139,92,246,0.35)' },
+  },
+  bar: {
+    className: 'w-full py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2',
+    style: { background: '#8B5CF6', color: '#FFFFFF', boxShadow: '0 2px 12px rgba(139,92,246,0.4)' },
+  },
+  card: {
+    className: 'w-full py-2.5 rounded-xl text-sm font-medium transition-all hover:scale-[1.01] flex items-center justify-center gap-2',
+    style: { background: 'rgba(139,92,246,0.10)', border: '1px solid rgba(139,92,246,0.25)', color: '#8B5CF6' },
+  },
 }
 
 type Status = 'pick' | 'preview' | 'pending' | 'success' | 'error'
 
 const fmt = (wei: bigint) => parseFloat(formatEther(wei)).toFixed(4)
 
-export function AttestButton({ agentId, agentName, className }: AttestButtonProps) {
+export function AttestButton({ agentId, agentName, className, variant = 'card' }: AttestButtonProps) {
   const { isConnected, address, chain } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
@@ -153,8 +175,8 @@ export function AttestButton({ agentId, agentName, className }: AttestButtonProp
           }
           setOpen(true)
         }}
-        className="w-full py-2.5 rounded-xl text-sm font-medium transition-all hover:scale-[1.01] flex items-center justify-center gap-2"
-        style={{ background: 'rgba(139,92,246,0.10)', border: '1px solid rgba(139,92,246,0.25)', color: '#8B5CF6' }}
+        className={TRIGGER_STYLES[variant].className}
+        style={TRIGGER_STYLES[variant].style}
       >
         <Award className="w-4 h-4" />
         Attest Competence

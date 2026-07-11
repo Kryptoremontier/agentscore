@@ -39,6 +39,9 @@ import { TrustSparkline } from '@/components/TrustSparkline'
 import { AgentRadar } from '@/components/AgentRadar'
 import { TrustTimeline, ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
+import { AttestButton } from '@/components/attest/AttestButton'
+import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
+import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -161,6 +164,9 @@ function AgentsPageContent() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [platformFee, setPlatformFee] = useState<{ fixedFee: bigint; bps: bigint } | null>(null)
   const [skillTriples, setSkillTriples] = useState<any[]>([])
+  // Distinguishes "not fetched yet" from "fetched, zero attestations" — the
+  // empty-state CTA must not flash while skill triples are still loading.
+  const [skillTriplesLoaded, setSkillTriplesLoaded] = useState(false)
   // Cache hybrid scores keyed by agent term_id, populated when modal computes them.
   // Cards fall back to trust score until the modal has been opened for that agent.
   const [objectScoreByTermId, setObjectScoreByTermId] = useState<Record<string, number>>({})
@@ -521,15 +527,26 @@ function AgentsPageContent() {
     })
   }, [selectedAgent?.term_id])
 
-  // Fetch skill triples when modal opens (for skill trust breakdown)
+  // Fetch skill triples when modal opens (for skill trust breakdown + empty-state CTA)
   useEffect(() => {
+    let cancelled = false
+    setSkillTriplesLoaded(false)
     if (!selectedAgent) {
       setSkillTriples([])
       return
     }
     fetchAgentSkillTriples(selectedAgent.term_id)
-      .then(setSkillTriples)
-      .catch(() => setSkillTriples([]))
+      .then(triples => {
+        if (cancelled) return
+        setSkillTriples(triples)
+        setSkillTriplesLoaded(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSkillTriples([])
+        // fetch failed — unknown, keep loaded=false so the CTA stays hidden
+      })
+    return () => { cancelled = true }
   }, [selectedAgent?.term_id])
 
   // PRIMARY: Derive userPosition from allPositions (same data that feeds Attestations — reliable)
@@ -1895,7 +1912,7 @@ function AgentsPageContent() {
           }}
           onClick={() => setSelectedAgent(null)}
         >
-          <div className="min-h-full p-4 flex items-start justify-center">
+          <div className="min-h-full p-4 pb-36 md:pb-4 flex items-start justify-center">
             <div className="w-full max-w-3xl my-4" onClick={e => e.stopPropagation()}>
 
               {/* === TOP CARD: Agent Header === */}
@@ -1983,7 +2000,26 @@ function AgentsPageContent() {
                     </div>
                   ))}
                 </div>
+
+                {/* PRIMARY ACTION — attest competence (the core data unit of the product) */}
+                <AttestButton
+                  agentId={selectedAgent.term_id}
+                  agentName={getAgentNameFromAtom(selectedAgent)}
+                  variant="hero"
+                  className="mt-4"
+                />
               </div>
+
+              {/* Empty state as growth engine — triples fetched AND no genuine
+                  skill attestations (skillBreakdown filters non-skill predicates,
+                  matching the API's skillCount semantics) */}
+              {skillTriplesLoaded && !skillBreakdown && (
+                <AttestEmptyState
+                  agentId={selectedAgent.term_id}
+                  agentName={getAgentNameFromAtom(selectedAgent)}
+                  className="mb-3"
+                />
+              )}
 
               {/* === ACTION SECTION: Buy / Sell Shares === */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
@@ -3677,6 +3713,15 @@ function AgentsPageContent() {
           {/* Backdrop click to close */}
           <div className="fixed inset-0 top-[64px] -z-10" onClick={() => setSelectedAgent(null)} />
         </div>
+      )}
+
+      {/* Mobile: Attest always in viewport while the agent modal is open —
+          sibling of the modal so taps don't bubble into the backdrop-close */}
+      {selectedAgent && (
+        <AttestStickyBar
+          agentId={selectedAgent.term_id}
+          agentName={getAgentNameFromAtom(selectedAgent)}
+        />
       )}
 
       {/* Report Modal */}
