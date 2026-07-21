@@ -17,10 +17,21 @@
  * Curator provenance: buckets minted by 0x665e3192… (first 3) and community
  * curators (see project memory: canonical domain taxonomy).
  *
- * NOTE (merge plan): `domain-aliases.ts` and `skill-domain-map.ts` (branch
- * domains-skill-predicate-fix) define overlapping bucket lists. Once branches
- * merge, both should import bucket definitions from THIS registry — one
- * source, no drift.
+ * TODO (post-merge, not done): `domain-aliases.ts` still defines its own
+ * overlapping bucket list (`CANONICAL_DOMAINS`) instead of importing this
+ * registry. NOT a trivial swap — the shapes have diverged:
+ *   - `CanonicalDomain` (domain-aliases.ts) carries a `status:
+ *     'canonical' | 'pending_canonical'` axis and allows `termId: null`;
+ *     `skill-domain-map.test.ts` asserts exactly that (Agriculture/Energy/
+ *     Safety → status 'pending_canonical', termId null).
+ *   - `CanonicalDomainDef` (this file) has no `status` field and all 8
+ *     term_ids populated (Agriculture/Energy/Safety were minted on mainnet
+ *     14 Jun — see project memory), because this registry answers a
+ *     different question (attest-picker: mint-if-missing on testnet) than
+ *     domain-aliases answers (category-fold: is there a reusable atom at all).
+ * Unifying requires either adding a status axis here or reworking the
+ * pending_canonical tests in skill-domain-map — do that as its own change,
+ * not folded into a merge.
  */
 
 export interface CanonicalDomainDef {
