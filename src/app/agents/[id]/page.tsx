@@ -10,6 +10,9 @@ import { AgentHeader } from '@/components/agents/AgentHeader'
 import { AgentStats } from '@/components/agents/AgentStats'
 import { AgentTabs } from '@/components/agents/AgentTabs'
 import { TrustButton } from '@/components/trust/TrustButton'
+import { AttestButton } from '@/components/attest/AttestButton'
+import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
+import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 import { Button } from '@/components/ui/button'
 import { PageHeaderSkeleton, LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { parseAgentCard } from '@/lib/agent-card'
@@ -36,7 +39,7 @@ function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
     trustScore: Math.round(apiAgent.score.objectScore ?? apiAgent.score.trustScore),
     positiveStake: BigInt(Math.round(apiAgent.supportStake * 1e18)),
     negativeStake: BigInt(Math.round(apiAgent.opposeStake * 1e18)),
-    attestationCount: 0,
+    attestationCount: apiAgent.skillBreakdown.length,
     reportCount: 0,
     stakerCount: apiAgent.stakerCount,
   }
@@ -154,7 +157,8 @@ export default function AgentDetailPage() {
 
   return (
     <PageBackground image="hero" opacity={0.35}>
-      <div className="pt-24 pb-16">
+      {/* pb-40 on mobile clears the sticky attest bar + bottom nav */}
+      <div className="pt-24 pb-40 md:pb-16">
         <div className="container">
         {/* Breadcrumb & Actions */}
         <motion.div
@@ -182,10 +186,18 @@ export default function AgentDetailPage() {
 
         {/* Content */}
         <div className="space-y-6">
-          {/* Header */}
-          <AgentHeader agent={agent} />
+          {/* Header — Attest is THE primary action, mounted next to the name */}
+          <AgentHeader
+            agent={agent}
+            action={<AttestButton agentId={agent.id} agentName={agent.name} variant="hero" />}
+          />
 
-          {/* Trust Actions */}
+          {/* Empty state as growth engine — zero attestations = honest "be the first" CTA */}
+          {agent.attestationCount === 0 && (
+            <AttestEmptyState agentId={agent.id} agentName={agent.name} />
+          )}
+
+          {/* Secondary actions */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -224,6 +236,9 @@ export default function AgentDetailPage() {
         </motion.div>
         </div>
       </div>
+
+      {/* Mobile: Attest always in viewport, above the bottom nav */}
+      <AttestStickyBar agentId={agent.id} agentName={agent.name} />
     </PageBackground>
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { Shield, ExternalLink, Copy, CheckCircle, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -9,9 +10,11 @@ import type { Agent } from '@/types/agent'
 
 interface AgentHeaderProps {
   agent: Agent
+  /** Primary action slot rendered directly under the agent name — the hero CTA. */
+  action?: ReactNode
 }
 
-export function AgentHeader({ agent }: AgentHeaderProps) {
+export function AgentHeader({ agent, action }: AgentHeaderProps) {
   const isVerified = agent.verificationLevel !== 'none'
 
   const handleCopyAddress = () => {
@@ -61,6 +64,9 @@ export function AgentHeader({ agent }: AgentHeaderProps) {
               </div>
             </div>
           </div>
+
+          {/* Primary action — hero CTA under the name, above the fold */}
+          {action && <div className="mb-6 sm:max-w-xs">{action}</div>}
 
           {/* Description */}
           {agent.description && (
