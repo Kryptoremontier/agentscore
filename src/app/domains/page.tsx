@@ -14,6 +14,13 @@ import {
   type DomainAgent,
   type DomainTripleData,
 } from '@/lib/domain-scoring'
+import {
+  refineSkillTriples,
+  mapSkillToBucket,
+  SKILL_DOMAIN_BUCKETS,
+  UNCATEGORIZED,
+  type SkillBucketStatus,
+} from '@/lib/skill-domain-map'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -44,10 +51,21 @@ function rankColor(rank: number): string {
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
-async function fetchDomainTriples(): Promise<DomainTripleData[]> {
-  if (!GRAPHQL_URL) return []
+// Faza 0.5a — skill-domain predicate, matched by TERM_ID (not label).
+// "is skilled in" is the cross-network canonical skill predicate: SAME term_id
+// on testnet (75 triples) AND mainnet (134 triples), so it works on the current
+// testnet and survives the testnet→mainnet migration. Matching by term_id avoids
+// the brittle label-string matching that previously missed mainnet entirely.
+// Faza 0.5b (future, mainnet layer): also fold in "is best at"
+// (0xe39dc1c656b35d408dd772007f77cffddfa4e720b3cff91ef3c82cdbd65c7447) — it is
+// mainnet-only (0 testnet triples), so it is intentionally NOT added here yet.
+const IS_SKILLED_IN_PREDICATE_ID =
+  '0xe332e7d663cda20970d2e9a9278b6a5be9575c0514379e8574aa61203c549103'
+
+async function fetchDomainTriples(): Promise<{ triples: DomainTripleData[]; junkCount: number }> {
+  if (!GRAPHQL_URL) return { triples: [], junkCount: 0 }
   try {
-    // Step 1: fetch all hasAgentSkill triples
+    // Step 1: fetch all skill triples ("is skilled in" by term_id + legacy isTrustedFor)
     const res = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -57,8 +75,7 @@ async function fetchDomainTriples(): Promise<DomainTripleData[]> {
             triples(
               where: {
                 _or: [
-                  { predicate: { label: { _eq: "hasAgentSkill" } } }
-                  { predicate: { label: { _eq: "has-agent-skill" } } }
+                  { predicate_id: { _eq: "${IS_SKILLED_IN_PREDICATE_ID}" } }
                   { predicate: { label: { _eq: "isTrustedFor" } } }
                 ]
               }
@@ -85,7 +102,7 @@ async function fetchDomainTriples(): Promise<DomainTripleData[]> {
       object: { term_id: string; label: string }
     }> = data?.data?.triples || []
 
-    if (triples.length === 0) return []
+    if (triples.length === 0) return { triples: [], junkCount: 0 }
 
     // Step 2: collect vault IDs for position fetch
     const vaultIds: string[] = []
@@ -127,7 +144,7 @@ async function fetchDomainTriples(): Promise<DomainTripleData[]> {
     }
 
     // Step 5: build DomainTripleData[]
-    return triples.map(t => {
+    const raw = triples.map(t => {
       const forVault = vaultMap.get(t.term_id) || { totalShares: 0n, count: 0 }
       const againstVault = t.counter_term_id
         ? (vaultMap.get(t.counter_term_id) || { totalShares: 0n, count: 0 })
@@ -145,9 +162,16 @@ async function fetchDomainTriples(): Promise<DomainTripleData[]> {
         opposePositionCount: againstVault.count,
       }
     })
+
+    // Faza 1 — shared quality/structure layer (same function as api-data.ts):
+    // junk-filter + case/duplicate-atom folding at the fetch boundary.
+    // TODO(dedup): this fetcher duplicates fetchDomainTriplesInternal in
+    // api-data.ts — fold both onto one shared implementation.
+    const refined = refineSkillTriples(raw)
+    return { triples: refined.triples, junkCount: refined.junkCount }
   } catch (err) {
     console.warn('[fetchDomainTriples] Failed:', err)
-    return []
+    return { triples: [], junkCount: 0 }
   }
 }
 
@@ -332,6 +356,7 @@ export default function DomainsPage() {
 
 function DomainsPageContent() {
   const [allTriples, setAllTriples] = useState<DomainTripleData[]>([])
+  const [junkCount, setJunkCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -342,8 +367,9 @@ function DomainsPageContent() {
     setLoading(true)
     setError(null)
     fetchDomainTriples()
-      .then(triples => {
+      .then(({ triples, junkCount }) => {
         setAllTriples(triples)
+        setJunkCount(junkCount)
         setLoading(false)
       })
       .catch(e => {
@@ -372,6 +398,28 @@ function DomainsPageContent() {
     // 'stake' is already sorted by aggregateDomains
     return result
   }, [allDomains, searchTerm, sortBy])
+
+  // Faza 1 — group domains under canonical buckets (order: canonical buckets,
+  // then pending, Uncategorized last). Sort WITHIN a group = filteredDomains order.
+  const groupedDomains = useMemo(() => {
+    const byBucket = new Map<string, Domain[]>()
+    for (const d of filteredDomains) {
+      const { bucket } = mapSkillToBucket(d.name)
+      const arr = byBucket.get(bucket)
+      if (arr) arr.push(d)
+      else byBucket.set(bucket, [d])
+    }
+    const sections: Array<{ bucket: string; status: SkillBucketStatus; domains: Domain[] }> = []
+    for (const b of SKILL_DOMAIN_BUCKETS) {
+      const domains = byBucket.get(b.label)
+      if (domains?.length) sections.push({ bucket: b.label, status: b.status, domains })
+    }
+    const uncategorized = byBucket.get(UNCATEGORIZED)
+    if (uncategorized?.length) {
+      sections.push({ bucket: UNCATEGORIZED, status: 'uncategorized', domains: uncategorized })
+    }
+    return sections
+  }, [filteredDomains])
 
   // Ranked agents for selected domain
   const domainAgents = useMemo<DomainAgent[]>(() => {
@@ -434,6 +482,11 @@ function DomainsPageContent() {
                   <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Total Stakers</p>
                 </div>
               </div>
+            )}
+            {!loading && (allDomains.length > 0 || junkCount > 0) && (
+              <p className="mt-2 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                {allDomains.length} {allDomains.length === 1 ? 'skill' : 'skills'} shown · {junkCount} junk filtered
+              </p>
             )}
           </div>
 
@@ -512,13 +565,42 @@ function DomainsPageContent() {
                   </div>
                 )}
 
-                {!loading && filteredDomains.map(domain => (
-                  <DomainCard
-                    key={domain.id}
-                    domain={domain}
-                    selected={selectedDomain?.id === domain.id}
-                    onClick={() => setSelectedDomain(domain)}
-                  />
+                {!loading && groupedDomains.map(section => (
+                  <div key={section.bucket}>
+                    {/* Bucket section header */}
+                    <div className="flex items-center gap-1.5 px-4 pt-3 pb-1">
+                      <p
+                        className="text-[10px] font-semibold uppercase tracking-wider truncate"
+                        style={{
+                          color: section.status === 'uncategorized'
+                            ? 'rgba(255,255,255,0.25)'
+                            : 'rgba(255,255,255,0.35)',
+                        }}
+                      >
+                        {section.bucket}
+                      </p>
+                      <span className="text-[10px] tabular-nums" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                        {section.domains.length}
+                      </span>
+                      {section.status === 'pending_canonical' && (
+                        <span
+                          className="text-[9px] font-medium px-1 py-px rounded"
+                          style={{ color: '#F59E0B', background: 'rgba(245,158,11,0.12)' }}
+                          title="No canonical atom minted yet"
+                        >
+                          pending
+                        </span>
+                      )}
+                    </div>
+                    {section.domains.map(domain => (
+                      <DomainCard
+                        key={domain.id}
+                        domain={domain}
+                        selected={selectedDomain?.id === domain.id}
+                        onClick={() => setSelectedDomain(domain)}
+                      />
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>
