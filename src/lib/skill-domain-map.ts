@@ -22,8 +22,20 @@ import {
   type CanonicalDomain,
   type DomainStatus,
 } from './domain-aliases'
+import { CANONICAL_DOMAINS_REGISTRY } from './canonical-domains'
 import { classifyJunk } from './skill-junk-filter'
 import { cleanDomainName, type DomainTripleData } from './domain-scoring'
+
+/**
+ * Term_ids of the canonical bucket atoms (ETAP 2a). Triples whose OBJECT is
+ * one of these are ATTESTATIONS ([agent] is skilled in [canonical domain]) —
+ * the structural data unit of the Trust Stack — not skill tags. They are
+ * partitioned out of the skill stream (see refineSkillTriples) so a bucket
+ * atom never renders as a pseudo-skill row inside its own bucket section.
+ */
+const CANONICAL_BUCKET_TERM_IDS: ReadonlySet<string> = new Set(
+  CANONICAL_DOMAINS_REGISTRY.map((d) => d.termId),
+)
 
 export { UNCATEGORIZED }
 
@@ -149,6 +161,12 @@ export function mapSkillToBucket(raw: string): SkillBucketMapping {
 export interface RefinedSkillTriples {
   /** Junk-free triples; case/duplicate skill atoms merged onto one skillId. */
   triples: DomainTripleData[]
+  /**
+   * Triples whose object is a canonical bucket atom — community ATTESTATIONS,
+   * partitioned out of `triples` before junk/fold. Structure, not skills:
+   * consumed by the Attested tier (attestation-reader), never by skill rows.
+   */
+  attestationTriples: DomainTripleData[]
   /** Distinct junk skill labels dropped (for the UI stat line). */
   junkCount: number
   /** The dropped labels themselves (cleaned), for debugging/reporting. */
@@ -168,6 +186,9 @@ export interface RefinedSkillTriples {
  * Refine the raw skill-triple stream — the single shared quality/structure
  * step applied at BOTH fetch boundaries (page + api-data) so every consumer
  * sees identical data:
+ *  0. partition out ATTESTATION triples (object = canonical bucket atom,
+ *     matched by term_id) — returned as `attestationTriples`, excluded from
+ *     skill rows (ETAP 2a: attested tier vs ecosystem signals)
  *  1. clean skill labels (cleanDomainName — strips Skill:/INTU: prefixes,
  *     " - description" tails)
  *  2. drop junk labels (TRANSITIONAL — see skill-junk-filter.ts)
@@ -179,11 +200,16 @@ export interface RefinedSkillTriples {
  */
 export function refineSkillTriples(triples: DomainTripleData[]): RefinedSkillTriples {
   const kept: DomainTripleData[] = []
+  const attestationTriples: DomainTripleData[] = []
   const junkLabelSet = new Set<string>()
   let junkTripleCount = 0
 
   for (const t of triples) {
     if (!t?.skillName) continue
+    if (t.skillId && CANONICAL_BUCKET_TERM_IDS.has(t.skillId)) {
+      attestationTriples.push(t)
+      continue
+    }
     const cleaned = cleanDomainName(t.skillName)
     if (classifyJunk(cleaned)) {
       junkLabelSet.add(cleaned)
@@ -232,7 +258,7 @@ export function refineSkillTriples(triples: DomainTripleData[]): RefinedSkillTri
   })
 
   const junkLabels = [...junkLabelSet].sort()
-  return { triples: merged, junkCount: junkLabels.length, junkLabels, junkTripleCount, foldedSkillIds }
+  return { triples: merged, attestationTriples, junkCount: junkLabels.length, junkLabels, junkTripleCount, foldedSkillIds }
 }
 
 function isUpperFirst(label: string): boolean {
