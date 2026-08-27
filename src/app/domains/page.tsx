@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from 'react'
 import { motion } from 'framer-motion'
-import { Layers, Search, Trophy, RefreshCw } from 'lucide-react'
+import { Layers, Search, Trophy, RefreshCw, BadgeCheck, ChevronDown, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { APP_CONFIG } from '@/lib/app-config'
@@ -21,6 +21,8 @@ import {
   UNCATEGORIZED,
   type SkillBucketStatus,
 } from '@/lib/skill-domain-map'
+import { fetchAttestations, truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
+import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -173,6 +175,142 @@ async function fetchDomainTriples(): Promise<{ triples: DomainTripleData[]; junk
     console.warn('[fetchDomainTriples] Failed:', err)
     return { triples: [], junkCount: 0 }
   }
+}
+
+// ─── Attested tier (ETAP 2a) ─────────────────────────────────────────────────
+
+/** BigInt wei → display tTRUST (CLAUDE.md convention: Number(x) / 1e18). */
+function formatStake(wei: bigint): string {
+  const t = Number(wei) / 1e18
+  if (t === 0) return '0'
+  if (t < 0.001) return t.toFixed(4)
+  return t.toFixed(3)
+}
+
+function AttestedEntryRow({ entry }: { entry: AttestedEntry }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div
+      className="rounded-xl px-4 py-2.5"
+      style={{ background: 'rgba(255,255,255,0.03)' }}
+    >
+      <div className="flex items-center gap-3">
+        <BadgeCheck className="w-4 h-4 flex-shrink-0" style={{ color: '#10b981' }} />
+        <Link
+          href={`/agents?open=${entry.agentId}`}
+          className="text-sm font-semibold text-white truncate hover:underline"
+        >
+          {entry.agentName}
+        </Link>
+        <div className="flex-1" />
+        <span className="text-xs tabular-nums flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          {entry.distinctAttesters} {entry.distinctAttesters === 1 ? 'attester' : 'attesters'}
+        </span>
+        <span className="text-xs tabular-nums flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          {formatStake(entry.totalStake)} tTRUST
+        </span>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="flex items-center gap-1 text-xs font-medium flex-shrink-0 transition-colors"
+          style={{ color: '#8B5CF6' }}
+        >
+          attested by
+          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-2 ml-7 flex flex-wrap gap-1.5">
+          {entry.attesters.map(wallet => (
+            <span
+              key={wallet}
+              className="text-xs font-mono px-2 py-0.5 rounded-md"
+              style={{ background: 'rgba(139,92,246,0.10)', color: 'rgba(255,255,255,0.6)' }}
+              title={wallet}
+            >
+              {truncateWallet(wallet)}
+            </span>
+          ))}
+          {entry.opposeStake > 0n && (
+            <span className="text-xs px-2 py-0.5 rounded-md" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.10)' }}>
+              {formatStake(entry.opposeStake)} tTRUST opposed
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AttestedSection({ entries, loading }: { entries: AttestedEntry[]; loading: boolean }) {
+  const byDomain = useMemo(() => {
+    const m = new Map<string, AttestedEntry[]>()
+    for (const e of entries) {
+      const arr = m.get(e.domain.termId)
+      if (arr) arr.push(e)
+      else m.set(e.domain.termId, [e])
+    }
+    return m
+  }, [entries])
+
+  if (loading) {
+    return (
+      <div className="mb-6 rounded-2xl p-4 animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <div className="h-5 w-40 bg-white/10 rounded mb-3" />
+        <div className="h-10 bg-white/5 rounded-xl" />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="mb-6 rounded-2xl p-5"
+      style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.15)' }}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <BadgeCheck className="w-5 h-5" style={{ color: '#10b981' }} />
+        <h2 className="text-base font-bold text-white">Attested</h2>
+      </div>
+      <p className="text-xs mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
+        Community attestations: staked on-chain claims with visible authors.
+      </p>
+
+      <div className="space-y-3">
+        {CANONICAL_DOMAINS_REGISTRY.map(domain => {
+          const domainEntries = byDomain.get(domain.termId) ?? []
+          return (
+            <div key={domain.termId}>
+              <div className="flex items-center gap-1.5 px-1 pb-1">
+                <span className="text-sm">{domain.emoji}</span>
+                <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                  {domain.label}
+                </p>
+                {domainEntries.length > 0 && (
+                  <span className="text-[11px] tabular-nums" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                    {domainEntries.length}
+                  </span>
+                )}
+              </div>
+              {domainEntries.length > 0 ? (
+                <div className="space-y-1.5">
+                  {domainEntries.map(e => (
+                    <AttestedEntryRow key={`${e.agentId}:${e.domain.termId}`} entry={e} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs px-1" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                  No attested agents yet —{' '}
+                  <Link href="/agents" className="underline" style={{ color: '#8B5CF6' }}>
+                    be the first
+                  </Link>
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 // ─── Subcomponents ───────────────────────────────────────────────────────────
@@ -356,6 +494,7 @@ export default function DomainsPage() {
 
 function DomainsPageContent() {
   const [allTriples, setAllTriples] = useState<DomainTripleData[]>([])
+  const [attested, setAttested] = useState<AttestedEntry[]>([])
   const [junkCount, setJunkCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -366,10 +505,11 @@ function DomainsPageContent() {
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
-    fetchDomainTriples()
-      .then(({ triples, junkCount }) => {
+    Promise.all([fetchDomainTriples(), fetchAttestations()])
+      .then(([{ triples, junkCount }, attestedEntries]) => {
         setAllTriples(triples)
         setJunkCount(junkCount)
+        setAttested(attestedEntries)
         setLoading(false)
       })
       .catch(e => {
@@ -459,7 +599,7 @@ function DomainsPageContent() {
               </button>
             </div>
             <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              Explore AI agent rankings by expertise domain. Each domain is a skill with its own agent leaderboard.
+              Attested = staked on-chain claims with visible authors · Signals = unweighted ecosystem tags.
             </p>
 
             {/* Stats row */}
@@ -483,12 +623,15 @@ function DomainsPageContent() {
                 </div>
               </div>
             )}
-            {!loading && (allDomains.length > 0 || junkCount > 0) && (
+            {!loading && (allDomains.length > 0 || junkCount > 0 || attested.length > 0) && (
               <p className="mt-2 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                {allDomains.length} {allDomains.length === 1 ? 'skill' : 'skills'} shown · {junkCount} junk filtered
+                {attested.length} attested · {allDomains.length} {allDomains.length === 1 ? 'skill' : 'skills'} shown · {junkCount} junk filtered
               </p>
             )}
           </div>
+
+          {/* ── Attested tier (ETAP 2a) ── */}
+          <AttestedSection entries={attested} loading={loading} />
 
           {/* Error */}
           {error && (
@@ -498,8 +641,16 @@ function DomainsPageContent() {
             </div>
           )}
 
+          {/* ── Ecosystem signals (secondary tier) ── */}
+          <div className="flex items-center gap-2 mb-2">
+            <Layers className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.35)' }} />
+            <h2 className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>
+              Ecosystem signals
+            </h2>
+          </div>
+
           {/* Two-column layout */}
-          <div className="flex gap-4 min-h-[600px]">
+          <div className="flex gap-4 min-h-[600px]" style={{ opacity: 0.92 }}>
 
             {/* ── Left: Domain list ── */}
             <div

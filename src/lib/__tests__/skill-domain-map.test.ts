@@ -142,9 +142,61 @@ describe('refineSkillTriples — quality/structure pipeline', () => {
   it('returns an empty result for empty input', () => {
     const res = refineSkillTriples([])
     expect(res.triples).toEqual([])
+    expect(res.attestationTriples).toEqual([])
     expect(res.junkCount).toBe(0)
     expect(res.junkLabels).toEqual([])
     expect(res.junkTripleCount).toBe(0)
     expect(res.foldedSkillIds.size).toBe(0)
+  })
+})
+
+describe('refineSkillTriples — attestation partition (ETAP 2a)', () => {
+  // The Knowledge / Productivity canonical bucket atom (canonical-domains.ts).
+  const KNOWLEDGE_BUCKET_ID = '0x8a0e3710014141458ee303a6cc504704ee3da370450d7f5cd5a898186a2f66e4'
+
+  it('partitions bucket-atom triples out of skill rows into attestationTriples', () => {
+    const attestation = T('Knowledge / Productivity', KNOWLEDGE_BUCKET_ID, '0xluda')
+    const skill = T('React', '0xs4')
+    const res = refineSkillTriples([attestation, skill])
+
+    expect(res.triples).toHaveLength(1)
+    expect(res.triples[0].skillName).toBe('React')
+    expect(res.attestationTriples).toHaveLength(1)
+    expect(res.attestationTriples[0]).toBe(attestation)
+  })
+
+  it('never renders a bucket atom as a pseudo-skill (not junk-counted, not folded)', () => {
+    const res = refineSkillTriples([
+      T('Knowledge / Productivity', KNOWLEDGE_BUCKET_ID, '0xluda'),
+    ])
+    expect(res.triples).toHaveLength(0)
+    expect(res.junkCount).toBe(0)
+    expect(res.junkTripleCount).toBe(0)
+    expect(res.foldedSkillIds.size).toBe(0)
+    expect(res.attestationTriples).toHaveLength(1)
+  })
+
+  it('matches by term_id, NOT label — a different atom with a bucket-like label stays a skill', () => {
+    const res = refineSkillTriples([
+      T('Knowledge / Productivity', '0xnot-the-bucket-atom'),
+    ])
+    expect(res.triples).toHaveLength(1)
+    expect(res.attestationTriples).toHaveLength(0)
+  })
+
+  it('partitions all 8 canonical bucket atoms', () => {
+    const bucketIds = [
+      '0xecc2b1dce5f8269777d9001faa532642691d7038eed3c639f04895ac5b312d42', // Crypto / Onchain
+      '0x0caa623ae3f31ffaa9bf4e27acd1c25d1f7fe3a141145fd77c82cd21b4f59226', // AI / Coding
+      KNOWLEDGE_BUCKET_ID,
+      '0x9c7db27885e2e35f9a2f674943f61b02f321ea22d91dd48dea6d82647f884a91', // Social
+      '0x4e0095d1e2ecfcdccc5abe6e562c513924fb5cddc35c5974ea45327c842618e6', // Entertainment
+      '0x19c043b6065719f719ceb67cbbb6989d41d69ba81c3c5cc43327ed7a4a135c0e', // Agriculture
+      '0xbfac4ea93d9ffa5126ee9a13d97e5fad326a8aeeec33c95d6f93e311b8818968', // Energy
+      '0xa4f404dee0ff69863e6782150aecf688dc6337659da87a3fa0ff0b3ff5214eaf', // Safety / Identity
+    ]
+    const res = refineSkillTriples(bucketIds.map((id, i) => T(`Bucket ${i}`, id)))
+    expect(res.triples).toHaveLength(0)
+    expect(res.attestationTriples).toHaveLength(8)
   })
 })
