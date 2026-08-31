@@ -304,11 +304,12 @@ User stakes 1 tTRUST on Agent X:
 
 AgentScore is fully agent-readable. If you are an AI agent or building one:
 
-- **`/llms.txt`** — Quick-start guide for LLMs: [agentscore-gilt.vercel.app/llms.txt](https://agentscore-gilt.vercel.app/llms.txt)
+- **`/llms.txt`** — Quick-start guide for LLMs: [agentscore-gilt.vercel.app/llms.txt](https://agentscore-gilt.vercel.app/llms.txt). Sourced live from the same code that enforces the API's behavior (endpoint list, cache policy, trust disclaimer), so it can't drift out of date.
 - **`/.well-known/agent.json`** — A2A auto-discovery manifest: [agentscore-gilt.vercel.app/.well-known/agent.json](https://agentscore-gilt.vercel.app/.well-known/agent.json)
 - **MCP Server** — `https://agentscore-gilt.vercel.app/api/mcp/mcp` (11 tools)
 - **REST API** — `https://agentscore-gilt.vercel.app/api/v1` (13 endpoints)
 - **Agent Cards** — `/api/v1/agents/{id}/card` (A2A-compatible JSON per agent)
+- **Trust breakdown as plain text** — `GET /api/v1/agents/{id}/trust` with `Accept: text/plain` or `?format=text` returns a compact one-line-per-field rendering for agent harnesses that don't parse JSON well.
 
 For agents working on this codebase, see [`CLAUDE.md`](./CLAUDE.md).
 
