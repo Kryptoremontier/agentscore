@@ -5,6 +5,11 @@ import { AGENT_SURFACE_VERSION, TRUST_DISCLAIMER, TRUST_ROUTE_CACHE_CONTROL, ren
 
 const RESPONSE_HEADERS = {
   'Cache-Control': TRUST_ROUTE_CACHE_CONTROL,
+  // JSON vs. text share one URL and differ only by the Accept header —
+  // without Vary the CDN edge cache serves whichever representation was
+  // cached first to every client hitting that URL (?format=text is exempt:
+  // its query string is already part of the cache key).
+  Vary: 'Accept',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
