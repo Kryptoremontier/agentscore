@@ -305,6 +305,7 @@ User stakes 1 tTRUST on Agent X:
 AgentScore is fully agent-readable. If you are an AI agent or building one:
 
 - **`/llms.txt`** — Quick-start guide for LLMs: [agentscore-gilt.vercel.app/llms.txt](https://agentscore-gilt.vercel.app/llms.txt). Sourced live from the same code that enforces the API's behavior (endpoint list, cache policy, trust disclaimer), so it can't drift out of date.
+- **`/skill.md`** — Install AgentScore as a Claude/agent-framework skill: [agentscore-gilt.vercel.app/skill.md](https://agentscore-gilt.vercel.app/skill.md). Byte-identical to this repo's [`SKILL.md`](./SKILL.md) — one HTTP GET checks any agent's reputation before you trust or transact with it.
 - **`/.well-known/agent.json`** — A2A auto-discovery manifest: [agentscore-gilt.vercel.app/.well-known/agent.json](https://agentscore-gilt.vercel.app/.well-known/agent.json)
 - **MCP Server** — `https://agentscore-gilt.vercel.app/api/mcp/mcp` (11 tools)
 - **REST API** — `https://agentscore-gilt.vercel.app/api/v1` (13 endpoints)

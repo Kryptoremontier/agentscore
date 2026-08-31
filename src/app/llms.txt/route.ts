@@ -4,37 +4,10 @@ import {
   AGENT_SURFACE_VERSION,
   TRUST_DISCLAIMER,
   TRUST_ROUTE_CACHE,
+  EXAMPLE_TRUST_BREAKDOWN,
   renderTrustText,
 } from '@/lib/agent-surface'
-import type { AgentTrustBreakdown } from '@/lib/api-data'
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
-
-/**
- * A real trust breakdown captured from testnet (agent "INTU:Talaria",
- * term_id below) — kept as a fixed snapshot so the documented shape stays
- * stable. It is rendered through the same renderTrustText() the live
- * endpoint uses, so the text example below can never drift from what that
- * endpoint actually emits.
- */
-const EXAMPLE_TRUST_BREAKDOWN: AgentTrustBreakdown = {
-  agentId: '0xac7682d94109547c0c03e8f9f76d67f785fab307b6096910235cb75ddb424c6a',
-  agentName: 'INTU:Talaria',
-  score: {
-    objectType: 'agent',
-    trustScore: 70,
-    qualityScore: 50,
-    objectScore: 62,
-    tier: 'good',
-    softGateActive: false,
-    computedAt: '2026-08-31T17:53:59.563Z',
-  },
-  agentScore: 62,
-  trustScore: { raw: 100, confidence: 0.39, anchored: 69.7, momentum: 0 },
-  compositeScore: { total: 50, signalRatio: 100, stakerDiversity: 0, stability: 0, priceRetention: 100 },
-  softGate: { supportRatio: 100, scaleFactor: 1, applied: false },
-  antiManipulation: { diversityWeightedRatio: 100, whaleDetected: true, largestStakerShare: 1, evaluatorWeightsApplied: false },
-  tier: { current: 'unverified', nextTier: 'sandbox', requirements: { stakers: '1/3', stake: '0.0500/0.1 tTRUST', ratio: '100%/0%', age: '129/0 days' } },
-}
 
 function exampleJson(): string {
   return JSON.stringify({
@@ -120,6 +93,15 @@ ${TRUST_DISCLAIMER}
 
 Identity proves WHO an agent is. AgentScore estimates behavioral reputation.
 Neither proves the trustworthiness of an agent's future actions.
+
+## Install as a skill
+
+GET /skill.md — this manual's task-focused counterpart: a Claude/agent-framework
+skill file (frontmatter + curl one-liner) for checking an agent's reputation
+before trusting or transacting with it. Byte-identical to this repo's SKILL.md.
+
+GET /.well-known/agent.json — service manifest (A2A-style auto-discovery):
+name, endpoints, docs, and disclaimer as machine-readable JSON.
 
 ## Links
 

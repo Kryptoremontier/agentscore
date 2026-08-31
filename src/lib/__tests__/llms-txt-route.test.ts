@@ -31,4 +31,12 @@ describe('GET /llms.txt', () => {
     expect(text).toContain('"success":true')
     expect(text).toMatch(/agentId: 0x[0-9a-f]+/)
   })
+
+  it('cross-links the skill and service-manifest surfaces', async () => {
+    const res = await GET()
+    const text = await res.text()
+
+    expect(text).toContain('/skill.md')
+    expect(text).toContain('/.well-known/agent.json')
+  })
 })
