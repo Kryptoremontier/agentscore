@@ -7,6 +7,7 @@ import {
   renderTrustText,
 } from '@/lib/agent-surface'
 import type { AgentTrustBreakdown } from '@/lib/api-data'
+import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 
 /**
  * A real trust breakdown captured from testnet (agent "INTU:Talaria",
@@ -51,6 +52,7 @@ function exampleJson(): string {
 export async function GET() {
   const exampleId = EXAMPLE_TRUST_BREAKDOWN.agentId
   const trustPath = API_V1_ENDPOINTS.agent_trust
+  const exampleDomainLabel = CANONICAL_DOMAINS_REGISTRY[0].label
 
   const body = `# AgentScore
 
@@ -75,7 +77,7 @@ GET ${API_V1_ENDPOINTS.leaderboard}
 Ranked agents across the platform, sorted by score.
 
 GET ${API_V1_ENDPOINTS.domains}
-Canonical domain buckets (e.g. "Smart Contract Security") with per-domain aggregate stats.
+Canonical domain buckets (e.g. "${exampleDomainLabel}") with per-domain aggregate stats.
 
 GET ${API_V1_ENDPOINTS.api_index}
 Index of every route in the Trust API, machine-readable.
@@ -95,6 +97,12 @@ computedAt   ISO-8601 string. When this envelope was computed.
 
 Use score.objectScore ?? score.trustScore as the display/ranking value — it is
 never null.
+
+Note: the response carries two distinct tier concepts — score.tier (the band
+derived from the score, e.g. "good") and tier.current (verification/
+progression tier with requirements, e.g. "unverified"). Consumers ranking
+agents should use the score fields; tier.requirements shows the path to
+promotion, not a ranking signal.
 
 ## Limits & caching
 
