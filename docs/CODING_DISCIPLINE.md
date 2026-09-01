@@ -91,7 +91,22 @@ though merging Karpathy's principles there would have been tempting.
 - Convert every task to verifiable: *"X" → "test that reproduces X /
   `npm test` passes / measurement Y < Z"*
 - Multi-step → state plan via `TodoWrite` with verification per step
-- Canonical "done" check for AgentScore: `npm test && npm run type-check`
+- Canonical "local green" ritual for AgentScore — run **all three**, in order:
+  ```
+  npm run type-check && npx tsc -p tsconfig.test.json --noEmit && npx vitest run
+  ```
+  (or `npm run type-check && npm run type-check:tests && npx vitest run`)
+
+**Why all three, not two:** `npm run type-check` only compiles what the root
+`tsconfig.json` includes, which **excludes `src/**/__tests__/**`** — it never
+sees test files at all. `npx vitest run` executes tests through esbuild,
+which strips TypeScript types before running; it never type-checks either.
+`tsconfig.test.json` is the *only* command that type-checks test files, and
+it's what CI's "Type-check (tests)" step runs. Skipping it locally means a
+broken test file (e.g. a stale `vi.fn<[Args], Ret>` two-generic mock
+signature — vitest 4 takes one) can be "locally green" on both other
+commands, merge to `main`, and go undetected until CI runs — which is
+exactly what happened for two consecutive merges before this line was added.
 
 **Reference (anti-pattern that occurred):** Generated 4 icon variants without
 defining success criteria. Should have been *"verify by getting specific error

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import type { AgentTrustBreakdown } from '@/lib/api-data'
 
-const getAgentTrustBreakdown = vi.fn<[string], Promise<AgentTrustBreakdown | null>>()
+const getAgentTrustBreakdown = vi.fn<(id: string) => Promise<AgentTrustBreakdown | null>>()
 
 vi.mock('@/lib/api-data', () => ({
   getAgentTrustBreakdown: (id: string) => getAgentTrustBreakdown(id),
