@@ -25,6 +25,7 @@ import {
 import { CANONICAL_DOMAINS_REGISTRY } from './canonical-domains'
 import { classifyJunk } from './skill-junk-filter'
 import { cleanDomainName, type DomainTripleData } from './domain-scoring'
+import { foldDuplicateAtoms } from './atom-fold'
 
 /**
  * Term_ids of the canonical bucket atoms (ETAP 2a). Triples whose OBJECT is
@@ -220,48 +221,17 @@ export function refineSkillTriples(triples: DomainTripleData[]): RefinedSkillTri
   }
 
   // Group surviving skill atoms by folded label, pick one representative per group.
-  const groups = new Map<string, Map<string, { label: string; count: number }>>()
-  for (const t of kept) {
-    const foldKey = t.skillName.toLowerCase()
-    const atoms = groups.get(foldKey) ?? new Map()
-    const entry = atoms.get(t.skillId) ?? { label: t.skillName, count: 0 }
-    entry.count++
-    atoms.set(t.skillId, entry)
-    groups.set(foldKey, atoms)
-  }
-
-  const representative = new Map<string, { skillId: string; skillName: string }>()
-  const foldedSkillIds = new Map<string, string>()
-  for (const [foldKey, atoms] of groups) {
-    let best: { skillId: string; label: string; count: number } | null = null
-    for (const [skillId, { label, count }] of atoms) {
-      if (
-        !best ||
-        count > best.count ||
-        (count === best.count && isUpperFirst(label) && !isUpperFirst(best.label)) ||
-        (count === best.count && isUpperFirst(label) === isUpperFirst(best.label) && skillId < best.skillId)
-      ) {
-        best = { skillId, label, count }
-      }
-    }
-    representative.set(foldKey, { skillId: best!.skillId, skillName: best!.label })
-    for (const skillId of atoms.keys()) {
-      if (skillId !== best!.skillId) foldedSkillIds.set(skillId, best!.skillId)
-    }
-  }
+  const { representatives, foldedIds } = foldDuplicateAtoms(
+    kept.map((t) => ({ id: t.skillId, label: t.skillName }))
+  )
 
   const merged = kept.map((t) => {
-    const rep = representative.get(t.skillName.toLowerCase())!
-    return rep.skillId === t.skillId && rep.skillName === t.skillName
+    const rep = representatives.get(t.skillName.toLowerCase())!
+    return rep.id === t.skillId && rep.label === t.skillName
       ? t
-      : { ...t, skillId: rep.skillId, skillName: rep.skillName }
+      : { ...t, skillId: rep.id, skillName: rep.label }
   })
 
   const junkLabels = [...junkLabelSet].sort()
-  return { triples: merged, attestationTriples, junkCount: junkLabels.length, junkLabels, junkTripleCount, foldedSkillIds }
-}
-
-function isUpperFirst(label: string): boolean {
-  const c = label.charAt(0)
-  return c !== c.toLowerCase()
+  return { triples: merged, attestationTriples, junkCount: junkLabels.length, junkLabels, junkTripleCount, foldedSkillIds: foldedIds }
 }

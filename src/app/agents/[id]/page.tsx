@@ -18,6 +18,8 @@ import { PageHeaderSkeleton, LoadingSkeleton } from '@/components/shared/Loading
 import { parseAgentCard } from '@/lib/agent-card'
 import type { Agent } from '@/types/agent'
 import type { AgentDetailApiItem } from '@/lib/api-data'
+import type { CohortAgent } from '@/lib/cohort-reader'
+import { mapOasfToBucket } from '@/lib/oasf-domain-map'
 
 // Convert API response to Agent type
 function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
@@ -51,6 +53,12 @@ export default function AgentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [agent, setAgent] = useState<Agent | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Etap 2c: ERC-8004 cohort atoms are NOT part of the scored API surface
+  // (getAgentDetail stays scoped to AgentScore-registered atoms — cohort
+  // score data would be fabricated). When the scored lookup 404s, this route
+  // still checks the cohort client-side so a shared cohort-agent link doesn't
+  // dead-end; it renders a minimal honest fallback, not the scored layout.
+  const [cohortFallback, setCohortFallback] = useState<CohortAgent | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -59,18 +67,27 @@ export default function AgentDetailPage() {
       try {
         setLoading(true)
         setError(null)
+        setCohortFallback(null)
 
         const response = await fetch(`/api/v1/agents/${agentId}`)
-        
+
         if (!response.ok) {
           if (response.status === 404) {
+            const { fetchCohortAgents } = await import('@/lib/cohort-reader')
+            const cohort = await fetchCohortAgents()
+            if (cancelled) return
+            const match = cohort.find(c => c.termId === agentId)
+            if (match) {
+              setCohortFallback(match)
+              return
+            }
             throw new Error('Agent not found')
           }
           throw new Error('Failed to load agent')
         }
 
         const data = await response.json()
-        
+
         if (cancelled) return
 
         if (data.success && data.data) {
@@ -114,6 +131,47 @@ export default function AgentDetailPage() {
             </div>
           </div>
         </div>
+      </PageBackground>
+    )
+  }
+
+  if (cohortFallback) {
+    const buckets = [...new Set(cohortFallback.declaredDomains.map(slug => mapOasfToBucket(slug).bucket))]
+    return (
+      <PageBackground image="hero" opacity={0.35}>
+        <div className="pt-24 pb-40 md:pb-16">
+          <div className="container max-w-2xl">
+            <Link href="/agents" className="inline-flex items-center text-text-secondary hover:text-text-primary transition-colors mb-8">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Explorer
+            </Link>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-2xl p-8">
+              <div className="flex items-center gap-2 mb-2">
+                <h1 className="text-2xl font-bold">{cohortFallback.label}</h1>
+                <span className="text-xs text-[#8B5CF6] bg-[#8B5CF6]/10 px-2 py-0.5 rounded-full">ERC-8004</span>
+              </div>
+              <p className="text-text-muted text-sm mb-1">
+                Real agent from the ERC-8004 registry cohort — self-declared, not yet attested by AgentScore.
+              </p>
+              <p className="text-xs text-text-muted mb-6 font-mono break-all opacity-60">{cohortFallback.caipIdentity}</p>
+              <div className="inline-flex items-center gap-1.5 text-xs text-text-muted bg-white/5 px-2.5 py-1 rounded-full mb-6">
+                ○ Unverified — no attestations yet
+              </div>
+              {buckets.length > 0 && (
+                <div className="mb-6">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#8B5CF6] mb-2">Declared Domains</p>
+                  <div className="flex flex-wrap gap-2">
+                    {buckets.map(b => (
+                      <span key={b} className="text-xs text-text-secondary bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">{b}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <AttestButton agentId={cohortFallback.termId} agentName={cohortFallback.label} variant="hero" />
+            </motion.div>
+          </div>
+        </div>
+        <AttestStickyBar agentId={cohortFallback.termId} agentName={cohortFallback.label} />
       </PageBackground>
     )
   }
