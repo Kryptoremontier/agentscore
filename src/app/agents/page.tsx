@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Layers, Globe, LayoutGrid, List } from 'lucide-react'
+import { Layers, Globe, LayoutGrid, List, ExternalLink } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther, getAddress } from 'viem'
 import Link from 'next/link'
@@ -42,6 +42,8 @@ import { buildAgentTimeline } from '@/lib/trust-timeline'
 import { AttestButton } from '@/components/attest/AttestButton'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
+import { mapOasfToBucket } from '@/lib/oasf-domain-map'
+import { compareAgentEntries } from '@/lib/agent-list-sort'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -58,7 +60,15 @@ interface GraphQLAgent {
   creator?: { label: string; id?: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /** Etap 2c: which corpus this atom came from. Absent = AgentScore (legacy fetch paths). */
+  origin?: 'agentscore' | 'erc8004'
+  /** ERC-8004 cohort only — declared OASF domains/skills (`has category`/`has tag`), self-declared not attested. */
+  declaredDomains?: string[]
+  declaredSkills?: string[]
+  caipIdentity?: string
 }
+
+type OriginFilter = 'all' | 'agentscore' | 'erc8004'
 
 
 export default function AgentsPage() {
@@ -107,7 +117,10 @@ function AgentsPageContent() {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState<'newest' | 'score_desc' | 'score_asc' | 'stakers' | 'stake'>('newest')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [showOnlyOurs, setShowOnlyOurs] = useState(true)
+  // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
+  const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>([])
+  const [cohortLoading, setCohortLoading] = useState(true)
+  const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
   const [trustAmount, setTrustAmount] = useState('0.05')
@@ -303,6 +316,7 @@ function AgentsPageContent() {
         } catch { /* non-critical, cards fall back to opposeWei=0 */ }
       }
 
+      for (const atom of atoms) atom.origin = 'agentscore'
       setAgents(atoms)
     } catch (e: any) {
       setError(e.message)
@@ -315,16 +329,39 @@ function AgentsPageContent() {
     fetchAgents()
   }, [])
 
-  // Auto-open agent modal when ?open=TERM_ID is in URL
+  // Etap 2c: ERC-8004 cohort — fetched once, no search/sort params server-side
+  // (cohort has no score data; search/sort/filter apply client-side below).
+  useEffect(() => {
+    let cancelled = false
+    import('@/lib/cohort-reader').then(({ fetchCohortAgents }) => {
+      fetchCohortAgents().then(cohort => {
+        if (cancelled) return
+        setCohortAgents(cohort.map((c): GraphQLAgent => ({
+          term_id: c.termId,
+          label: c.label,
+          type: 'Thing',
+          created_at: c.createdAt,
+          origin: 'erc8004',
+          declaredDomains: c.declaredDomains,
+          declaredSkills: c.declaredSkills,
+          caipIdentity: c.caipIdentity,
+        })))
+        setCohortLoading(false)
+      })
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  // Auto-open agent modal when ?open=TERM_ID is in URL (checks both corpora)
   useEffect(() => {
     const openId = searchParams.get('open')
-    if (openId && agents.length > 0 && !selectedAgent) {
-      const match = agents.find(a => a.term_id === openId)
+    if (openId && (agents.length > 0 || cohortAgents.length > 0) && !selectedAgent) {
+      const match = agents.find(a => a.term_id === openId) ?? cohortAgents.find(a => a.term_id === openId)
       if (match) {
         setSelectedAgent(match)
       }
     }
-  }, [agents, searchParams])
+  }, [agents, cohortAgents, searchParams])
 
   useEffect(() => {
     const timer = setTimeout(() => fetchAgents(searchTerm), 500)
@@ -1497,7 +1534,7 @@ function AgentsPageContent() {
             <div className="flex items-center gap-2 mt-4">
               <div className="w-2 h-2 rounded-full bg-[#C8963C] animate-pulse" />
               <span className="text-xs text-[#7A838D]">
-                {agents.length} agents indexed · GraphQL live feed
+                {agents.length} agents indexed{cohortAgents.length > 0 ? ` · ${cohortAgents.length} ERC-8004` : ''} · GraphQL live feed
               </span>
             </div>
           </motion.div>
@@ -1566,21 +1603,38 @@ function AgentsPageContent() {
               {/* Spacer */}
               <div className="flex-1" />
 
-              {/* Platform toggle */}
-              <button
-                onClick={() => setShowOnlyOurs(v => !v)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                  showOnlyOurs
-                    ? 'bg-[#1E2229] text-[#C8963C] border-[#C8963C]/50'
-                    : 'text-[#B5BDC6] border-white/[0.12] hover:text-white hover:bg-[#1E2229] hover:border-white/20'
-                }`}
-                title={showOnlyOurs ? 'Showing AgentScore agents only' : 'Showing all Intuition agents'}
+              {/* Origin toggle — All / AgentScore / ERC-8004 (Etap 2c) */}
+              <div
+                className="flex items-center gap-0.5 p-1 rounded-lg"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
               >
-                {showOnlyOurs
-                  ? <><Layers className="w-3 h-3" /> Platform only</>
-                  : <><Globe className="w-3 h-3" /> All Intuition</>
-                }
-              </button>
+                {([
+                  { id: 'all' as const, label: 'All', icon: Globe },
+                  { id: 'agentscore' as const, label: 'AgentScore', icon: Layers },
+                  { id: 'erc8004' as const, label: 'ERC-8004', icon: ExternalLink },
+                ]).map(o => {
+                  const Icon = o.icon
+                  return (
+                    <button
+                      key={o.id}
+                      onClick={() => setOriginFilter(o.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        originFilter === o.id
+                          ? 'bg-[#1E2229] text-[#C8963C] border border-[#C8963C]/50'
+                          : 'text-[#B5BDC6] border border-transparent hover:text-white hover:bg-[#1E2229]'
+                      }`}
+                      title={
+                        o.id === 'agentscore' ? 'Agents registered via AgentScore'
+                        : o.id === 'erc8004' ? 'Real agents from the ERC-8004 registry cohort — self-declared, not yet attested'
+                        : 'All agents'
+                      }
+                    >
+                      <Icon className="w-3 h-3" />
+                      {o.label}
+                    </button>
+                  )
+                })}
+              </div>
 
               {/* Sort dropdown */}
               <select
@@ -1618,7 +1672,7 @@ function AgentsPageContent() {
           )}
 
           {/* Empty State - No agents registered */}
-          {!loading && !error && agents.length === 0 && !searchTerm && (
+          {!loading && !error && (agents.length + cohortAgents.length) === 0 && !searchTerm && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1644,7 +1698,7 @@ function AgentsPageContent() {
           )}
 
           {/* Empty Search Results */}
-          {!loading && !error && agents.length === 0 && searchTerm && (
+          {!loading && !error && (agents.length + cohortAgents.length) === 0 && searchTerm && (
             <div className="text-center py-20">
               <p className="text-6xl mb-4">🔍</p>
               <h3 className="text-xl font-bold mb-2">No results for &quot;{searchTerm}&quot;</h3>
@@ -1659,8 +1713,18 @@ function AgentsPageContent() {
           )}
 
           {/* Agents Grid */}
-          {!loading && agents.length > 0 && (() => {
-            const enriched = agents.map(agent => {
+          {!(loading || cohortLoading) && (agents.length + cohortAgents.length) > 0 && (() => {
+            // Etap 2c: merge AgentScore + ERC-8004 cohort per originFilter. Cohort wasn't
+            // server-side search-filtered (single fetch, no score data) — apply client-side.
+            const searchedCohort = searchTerm
+              ? cohortAgents.filter(a => a.label.toLowerCase().includes(searchTerm.toLowerCase()))
+              : cohortAgents
+            const sourceAgents =
+              originFilter === 'agentscore' ? agents :
+              originFilter === 'erc8004' ? searchedCohort :
+              [...agents, ...searchedCohort]
+
+            const enriched = sourceAgents.map(agent => {
               let supportWei = 0n
               try { supportWei = BigInt(agent.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
               const opposeWei: bigint = (agent as any).__opposeWei ?? 0n
@@ -1668,29 +1732,14 @@ function AgentsPageContent() {
               return { agent, trust: cardTrust }
             })
 
-            // Platform-only filter: hide agents that were not created via AgentScore UI
-            // (client-side heuristic: agents with at least 1 staker or short label are likely ours)
-            // When showOnlyOurs is on, require label starts with "Agent:" — already guaranteed
-            // so this is a no-op for now but hooks into future createdVia triple filtering
-            const platformFiltered = enriched
-
             const filtered = selectedCategory === 'all'
-              ? platformFiltered
-              : platformFiltered.filter(e => e.trust.level === selectedCategory)
+              ? enriched
+              : enriched.filter(e => e.trust.level === selectedCategory)
 
-            const sorted = [...filtered].sort((a, b) => {
-              switch (sortBy) {
-                case 'score_desc': return b.trust.score - a.trust.score
-                case 'score_asc': return a.trust.score - b.trust.score
-                case 'stakers':
-                  return (b.agent.positions_aggregate?.aggregate?.count || 0)
-                       - (a.agent.positions_aggregate?.aggregate?.count || 0)
-                case 'stake':
-                  return Number(BigInt(b.agent.positions_aggregate?.aggregate?.sum?.shares || '0')
-                       - BigInt(a.agent.positions_aggregate?.aggregate?.sum?.shares || '0'))
-                default: return 0
-              }
-            })
+            // Honesty gate (thesis §6): see lib/agent-list-sort.ts — an atom with zero real
+            // stakers (cohort self-deposit included) must never outrank a genuinely staked
+            // agent by raw score alone.
+            const sorted = [...filtered].sort((a, b) => compareAgentEntries(a, b, sortBy))
 
             return (
             <motion.div
@@ -1701,7 +1750,7 @@ function AgentsPageContent() {
               <div className="mb-6 flex items-center justify-between">
                 <p className="text-sm text-[#7A838D]">
                   <span className="font-semibold text-white">{sorted.length}</span>
-                  {sorted.length !== agents.length && <span className="text-[#4A5260]"> of {agents.length}</span>} agents
+                  {sorted.length !== sourceAgents.length && <span className="text-[#4A5260]"> of {sourceAgents.length}</span>} agents
                   {selectedCategory !== 'all' && (
                     <span className="text-[#4A5260]"> · <span className="text-[#B5BDC6]">{selectedCategory}</span></span>
                   )}
@@ -1800,17 +1849,23 @@ function AgentsPageContent() {
                               <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
                               {(() => { try { return <TrustTierBadge tier={calculateTier(stakers, Number(agent.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18, 50, agent.created_at ? getAgentAgeDays(agent.created_at) : 0)} size="sm" /> } catch { return null } })()}
                             </div>
-                            <span className="text-xs text-[#7A838D] bg-[#1e2028] px-2 py-0.5 rounded inline-block">
-                              via AgentScore
+                            <span className={`text-xs px-2 py-0.5 rounded inline-block ${
+                              agent.origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
+                            }`}>
+                              {agent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
                             </span>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="flex items-baseline justify-end gap-1 mb-0.5">
-                            <p className="text-2xl font-bold leading-none" style={{ color }}>{displayScore}</p>
-                            <span className="text-base leading-none" style={{ color: cardMi.color }}>{cardMi.arrow}</span>
-                          </div>
-                          <p className="text-[10px] text-[#7A838D]">AGENTSCORE</p>
+                          {stakers > 0 ? (
+                            <div className="flex items-baseline justify-end gap-1 mb-0.5">
+                              <p className="text-2xl font-bold leading-none" style={{ color }}>{displayScore}</p>
+                              <span className="text-base leading-none" style={{ color: cardMi.color }}>{cardMi.arrow}</span>
+                            </div>
+                          ) : (
+                            <p className="text-lg font-semibold leading-none text-[#7A838D]">—</p>
+                          )}
+                          <p className="text-[10px] text-[#7A838D]">{stakers > 0 ? 'AGENTSCORE' : 'UNVERIFIED'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
@@ -1818,7 +1873,7 @@ function AgentsPageContent() {
                         <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
                       </div>
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${displayScore}%`, backgroundColor: color }} />
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${stakers > 0 ? displayScore : 0}%`, backgroundColor: color }} />
                       </div>
                     </motion.div>
                   )
@@ -1874,9 +1929,11 @@ function AgentsPageContent() {
                         </svg>
                       </div>
                       {/* Name */}
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex items-center gap-1.5">
                         <p className="text-sm font-semibold text-white truncate">{name}</p>
-                        {/* creator hidden */}
+                        {agent.origin === 'erc8004' && (
+                          <span className="text-[10px] text-[#8B5CF6] bg-[#8B5CF6]/10 px-1.5 py-0.5 rounded flex-shrink-0">ERC-8004</span>
+                        )}
                       </div>
                       {/* Stakes */}
                       <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{stakes}</span>
@@ -1884,8 +1941,14 @@ function AgentsPageContent() {
                       <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{stakers}</span>
                       {/* Score + momentum */}
                       <div className="flex items-center justify-end gap-1 w-12">
-                        <span className="text-sm font-bold font-mono" style={{ color }}>{displayScore}</span>
-                        <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
+                        {stakers > 0 ? (
+                          <>
+                            <span className="text-sm font-bold font-mono" style={{ color }}>{displayScore}</span>
+                            <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
+                          </>
+                        ) : (
+                          <span className="text-xs font-mono text-[#7A838D]">—</span>
+                        )}
                       </div>
                     </motion.div>
                   )
@@ -1932,7 +1995,11 @@ function AgentsPageContent() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
-                      <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs text-[#7A838D]">via AgentScore</span>
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        selectedAgent.origin === 'erc8004' ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#1E2229] text-[#7A838D]'
+                      }`}>
+                        {selectedAgent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
+                      </span>
                       <span>·</span>
                       <span>Registered {new Date(selectedAgent.created_at).toLocaleDateString('pl-PL')}</span>
                     </div>
@@ -3029,6 +3096,34 @@ function AgentsPageContent() {
                     {/* Agent Radar — skill spider chart (3+ skills only) */}
                     {skillBreakdown && skillBreakdown.skills.length >= 3 && (
                       <AgentRadar skills={skillBreakdown.skills} />
+                    )}
+
+                    {/* Declared domains — ERC-8004 cohort only. Etap 2c: OASF `has category`
+                        edges the agent DECLARES (self-reported), mapped to our buckets.
+                        Deliberately distinct styling from Attested (staked, community-verified) —
+                        thesis §7: "has tag {oasf} = what an agent DECLARES; is skilled in + stake
+                        = what the community ATTESTS. Both valid, different things." */}
+                    {selectedAgent.origin === 'erc8004' && selectedAgent.declaredDomains && selectedAgent.declaredDomains.length > 0 && (
+                      <div className="bg-[#171A1D] border border-dashed border-[#8B5CF6]/25 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <p className="text-[#8B5CF6] text-xs font-semibold uppercase tracking-wider">
+                            Declared Domains
+                          </p>
+                          <span className="text-[10px] text-[#7A838D]">— self-declared via OASF, not yet attested</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {[...new Set(
+                            selectedAgent.declaredDomains.map(slug => mapOasfToBucket(slug).bucket)
+                          )].map(bucket => (
+                            <span
+                              key={bucket}
+                              className="text-xs text-[#B5BDC6] bg-[#8B5CF6]/10 border border-[#8B5CF6]/20 px-2.5 py-1 rounded-full"
+                            >
+                              {bucket}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     )}
 
                     {/* Bonding Curve Charts */}
