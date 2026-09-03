@@ -40,9 +40,12 @@ import { AgentRadar } from '@/components/AgentRadar'
 import { TrustTimeline, ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
 import { AttestButton } from '@/components/attest/AttestButton'
-import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
-import { mapOasfToBucket } from '@/lib/oasf-domain-map'
+import { AttestedDomains } from '@/components/profile/AttestedDomains'
+import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
+import { ReportsSection } from '@/components/profile/ReportsSection'
+import { AttestersList } from '@/components/profile/AttestersAndBackers'
+import { fetchAgentProfileVector, summarizeAttesters, type AgentProfileVector } from '@/lib/agent-profile'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -180,6 +183,10 @@ function AgentsPageContent() {
   // Distinguishes "not fetched yet" from "fetched, zero attestations" — the
   // empty-state CTA must not flash while skill triples are still loading.
   const [skillTriplesLoaded, setSkillTriplesLoaded] = useState(false)
+  // ETAP 3: canonical profile vector — attested domains (is skilled in + stake)
+  // and reports (reported for + stake). The profile's headline data.
+  const [profileVector, setProfileVector] = useState<AgentProfileVector>({ attested: [], reports: [] })
+  const [profileLoaded, setProfileLoaded] = useState(false)
   // Cache hybrid scores keyed by agent term_id, populated when modal computes them.
   // Cards fall back to trust score until the modal has been opened for that agent.
   const [objectScoreByTermId, setObjectScoreByTermId] = useState<Record<string, number>>({})
@@ -1143,54 +1150,25 @@ function AgentsPageContent() {
     }
   }
 
-  // Fetch reports for agent (count + details)
+  // ETAP 3: canonical profile vector (attested domains + reports) in one read.
+  // reportCount (stats grid) is derived from the same data — the former
+  // reports-only query is folded in here.
   const [reportCount, setReportCount] = useState(0)
-  const [agentReports, setAgentReports] = useState<any[]>([])
   useEffect(() => {
-    if (!selectedAgent) { setReportCount(0); setAgentReports([]); return }
-    fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetReports($termId: String!) {
-            triples(
-              where: {
-                subject_id: { _eq: $termId },
-                _or: [
-                  { predicate: { label: { _ilike: "reported_for_%" } } }
-                  { predicate: { id: { _eq: "0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d" } } }
-                ]
-              }
-              order_by: { created_at: desc }
-              limit: 20
-            ) {
-              id
-              predicate { id label }
-              object { id label }
-              creator { label id }
-              created_at
-            }
-            triples_aggregate(where: {
-              subject_id: { _eq: $termId },
-              _or: [
-                { predicate: { label: { _ilike: "reported_for_%" } } }
-                { predicate: { id: { _eq: "0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d" } } }
-              ]
-            }) {
-              aggregate { count }
-            }
-          }
-        `,
-        variables: { termId: selectedAgent.term_id }
-      })
+    let cancelled = false
+    setProfileLoaded(false)
+    if (!selectedAgent) {
+      setProfileVector({ attested: [], reports: [] })
+      setReportCount(0)
+      return
+    }
+    fetchAgentProfileVector(selectedAgent.term_id).then(v => {
+      if (cancelled) return
+      setProfileVector(v)
+      setReportCount(v.reports.length)
+      setProfileLoaded(true)
     })
-      .then(r => r.json())
-      .then(d => {
-        setReportCount(d?.data?.triples_aggregate?.aggregate?.count || 0)
-        setAgentReports(d?.data?.triples || [])
-      })
-      .catch(() => { setReportCount(0); setAgentReports([]) })
+    return () => { cancelled = true }
   }, [selectedAgent?.term_id])
 
   // Submit a report on-chain
@@ -2077,16 +2055,21 @@ function AgentsPageContent() {
                 />
               </div>
 
-              {/* Empty state as growth engine — triples fetched AND no genuine
-                  skill attestations (skillBreakdown filters non-skill predicates,
-                  matching the API's skillCount semantics) */}
-              {skillTriplesLoaded && !skillBreakdown && (
-                <AttestEmptyState
-                  agentId={selectedAgent.term_id}
-                  agentName={getAgentNameFromAtom(selectedAgent)}
-                  className="mb-3"
-                />
+              {/* ETAP 3 — profile hierarchy (thesis §5), always visible above the
+                  tabs: ATTESTED (headline, canonical unit) > DECLARED (2c, cohort
+                  only) > REPORTS (collapsed). Zero attestations renders the
+                  AttestEmptyState "be the first" CTA (thesis §6). */}
+              <AttestedDomains
+                entries={profileVector.attested}
+                loading={!profileLoaded}
+                agentId={selectedAgent.term_id}
+                agentName={getAgentNameFromAtom(selectedAgent)}
+                className="mb-3"
+              />
+              {selectedAgent.origin === 'erc8004' && (
+                <DeclaredDomains declaredDomains={selectedAgent.declaredDomains} className="mb-3" />
               )}
+              <ReportsSection reports={profileVector.reports} loading={!profileLoaded} className="mb-3 px-1" />
 
               {/* === ACTION SECTION: Buy / Sell Shares === */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
@@ -3074,23 +3057,17 @@ function AgentsPageContent() {
                       </div>
                     </div>
 
-                    {/* Skill Trust Breakdown — per-skill contextual scores */}
-                    {skillBreakdown ? (
+                    {/* Legacy skill claims — pre-canonical hasAgentSkill / isTrustedFor
+                        triples with real stake (9 on testnet). Kept and labeled honestly,
+                        demoted below ATTESTED (which now lives in the header). The old
+                        empty state pointed users at the dead predicate — removed. */}
+                    {skillBreakdown && (
                       <SkillBreakdown
                         skills={skillBreakdown.skills}
                         overallScore={skillBreakdown.overallScore}
+                        title="Legacy skill claims"
+                        subtitle="Pre-canonical hasAgentSkill / isTrustedFor claims with free-text objects — real stake, not domain attestations. New claims use Attest Competence above."
                       />
-                    ) : (
-                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
-                        <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-2">
-                          Skill Trust Breakdown
-                        </p>
-                        <p className="text-[#7A838D] text-xs">
-                          No skills linked yet. Create a claim{' '}
-                          <span className="text-[#C8963C]">[Agent] [hasAgentSkill] [Skill]</span>
-                          {' '}to see per-skill trust scores.
-                        </p>
-                      </div>
                     )}
 
                     {/* Agent Radar — skill spider chart (3+ skills only) */}
@@ -3098,33 +3075,8 @@ function AgentsPageContent() {
                       <AgentRadar skills={skillBreakdown.skills} />
                     )}
 
-                    {/* Declared domains — ERC-8004 cohort only. Etap 2c: OASF `has category`
-                        edges the agent DECLARES (self-reported), mapped to our buckets.
-                        Deliberately distinct styling from Attested (staked, community-verified) —
-                        thesis §7: "has tag {oasf} = what an agent DECLARES; is skilled in + stake
-                        = what the community ATTESTS. Both valid, different things." */}
-                    {selectedAgent.origin === 'erc8004' && selectedAgent.declaredDomains && selectedAgent.declaredDomains.length > 0 && (
-                      <div className="bg-[#171A1D] border border-dashed border-[#8B5CF6]/25 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <p className="text-[#8B5CF6] text-xs font-semibold uppercase tracking-wider">
-                            Declared Domains
-                          </p>
-                          <span className="text-[10px] text-[#7A838D]">— self-declared via OASF, not yet attested</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {[...new Set(
-                            selectedAgent.declaredDomains.map(slug => mapOasfToBucket(slug).bucket)
-                          )].map(bucket => (
-                            <span
-                              key={bucket}
-                              className="text-xs text-[#B5BDC6] bg-[#8B5CF6]/10 border border-[#8B5CF6]/20 px-2.5 py-1 rounded-full"
-                            >
-                              {bucket}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {/* Declared domains moved to the modal header (ETAP 3 hierarchy:
+                        directly under ATTESTED) — see <DeclaredDomains /> above the tabs. */}
 
                     {/* Bonding Curve Charts */}
                     <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
@@ -3394,67 +3346,8 @@ function AgentsPageContent() {
                       </div>
                     )}
 
-                    {/* Reports Info */}
-                    {reportCount > 0 && (
-                      <div className="bg-[#171A1D] border border-[#f9731630] rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <line x1="12" y1="9" x2="12" y2="13" stroke="#f97316" strokeWidth="2" strokeLinecap="round"/>
-                            <line x1="12" y1="17" x2="12.01" y2="17" stroke="#f97316" strokeWidth="2" strokeLinecap="round"/>
-                          </svg>
-                          <p className="text-[#f97316] text-xs font-semibold uppercase tracking-wider">
-                            {reportCount} Report{reportCount !== 1 ? 's' : ''} Filed
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          {agentReports.map((report, i) => {
-                            const isMainnetReport = report.predicate?.id === '0x51f1febac0b9d05953442f082597c5d1ce827bd2f888446ad811692e0a0f428d'
-                            const predLabel = isMainnetReport
-                              ? (report.object?.label || 'unknown')
-                              : (report.predicate?.label || '').replace('reported_for_', '').replace(/_/g, ' ')
-                            const reason = isMainnetReport ? '' : (report.object?.label || '')
-                            const reporter = report.creator?.label || report.creator?.id?.slice(0, 10) || '?'
-                            const isENS = reporter.includes('.eth')
-                            const displayReporter = isENS
-                              ? reporter
-                              : reporter.length > 14
-                                ? reporter.slice(0, 8) + '...' + reporter.slice(-4)
-                                : reporter
-                            const date = new Date(report.created_at).toLocaleDateString('pl-PL')
-
-                            const categoryIcons: Record<string, string> = {
-                              scam: '🚨', spam: '📢', injection: '💉', impersonation: '🎭',
-                            }
-                            const icon = categoryIcons[predLabel] || '⚠️'
-
-                            return (
-                              <div key={report.id || i} className="flex items-start gap-2.5 bg-[#0F1113] rounded-lg px-3 py-2">
-                                <span className="text-sm flex-shrink-0 mt-0.5">{icon}</span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-[#f97316] text-[10px] font-bold uppercase">{predLabel}</span>
-                                    <span className="text-[#30363d]">·</span>
-                                    {report.creator?.id ? (
-                                      <Link href={`/profile/${report.creator.id}`} className="text-[#C8963C] text-[10px] hover:underline">
-                                        by {displayReporter}
-                                      </Link>
-                                    ) : (
-                                      <span className="text-[#B5BDC6] text-[10px]">by {displayReporter}</span>
-                                    )}
-                                    <span className="text-[#30363d]">·</span>
-                                    <span className="text-[#7A838D] text-[10px]">{date}</span>
-                                  </div>
-                                  {reason && reason !== `${predLabel} report` && (
-                                    <p className="text-[#B5BDC6] text-[11px] mt-0.5 truncate">{reason}</p>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    {/* Reports moved to the modal header (<ReportsSection />, collapsed,
+                        with an honest "No reports on-chain" line) — ETAP 3. */}
 
                     {/* Agent Details */}
                     <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
@@ -3538,9 +3431,17 @@ function AgentsPageContent() {
 
                   return (
                   <div className="p-5">
+                    {/* ETAP 3: attesters from the canonical unit FIRST; the signal-based
+                        list below is BACKERS (positions on this agent) — a different claim. */}
+                    <AttestersList
+                      attesters={summarizeAttesters(profileVector.attested)}
+                      loading={!profileLoaded}
+                      className="mb-6"
+                    />
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-white font-semibold text-sm">Attestors</h4>
+                        <h4 className="text-white font-semibold text-sm">Backers</h4>
+                        <span className="text-[10px] text-[#7A838D]">staked on this agent · not a domain attestation</span>
                         <div className="flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#34a872] animate-pulse" />
                           <span className="text-xs text-[#B5BDC6]">live</span>
@@ -3564,8 +3465,8 @@ function AgentsPageContent() {
                             <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#B5BDC6" strokeWidth="2"/>
                           </svg>
                         </div>
-                        <p className="text-[#B5BDC6] text-sm">No attestors yet</p>
-                        <p className="text-[#7A838D] text-xs mt-1">Be the first to stake on this agent</p>
+                        <p className="text-[#B5BDC6] text-sm">No backers yet</p>
+                        <p className="text-[#7A838D] text-xs mt-1">No positions on this agent&apos;s vault — stake via the Bonding Curve Market</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -3621,7 +3522,7 @@ function AgentsPageContent() {
 
                               <div className="text-right">
                                 <p className="text-white text-sm font-bold">{profile.totalSignals}</p>
-                                <p className="text-[#7A838D] text-[10px]">attestation{profile.totalSignals !== 1 ? 's' : ''}</p>
+                                <p className="text-[#7A838D] text-[10px]">signal{profile.totalSignals !== 1 ? 's' : ''}</p>
                               </div>
                             </Link>
                           )

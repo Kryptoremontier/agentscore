@@ -52,6 +52,12 @@ export interface AttestedEntry {
   distinctAttesters: number
   /** Distinct attester wallets (support side), first-seen casing preserved. */
   attesters: string[]
+  /**
+   * Per-attester support stake (ETAP 3 profile): one row per distinct wallet,
+   * shares summed across that wallet's positions. Same order as `attesters`.
+   * Answers "according to WHOM, with how much" on the agent profile.
+   */
+  attesterStakes: Array<{ wallet: string; shares: bigint }>
   /** Total support shares across all positions. */
   totalStake: bigint
   /** Total counter-vault shares. */
@@ -107,6 +113,7 @@ export function aggregateAttestations(raw: readonly RawAttestation[]): AttestedE
     agentName: string
     domain: CanonicalDomainDef
     attesters: Map<string, string> // lowercased → first-seen casing
+    stakeByWallet: Map<string, bigint> // lowercased → summed support shares
     totalStake: bigint
     opposeStake: bigint
     positionCount: number
@@ -125,6 +132,7 @@ export function aggregateAttestations(raw: readonly RawAttestation[]): AttestedE
         agentName: r.agentName || 'Unknown',
         domain,
         attesters: new Map(),
+        stakeByWallet: new Map(),
         totalStake: 0n,
         opposeStake: 0n,
         positionCount: 0,
@@ -136,6 +144,7 @@ export function aggregateAttestations(raw: readonly RawAttestation[]): AttestedE
       if (!p?.wallet) continue
       const lower = p.wallet.toLowerCase()
       if (!e.attesters.has(lower)) e.attesters.set(lower, p.wallet)
+      e.stakeByWallet.set(lower, (e.stakeByWallet.get(lower) ?? 0n) + p.shares)
       e.totalStake += p.shares
       e.positionCount++
     }
@@ -155,6 +164,10 @@ export function aggregateAttestations(raw: readonly RawAttestation[]): AttestedE
       domain: e.domain,
       distinctAttesters,
       attesters: [...e.attesters.values()],
+      attesterStakes: [...e.attesters.entries()].map(([lower, wallet]) => ({
+        wallet,
+        shares: e.stakeByWallet.get(lower) ?? 0n,
+      })),
       totalStake: e.totalStake,
       opposeStake: e.opposeStake,
       positionCount: e.positionCount,
@@ -181,24 +194,35 @@ interface PositionRow {
   account_id: string | null
 }
 
+export interface FetchAttestationsOptions {
+  /**
+   * Restrict to attestations whose SUBJECT is this atom (ETAP 3 agent
+   * profile). Omit for the corpus-wide read used by /domains.
+   */
+  subjectId?: string
+}
+
 /**
- * Fetch all attestations from the app's GraphQL endpoint and aggregate them.
+ * Fetch attestations from the app's GraphQL endpoint and aggregate them —
+ * corpus-wide by default, or for one subject atom via `options.subjectId`.
  * Graceful degradation: returns [] on any transport/GraphQL error (the
  * Attested tier renders its empty states; it must never crash the page).
  */
-export async function fetchAttestations(): Promise<AttestedEntry[]> {
+export async function fetchAttestations(options: FetchAttestationsOptions = {}): Promise<AttestedEntry[]> {
   const url = APP_CONFIG.GRAPHQL_URL
   if (!url) return []
   try {
     const bucketIds = CANONICAL_DOMAINS_REGISTRY.map((d) => d.termId)
+    const subjectFilter = options.subjectId ? ', subject_id: { _eq: $subject }' : ''
+    const subjectVar = options.subjectId ? ', $subject: String!' : ''
     const tripleRes = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: `
-          query GetAttestationTriples($pred: String!, $buckets: [String!]!) {
+          query GetAttestationTriples($pred: String!, $buckets: [String!]!${subjectVar}) {
             triples(
-              where: { predicate_id: { _eq: $pred }, object_id: { _in: $buckets } }
+              where: { predicate_id: { _eq: $pred }, object_id: { _in: $buckets }${subjectFilter} }
               limit: 500
             ) {
               term_id
@@ -208,7 +232,11 @@ export async function fetchAttestations(): Promise<AttestedEntry[]> {
             }
           }
         `,
-        variables: { pred: IS_SKILLED_IN.termId, buckets: bucketIds },
+        variables: {
+          pred: IS_SKILLED_IN.termId,
+          buckets: bucketIds,
+          ...(options.subjectId ? { subject: options.subjectId } : {}),
+        },
       }),
     })
     const tripleData = await tripleRes.json()

@@ -1,5 +1,18 @@
 'use client'
 
+/**
+ * /agents/[id] — the route surface of the agent profile (the /agents modal
+ * is the other; both mount the same ETAP 3 profile components).
+ *
+ * Three tiers, resolved with ONE indexer round-trip first (resolveProfileAtom):
+ *   scored      atom is in the AgentScore corpus → scored API → full layout
+ *   non-scored  atom exists on-chain (ERC-8004 cohort, an attested human
+ *               like Luda, …) → honest minimal profile, no fabricated score
+ *   not found   atom does not exist
+ * The scored API is only called when the pre-check says it will 200 — the
+ * 404-then-fallback console noise from 2c is gone (Task 4).
+ */
+
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -11,17 +24,29 @@ import { AgentStats } from '@/components/agents/AgentStats'
 import { AgentTabs } from '@/components/agents/AgentTabs'
 import { TrustButton } from '@/components/trust/TrustButton'
 import { AttestButton } from '@/components/attest/AttestButton'
-import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
+import { AttestedDomains } from '@/components/profile/AttestedDomains'
+import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
+import { ReportsSection } from '@/components/profile/ReportsSection'
+import { AttestersAndBackers } from '@/components/profile/AttestersAndBackers'
 import { Button } from '@/components/ui/button'
 import { PageHeaderSkeleton, LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { parseAgentCard } from '@/lib/agent-card'
+import {
+  resolveProfileAtom,
+  fetchAgentProfileVector,
+  fetchAgentBackers,
+  summarizeAttesters,
+  type AgentProfileVector,
+  type Backer,
+  type ProfileAtom,
+} from '@/lib/agent-profile'
+import type { CohortAgent } from '@/lib/cohort-reader'
 import type { Agent } from '@/types/agent'
 import type { AgentDetailApiItem } from '@/lib/api-data'
-import type { CohortAgent } from '@/lib/cohort-reader'
-import { mapOasfToBucket } from '@/lib/oasf-domain-map'
 
-// Convert API response to Agent type
+// Convert API response to Agent type. attestationCount/reportCount are
+// overwritten from the canonical profile vector once it resolves.
 function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
   const card = parseAgentCard(apiAgent.rawLabel)
   return {
@@ -41,81 +66,90 @@ function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
     trustScore: Math.round(apiAgent.score.objectScore ?? apiAgent.score.trustScore),
     positiveStake: BigInt(Math.round(apiAgent.supportStake * 1e18)),
     negativeStake: BigInt(Math.round(apiAgent.opposeStake * 1e18)),
-    attestationCount: apiAgent.skillBreakdown.length,
+    attestationCount: 0,
     reportCount: 0,
     stakerCount: apiAgent.stakerCount,
   }
 }
+
+const EMPTY_VECTOR: AgentProfileVector = { attested: [], reports: [] }
 
 export default function AgentDetailPage() {
   const params = useParams()
   const agentId = params['id'] as string
   const [loading, setLoading] = useState(true)
   const [agent, setAgent] = useState<Agent | null>(null)
+  const [legacySkillClaimCount, setLegacySkillClaimCount] = useState(0)
+  const [minimalAtom, setMinimalAtom] = useState<ProfileAtom | null>(null)
+  const [cohortMatch, setCohortMatch] = useState<CohortAgent | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Etap 2c: ERC-8004 cohort atoms are NOT part of the scored API surface
-  // (getAgentDetail stays scoped to AgentScore-registered atoms — cohort
-  // score data would be fabricated). When the scored lookup 404s, this route
-  // still checks the cohort client-side so a shared cohort-agent link doesn't
-  // dead-end; it renders a minimal honest fallback, not the scored layout.
-  const [cohortFallback, setCohortFallback] = useState<CohortAgent | null>(null)
+  // ETAP 3 canonical profile vector — shared by every tier.
+  const [vector, setVector] = useState<AgentProfileVector>(EMPTY_VECTOR)
+  const [backers, setBackers] = useState<Backer[]>([])
+  const [profileLoading, setProfileLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
 
-    async function fetchAgent() {
+    async function load() {
+      setLoading(true)
+      setProfileLoading(true)
+      setError(null)
+      setAgent(null)
+      setMinimalAtom(null)
+      setCohortMatch(null)
+      setVector(EMPTY_VECTOR)
+      setBackers([])
+
+      // Profile vector + backers are needed by every tier — start immediately.
+      const vectorPromise = fetchAgentProfileVector(agentId)
+      const backersPromise = fetchAgentBackers(agentId)
+
       try {
-        setLoading(true)
-        setError(null)
-        setCohortFallback(null)
-
-        const response = await fetch(`/api/v1/agents/${agentId}`)
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            const { fetchCohortAgents } = await import('@/lib/cohort-reader')
-            const cohort = await fetchCohortAgents()
-            if (cancelled) return
-            const match = cohort.find(c => c.termId === agentId)
-            if (match) {
-              setCohortFallback(match)
-              return
-            }
-            throw new Error('Agent not found')
-          }
-          throw new Error('Failed to load agent')
-        }
-
-        const data = await response.json()
-
+        const { inScope, atom } = await resolveProfileAtom(agentId)
         if (cancelled) return
 
-        if (data.success && data.data) {
-          setAgent(apiToAgent(data.data))
+        if (inScope) {
+          const response = await fetch(`/api/v1/agents/${agentId}`)
+          if (!response.ok) throw new Error(response.status === 404 ? 'Agent not found' : 'Failed to load agent')
+          const data = await response.json()
+          if (cancelled) return
+          if (!(data.success && data.data)) throw new Error('Invalid response format')
+          const api = data.data as AgentDetailApiItem
+          setAgent(apiToAgent(api))
+          setLegacySkillClaimCount(api.skillBreakdown?.length ?? 0)
+        } else if (atom) {
+          setMinimalAtom(atom)
+          // Cohort membership only matters for the DECLARED chips.
+          const { fetchCohortAgents } = await import('@/lib/cohort-reader')
+          const cohort = await fetchCohortAgents()
+          if (cancelled) return
+          setCohortMatch(cohort.find(c => c.termId === agentId) ?? null)
         } else {
-          throw new Error('Invalid response format')
+          throw new Error('Agent not found')
         }
       } catch (err) {
         if (cancelled) return
         console.error('Error fetching agent:', err)
         setError(err instanceof Error ? err.message : 'Failed to load agent')
       } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+        if (!cancelled) setLoading(false)
       }
+
+      const [v, b] = await Promise.all([vectorPromise, backersPromise])
+      if (cancelled) return
+      setVector(v)
+      setBackers(b)
+      setProfileLoading(false)
+      setAgent(prev => prev ? { ...prev, attestationCount: v.attested.length, reportCount: v.reports.length } : prev)
     }
 
-    fetchAgent()
-
-    return () => {
-      cancelled = true
-    }
+    load()
+    return () => { cancelled = true }
   }, [agentId])
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href)
-    // TODO: Show toast notification
   }
 
   if (loading) {
@@ -135,8 +169,11 @@ export default function AgentDetailPage() {
     )
   }
 
-  if (cohortFallback) {
-    const buckets = [...new Set(cohortFallback.declaredDomains.map(slug => mapOasfToBucket(slug).bucket))]
+  const attesters = summarizeAttesters(vector.attested)
+
+  // ── Non-scored tier: cohort agent, attested human, any real atom outside the scored corpus ──
+  if (!agent && minimalAtom) {
+    const name = minimalAtom.label
     return (
       <PageBackground image="hero" opacity={0.35}>
         <div className="pt-24 pb-40 md:pb-16">
@@ -145,33 +182,36 @@ export default function AgentDetailPage() {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Explorer
             </Link>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-2xl p-8">
-              <div className="flex items-center gap-2 mb-2">
-                <h1 className="text-2xl font-bold">{cohortFallback.label}</h1>
-                <span className="text-xs text-[#8B5CF6] bg-[#8B5CF6]/10 px-2 py-0.5 rounded-full">ERC-8004</span>
-              </div>
-              <p className="text-text-muted text-sm mb-1">
-                Real agent from the ERC-8004 registry cohort — self-declared, not yet attested by AgentScore.
-              </p>
-              <p className="text-xs text-text-muted mb-6 font-mono break-all opacity-60">{cohortFallback.caipIdentity}</p>
-              <div className="inline-flex items-center gap-1.5 text-xs text-text-muted bg-white/5 px-2.5 py-1 rounded-full mb-6">
-                ○ Unverified — no attestations yet
-              </div>
-              {buckets.length > 0 && (
-                <div className="mb-6">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#8B5CF6] mb-2">Declared Domains</p>
-                  <div className="flex flex-wrap gap-2">
-                    {buckets.map(b => (
-                      <span key={b} className="text-xs text-text-secondary bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">{b}</span>
-                    ))}
-                  </div>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-2xl p-8 space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <h1 className="text-2xl font-bold">{name}</h1>
+                  {cohortMatch && <span className="text-xs text-[#8B5CF6] bg-[#8B5CF6]/10 px-2 py-0.5 rounded-full">ERC-8004</span>}
                 </div>
+                <p className="text-text-muted text-sm">
+                  {cohortMatch
+                    ? 'Real agent from the ERC-8004 registry cohort — self-declared, not scored by AgentScore.'
+                    : 'Not in the scored AgentScore corpus — shown because it has on-chain claims. No score is computed for it.'}
+                </p>
+                {cohortMatch && (
+                  <p className="text-xs text-text-muted font-mono break-all opacity-60 mt-1">{cohortMatch.caipIdentity}</p>
+                )}
+              </div>
+
+              {/* ATTESTED > DECLARED > REPORTS (thesis §5 hierarchy) */}
+              <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agentId} agentName={name} />
+              <DeclaredDomains declaredDomains={cohortMatch?.declaredDomains} />
+              <ReportsSection reports={vector.reports} loading={profileLoading} />
+
+              <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
+
+              {vector.attested.length > 0 && (
+                <AttestButton agentId={agentId} agentName={name} variant="hero" />
               )}
-              <AttestButton agentId={cohortFallback.termId} agentName={cohortFallback.label} variant="hero" />
             </motion.div>
           </div>
         </div>
-        <AttestStickyBar agentId={cohortFallback.termId} agentName={cohortFallback.label} />
+        <AttestStickyBar agentId={agentId} agentName={name} />
       </PageBackground>
     )
   }
@@ -213,6 +253,7 @@ export default function AgentDetailPage() {
     )
   }
 
+  // ── Scored tier ──
   return (
     <PageBackground image="hero" opacity={0.35}>
       {/* pb-40 on mobile clears the sticky attest bar + bottom nav */}
@@ -242,7 +283,6 @@ export default function AgentDetailPage() {
           </div>
         </motion.div>
 
-        {/* Content */}
         <div className="space-y-6">
           {/* Header — Attest is THE primary action, mounted next to the name */}
           <AgentHeader
@@ -250,10 +290,12 @@ export default function AgentDetailPage() {
             action={<AttestButton agentId={agent.id} agentName={agent.name} variant="hero" />}
           />
 
-          {/* Empty state as growth engine — zero attestations = honest "be the first" CTA */}
-          {agent.attestationCount === 0 && (
-            <AttestEmptyState agentId={agent.id} agentName={agent.name} />
-          )}
+          {/* ETAP 3 — profile hierarchy (thesis §5): ATTESTED (headline) >
+              DECLARED (cohort only) > REPORTS (collapsed) > score context below.
+              Zero attestations renders AttestEmptyState (thesis §6). */}
+          <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agent.id} agentName={agent.name} />
+          <DeclaredDomains declaredDomains={cohortMatch?.declaredDomains} />
+          <ReportsSection reports={vector.reports} loading={profileLoading} />
 
           {/* Secondary actions */}
           <motion.div
@@ -264,34 +306,17 @@ export default function AgentDetailPage() {
             <TrustButton agentId={agent.id} />
           </motion.div>
 
-          {/* Stats */}
+          {/* Score context — below the canonical sections */}
           <AgentStats agent={agent} />
 
-          {/* Tabs */}
-          <AgentTabs agent={agent} />
+          <AgentTabs
+            agent={agent}
+            attesters={attesters}
+            backers={backers}
+            profileLoading={profileLoading}
+            legacySkillClaimCount={legacySkillClaimCount}
+          />
         </div>
-
-        {/* Related Agents */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mt-16"
-        >
-          <h2 className="text-2xl font-bold mb-6">Similar Agents</h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* TODO: Add related agent cards */}
-            <div className="glass rounded-xl p-6 text-center text-text-muted">
-              Coming soon...
-            </div>
-            <div className="glass rounded-xl p-6 text-center text-text-muted">
-              Coming soon...
-            </div>
-            <div className="glass rounded-xl p-6 text-center text-text-muted">
-              Coming soon...
-            </div>
-          </div>
-        </motion.div>
         </div>
       </div>
 
