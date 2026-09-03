@@ -142,8 +142,14 @@ No mixing attested signal with ecosystem noise. No hiding the "who".
 - **Agent-surface track (from the technocore audit, in progress):**
   REPO_MAP → public machine-readable surface (llms.txt + content negotiation on
   existing score endpoints + SKILL.md + agent.json; reuse /agents/:id/trust and
-  /agents/:id/card — do not duplicate routes). Then engagement-signal recon
-  (phase A only, decide after).
+  /agents/:id/card — do not duplicate routes).
+- **Engagement signals (technocore Etap 3): phase B PARKED by recon verdict
+  (2026-09-03)** — 100% of agents null in a 90-day window; reciprocity does
+  not map to a stake-on-claim substrate (closest proxy: co-staking).
+  Re-run the recon when (i) ≥10 real registered agents have ≥3 distinct
+  non-self stakers in a rolling 90d window, OR (ii) ≥20 attested
+  (agent, domain) pairs have ≥3 distinct attesters each. Bottleneck is
+  Attest Flow adoption, not signal math.
 - **Etap 2b** (blocked on Partner API key application — postponed, tracked):
   provider identity + resolver JSON (with signature + anti-rollback).
 - **Etap 2c** ERC-8004 cohort in DOMAINS via OASF→bucket mapping; attest flow
