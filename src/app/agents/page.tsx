@@ -335,7 +335,7 @@ function AgentsPageContent() {
       // this page fetches independently rather than through that function.
       const candidates = atoms.map(a => ({
         termId: a.term_id,
-        label: a.label,
+        label: getAgentNameFromAtom(a),
         stakerCount: a.positions_aggregate?.aggregate?.count || 0,
         totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
         createdAt: a.created_at,
