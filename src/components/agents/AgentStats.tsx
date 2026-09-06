@@ -1,7 +1,6 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { TrustScoreBadge } from '@/components/trust/TrustScoreBadge'
 import { getTrustLevel } from '@/types/agent'
 import { cn } from '@/lib/cn'
@@ -17,10 +16,14 @@ export function AgentStats({ agent }: AgentStatsProps) {
   const positivePercentage = agent.positiveStake + agent.negativeStake > BigInt(0)
     ? (Number(agent.positiveStake) / Number(agent.positiveStake + agent.negativeStake)) * 100
     : 50
-
-  // Mock trend data (replace with real historical data)
-  const trend = agent.trustScore > 70 ? 'up' : agent.trustScore < 30 ? 'down' : 'stable'
-  const trendValue = trend === 'up' ? '+5.2' : trend === 'down' ? '-3.8' : '+0.0'
+  // Trend and percentile were removed here (thesis §6): "vs last week" was a
+  // threshold on the current score, not an actual week-over-week delta, and
+  // the only historical series available (/api/v1/agents/:id/timeline
+  // scoreHistory) is itself a synthetic eased interpolation between an
+  // assumed baseline of 50 and the current score — not real snapshots. No
+  // cheap real source exists for either number; fabricating one under a
+  // different name isn't a fix. Real trend needs actual periodic score
+  // snapshots; real percentile needs a rank over all agents' scores.
 
   return (
     <motion.div
@@ -38,34 +41,10 @@ export function AgentStats({ agent }: AgentStatsProps) {
             <TrustScoreBadge score={agent.trustScore} size="lg" />
 
             <div className="space-y-4 flex-1">
-              {/* Trend */}
-              <div className="flex items-center gap-2">
-                {trend === 'up' && <TrendingUp className="w-5 h-5 text-trust-good" />}
-                {trend === 'down' && <TrendingDown className="w-5 h-5 text-trust-critical" />}
-                {trend === 'stable' && <Minus className="w-5 h-5 text-text-muted" />}
-                <span className={cn(
-                  "font-mono font-semibold",
-                  trend === 'up' && "text-trust-good",
-                  trend === 'down' && "text-trust-critical",
-                  trend === 'stable' && "text-text-muted"
-                )}>
-                  {trendValue}%
-                </span>
-                <span className="text-sm text-text-muted">vs last week</span>
-              </div>
-
               {/* Trust Level Description */}
               <div>
                 <p className="text-sm text-text-muted mb-1">Trust Level</p>
                 <p className="font-semibold capitalize">{trustLevel}</p>
-              </div>
-
-              {/* Percentile */}
-              <div>
-                <p className="text-sm text-text-muted mb-1">Percentile</p>
-                <p className="font-semibold">
-                  Top {100 - Math.floor(agent.trustScore * 0.8)}%
-                </p>
               </div>
             </div>
           </div>
