@@ -6,6 +6,7 @@ import { Shield, ExternalLink, Copy, CheckCircle, AlertTriangle } from 'lucide-r
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
+import { formatDate, formatTTrust } from '@/lib/format'
 import type { Agent } from '@/types/agent'
 
 interface AgentHeaderProps {
@@ -59,7 +60,7 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
               <div className="flex items-center gap-3 text-text-secondary">
                 <Badge variant="secondary">{agent.platform}</Badge>
                 <span className="text-sm">
-                  Registered {agent.createdAt.toLocaleDateString()}
+                  Registered {formatDate(agent.createdAt)}
                 </span>
               </div>
             </div>
@@ -140,7 +141,7 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
             {/* Total Stake */}
             <div className="glass rounded-lg p-4 text-center">
               <p className="text-2xl font-bold font-mono">
-                ${formatStake(agent.positiveStake + agent.negativeStake)}
+                {formatTTrust(agent.positiveStake + agent.negativeStake)}
               </p>
               <p className="text-sm text-text-muted">Total Stake</p>
             </div>
@@ -168,11 +169,4 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
       </div>
     </motion.div>
   )
-}
-
-function formatStake(stake: bigint): string {
-  const value = Number(stake) / 1e18 // Assuming 18 decimals
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
-  return value.toFixed(2)
 }

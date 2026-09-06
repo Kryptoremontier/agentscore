@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useIntuition, useAtom, useSearchAtoms, useUserPositions, useCreatorAtoms } from '@/hooks/useIntuition'
 import { parseEther } from 'viem'
 import { AGENTS_TO_REGISTER } from '@/data/realAgents'
+import { formatDate } from '@/lib/format'
 
 interface CreatedAtom {
   id: string           // termId (bytes32)
@@ -426,7 +427,7 @@ export default function TestIntuitionPage() {
                               />
                             </div>
                             <span className="text-xs text-text-muted">
-                              {new Date(position.updated_at).toLocaleDateString()}
+                              {formatDate(position.updated_at)}
                             </span>
                           </div>
 
@@ -891,7 +892,7 @@ export default function TestIntuitionPage() {
                           </div>
                         </div>
                         <span className="text-xs text-text-muted">
-                          {new Date(atom.created_at).toLocaleDateString()}
+                          {formatDate(atom.created_at)}
                         </span>
                       </div>
 

@@ -20,7 +20,7 @@ interface StakingModalProps {
   action: 'trust' | 'distrust'
 }
 
-// Mock $TRUST token balance - replace with actual wagmi hook
+// Mock tTRUST token balance - replace with actual wagmi hook
 const MOCK_BALANCE = 1000
 
 export function StakingModal({
@@ -164,7 +164,7 @@ export function StakingModal({
                       )}
                     />
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
-                      $TRUST
+                      tTRUST
                     </div>
                   </div>
 
@@ -183,7 +183,7 @@ export function StakingModal({
 
                   {/* Balance */}
                   <div className="text-sm text-slate-500">
-                    Balance: {balance.toFixed(2)} $TRUST
+                    Balance: {balance.toFixed(2)} tTRUST
                   </div>
                 </div>
 
@@ -199,19 +199,19 @@ export function StakingModal({
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-400">Price per share</span>
                       <span className="font-mono">
-                        {formatToken(quote.pricePerShare)} $TRUST
+                        {formatToken(quote.pricePerShare)} tTRUST
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-400">Platform fee ({PLATFORM_FEES.stakingFee / 100}%)</span>
                       <span className="font-mono text-slate-500">
-                        -{formatToken(quote.fee)} $TRUST
+                        -{formatToken(quote.fee)} tTRUST
                       </span>
                     </div>
                     <div className="border-t border-white/10 pt-3 flex justify-between">
                       <span className="text-slate-400">Net amount staked</span>
                       <span className="font-mono font-medium text-emerald-400">
-                        {formatToken(quote.netAmount)} $TRUST
+                        {formatToken(quote.netAmount)} tTRUST
                       </span>
                     </div>
                   </div>
@@ -223,7 +223,7 @@ export function StakingModal({
                   <div className="text-sm text-slate-300">
                     <p className="font-medium text-primary">Bonding Curve</p>
                     <p className="mt-1">
-                      Early supporters get more shares per $TRUST. As more people stake,
+                      Early supporters get more shares per tTRUST. As more people stake,
                       share price increases, making your position more valuable.
                     </p>
                   </div>

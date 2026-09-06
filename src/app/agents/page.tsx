@@ -47,6 +47,7 @@ import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, type AgentProfileVector } from '@/lib/agent-profile'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
+import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -1209,15 +1210,6 @@ function AgentsPageContent() {
   }
 
   // Helper: format stakes
-  const formatStakes = (shares: string | null | undefined): string => {
-    if (!shares) return '$0'
-    const num = Number(shares) / 1e18
-    if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`
-    if (num >= 1000) return `$${(num / 1000).toFixed(1)}K`
-    if (num >= 1) return `$${num.toFixed(2)}`
-    return `$${num.toFixed(4)}`
-  }
-
   // Helper: trust score color (3 states matching shield colors)
   const getTrustColor = (score: number): string => {
     if (score >= 40) return '#34a872'   // green
@@ -1271,7 +1263,7 @@ function AgentsPageContent() {
       const trustRatio = total > 0 ? Math.round((supportTotal / total) * 100) : 50
 
       return {
-        date: new Date(signal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date: formatDateShort(signal.created_at),
         trustRatio,
       }
     })
@@ -1798,7 +1790,7 @@ function AgentsPageContent() {
                     : effectiveLevel === 'low' ? '#f97316'
                     : '#ef4444'
                   const cardMi = getMomentumIndicator(cardTrust.momentum ?? 0)
-                  const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
+                  const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getAgentNameFromAtom(agent)
 
                   return (
@@ -1877,7 +1869,7 @@ function AgentsPageContent() {
                     : effectiveLevel === 'moderate' ? '#eab308'
                     : effectiveLevel === 'low' ? '#f97316' : '#ef4444'
                   const listMi = getMomentumIndicator(cardTrust.momentum ?? 0)
-                  const stakes = formatStakes(agent.positions_aggregate?.aggregate?.sum?.shares)
+                  const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getAgentNameFromAtom(agent)
 
                   return (
@@ -1979,7 +1971,7 @@ function AgentsPageContent() {
                         {selectedAgent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
                       </span>
                       <span>·</span>
-                      <span>Registered {new Date(selectedAgent.created_at).toLocaleDateString('pl-PL')}</span>
+                      <span>Registered {formatDate(selectedAgent.created_at)}</span>
                     </div>
                   </div>
 
@@ -2036,7 +2028,7 @@ function AgentsPageContent() {
                   {[
                     { value: agentSignalsCount, label: 'Signals' },
                     { value: combinedStakerCount, label: 'Stakers' },
-                    { value: formatStakes(selectedAgent.positions_aggregate?.aggregate?.sum?.shares), label: 'Total Stake' },
+                    { value: formatTTrust(selectedAgent.positions_aggregate?.aggregate?.sum?.shares ?? 0n), label: 'Total Stake' },
                     { value: reportCount, label: 'Reports' },
                   ].map((s, i) => (
                     <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
@@ -2498,12 +2490,6 @@ function AgentsPageContent() {
                 const supportPct = totalWei > BigInt(0)
                   ? Number((supportWei * BigInt(1000)) / totalWei) / 10
                   : 100
-                const fmtWei = (wei: bigint) => {
-                  const n = Number(wei) / 1e18
-                  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
-                  if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
-                  return `$${n.toFixed(4)}`
-                }
                 const scoreColor = agentLevel === 'excellent' ? '#2ECC71'
                   : agentLevel === 'good' ? '#22C55E'
                   : agentLevel === 'moderate' ? '#EAB308'
@@ -2594,16 +2580,16 @@ function AgentsPageContent() {
                         <div className="space-y-2">
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Support Stake</p>
-                            <p className="text-[#C8963C] font-bold">{fmtWei(supportWei)}</p>
+                            <p className="text-[#C8963C] font-bold">{formatTTrust(supportWei)}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Oppose Stake</p>
-                            <p className="text-[#f85149] font-bold">{fmtWei(opposeWei)}</p>
+                            <p className="text-[#f85149] font-bold">{formatTTrust(opposeWei)}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Net Stake</p>
                             <p className="text-[#C8963C] font-bold">
-                              {netWei >= BigInt(0) ? '+' : ''}{fmtWei(netWei)} tTRUST
+                              {netWei >= BigInt(0) ? '+' : ''}{formatTTrust(netWei)}
                             </p>
                           </div>
                         </div>
@@ -3365,7 +3351,7 @@ function AgentsPageContent() {
                         </div>
                         {[
                           { label: 'Agent Age', value: ageLabel },
-                          { label: 'First Seen', value: new Date(selectedAgent.created_at).toLocaleDateString('pl-PL') },
+                          { label: 'First Seen', value: formatDate(selectedAgent.created_at) },
                           { label: 'Stakers', value: String(combinedStakerCount) },
                         ].map((item, i) => (
                           <div key={i}>
@@ -3484,7 +3470,7 @@ function AgentsPageContent() {
                               ? profile.label.slice(0, 8) + '...' + profile.label.slice(-6)
                               : profile.label
                           const netPositive = profile.netShares >= 0
-                          const lastDate = new Date(profile.lastSeen).toLocaleDateString('pl-PL')
+                          const lastDate = formatDate(profile.lastSeen)
 
                           return (
                             <Link
@@ -3568,9 +3554,7 @@ function AgentsPageContent() {
                             Registered on Intuition Protocol
                           </p>
                           <p className="text-[#B5BDC6] text-xs mt-1">
-                            {new Date(selectedAgent.created_at).toLocaleDateString('pl-PL', {
-                              day: 'numeric', month: 'long', year: 'numeric'
-                            })}
+                            {formatDate(selectedAgent.created_at, 'long')}
                           </p>
                         </div>
                       </div>
@@ -3638,10 +3622,7 @@ function AgentsPageContent() {
                                   {isDeposit ? '+' : '-'}{sharesDisplay} shares
                                 </p>
                                 <p className="text-[#B5BDC6] text-xs mt-0.5">
-                                  {new Date(signal.created_at).toLocaleDateString('pl-PL', {
-                                    day: 'numeric', month: 'short', year: 'numeric',
-                                    hour: '2-digit', minute: '2-digit'
-                                  })}
+                                  {formatDate(signal.created_at, 'long')}
                                 </p>
                               </div>
                             </div>

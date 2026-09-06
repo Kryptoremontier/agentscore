@@ -12,6 +12,7 @@ import { motion } from 'framer-motion'
 import { FileText, Shield } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { AttestersAndBackers } from '@/components/profile/AttestersAndBackers'
+import { formatDate } from '@/lib/format'
 import type { Agent } from '@/types/agent'
 import type { AttesterSummary, Backer } from '@/lib/agent-profile'
 
@@ -67,7 +68,7 @@ export function AgentTabs({ agent, attesters, backers, profileLoading, legacySki
                 </div>
                 <div>
                   <p className="text-sm text-text-muted mb-1">First Seen</p>
-                  <p className="font-medium text-text-primary">{agent.createdAt.toLocaleDateString()}</p>
+                  <p className="font-medium text-text-primary">{formatDate(agent.createdAt)}</p>
                 </div>
               </div>
               {legacySkillClaimCount > 0 && (

@@ -62,6 +62,7 @@ function AtomTypeIcon({ type, color }: { type: 'agent' | 'skill' | 'unknown'; co
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
+import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -858,13 +859,6 @@ function ClaimsPageContent() {
     return '#ef4444'
   }
 
-  const formatStakes = (wei: bigint): string => {
-    const n = Number(wei) / 1e18
-    if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
-    if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
-    if (n >= 1) return `$${n.toFixed(2)}`
-    return `$${n.toFixed(4)}`
-  }
 
   const buildTrustChartData = (signals: any[], counterTermId: string | null) => {
     if (!signals || signals.length === 0) return []
@@ -884,7 +878,7 @@ function ClaimsPageContent() {
       const total = supportTotal + opposeTotal
       const ratio = total > 0 ? Math.round((supportTotal / total) * 100) : 50
       results.push({
-        date: new Date(sig.created_at).toLocaleDateString('pl-PL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        date: formatDateShort(sig.created_at, { withTime: true }),
         trustRatio: ratio,
       })
     })
@@ -1244,7 +1238,7 @@ function ClaimsPageContent() {
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
                       <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs text-[#7A838D]">via AgentScore</span>
                       <span>·</span>
-                      <span>{new Date(selectedClaim.created_at).toLocaleDateString('pl-PL')}</span>
+                      <span>{formatDate(selectedClaim.created_at)}</span>
                     </div>
                   </div>
 
@@ -1785,15 +1779,15 @@ function ClaimsPageContent() {
                         <div className="space-y-2">
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Support Stake</p>
-                            <p className="text-[#10b981] font-bold">{formatStakes(supportWei)}</p>
+                            <p className="text-[#10b981] font-bold">{formatTTrust(supportWei)}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Oppose Stake</p>
-                            <p className="text-[#f85149] font-bold">{formatStakes(opposeWei)}</p>
+                            <p className="text-[#f85149] font-bold">{formatTTrust(opposeWei)}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Net Stake</p>
-                            <p className="text-[#C8963C] font-bold">{netWei >= BigInt(0) ? '+' : ''}{formatStakes(netWei)} tTRUST</p>
+                            <p className="text-[#C8963C] font-bold">{netWei >= BigInt(0) ? '+' : ''}{formatTTrust(netWei)}</p>
                           </div>
                         </div>
                       </div>
@@ -2201,7 +2195,7 @@ function ClaimsPageContent() {
                           </div>
                           {[
                             { label: 'Claim Age', value: ageLabel },
-                            { label: 'Created', value: new Date(selectedClaim.created_at).toLocaleDateString('pl-PL') },
+                            { label: 'Created', value: formatDate(selectedClaim.created_at) },
                             { label: 'Stakers', value: String(combinedStakerCount) },
                           ].map((item, i) => (
                             <div key={i}>
@@ -2264,7 +2258,7 @@ function ClaimsPageContent() {
                                 </div>
                                 <div>
                                   <Link href={`/profile/${profile.accountId}`} className="text-white text-sm font-medium hover:text-[#C8963C] transition-colors">{displayWallet}</Link>
-                                  <p className="text-[#7A838D] text-[10px] mt-0.5">Last active {new Date(profile.lastSeen).toLocaleDateString('pl-PL')}</p>
+                                  <p className="text-[#7A838D] text-[10px] mt-0.5">Last active {formatDate(profile.lastSeen)}</p>
                                 </div>
                               </div>
                               <div className="text-right flex-shrink-0">
@@ -2305,7 +2299,7 @@ function ClaimsPageContent() {
                       <div className="flex-1 min-w-0">
                         <p className="text-white text-xs font-medium">Claim Created</p>
                         <p className="text-[#7A838D] text-[10px] mt-0.5">
-                          via AgentScore{' · '}{new Date(selectedClaim.created_at).toLocaleDateString('pl-PL')}
+                          via AgentScore{' · '}{formatDate(selectedClaim.created_at)}
                         </p>
                       </div>
                     </div>
@@ -2334,7 +2328,7 @@ function ClaimsPageContent() {
                                 ? <Link href={`/profile/${sig.account_id}`} className="text-[#C8963C] text-[10px] hover:underline">{walletLabel}</Link>
                                 : <span className="text-[#7A838D] text-[10px]">{walletLabel}</span>}
                             </div>
-                            <p className="text-[#7A838D] text-[10px] mt-0.5">{new Date(sig.created_at).toLocaleDateString('pl-PL')}</p>
+                            <p className="text-[#7A838D] text-[10px] mt-0.5">{formatDate(sig.created_at)}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
                             <p className={`text-xs font-bold ${isDeposit ? (isOppose ? 'text-[#c45454]' : 'text-[#34a872]') : 'text-[#B5BDC6]'}`}>

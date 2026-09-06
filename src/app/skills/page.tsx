@@ -28,6 +28,7 @@ import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 import { TrustTimeline } from '@/components/agents/TrustTimeline'
 
 import { APP_CONFIG } from '@/lib/app-config'
+import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { SKILL_WHERE_STR } from '@/lib/gql-filters'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -1070,14 +1071,6 @@ function SkillsPageContent() {
     }
   }
 
-  const formatStakes = (shares: string | null | undefined): string => {
-    if (!shares) return '$0'
-    const num = Number(shares) / 1e18
-    if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`
-    if (num >= 1000) return `$${(num / 1000).toFixed(1)}K`
-    if (num >= 1) return `$${num.toFixed(2)}`
-    return `$${num.toFixed(4)}`
-  }
 
   const getTrustColor = (score: number): string => {
     if (score >= 40) return '#34a872'
@@ -1115,7 +1108,7 @@ function SkillsPageContent() {
       const trustRatio = total > 0 ? Math.round((supportTotal / total) * 100) : 50
 
       return {
-        date: new Date(signal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date: formatDateShort(signal.created_at),
         trustRatio,
       }
     })
@@ -1533,7 +1526,7 @@ function SkillsPageContent() {
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
-                  const stakes = formatStakes(skill.positions_aggregate?.aggregate?.sum?.shares)
+                  const stakes = formatTTrust(skill.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getSkillName(skill.label)
                   const creator = skill.creator?.label || 'unknown'
 
@@ -1601,7 +1594,7 @@ function SkillsPageContent() {
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
-                  const stakes = formatStakes(skill.positions_aggregate?.aggregate?.sum?.shares)
+                  const stakes = formatTTrust(skill.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getSkillName(skill.label)
                   const creator = skill.creator?.label || 'unknown'
 
@@ -1685,7 +1678,7 @@ function SkillsPageContent() {
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
                       <span className="bg-[#1E2229] px-2 py-0.5 rounded text-xs text-[#7A838D]">via AgentScore</span>
                       <span>·</span>
-                      <span>Registered {new Date(selectedSkill.created_at).toLocaleDateString('pl-PL')}</span>
+                      <span>Registered {formatDate(selectedSkill.created_at)}</span>
                     </div>
                   </div>
 
@@ -1731,7 +1724,7 @@ function SkillsPageContent() {
                   {[
                     { value: skillSignalsCount, label: 'Signals' },
                     { value: combinedStakerCount, label: 'Stakers' },
-                    { value: formatStakes(selectedSkill.positions_aggregate?.aggregate?.sum?.shares), label: 'Total Stake' },
+                    { value: formatTTrust(selectedSkill.positions_aggregate?.aggregate?.sum?.shares ?? 0n), label: 'Total Stake' },
                     { value: reportCount, label: 'Reports' },
                   ].map((s, i) => (
                     <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
@@ -2168,12 +2161,6 @@ function SkillsPageContent() {
                 const supportPct = totalWei > BigInt(0)
                   ? Number((supportWei * BigInt(1000)) / totalWei) / 10
                   : 100
-                const fmtWei = (wei: bigint) => {
-                  const n = Number(wei) / 1e18
-                  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
-                  if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
-                  return `$${n.toFixed(4)}`
-                }
                 const scoreColor = level === 'excellent' ? '#2ECC71'
                   : level === 'good' ? '#22C55E'
                   : level === 'moderate' ? '#EAB308'
@@ -2253,16 +2240,16 @@ function SkillsPageContent() {
                         <div className="space-y-2">
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Support Stake</p>
-                            <p className="text-[#C8963C] font-bold">{fmtWei(supportWei)}</p>
+                            <p className="text-[#C8963C] font-bold">{formatTTrust(supportWei)}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Oppose Stake</p>
-                            <p className="text-[#f85149] font-bold">{fmtWei(opposeWei)}</p>
+                            <p className="text-[#f85149] font-bold">{formatTTrust(opposeWei)}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Net Stake</p>
                             <p className="text-[#C8963C] font-bold">
-                              {netWei >= BigInt(0) ? '+' : ''}{fmtWei(netWei)} tTRUST
+                              {netWei >= BigInt(0) ? '+' : ''}{formatTTrust(netWei)}
                             </p>
                           </div>
                         </div>
@@ -2851,7 +2838,7 @@ function SkillsPageContent() {
                               : reporter.length > 14
                                 ? reporter.slice(0, 8) + '...' + reporter.slice(-4)
                                 : reporter
-                            const date = new Date(report.created_at).toLocaleDateString('pl-PL')
+                            const date = formatDate(report.created_at)
                             const categoryIcons: Record<string, string> = {
                               scam: '🚨', spam: '📢', injection: '💉', impersonation: '🎭',
                             }
@@ -2894,7 +2881,7 @@ function SkillsPageContent() {
                         </div>
                         {[
                           { label: 'Skill Age', value: ageLabel },
-                          { label: 'First Seen', value: new Date(selectedSkill.created_at).toLocaleDateString('pl-PL') },
+                          { label: 'First Seen', value: formatDate(selectedSkill.created_at) },
                           { label: 'Stakers', value: String(combinedStakerCount) },
                         ].map((item, i) => (
                           <div key={i}>
@@ -3004,7 +2991,7 @@ function SkillsPageContent() {
                               ? profile.label.slice(0, 8) + '...' + profile.label.slice(-6)
                               : profile.label
                           const netPositive = profile.netShares >= 0
-                          const lastDate = new Date(profile.lastSeen).toLocaleDateString('pl-PL')
+                          const lastDate = formatDate(profile.lastSeen)
                           return (
                             <Link
                               key={profile.accountId}
@@ -3083,9 +3070,7 @@ function SkillsPageContent() {
                           <p className="text-white text-sm font-medium">Skill Registered</p>
                           <p className="text-[#B5BDC6] text-xs mt-0.5">Registered on Intuition Protocol</p>
                           <p className="text-[#B5BDC6] text-xs mt-1">
-                            {new Date(selectedSkill.created_at).toLocaleDateString('pl-PL', {
-                              day: 'numeric', month: 'long', year: 'numeric'
-                            })}
+                            {formatDate(selectedSkill.created_at, 'long')}
                           </p>
                         </div>
                       </div>
@@ -3150,10 +3135,7 @@ function SkillsPageContent() {
                                   {isDeposit ? '+' : '-'}{sharesDisplay} shares
                                 </p>
                                 <p className="text-[#B5BDC6] text-xs mt-0.5">
-                                  {new Date(signal.created_at).toLocaleDateString('pl-PL', {
-                                    day: 'numeric', month: 'short', year: 'numeric',
-                                    hour: '2-digit', minute: '2-digit'
-                                  })}
+                                  {formatDate(signal.created_at, 'long')}
                                 </p>
                               </div>
                             </div>

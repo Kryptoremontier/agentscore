@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { TrustScoreBadge } from '@/components/trust/TrustScoreBadge'
 import { getTrustLevel } from '@/types/agent'
 import { cn } from '@/lib/cn'
+import { formatTTrust } from '@/lib/format'
 import type { Agent } from '@/types/agent'
 
 interface AgentStatsProps {
@@ -80,13 +81,13 @@ export function AgentStats({ agent }: AgentStatsProps) {
             <div className="glass rounded-lg p-4">
               <p className="text-sm text-text-muted mb-1">Positive Stake</p>
               <p className="text-xl font-mono font-semibold text-trust-good">
-                ${(Number(agent.positiveStake) / 1e18).toFixed(2)}
+                {formatTTrust(agent.positiveStake)}
               </p>
             </div>
             <div className="glass rounded-lg p-4">
               <p className="text-sm text-text-muted mb-1">Negative Stake</p>
               <p className="text-xl font-mono font-semibold text-trust-critical">
-                ${(Number(agent.negativeStake) / 1e18).toFixed(2)}
+                {formatTTrust(agent.negativeStake)}
               </p>
             </div>
           </div>
@@ -98,7 +99,7 @@ export function AgentStats({ agent }: AgentStatsProps) {
               "text-2xl font-mono font-bold",
               netStake >= 0 ? "text-trust-good" : "text-trust-critical"
             )}>
-              {netStake >= 0 ? '+' : ''}{netStake.toFixed(2)} $TRUST
+              {netStake >= 0 ? '+' : ''}{formatTTrust(netStake, { fromEther: true })}
             </p>
           </div>
         </div>
