@@ -6,6 +6,10 @@ import type { SkillTrustScore } from '@/lib/skill-trust'
 interface SkillBreakdownProps {
   skills: SkillTrustScore[]
   overallScore: number
+  /** Heading override (ETAP 3: demoted to "Legacy skill claims" under ATTESTED). */
+  title?: string
+  /** Small muted note rendered under the heading, e.g. the legacy-predicate caveat. */
+  subtitle?: string
 }
 
 const TIER_COLOR: Record<string, string> = {
@@ -16,7 +20,7 @@ const TIER_COLOR: Record<string, string> = {
   critical:  '#ef4444',   // red-400
 }
 
-export function SkillBreakdown({ skills, overallScore }: SkillBreakdownProps) {
+export function SkillBreakdown({ skills, overallScore, title = 'Skill Trust Breakdown', subtitle }: SkillBreakdownProps) {
   if (skills.length === 0) return null
 
   return (
@@ -24,12 +28,13 @@ export function SkillBreakdown({ skills, overallScore }: SkillBreakdownProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">
-          Skill Trust Breakdown
+          {title}
         </p>
         <span className="text-[#7A838D] text-[10px]">
           Avg&nbsp;<span className="text-white font-semibold">{overallScore.toFixed(1)}</span>
         </span>
       </div>
+      {subtitle && <p className="text-[#7A838D] text-[10px] mb-2">{subtitle}</p>}
       <div className="border-b border-white/[0.06] mb-3" />
 
       {/* Skill rows */}
