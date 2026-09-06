@@ -9,6 +9,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import Link from 'next/link'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
+import { DecimalInput } from '@/components/ui/DecimalInput'
 import {
   createWriteConfig,
   depositToVault,
@@ -1392,23 +1393,22 @@ function ClaimsPageContent() {
                           </div>
                           <div className="flex items-center gap-2">
                             {tradeAction === 'buy' ? (
-                              <input type="number"
+                              <DecimalInput
                                 value={signalSide === 'support' ? voteAmount : untrustAmount}
-                                onChange={e => signalSide === 'support' ? setVoteAmount(e.target.value) : setUntrustAmount(e.target.value)}
-                                onClick={e => e.stopPropagation()} min="0.001" step="0.001"
+                                onChange={signalSide === 'support' ? setVoteAmount : setUntrustAmount}
+                                onClick={e => e.stopPropagation()}
                                 className="flex-1 bg-transparent text-white text-lg font-bold outline-none" placeholder="0.05" />
                             ) : (
-                              <input type="number" value={redeemShares}
-                                onChange={e => {
+                              <DecimalInput value={redeemShares}
+                                onChange={setRedeemShares}
+                                max={(() => {
                                   const maxShares = signalSide === 'support'
                                     ? (userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0)
                                     : (userPosition.againstShares ? Number(userPosition.againstShares) / 1e18 : 0)
-                                  const val = parseFloat(e.target.value)
                                   const effectiveMax = exitLimit?.isLimited ? Math.min(exitLimit.maxSellShares, maxShares) : maxShares
-                                  if (!isNaN(val) && val > effectiveMax) setRedeemShares(effectiveMax.toFixed(6))
-                                  else setRedeemShares(e.target.value)
-                                }}
-                                onClick={e => e.stopPropagation()} min="0" step="0.0001"
+                                  return effectiveMax.toFixed(6)
+                                })()}
+                                onClick={e => e.stopPropagation()}
                                 className="flex-1 bg-transparent text-white text-lg font-bold outline-none" placeholder="0.00" />
                             )}
                             <span className="text-[#B5BDC6] text-sm font-semibold">{tradeAction === 'buy' ? 'tTRUST' : 'shares'}</span>

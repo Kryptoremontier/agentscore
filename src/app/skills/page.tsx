@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { Button } from '@/components/ui/button'
+import { DecimalInput } from '@/components/ui/DecimalInput'
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
 import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
 import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
@@ -1857,32 +1858,19 @@ function SkillsPageContent() {
                       </div>
                       <div className="flex items-center gap-2">
                         {tradeAction === 'buy' ? (
-                          <input
-                            type="number"
+                          <DecimalInput
                             value={voteAmount}
-                            onChange={(e) => setVoteAmount(e.target.value)}
+                            onChange={setVoteAmount}
                             onClick={(e) => e.stopPropagation()}
-                            min="0.001"
-                            step="0.001"
                             className="flex-1 bg-transparent text-white text-lg font-bold outline-none"
                             placeholder="0.05"
                           />
                         ) : (
-                          <input
-                            type="number"
+                          <DecimalInput
                             value={redeemShares}
-                            onChange={(e) => {
-                              const maxShares = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
-                              const val = parseFloat(e.target.value)
-                              if (!isNaN(val) && val > maxShares) {
-                                setRedeemShares(maxShares.toFixed(6))
-                              } else {
-                                setRedeemShares(e.target.value)
-                              }
-                            }}
+                            onChange={setRedeemShares}
+                            max={(userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0).toFixed(6)}
                             onClick={(e) => e.stopPropagation()}
-                            min="0"
-                            step="0.0001"
                             className="flex-1 bg-transparent text-white text-lg font-bold outline-none"
                             placeholder="0.00"
                           />
