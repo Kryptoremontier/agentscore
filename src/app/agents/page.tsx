@@ -3170,14 +3170,20 @@ function AgentsPageContent() {
                       </div>
                     </div>
 
-                    {/* Score Trajectory Chart */}
-                    {scoreTrajectory.length >= 2 && (
+                    {/* Score Trajectory Chart — real history only; no persisted
+                        snapshots exist yet, so this normally shows the honest
+                        note rather than a chart (thesis §6). */}
+                    {scoreTrajectory.length >= 2 ? (
                       <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4" style={{ height: 200 }}>
                         <ScoreTrajectoryChart
                           scoreHistory={scoreTrajectory}
                           currentScore={hybridScore ?? agentTrust?.score ?? 50}
                         />
                       </div>
+                    ) : (
+                      <p className="text-[#7A838D] text-[11px] px-1">
+                        Score history not yet recorded — historical snapshots aren&apos;t persisted yet.
+                      </p>
                     )}
 
                     {/* Positions Table */}

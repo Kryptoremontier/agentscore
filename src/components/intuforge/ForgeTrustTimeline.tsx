@@ -180,7 +180,7 @@ export function ForgeTrustTimeline({
       </div>
 
       <div className={`grid gap-6 ${hasChart ? 'grid-cols-2' : 'grid-cols-1'}`} style={{ minHeight: hasChart ? 320 : undefined }}>
-        {hasChart && (
+        {hasChart ? (
           <div
             className="flex flex-col rounded-xl p-4"
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', minHeight: 280 }}
@@ -190,6 +190,11 @@ export function ForgeTrustTimeline({
               currentScore={currentScore}
             />
           </div>
+        ) : (
+          <p className="text-[11px] mb-1 text-white/25">
+            Score history not yet recorded — historical snapshots aren&apos;t persisted yet.
+            Only the current score and the events below are real.
+          </p>
         )}
 
         <div className={hasChart ? 'overflow-y-auto pr-1' : ''} style={hasChart ? { maxHeight: 480 } : undefined}>

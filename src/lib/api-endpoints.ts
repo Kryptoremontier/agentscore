@@ -10,6 +10,7 @@ export const API_V1_ENDPOINTS = {
   agent_detail: '/api/v1/agents/:id',
   agent_trust: '/api/v1/agents/:id/trust',
   agent_card: '/api/v1/agents/:id/card',
+  agent_timeline: '/api/v1/agents/:id/timeline',
   skills: '/api/v1/skills',
   skill_detail: '/api/v1/skills/:id',
   domains: '/api/v1/domains',
