@@ -29,15 +29,24 @@ export async function GET(
       skillEvents: rawData.skillEvents,
     })
 
-    return apiSuccess({
-      agentId: timeline.agentId,
-      agentName: timeline.agentName,
-      currentScore: timeline.currentScore,
-      currentTier: timeline.currentTier,
-      summary: timeline.summary,
-      events: timeline.events.slice(0, 50),
-      scoreHistory: timeline.scoreHistory,
-    })
+    return apiSuccess(
+      {
+        agentId: timeline.agentId,
+        agentName: timeline.agentName,
+        currentScore: timeline.currentScore,
+        currentTier: timeline.currentTier,
+        summary: timeline.summary,
+        events: timeline.events.slice(0, 50),
+        // Exactly one real point (current score, now) — never a fabricated
+        // curve. historyStatus / meta.history say so explicitly.
+        scoreHistory: timeline.scoreHistory,
+        historyStatus: timeline.historyStatus,
+      },
+      {
+        history: 'not_recorded',
+        historyNote: 'Historical score snapshots are not yet persisted — scoreHistory is the current score only, and events carry real on-chain timestamps.',
+      },
+    )
   } catch (error) {
     console.error('[API] /agents/:id/timeline error:', error)
     return apiError('Internal server error', 500)

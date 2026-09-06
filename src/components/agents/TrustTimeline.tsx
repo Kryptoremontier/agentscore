@@ -53,7 +53,7 @@ interface TrustTimelineProps {
 const FILTER_OPTIONS: { id: string; label: string; types?: TimelineEventType[] }[] = [
   { id: 'all', label: 'All Events' },
   { id: 'staking', label: 'Staking Only', types: ['staker_joined', 'staker_opposed', 'staker_left', 'evaluator_staked'] },
-  { id: 'skills', label: 'Skills Only', types: ['skill_added'] },
+  { id: 'skills', label: 'Skills & Attestations', types: ['skill_added', 'domain_attested'] },
   { id: 'milestones', label: 'Milestones', types: ['registered', 'tier_upgrade', 'a2a_ready'] },
   { id: 'negative', label: 'Negative Events', types: ['staker_opposed', 'staker_left'] },
 ]
@@ -79,6 +79,7 @@ function getEventIcon(event: TimelineEvent): { Icon: LucideIcon; color: string }
     case 'staker_opposed':   return { Icon: TrendingDown, color: '#EF4444' }
     case 'staker_left':      return { Icon: LogOut,       color: '#7A838D' }
     case 'skill_added':      return { Icon: Zap,          color: '#2EE6D6' }
+    case 'domain_attested':  return { Icon: ShieldCheck,  color: '#2ECC71' }
     case 'a2a_ready':        return { Icon: Wifi,         color: '#2EE6D6' }
     case 'evaluator_staked':
       return tier === 'Sage'
@@ -333,6 +334,7 @@ export function TrustTimeline({
     : timeline.events
 
   const { summary } = timeline
+  const hasChart = timeline.scoreHistory.length >= 2
 
   return (
     <div className="p-5">
@@ -385,21 +387,29 @@ export function TrustTimeline({
         </div>
       </div>
 
-      {/* Two-column layout — chart 50%, events 50% */}
-      <div className="grid grid-cols-2 gap-6" style={{ minHeight: 360 }}>
-        {/* Left: Score chart */}
-        <div
-          className="flex flex-col rounded-xl p-4"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', minHeight: 320 }}
-        >
-          <ScoreTrajectoryChart
-            scoreHistory={timeline.scoreHistory}
-            currentScore={currentScore}
-          />
-        </div>
+      {/* Two-column layout when real history exists; otherwise events take the
+          full width and an honest note replaces the chart slot (thesis §6 —
+          no fake curve when there's only one real score point). */}
+      <div className={`grid gap-6 ${hasChart ? 'grid-cols-2' : 'grid-cols-1'}`} style={{ minHeight: hasChart ? 360 : undefined }}>
+        {hasChart ? (
+          <div
+            className="flex flex-col rounded-xl p-4"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', minHeight: 320 }}
+          >
+            <ScoreTrajectoryChart
+              scoreHistory={timeline.scoreHistory}
+              currentScore={currentScore}
+            />
+          </div>
+        ) : (
+          <p className="text-[11px] mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            Score history not yet recorded — historical snapshots aren&apos;t persisted yet.
+            Only the current score and the dated events below are real.
+          </p>
+        )}
 
         {/* Right: Event list */}
-        <div className="overflow-y-auto pr-1" style={{ maxHeight: 480 }}>
+        <div className={hasChart ? 'overflow-y-auto pr-1' : ''} style={hasChart ? { maxHeight: 480 } : undefined}>
           {visibleEvents.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>

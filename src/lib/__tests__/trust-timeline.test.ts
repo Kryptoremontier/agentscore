@@ -27,7 +27,8 @@ describe('buildAgentTimeline', () => {
     })
     expect(tl.events).toHaveLength(1)
     expect(tl.events[0].type).toBe('registered')
-    expect(tl.events[0].scoreAtEvent).toBe(50)
+    // No historical score snapshots are persisted — never claim one at registration.
+    expect(tl.events[0].scoreAtEvent).toBeNull()
     expect(tl.events[0].severity).toBe('milestone')
   })
 
@@ -169,7 +170,7 @@ describe('buildAgentTimeline', () => {
     expect(tl.summary.currentStreak).toBe('No activity yet')
   })
 
-  test('score history starts at 50 and ends at currentScore', () => {
+  test('scoreHistory is exactly one REAL point (current score, now) — never an interpolated curve', () => {
     const tl = buildAgentTimeline({
       agentId: 'hist1', agentName: 'Test',
       createdAt: '2026-03-01T00:00:00Z',
@@ -177,8 +178,48 @@ describe('buildAgentTimeline', () => {
       stakingEvents: [makeSupport('p1', '2026-03-10T00:00:00Z')],
       skillEvents: [],
     })
-    expect(tl.scoreHistory.length).toBeGreaterThan(2)
-    expect(tl.scoreHistory[0].score).toBe(50)
-    expect(tl.scoreHistory[tl.scoreHistory.length - 1].score).toBe(75)
+    expect(tl.scoreHistory).toHaveLength(1)
+    expect(tl.scoreHistory[0].score).toBe(75)
+    // Real "now" timestamp, not a fabricated waypoint.
+    expect(Date.now() - new Date(tl.scoreHistory[0].date).getTime()).toBeLessThan(5000)
+  })
+
+  test('historyStatus explicitly marks that no periodic score snapshots are persisted', () => {
+    const tl = buildAgentTimeline({
+      agentId: 'hist2', agentName: 'Test',
+      currentScore: 60, currentTier: 'sandbox',
+      stakingEvents: [], skillEvents: [],
+    })
+    expect(tl.historyStatus).toBe('not_recorded')
+  })
+
+  test('summary no longer fabricates highestScore/lowestScore', () => {
+    const tl = buildAgentTimeline({
+      agentId: 'hist3', agentName: 'Test',
+      currentScore: 42, currentTier: 'unverified',
+      stakingEvents: [], skillEvents: [],
+    })
+    expect(tl.summary).not.toHaveProperty('highestScore')
+    expect(tl.summary).not.toHaveProperty('lowestScore')
+  })
+
+  test('domain_attested events (canonical unit) are distinct from legacy skill_added claims', () => {
+    const tl = buildAgentTimeline({
+      agentId: 'attest1', agentName: 'Test',
+      currentScore: 60, currentTier: 'sandbox',
+      stakingEvents: [],
+      skillEvents: [
+        { tripleId: 'legacy1', skillId: 's1', skillName: 'Legacy Skill', timestamp: '2026-03-01T00:00:00Z' },
+        { tripleId: 'canon1', skillId: 's2', skillName: 'Crypto / Onchain', timestamp: '2026-03-02T00:00:00Z', canonical: true },
+      ],
+    })
+    const legacy = tl.events.find(e => e.id === 'skill_legacy1')
+    const attested = tl.events.find(e => e.id === 'attest_canon1')
+    expect(legacy?.type).toBe('skill_added')
+    expect(attested?.type).toBe('domain_attested')
+    expect(attested?.title).toContain('Crypto / Onchain')
+    // Every event timestamp is a real, passed-in date — never fabricated.
+    expect(legacy?.timestamp).toBe('2026-03-01T00:00:00Z')
+    expect(attested?.timestamp).toBe('2026-03-02T00:00:00Z')
   })
 })

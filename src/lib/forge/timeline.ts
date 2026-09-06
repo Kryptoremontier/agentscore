@@ -17,7 +17,7 @@ export function mapForgeTimelineEvent(event: TimelineEvent): TimelineEvent {
   const mapping: Record<string, { title: string; description: string; icon: string }> = {
     registered: {
       title: 'Project Listed on IntuForge',
-      description: `${(event.metadata?.agentName as string) || 'Project'} was listed on IntuForge. Initial trust score: 50 (neutral).`,
+      description: `${(event.metadata?.agentName as string) || 'Project'} was listed on IntuForge.`,
       icon: '🏗️',
     },
     staker_joined: {

@@ -562,18 +562,20 @@ const handler = createMcpHandler(
       {
         title: 'Get Agent Trust Timeline',
         description:
-          'Get the chronological trust history of an AI agent. ' +
-          'Shows every significant event: staker joins/leaves, skill additions, ' +
+          'Get the chronological trust history of an AI agent, from real dated ' +
+          'on-chain events: staker joins/leaves, skill/domain attestation claims, ' +
           'tier upgrades (Sandbox at 3, Trusted at 10, Verified at 25 stakers), ' +
           'high-accuracy evaluator staking, and A2A readiness. ' +
-          'Use this to understand WHY an agent has its current score ' +
-          'and HOW its reputation developed over time.',
+          'Use this to understand WHY an agent has its current score and WHEN ' +
+          'specific events occurred. Historical score snapshots are not persisted — ' +
+          'only the current score and these dated events are real; there is no ' +
+          'continuous score curve.',
         inputSchema: {
           agentId: z.string().describe("Agent's term ID (from search_agents or get_agent_trust)"),
           limit: z.number().min(1).max(50).optional().describe('Max events to return (default: 20)'),
           type: z.enum([
             'staker_joined', 'staker_opposed', 'staker_left',
-            'skill_added', 'tier_upgrade', 'evaluator_staked',
+            'skill_added', 'domain_attested', 'tier_upgrade', 'evaluator_staked',
             'registered', 'a2a_ready',
           ]).optional().describe('Filter by event type'),
         },

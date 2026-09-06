@@ -1,14 +1,20 @@
 /**
- * Trust Timeline — reconstructs the chronological trust history of an AI agent.
- *
- * Detects and describes events that impacted the agent's score:
- *   - Registration, staker joins/leaves, skill additions
+ * Trust Timeline — reconstructs the chronological trust history of an AI agent
+ * from REAL dated events. Detects and describes:
+ *   - Registration, staker joins/leaves, skill/domain claims
  *   - Tier upgrades (Sandbox at 3, Trusted at 10, Verified at 25 stakers)
  *   - High-tier evaluator staking (Oracle/Sage weight ≥ 1.25)
  *   - A2A readiness milestone
  *
- * Data source: on-chain signals (deposit/redeem events) + skill triples from GraphQL.
- * Each event includes: timestamp, type, description, severity.
+ * Data source: on-chain signals (deposit/redeem events) + skill/attestation
+ * triples from GraphQL — every event timestamp is a real `created_at`.
+ *
+ * Historical SCORE snapshots are NOT persisted anywhere (thesis §6): no
+ * periodic score recording exists yet, so `scoreAtEvent` is always null and
+ * `scoreHistory` carries exactly one real point (the current score, now) —
+ * never an interpolated curve. `historyStatus: 'not_recorded'` says so
+ * explicitly for API/UI consumers. See docs/AGENTSCORE_CORE_THESIS.md
+ * roadmap for the (separate, future) persisted-snapshots feature.
  */
 
 // ─── Event Types ──────────────────────────────────────────────────────────────
@@ -19,6 +25,7 @@ export type TimelineEventType =
   | 'staker_opposed'
   | 'staker_left'
   | 'skill_added'
+  | 'domain_attested'
   | 'tier_upgrade'
   | 'evaluator_staked'
   | 'a2a_ready'
@@ -43,13 +50,19 @@ export interface AgentTimeline {
   agentName: string
   currentScore: number
   currentTier: string
-  events: TimelineEvent[]                          // newest first
-  scoreHistory: { date: string; score: number }[]  // for chart
+  events: TimelineEvent[]                          // newest first, real timestamps
+  /**
+   * Exactly one REAL point: the current score, computed now. Never an
+   * interpolated/synthetic curve — see `historyStatus`. A consumer needs
+   * ≥2 points to draw a trend line; this array never provides that, by
+   * design, until real snapshots are persisted.
+   */
+  scoreHistory: { date: string; score: number }[]
+  /** Explicit marker: no periodic score snapshots are persisted yet. */
+  historyStatus: 'not_recorded'
   summary: {
     totalEvents: number
     daysActive: number
-    highestScore: number
-    lowestScore: number
     currentStreak: string
   }
 }
@@ -66,12 +79,19 @@ export interface StakingEvent {
   timestamp: string    // signal.created_at
 }
 
-/** A skill triple associating an agent with a capability. */
+/** A skill/domain triple associating an agent with a capability. */
 export interface SkillEvent {
   tripleId: string
   skillId: string
   skillName: string
   timestamp?: string   // triple.created_at (may be absent from UI data)
+  /**
+   * True for the canonical `is skilled in` + stake attestation unit
+   * (thesis §4); false/undefined for the legacy hasAgentSkill/
+   * isTrustedFor predicate. Rendered as a distinct, honestly-labeled
+   * event type — "attested" and "declared/legacy" are different claims.
+   */
+  canonical?: boolean
 }
 
 interface BuildTimelineInput {
@@ -106,8 +126,8 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
       timestamp: input.createdAt,
       type: 'registered',
       title: 'Agent Registered',
-      description: `${input.agentName} was registered on AgentScore. Starting trust score: 50.`,
-      scoreAtEvent: 50,
+      description: `${input.agentName} was registered on AgentScore.`,
+      scoreAtEvent: null,
       scoreDelta: null,
       icon: 'registered',
       severity: 'milestone',
@@ -196,24 +216,40 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
     })
   }
 
-  // ── 4. Skill Events ──────────────────────────────────────────────────────
+  // ── 4. Skill / Attestation Events ────────────────────────────────────────
   for (const skill of input.skillEvents) {
     // Fall back to createdAt if no skill timestamp (happens with UI data)
     const ts = skill.timestamp ?? input.createdAt
     if (!ts) continue
 
-    events.push({
-      id: `skill_${skill.tripleId}`,
-      timestamp: ts,
-      type: 'skill_added',
-      title: `Skill Added: ${skill.skillName}`,
-      description: `Capability claim created: "${input.agentName} has skill ${skill.skillName}". This enables domain-specific scoring in the ${skill.skillName} leaderboard.`,
-      scoreAtEvent: null,
-      scoreDelta: null,
-      icon: '⚡',
-      severity: 'positive',
-      metadata: { skillName: skill.skillName, skillId: skill.skillId },
-    })
+    if (skill.canonical) {
+      // Canonical unit: [agent] is skilled in [domain] + stake (thesis §4).
+      events.push({
+        id: `attest_${skill.tripleId}`,
+        timestamp: ts,
+        type: 'domain_attested',
+        title: `Domain Attested: ${skill.skillName}`,
+        description: `Community attestation created and staked: "${input.agentName} is skilled in ${skill.skillName}".`,
+        scoreAtEvent: null,
+        scoreDelta: null,
+        icon: '🛡️',
+        severity: 'positive',
+        metadata: { skillName: skill.skillName, skillId: skill.skillId },
+      })
+    } else {
+      events.push({
+        id: `skill_${skill.tripleId}`,
+        timestamp: ts,
+        type: 'skill_added',
+        title: `Skill Claim: ${skill.skillName}`,
+        description: `Legacy capability claim created: "${input.agentName} has skill ${skill.skillName}" (pre-canonical predicate).`,
+        scoreAtEvent: null,
+        scoreDelta: null,
+        icon: '⚡',
+        severity: 'positive',
+        metadata: { skillName: skill.skillName, skillId: skill.skillId },
+      })
+    }
   }
 
   // ── 5. A2A Readiness ─────────────────────────────────────────────────────
@@ -235,8 +271,8 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
   // ── Sort: newest first ────────────────────────────────────────────────────
   events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
-  // ── Build score history ───────────────────────────────────────────────────
-  const scoreHistory = buildScoreHistory(events, input.currentScore, input.createdAt)
+  // ── Score history — exactly one REAL point, never a fabricated curve ──────
+  const scoreHistory = [{ date: new Date().toISOString(), score: input.currentScore }]
 
   // ── Summary ───────────────────────────────────────────────────────────────
   const oldestEvent = events.length > 0 ? events[events.length - 1] : null
@@ -251,50 +287,16 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
     currentTier: input.currentTier,
     events,
     scoreHistory,
+    historyStatus: 'not_recorded',
     summary: {
       totalEvents: events.length,
       daysActive,
-      highestScore: input.currentScore,
-      lowestScore: 50,
       currentStreak: getStreakDescription(events),
     },
   }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Linear (ease-in) interpolation from 50 at registration to currentScore today.
- * Events are injected as waypoints on the curve.
- */
-function buildScoreHistory(
-  events: TimelineEvent[],
-  currentScore: number,
-  createdAt?: string,
-): { date: string; score: number }[] {
-  const oldest = events.length > 0 ? events[events.length - 1] : null
-  const startDate = createdAt
-    ? new Date(createdAt).getTime()
-    : (oldest ? new Date(oldest.timestamp).getTime() : Date.now() - 7 * 86_400_000)
-  const endDate = Date.now()
-  const duration = endDate - startDate
-
-  if (duration <= 0) return [{ date: new Date().toISOString(), score: currentScore }]
-
-  const startScore = 50
-  const steps = Math.max(8, Math.min(events.length + 2, 20))
-  const points: { date: string; score: number }[] = []
-
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps
-    const date = new Date(startDate + duration * t).toISOString()
-    const eased = Math.pow(t, 0.65)  // ease-in: slow start, faster later
-    const score = Math.round(startScore + (currentScore - startScore) * eased)
-    points.push({ date, score: Math.max(0, Math.min(100, score)) })
-  }
-
-  return points
-}
 
 function getStreakDescription(events: TimelineEvent[]): string {
   if (events.length === 0) return 'No activity yet'

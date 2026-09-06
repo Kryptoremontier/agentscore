@@ -159,6 +159,10 @@ No mixing attested signal with ecosystem noise. No hiding the "who".
 - **Housekeeping debt:** INTU's stash (verify graphql-client/domain-data liveness
   BEFORE applying), bucket-source unification TODO (4af870e), Next.js bump +
   npm audit, docs upkeep.
+- **Future (not started): persisted score-history snapshots.** The timeline
+  endpoint's scoreHistory used to fabricate a synthetic curve; fixed to one
+  real point + `historyStatus: 'not_recorded'` (2026-09-04). A real score
+  trend needs periodic snapshots (cron + storage) — separate feature, not built.
 
 ## 11. THE THESIS IN ONE SENTENCE
 

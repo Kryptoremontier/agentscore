@@ -46,6 +46,12 @@ ${renderTrustText(EXAMPLE_TRUST_BREAKDOWN)}
 GET ${API_V1_ENDPOINTS.agent_card}
 A2A-compatible agent card: identity, capabilities, endpoints, and the same trust envelope.
 
+GET ${API_V1_ENDPOINTS.agent_timeline}
+Real dated on-chain events for one agent (stakes, skill/domain attestation
+claims, tier upgrades) plus the current score. Historical score snapshots are
+not persisted: scoreHistory carries only the current score and
+meta.history is "not_recorded" — there is no historical score curve.
+
 GET ${API_V1_ENDPOINTS.leaderboard}
 Ranked agents across the platform, sorted by score.
 
