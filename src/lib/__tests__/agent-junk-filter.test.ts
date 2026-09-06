@@ -110,6 +110,34 @@ describe('filterAgents — normalization needed for the real Code Helper AI pair
   })
 })
 
+describe('normalizeAgentLabel — RAW atom.label, no caller pre-cleaning required', () => {
+  // Both fetch paths (api-data.ts, agents/page.tsx) now pass effectiveLabel(row)
+  // straight through, unmodified. This module owns ALL cleaning for
+  // fold-matching — see the file-header "Label input contract" note. A caller
+  // reverting to a pre-cleaned display name (the 2026-09-06 regression) must
+  // still fold correctly against a raw label, which this test guards.
+  it('a real raw "Agent:INTU:..." label and an already-clean plain name normalize to the same key', () => {
+    const rawIntu = cand(
+      CODE_HELPER_INTU,
+      'Agent:INTU: Code Helper AI - First On-Chain with Full reputaiton and identity Helper AI for Coding systems.',
+      3,
+      0.2249,
+    )
+    const plainClean = cand(CODE_HELPER_PLAIN, 'Code Helper AI', 1, 0.01)
+    const { kept, junk } = filterAgents([rawIntu, plainClean])
+    expect(kept).toEqual([rawIntu.original])
+    expect(junk).toEqual([{ item: plainClean.original, reason: 'folded_duplicate' }])
+  })
+
+  it('a raw "Agent: ..." label (no INTU: layer) also normalizes to the same key as the plain name', () => {
+    const rawAgent = cand('0xA', 'Agent: Code Helper AI - The best Claude Code Helper AI on Intuition !', 2, 0.3322)
+    const plainClean = cand('0xB', 'Code Helper AI', 1, 0.01)
+    const { kept, junk } = filterAgents([rawAgent, plainClean])
+    expect(kept).toEqual([rawAgent.original])
+    expect(junk).toEqual([{ item: plainClean.original, reason: 'folded_duplicate' }])
+  })
+})
+
 describe('filterForgeProjects — "Agent Score" cluster: all tied on stakers, stake decides', () => {
   it('6 variants -> 1 kept (highest stake, V1.0), 5 folded; Talaria untouched; counts sum to input length', () => {
     const candidates = [

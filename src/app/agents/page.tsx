@@ -333,9 +333,14 @@ function AgentsPageContent() {
       // (thesis §6) — see agent-junk-filter.ts. Two-surface pattern: same
       // filter as api-data.ts's getAgentsWithScores, applied here too since
       // this page fetches independently rather than through that function.
+      // Pass the RAW label via the same effectiveLabel() this page already
+      // imports from api-data.ts (label-vs-data Hasura quirk resolved, no
+      // further cleaning) — agent-junk-filter.ts owns all fold-matching
+      // normalization itself, so this path and the server path can't drift
+      // apart on how a label is read (see agent-junk-filter.ts file header).
       const candidates = atoms.map(a => ({
         termId: a.term_id,
-        label: getAgentNameFromAtom(a),
+        label: effectiveLabel(a),
         stakerCount: a.positions_aggregate?.aggregate?.count || 0,
         totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
         createdAt: a.created_at,

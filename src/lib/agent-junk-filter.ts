@@ -35,6 +35,18 @@
  * - Forge "Agent Score" cluster: all 6 variants have exactly 1 staker each
  *   (the staker-count tier is a tie across the board), so V1.0 (0.315
  *   tTRUST) wins on the stake tier — confirmed by data, not assumed.
+ *
+ * Label input contract (both mechanisms): callers pass the RAW atom label —
+ * api-data.ts's `effectiveLabel(row)` (already resolves the label-vs-data
+ * Hasura quirk, see api-data.ts) and agents/page.tsx's own call to that same
+ * exported `effectiveLabel`. Neither caller pre-cleans it beyond that. ALL
+ * further cleaning for fold-matching (stripping the "Agent:"/"INTU:"
+ * wrapper, cutting the " - description" tail, case-folding) happens once,
+ * here, in normalizeAgentLabel — so the two fetch paths cannot drift apart
+ * on how a label is read (see the 2026-09-06 regression: agents/page.tsx
+ * briefly used its own display-name resolver as a workaround instead of the
+ * raw label, which happened to normalize differently and silently stopped
+ * folding the real Code Helper AI duplicate on that page only).
  */
 
 export type AgentJunkReason = 'test_fixture' | 'blocklisted_id' | 'folded_duplicate'
@@ -95,15 +107,24 @@ export function classifyAgentJunk(a: { termId: string; label: string }): AgentJu
 // ─── (B) Fold — duplicate re-registrations ────────────────────────────────────
 
 /**
- * "INTU: Code Helper AI - First On-Chain with Full reputaiton..." and
- * "Code Helper AI - The best Claude Code Helper AI on Intuition !" must
- * fold to the same key. Stripping just the INTU: prefix isn't enough (the
- * two full labels never match) — split on " - " down to the name, matching
- * the existing cleanLabel/cleanSkillName convention elsewhere in the
- * codebase (api-data.ts, skill-trust.ts).
+ * Cleans a RAW atom.label for fold-matching. Real raw labels carry one or
+ * both wrapper prefixes stacked — "Agent:INTU: Code Helper AI - First
+ * On-Chain with Full reputaiton..." — or just one — "Agent: Code Helper AI
+ * - The best Claude Code Helper AI on Intuition !" — or already come in
+ * pre-cleaned ("Code Helper AI", e.g. from a caller that resolved a display
+ * name for its own purposes). All four must fold to the same key: strip
+ * "Agent:" first (so a stacked "Agent:INTU:" fully unwraps), then "INTU:",
+ * then cut the " - description" tail, then case-fold. This is the ONLY
+ * place this cleaning happens — see the file-header note on the label input
+ * contract.
  */
 function normalizeAgentLabel(label: string): string {
-  return label.replace(/^INTU:\s*/i, '').split(' - ')[0]!.trim().toLowerCase()
+  return label
+    .replace(/^Agent:\s*/i, '')
+    .replace(/^INTU:\s*/i, '')
+    .split(' - ')[0]!
+    .trim()
+    .toLowerCase()
 }
 
 /** "Agent Score V1.0" / "V1.2" / "V1" -> "agent score"; "Talaria" untouched. */

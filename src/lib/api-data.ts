@@ -269,10 +269,14 @@ export async function getAgentsWithScores(options: {
   })
 
   // Test fixtures + duplicate re-registrations, counted and surfaced
-  // (thesis §6 — never silently dropped). See agent-junk-filter.ts.
+  // (thesis §6 — never silently dropped). See agent-junk-filter.ts. Pass the
+  // RAW label (rawLabel = effectiveLabel(row), not the cleaned display name)
+  // — agent-junk-filter.ts owns all fold-matching normalization itself now,
+  // so this path and agents/page.tsx's client-side fetch can't drift apart
+  // on how a label is read.
   const candidates = allItems.map(a => ({
     termId: a.id,
-    label: a.name,
+    label: a.rawLabel ?? a.name,
     stakerCount: a.stakerCount,
     totalStake: a.supportStake,
     createdAt: a.createdAt,
