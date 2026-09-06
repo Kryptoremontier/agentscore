@@ -10,7 +10,7 @@
 ### 2. API Routes (`src/app/api`)
 **`/api/v1`** (Trust API, all wrapped in `apiSuccess`/`apiError`, CORS `*`):
 - `GET /api/v1` — index of all endpoints
-- `GET /api/v1/agents` — list agents w/ scores (sort: score/stakers/newest), revalidate 300
+- `GET /api/v1/agents` — list agents w/ scores (sort: score/stakers/newest), revalidate 300. Test-fixture atoms and duplicate re-registrations are filtered out by default (`lib/agent-junk-filter.ts`, §3) and counted in `meta.junkFiltered`; pass `?includeJunk=true` to get all atoms back, each junk one tagged with a `junkReason`.
 - `GET /api/v1/agents/:id` — agent detail
 - `GET /api/v1/agents/:id/trust` — full trust/quality/object score breakdown
 - `GET /api/v1/agents/:id/card` — A2A-compatible agent card (detail+trust in parallel)
@@ -25,7 +25,7 @@
 - `GET /api/v1/trust/query` — filtered trust query (skill/minTrust/minStakers)
 - `GET /api/v1/leaderboard` — ranked agent leaderboard, revalidate 60
 - `GET /api/v1/stats` — platform-wide stats, revalidate 300
-- `GET /api/v1/forge/projects` — list IntuForge projects
+- `GET /api/v1/forge/projects` — list IntuForge projects. Duplicate re-registrations of the same project are folded to one representative by default (`lib/agent-junk-filter.ts`, §3), counted in `meta.junkFiltered`; pass `?includeJunk=true` to get the folded duplicates back too.
 - `POST /api/v1/forge/projects` — register new IntuForge project
 - `GET /api/v1/forge/projects/:id` — project detail
 - `GET /api/v1/forge/projects/:id/trust` — project trust score
@@ -46,6 +46,7 @@
 - Example query (from `pnl-engine.ts`): `GetWalletPositionsWithPNL($wallet: String!, $termIds: [String!]!) { positions(where: {...}) { term_id shares total_deposit_assets_after_total_fees total_redeem_assets_for_receiver vault { current_share_price total_shares total_assets } } }`.
 - **On-chain reads**: `viem` `createPublicClient` against Intuition Testnet RPC (`api-data.ts` server client, `on-chain-pricing.ts` for cached share price, 15s TTL) — used for live share-price reads, not the bulk of data (Hasura indexer is primary source).
 - IPFS/Pinata metadata upload is wired as an *optional*, currently-unused path (env var present, no `PINATA_JWT`/`createAtomFromThing` call found in `intuition.ts`).
+- **`lib/agent-junk-filter.ts`** — test-fixture + duplicate-registration filter for agents and IntuForge projects (thesis §6: counted and surfaced, never silently dropped). Two mechanisms: (A) blocklist by exact `term_id` (+ regex on label as a second net) for verified-zero-active-stake fixtures; (B) fold duplicate re-registrations of the same real thing to one representative, tie-break `stakerCount` desc → `totalStake` desc → `createdAt` asc — distinct stakers ranked above raw stake deliberately (thesis §4: sybil-safe measure is wallets, not capital). Wired at every fetch path that returns agent/project lists — `api-data.ts`'s `getAgentsWithScores`, `forge/data.ts`'s `fetchForgeProjectsWithJunkInfo`, the `/agents` page's own independent client-side GraphQL fetch (§3's "no single shared GraphQL client" applies here too — filtering has to be applied in each place separately), and the MCP `search_agents` tool.
 - Env vars referenced in `src/`: `NEXT_PUBLIC_GRAPHQL_URL`, `NEXT_PUBLIC_NETWORK`, `NEXT_PUBLIC_CHAIN_ID`, `NEXT_PUBLIC_CHAIN_ENV`, `NEXT_PUBLIC_INTUITION_RPC_URL`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_WC_PROJECT_ID`, `NEXT_PUBLIC_AGENT_PREFIX`, `NEXT_PUBLIC_SKILL_PREFIX`, `NEXT_PUBLIC_APP_SCOPE`, `NEXT_PUBLIC_ALPHA_DATE`, `NEXT_PUBLIC_PLATFORM_TAG`, `NEXT_PUBLIC_PLATFORM_FEE_WALLET`, `NEXT_PUBLIC_PLATFORM_REG_FEE`, `NEXT_PUBLIC_PLATFORM_STAKE_FEE_BPS`, `NEXT_PUBLIC_ENABLE_TEST_PAGE`, `FEEDBACK_ADMIN_TOKEN`, `NODE_ENV`.
 
 ### 4. Scoring
@@ -83,4 +84,6 @@ interface ScoreEnvelope {
 - **Naming**: kebab-case for lib files (`evaluator-score.ts`, `pnl-engine.ts`, `skill-domain-map.ts`); PascalCase for components/pages; camelCase functions/vars.
 - **Error handling**: API routes wrap logic in `try/catch`, log `console.error('[API] /x error:', error)`, return via `apiError(message, status)` / `apiSuccess(data, meta)` (`lib/api-helpers.ts`) — consistent `{success, data|error, meta}` envelope, CORS headers on every response. Data-layer async fetches (attestation-reader, pnl-engine) instead **degrade gracefully to `[]`/`null`** on error with `console.warn`, never throw — callers never see a rejected promise.
 - **Shared libs**: `src/lib/` (business logic, scoring, data fetching — no React), `src/components/` (UI), `src/hooks/` (client-side hooks; only remaining hook is `useIntuition.ts`, wrapping `@0xintuition/sdk` + wagmi for reads/writes — the three GraphQL-client hooks were removed 2026-08-28 as dead code, see §3).
-- **Tests**: Vitest 4.1.2, config `vitest.config.ts` (`environment: 'node'`, globals on, alias `@/*`→`src/*`, no global setup file). Pattern: `src/**/__tests__/**/*.test.ts`. 21 test files, 239 tests, colocated next to the module under test (e.g. `src/lib/scoring/__tests__/`, `src/lib/forge/__tests__/`).
+- **Display formatting** (`lib/format.ts`, added Etap 4a hygiene pass): `formatTTrust(value, opts)` and `formatDate`/`formatDateShort` are the ONE shared formatter for tTRUST amounts and dates — repo rules, both enforced by grep before a hygiene commit ships: no `toLocaleDateString` anywhere in `src` (use `formatDate`/`formatDateShort` instead — they're `Intl.DateTimeFormat`-based, en-US, UTC, so they render identically on every OS locale), and no `$` prefix on a tTRUST amount (tTRUST is not a dollar-pegged asset — `formatTTrust` never emits one).
+- **Decimal amount inputs** (`components/ui/DecimalInput.tsx` + `lib/decimal-input.ts`, added Etap 4a): replaces native `<input type="number">` for any tTRUST/share amount field — the native input renders its value using the OS locale's decimal glyph (e.g. "0,05"), which silently breaks parsing on non-US locales. `DecimalInput` is `type="text" inputMode="decimal"`; the comma-to-period normalization, keystroke validation, and max-clamping logic lives in `decimal-input.ts` as plain functions, tested directly in `.test.ts` (the repo has no jsdom/`@testing-library/react` — see below — so the component itself is an untested thin wrapper).
+- **Tests**: Vitest 4.1.2, config `vitest.config.ts` (`environment: 'node'`, globals on, alias `@/*`→`src/*`, no global setup file, no jsdom). Pattern: `src/**/__tests__/**/*.test.ts` and `src/**/*.test.ts` — note this does NOT match `.test.tsx`; there is no component/DOM-rendering test capability in this repo, every test exercises a pure function directly. 33 test files, 388 tests, colocated next to the module under test (e.g. `src/lib/scoring/__tests__/`, `src/lib/forge/__tests__/`).
