@@ -30,6 +30,7 @@ import { fetchEvaluatorLeaderboard, fetchStakerPositions } from './evaluator-dat
 import { calculateEvaluatorScore, EVALUATOR_TIER_CONFIG, type EvaluatorTier } from './evaluator-score'
 import { getAttestationCount, getAttestationConfig } from './attestation-gate'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from './trust-tiers'
+import { filterAgents, type AgentJunkReason } from './agent-junk-filter'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const TRUST_PREDICATE_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
@@ -253,17 +254,36 @@ export async function getAgentsWithScores(options: {
   limit?: number
   offset?: number
   minTrust?: number
-} = {}): Promise<{ agents: AgentApiItem[]; total: number }> {
-  const { sort = 'score', limit = 20, offset = 0, minTrust = 0 } = options
+  /** Debug/audit escape hatch — includes filtered test fixtures/duplicates, each tagged `junkReason`. */
+  includeJunk?: boolean
+} = {}): Promise<{ agents: Array<AgentApiItem & { junkReason?: AgentJunkReason }>; total: number; junkFiltered: number }> {
+  const { sort = 'score', limit = 20, offset = 0, minTrust = 0, includeJunk = false } = options
 
   const rows = await fetchAgentRows(200)
   const opposeMap = await batchFetchOpposeShares(rows)
 
-  let items = rows.map(row => {
+  const allItems = rows.map(row => {
     const ctid = row.as_subject_triples?.[0]?.counter_term_id
     const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
     return rowToAgentItem(row, opposeWei)
   })
+
+  // Test fixtures + duplicate re-registrations, counted and surfaced
+  // (thesis §6 — never silently dropped). See agent-junk-filter.ts.
+  const candidates = allItems.map(a => ({
+    termId: a.id,
+    label: a.name,
+    stakerCount: a.stakerCount,
+    totalStake: a.supportStake,
+    createdAt: a.createdAt,
+    original: a,
+  }))
+  const { kept, junk } = filterAgents(candidates)
+  const junkFiltered = junk.length
+
+  let items: Array<AgentApiItem & { junkReason?: AgentJunkReason }> = includeJunk
+    ? [...kept, ...junk.map(j => ({ ...j.item, junkReason: j.reason }))]
+    : kept
 
   if (minTrust > 0) {
     items = items.filter(a => a.agentScore >= minTrust)
@@ -277,7 +297,7 @@ export async function getAgentsWithScores(options: {
   // 'newest' = keep default desc created_at order from GraphQL
 
   const total = items.length
-  return { agents: items.slice(offset, offset + limit), total }
+  return { agents: items.slice(offset, offset + limit), total, junkFiltered }
 }
 
 // ─── Agent Detail ─────────────────────────────────────────────────────────────

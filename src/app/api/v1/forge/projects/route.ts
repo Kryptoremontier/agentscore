@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { apiSuccess, apiError, corsOptions, parsePagination } from '@/lib/api-helpers'
-import { fetchForgeProjectsFromChain } from '@/lib/forge/data'
+import { fetchForgeProjectsWithJunkInfo } from '@/lib/forge/data'
 import { calculateForgeCompleteness } from '@/lib/forge/completeness'
 import { getForgeProjectScore } from '@/lib/forge/scoring'
 import { ForgeCategory, ProjectStage } from '@/lib/forge/types'
@@ -51,8 +51,10 @@ export async function GET(request: NextRequest) {
     const stage    = searchParams.get('stage') as ProjectStage | null
     const sort     = (searchParams.get('sort') || 'trustScore') as string
     const search   = (searchParams.get('search') || '').toLowerCase()
+    const includeJunk = searchParams.get('includeJunk') === 'true'
 
-    let projects = await fetchForgeProjectsFromChain(200)
+    const { kept, junk, junkFiltered } = await fetchForgeProjectsWithJunkInfo(200)
+    let projects = includeJunk ? [...kept, ...junk] : kept
 
     // Filters
     if (category && Object.values(ForgeCategory).includes(category)) {
@@ -86,7 +88,7 @@ export async function GET(request: NextRequest) {
         score: getForgeProjectScore(project),
       }))
 
-    return apiSuccess({ projects: paginated, total, limit, offset })
+    return apiSuccess({ projects: paginated, total, limit, offset, junkFiltered })
   } catch (error) {
     console.error('[API] GET /forge/projects error:', error)
     return apiError('Internal server error', 500)

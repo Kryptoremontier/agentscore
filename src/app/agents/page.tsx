@@ -48,6 +48,7 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, type AgentProfileVector } from '@/lib/agent-profile'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
+import { filterAgents } from '@/lib/agent-junk-filter'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -115,6 +116,7 @@ function AgentsPageContent() {
   const { connector } = useAccount()
 
   const [agents, setAgents] = useState<GraphQLAgent[]>([])
+  const [agentJunkFilteredCount, setAgentJunkFilteredCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -325,7 +327,22 @@ function AgentsPageContent() {
       }
 
       for (const atom of atoms) atom.origin = 'agentscore'
-      setAgents(atoms)
+
+      // Test fixtures + duplicate re-registrations, counted and surfaced
+      // (thesis §6) — see agent-junk-filter.ts. Two-surface pattern: same
+      // filter as api-data.ts's getAgentsWithScores, applied here too since
+      // this page fetches independently rather than through that function.
+      const candidates = atoms.map(a => ({
+        termId: a.term_id,
+        label: a.label,
+        stakerCount: a.positions_aggregate?.aggregate?.count || 0,
+        totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
+        createdAt: a.created_at,
+        original: a,
+      }))
+      const { kept, junk } = filterAgents(candidates)
+      setAgentJunkFilteredCount(junk.length)
+      setAgents(kept)
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -1504,7 +1521,8 @@ function AgentsPageContent() {
             <div className="flex items-center gap-2 mt-4">
               <div className="w-2 h-2 rounded-full bg-[#C8963C] animate-pulse" />
               <span className="text-xs text-[#7A838D]">
-                {agents.length} agents indexed{cohortAgents.length > 0 ? ` · ${cohortAgents.length} ERC-8004` : ''} · GraphQL live feed
+                {agents.length} AgentScore{cohortAgents.length > 0 ? ` · ${cohortAgents.length} ERC-8004` : ''}
+                {agentJunkFilteredCount > 0 ? ` · ${agentJunkFilteredCount} hidden` : ''} · GraphQL live feed
               </span>
             </div>
           </motion.div>

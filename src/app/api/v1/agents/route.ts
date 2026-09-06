@@ -22,15 +22,17 @@ export async function GET(request: NextRequest) {
     }
 
     const { limit, offset } = parsePagination(sp)
+    const includeJunk = sp.get('includeJunk') === 'true'
 
-    const { agents, total } = await getAgentsWithScores({
+    const { agents, total, junkFiltered } = await getAgentsWithScores({
       sort: sortParam as SortOption,
       limit,
       offset,
       minTrust,
+      includeJunk,
     })
 
-    return apiSuccess(agents, { total, limit, offset })
+    return apiSuccess(agents, { total, limit, offset, junkFiltered })
   } catch (error) {
     console.error('[API] /agents error:', error)
     return apiError('Internal server error', 500)
