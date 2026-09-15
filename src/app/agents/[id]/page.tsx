@@ -124,7 +124,7 @@ export default function AgentDetailPage() {
           const { fetchCohortAgents } = await import('@/lib/cohort-reader')
           const cohort = await fetchCohortAgents()
           if (cancelled) return
-          setCohortMatch(cohort.find(c => c.termId === agentId) ?? null)
+          setCohortMatch(cohort.agents.find(c => c.termId === agentId) ?? null)
         } else {
           throw new Error('Agent not found')
         }

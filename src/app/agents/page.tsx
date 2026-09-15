@@ -126,6 +126,8 @@ function AgentsPageContent() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
   const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>([])
+  const [cohortTotal, setCohortTotal] = useState(0)
+  const [cohortTruncated, setCohortTruncated] = useState(false)
   const [cohortLoading, setCohortLoading] = useState(true)
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
@@ -367,7 +369,7 @@ function AgentsPageContent() {
     import('@/lib/cohort-reader').then(({ fetchCohortAgents }) => {
       fetchCohortAgents().then(cohort => {
         if (cancelled) return
-        setCohortAgents(cohort.map((c): GraphQLAgent => ({
+        setCohortAgents(cohort.agents.map((c): GraphQLAgent => ({
           term_id: c.termId,
           label: c.label,
           type: 'Thing',
@@ -377,6 +379,8 @@ function AgentsPageContent() {
           declaredSkills: c.declaredSkills,
           caipIdentity: c.caipIdentity,
         })))
+        setCohortTotal(cohort.total)
+        setCohortTruncated(cohort.truncated)
         setCohortLoading(false)
       })
     })
@@ -1528,7 +1532,8 @@ function AgentsPageContent() {
               <div className="w-2 h-2 rounded-full bg-[#C8963C] animate-pulse" />
               <span className="text-xs text-[#7A838D]">
                 {agents.length} AgentScore{cohortAgents.length > 0 ? ` · ${cohortAgents.length} ERC-8004` : ''}
-                {agentJunkFilteredCount > 0 ? ` · ${agentJunkFilteredCount} hidden` : ''} · GraphQL live feed
+                {agentJunkFilteredCount > 0 ? ` · ${agentJunkFilteredCount} hidden` : ''}
+                {cohortTruncated ? ` · showing first ${cohortAgents.length} of ${cohortTotal}` : ''} · GraphQL live feed
               </span>
             </div>
           </motion.div>
