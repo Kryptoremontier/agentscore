@@ -14,8 +14,10 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp } from 'lucide-react'
+import { useAccount } from 'wagmi'
 import { truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
+import { AttestButton } from '@/components/attest/AttestButton'
 
 interface AttestedDomainsProps {
   entries: AttestedEntry[]
@@ -26,6 +28,29 @@ interface AttestedDomainsProps {
 }
 
 const fmt = (wei: bigint) => (Number(wei) / 1e18).toFixed(4)
+
+/**
+ * Etap 4b: the ONE Attest CTA for this section — desktop-only (mobile has
+ * its own always-visible AttestStickyBar; showing both here AND there would
+ * double the CTA on small screens). Disconnected: an inert prompt, no click
+ * handler — wallet connection happens via the nav's Connect Wallet button,
+ * same convention as the Buy/Sell panel's own disconnected state.
+ */
+function AttestCta({ agentId, agentName }: { agentId: string; agentName: string }) {
+  const { isConnected } = useAccount()
+  if (!isConnected) {
+    return (
+      <span className="hidden md:inline-flex text-xs font-medium px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}>
+        Connect wallet to attest
+      </span>
+    )
+  }
+  return (
+    <div className="hidden md:inline-block">
+      <AttestButton agentId={agentId} agentName={agentName} variant="card" />
+    </div>
+  )
+}
 
 export function AttestedDomains({ entries, loading, agentId, agentName, className }: AttestedDomainsProps) {
   if (loading) {
@@ -43,12 +68,15 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
 
   return (
     <div className={`rounded-2xl p-5 ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.3)' }}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="w-2 h-2 rounded-full" style={{ background: '#2ECC71' }} />
-        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#2ECC71' }}>
-          Attested Domains
-        </p>
-        <span className="text-[10px] text-[#7A838D]">— staked on-chain claims with visible authors</span>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#2ECC71' }} />
+          <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#2ECC71' }}>
+            Attested Domains
+          </p>
+          <span className="text-[10px] text-[#7A838D] hidden sm:inline">— staked on-chain claims with visible authors</span>
+        </div>
+        <AttestCta agentId={agentId} agentName={agentName} />
       </div>
       <p className="text-[11px] text-[#7A838D] mb-3">
         {entries.length} domain{entries.length !== 1 ? 's' : ''} · attested by{' '}

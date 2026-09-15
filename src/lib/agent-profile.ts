@@ -185,6 +185,45 @@ export function summarizeAttesters(entries: readonly AttestedEntry[]): AttesterS
   )
 }
 
+export interface ModalStatSummary {
+  /** Distinct attester wallets across ALL of this agent's attested domains — dedup, not row count. */
+  attesters: number
+  /** Distinct domains this agent is attested in (one AttestedEntry per domain already). */
+  domains: number
+  /** Sum of support stake across every attestation triple (the canonical unit, thesis §4) — wei. */
+  tTrustAttestedWei: bigint
+  reports: number
+  /** Distinct wallets with a position on the agent's OWN atom vault (Backers, not attesters). */
+  backerCount: number
+  /** Total stake on the agent's own atom vault — wei. */
+  backerVaultWei: bigint
+}
+
+/**
+ * Etap 4b modal — one derivation for both rows the modal shows: the primary
+ * attestation-unit row (attesters/domains/tTrustAttested/reports) and the
+ * secondary Backers line (vault stakers/stake). Pure so the hierarchy the
+ * modal renders is a tested rule, not a per-surface accident (same
+ * principle as profileSections below). No new data fetches — every input
+ * here is already fetched for AttestedDomains/ReportsSection/the vault
+ * stats grid; this only re-derives display numbers from those same rows.
+ */
+export function computeModalStatSummary(input: {
+  attested: readonly AttestedEntry[]
+  reportCount: number
+  backerCount: number
+  backerVaultWei: bigint
+}): ModalStatSummary {
+  return {
+    domains: input.attested.length,
+    attesters: summarizeAttesters(input.attested).length,
+    tTrustAttestedWei: input.attested.reduce((sum, e) => sum + e.totalStake, 0n),
+    reports: input.reportCount,
+    backerCount: input.backerCount,
+    backerVaultWei: input.backerVaultWei,
+  }
+}
+
 export type ProfileSectionKey = 'attested' | 'declared' | 'reports'
 
 export interface ProfileSectionPlan {

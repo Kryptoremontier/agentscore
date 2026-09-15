@@ -5,6 +5,7 @@ import {
   aggregateBackers,
   summarizeAttesters,
   profileSections,
+  computeModalStatSummary,
   type RawReportRow,
   type PositionRow,
 } from '../agent-profile'
@@ -125,6 +126,72 @@ describe('aggregateBackers — staking on the agent is NOT attesting competence'
     const out = aggregateBackers([pos(AGENT, W1, '335060865858275579')], AGENT, null)
     expect(out).toHaveLength(1)
     expect(out[0].supportShares).toBe(335060865858275579n)
+  })
+})
+
+describe('computeModalStatSummary — Etap 4b modal, attestation unit primary / vault secondary', () => {
+  // Real fixtures (verified live) — not invented numbers.
+  const DACKIE = '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb'
+  const LUDA = '0x82d87d9517b68e653418c0e49805b36aca3e33a00536af25fc319f5c24802c5a'
+
+  it('Captain Dackie: 1 attester, 1 domain, 0.0099 tTRUST attested, 0 reports', () => {
+    const attested = aggregateAttestations([att(DACKIE, CRYPTO, [[W1, 9_900_000_000_000_000n]])]) // 0.0099 tTRUST
+    const summary = computeModalStatSummary({
+      attested,
+      reportCount: 0,
+      backerCount: 0,
+      backerVaultWei: 0n,
+    })
+    expect(summary.attesters).toBe(1)
+    expect(summary.domains).toBe(1)
+    expect(summary.tTrustAttestedWei).toBe(9_900_000_000_000_000n)
+    expect(summary.reports).toBe(0)
+  })
+
+  it('Luda: attesters come from her attestation row, Backers come from the vault (independent numbers)', () => {
+    const attested = aggregateAttestations([att(LUDA, KNOWLEDGE, [[W1, 1_000_000_000_000_000n]])])
+    const summary = computeModalStatSummary({
+      attested,
+      reportCount: 0,
+      backerCount: 1,
+      backerVaultWei: 1_000_000_000_000_000n, // 0.0010 tTRUST vault stake — a DIFFERENT number from the attestation stake
+    })
+    expect(summary.attesters).toBe(1)
+    expect(summary.domains).toBe(1)
+    expect(summary.backerCount).toBe(1)
+    expect(summary.backerVaultWei).toBe(1_000_000_000_000_000n)
+  })
+
+  it('3 distinct attesters across 2 domains, one wallet attesting both -> 3 attesters, 2 domains (distinct-wallet count, not row count)', () => {
+    const attested = aggregateAttestations([
+      att(DACKIE, CRYPTO, [[W1, 10n], [W2, 5n]]),
+      att(DACKIE, KNOWLEDGE, [[W2, 3n], [W2.toLowerCase(), 2n], ['0x9999999999999999999999999999999999999a', 1n]]),
+    ])
+    const summary = computeModalStatSummary({
+      attested,
+      reportCount: 2,
+      backerCount: 4,
+      backerVaultWei: 20n,
+    })
+    // 3 distinct wallets total (W1, W2, the third) even though there are 2 domain rows
+    // and W2 appears in both — this is the "distinct-wallet count, not row count" guarantee.
+    expect(summary.attesters).toBe(3)
+    expect(summary.domains).toBe(2)
+    expect(summary.tTrustAttestedWei).toBe(21n) // 10+5 (domain 1) + 3+2+1 (domain 2, W2's two positions merged)
+    expect(summary.reports).toBe(2)
+    expect(summary.backerCount).toBe(4)
+  })
+
+  it('no attestations, no backers -> all zeros, never throws', () => {
+    const summary = computeModalStatSummary({ attested: [], reportCount: 0, backerCount: 0, backerVaultWei: 0n })
+    expect(summary).toEqual({
+      attesters: 0,
+      domains: 0,
+      tTrustAttestedWei: 0n,
+      reports: 0,
+      backerCount: 0,
+      backerVaultWei: 0n,
+    })
   })
 })
 
