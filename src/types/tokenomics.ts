@@ -3,7 +3,7 @@ export interface AgentVault {
 
   // Bonding curve state
   totalShares: bigint               // Łączna liczba shares
-  totalStaked: bigint               // Łączna ilość $TRUST w vault
+  totalStaked: bigint               // Łączna ilość tTRUST w vault
 
   // Curve parameters
   basePrice: bigint                 // Cena początkowa za share
@@ -19,13 +19,13 @@ export interface AgentVault {
 export interface VaultPosition {
   owner: `0x${string}`
   shares: bigint
-  stakedAmount: bigint              // Ile $TRUST zainwestował
+  stakedAmount: bigint              // Ile tTRUST zainwestował
   entryPrice: bigint                // Średnia cena zakupu
   timestamp: Date
 }
 
 export interface StakeQuote {
-  trustAmount: bigint               // Ile $TRUST chce stakować
+  trustAmount: bigint               // Ile tTRUST chce stakować
   sharesReceived: bigint            // Ile shares dostanie
   pricePerShare: bigint             // Aktualna cena za share
   slippage: number                  // Estimated slippage %
@@ -44,7 +44,7 @@ export const PLATFORM_FEES = {
   agentRegistration: BigInt(0.01e18),   // 0.01 ETH
   stakingFee: 100,                       // 1% (basis points)
   unstakingFee: 150,                     // 1.5%
-  minStake: BigInt(1e18),               // Min 1 $TRUST
+  minStake: BigInt(1e18),               // Min 1 tTRUST
 }
 
 // Bonding curve math

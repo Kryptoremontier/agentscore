@@ -19,6 +19,7 @@ import { ForgeStakeSection } from '@/components/intuforge/ForgeStakeSection'
 import { ProjectShareButtons } from '@/components/intuforge/ProjectShareButtons'
 import { TrustSparkline } from '@/components/TrustSparkline'
 import { TrustTierBadge } from '@/components/agents/TrustTierBadge'
+import { formatDate } from '@/lib/format'
 
 async function getProject(id: string): Promise<ForgeProject | null> {
   if (!id.startsWith('0x')) return null
@@ -37,10 +38,6 @@ function MomentumIcon({ momentum }: { momentum: 'up' | 'down' | 'stable' }) {
   if (momentum === 'up') return <TrendingUp className="w-5 h-5 inline ml-2" style={{ color: '#2ECC71' }} />
   if (momentum === 'down') return <TrendingDown className="w-5 h-5 inline ml-2" style={{ color: '#EF4444' }} />
   return <Minus className="w-5 h-5 inline ml-2" style={{ color: 'rgba(255,255,255,0.3)' }} />
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function truncateAddress(addr: string) {

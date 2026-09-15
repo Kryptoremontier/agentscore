@@ -26,8 +26,8 @@ export interface Agent {
 
   // Computed from attestations
   trustScore: number           // 0-100
-  positiveStake: bigint        // Total positive $TRUST
-  negativeStake: bigint        // Total negative $TRUST
+  positiveStake: bigint        // Total positive tTRUST
+  negativeStake: bigint        // Total negative tTRUST
   attestationCount: number
   reportCount: number
   stakerCount: number

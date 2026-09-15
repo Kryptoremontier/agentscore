@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Shield, ExternalLink, TrendingUp, Users } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { AgentAvatar } from './AgentAvatar'
+import { formatTTrust } from '@/lib/format'
 import type { Agent } from '@/types/agent'
 
 interface AgentCardProps {
@@ -76,7 +77,7 @@ export function AgentCard({ agent, index = 0, onClick }: AgentCardProps) {
             <TrendingUp className="w-4 h-4 text-slate-400" />
             <span className="text-slate-400">Stakes:</span>
             <span className="font-mono text-white">
-              ${formatNumber(Number(agent.positiveStake))}
+              {formatTTrust(agent.positiveStake)}
             </span>
           </div>
           <div className="flex items-center gap-2 text-sm">
@@ -124,10 +125,4 @@ export function AgentCard({ agent, index = 0, onClick }: AgentCardProps) {
       )}
     </motion.div>
   )
-}
-
-function formatNumber(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
-  return value.toFixed(0)
 }

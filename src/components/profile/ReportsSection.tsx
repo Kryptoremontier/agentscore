@@ -14,6 +14,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { truncateWallet } from '@/lib/attestation-reader'
+import { formatTTrust, formatDate } from '@/lib/format'
 import type { AgentReport } from '@/lib/agent-profile'
 
 interface ReportsSectionProps {
@@ -22,7 +23,6 @@ interface ReportsSectionProps {
   className?: string
 }
 
-const fmt = (wei: bigint) => (Number(wei) / 1e18).toFixed(4)
 
 export function ReportsSection({ reports, loading, className }: ReportsSectionProps) {
   const [open, setOpen] = useState(false)
@@ -66,9 +66,9 @@ export function ReportsSection({ reports, loading, className }: ReportsSectionPr
                   by {r.reporterLabel?.includes('.eth') ? r.reporterLabel : truncateWallet(r.reporter)}
                 </Link>
                 <span className="text-[#30363d]">·</span>
-                <span className="text-[#7A838D]">{new Date(r.createdAt).toLocaleDateString('pl-PL')}</span>
+                <span className="text-[#7A838D]">{formatDate(r.createdAt)}</span>
               </div>
-              <span className="font-mono text-[#B5BDC6] flex-shrink-0">{fmt(r.stakeWei)} tTRUST</span>
+              <span className="font-mono text-[#B5BDC6] flex-shrink-0">{formatTTrust(r.stakeWei)}</span>
             </div>
           ))}
         </div>

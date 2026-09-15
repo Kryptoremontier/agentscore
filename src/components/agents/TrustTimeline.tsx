@@ -16,6 +16,7 @@ import {
   type StakingEvent,
   type SkillEvent,
 } from '@/lib/trust-timeline'
+import { formatDate, formatDateShort } from '@/lib/format'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -94,17 +95,6 @@ function getEventIcon(event: TimelineEvent): { Icon: LucideIcon; color: string }
   }
 }
 
-// ─── Date formatter ───────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  })
-}
-
-function formatDateShort(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
-}
 
 // ─── Event Card ───────────────────────────────────────────────────────────────
 

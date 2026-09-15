@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import { CheckCircle2, Circle, Bug, Clock, User } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { formatDate } from '@/lib/format'
 import type { FeedbackEntry } from '@/lib/feedback-store'
 
 type Filter = 'all' | 'open' | 'resolved'
@@ -13,11 +14,6 @@ function shortAddress(sender: string): string {
     return `${sender.slice(0, 6)}…${sender.slice(-4)}`
   }
   return sender
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export function FeedbackAdminClient() {
@@ -262,7 +258,7 @@ export function FeedbackAdminClient() {
                   </div>
                   <div className="flex items-center gap-1 text-[10px] text-white/25 mt-0.5">
                     <Clock className="w-2.5 h-2.5" />
-                    {formatDate(entry.createdAt)}
+                    {formatDate(entry.createdAt, 'long')}
                   </div>
                 </div>
               </div>

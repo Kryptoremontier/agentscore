@@ -3,7 +3,7 @@ import { Hammer, Plus } from 'lucide-react'
 import { ProjectGrid } from '@/components/intuforge/ProjectGrid'
 import { ForgeLeaderboard } from '@/components/intuforge/ForgeLeaderboard'
 import { ForgeStatsBar } from '@/components/intuforge/ForgeStatsBar'
-import { fetchForgeProjectsFromChain } from '@/lib/forge/data'
+import { fetchForgeProjectsWithJunkInfo } from '@/lib/forge/data'
 import type { ForgeStats, ForgeProject } from '@/lib/forge/types'
 import { ForgeCategory } from '@/lib/forge/types'
 
@@ -30,7 +30,7 @@ function deriveStats(projects: ForgeProject[]): ForgeStats {
 }
 
 export default async function IntuforgePage() {
-  const projects = await fetchForgeProjectsFromChain(100)
+  const { kept: projects, junkFiltered } = await fetchForgeProjectsWithJunkInfo(100)
   const stats = deriveStats(projects)
 
   return (
@@ -60,6 +60,11 @@ export default async function IntuforgePage() {
           {projects.length > 0 && (
             <div className="mt-3">
               <ForgeStatsBar stats={stats} />
+              {junkFiltered > 0 && (
+                <p className="text-[11px] text-white/20 mt-1.5">
+                  {junkFiltered} duplicate{junkFiltered !== 1 ? 's' : ''} folded
+                </p>
+              )}
             </div>
           )}
         </div>

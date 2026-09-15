@@ -55,7 +55,9 @@ const handler = createMcpHandler(
           'Returns agents with a score envelope (trustScore, qualityScore, objectScore) ' +
           'plus trust tier, momentum direction, staker count, and skill count. ' +
           'In list context qualityScore is null — use get_agent_trust for the full composite. ' +
-          'Sort by score, stakers, or newest. Filter by minimum trust score.',
+          'Sort by score, stakers, or newest. Filter by minimum trust score. ' +
+          'Test fixtures and duplicate re-registrations are filtered out by default — ' +
+          'set includeJunk to audit them (each tagged junkReason).',
         inputSchema: {
           sort: z.enum(['score', 'stakers', 'newest']).optional()
             .describe('Sort order: score (default), stakers, newest'),
@@ -63,15 +65,18 @@ const handler = createMcpHandler(
             .describe('Minimum AGENTSCORE to include (0-100)'),
           limit: z.number().min(1).max(50).optional()
             .describe('Max results to return (default: 20, max: 50)'),
+          includeJunk: z.boolean().optional()
+            .describe('Include filtered test fixtures/duplicates, each tagged junkReason (default: false)'),
         },
       },
-      async ({ sort, minTrust, limit }) => {
+      async ({ sort, minTrust, limit, includeJunk }) => {
         try {
-          const { agents } = await getAgentsWithScores({
+          const { agents, junkFiltered } = await getAgentsWithScores({
             sort: sort || 'score',
             limit: limit || 20,
             offset: 0,
             minTrust: minTrust || 0,
+            includeJunk: includeJunk || false,
           })
           return {
             content: [{
@@ -86,8 +91,10 @@ const handler = createMcpHandler(
                   momentum: a.momentumDirection,
                   stakers: a.stakerCount,
                   skills: a.skillCount,
+                  ...(a.junkReason ? { junkReason: a.junkReason } : {}),
                 })),
                 total: agents.length,
+                junkFiltered,
                 network: process.env.NEXT_PUBLIC_NETWORK || 'testnet',
               }, null, 2),
             }],

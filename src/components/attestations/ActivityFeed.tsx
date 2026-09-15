@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
 import { cn } from '@/lib/cn'
+import { formatDate } from '@/lib/format'
 
 interface ActivityFeedProps {
   agentId: string
@@ -137,7 +138,7 @@ function formatTimeAgo(date: Date): string {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`
 
-  return date.toLocaleDateString()
+  return formatDate(date)
 }
 
 export function ActivityFeed({ agentId }: ActivityFeedProps) {
@@ -214,7 +215,7 @@ export function ActivityFeed({ agentId }: ActivityFeedProps) {
                     {/* Amount */}
                     {activity.amount && (
                       <p className="text-sm font-mono text-text-secondary">
-                        Amount: {(Number(activity.amount) / 1e18).toFixed(2)} $TRUST
+                        Amount: {(Number(activity.amount) / 1e18).toFixed(2)} tTRUST
                       </p>
                     )}
                   </div>

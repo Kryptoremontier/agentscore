@@ -14,6 +14,7 @@ import { calculateForgeTrustScore, buildSparkline } from '@/lib/forge/scoring'
 import { calculateForgeCompleteness } from '@/lib/forge/completeness'
 import { ForgeCategory, ProjectStage, FORGE_CATEGORY_LABELS } from '@/lib/forge/types'
 import type { ForgeProject, ForgeProjectRegistrationInput } from '@/lib/forge/types'
+import { filterForgeProjects } from '@/lib/agent-junk-filter'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -379,10 +380,12 @@ const FORGE_ATOM_QUERY_FIELDS = `
 `
 
 /**
- * Fetch all IntuForge projects registered on-chain.
- * Returns empty array if GraphQL is unavailable — callers should fall back to MOCK_PROJECTS.
+ * Fetch all IntuForge projects registered on-chain (unfiltered — includes
+ * duplicate re-registrations of the same project). Internal: use
+ * fetchForgeProjectsFromChain (deduped) or fetchForgeProjectsWithJunkInfo
+ * (deduped + the folded duplicates, for audit/UI count surfaces).
  */
-export async function fetchForgeProjectsFromChain(limit = 100): Promise<ForgeProject[]> {
+async function fetchAllForgeProjects(limit: number): Promise<ForgeProject[]> {
   const data = await gql<{ atoms: RawForgeAtom[] }>(`
     {
       atoms(
@@ -416,6 +419,35 @@ export async function fetchForgeProjectsFromChain(limit = 100): Promise<ForgePro
     if (p) projects.push(p)
   }
   return projects
+}
+
+function toForgeCandidates(projects: readonly ForgeProject[]) {
+  return projects.map(p => ({
+    termId: p.id,
+    label: p.name,
+    stakerCount: p.stakerCount,
+    totalStake: p.totalStaked,
+    createdAt: p.registeredAt,
+    original: p,
+  }))
+}
+
+/**
+ * Fetch all IntuForge projects registered on-chain, deduped: repeated
+ * re-registrations of the same project (e.g. "Agent Score" x6) are folded
+ * to one representative — see agent-junk-filter.ts. Returns empty array
+ * if GraphQL is unavailable — callers should fall back to MOCK_PROJECTS.
+ */
+export async function fetchForgeProjectsFromChain(limit = 100): Promise<ForgeProject[]> {
+  const all = await fetchAllForgeProjects(limit)
+  return filterForgeProjects(toForgeCandidates(all)).kept
+}
+
+/** Same as fetchForgeProjectsFromChain, plus the folded duplicates (for `?includeJunk` / UI counts). */
+export async function fetchForgeProjectsWithJunkInfo(limit = 100): Promise<{ kept: ForgeProject[]; junk: ForgeProject[]; junkFiltered: number }> {
+  const all = await fetchAllForgeProjects(limit)
+  const { kept, junk } = filterForgeProjects(toForgeCandidates(all))
+  return { kept, junk: junk.map(j => j.item), junkFiltered: junk.length }
 }
 
 /**

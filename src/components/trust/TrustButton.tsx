@@ -88,7 +88,7 @@ export function TrustButton({ agentId, className }: TrustButtonProps) {
               <div className="space-y-4">
                 {action === 'trust' ? (
                   <p className="text-text-secondary">
-                    Stake $TRUST to attest that you trust this agent. Your stake helps
+                    Stake tTRUST to attest that you trust this agent. Your stake helps
                     others verify agent reliability.
                   </p>
                 ) : (
@@ -101,7 +101,7 @@ export function TrustButton({ agentId, className }: TrustButtonProps) {
                 {/* Stake Amount Input */}
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Stake Amount ($TRUST)
+                    Stake Amount (tTRUST)
                   </label>
                   <input
                     type="number"
@@ -112,7 +112,7 @@ export function TrustButton({ agentId, className }: TrustButtonProps) {
                     className="w-full px-4 py-2 glass rounded-lg border-0 focus:ring-2 focus:ring-primary outline-none"
                   />
                   <p className="text-sm text-text-muted mt-1">
-                    Minimum stake: 1 $TRUST
+                    Minimum stake: 1 tTRUST
                   </p>
                 </div>
 
@@ -166,7 +166,7 @@ export function TrustButton({ agentId, className }: TrustButtonProps) {
                       Processing...
                     </>
                   ) : (
-                    <>Stake {stakeAmount} $TRUST</>
+                    <>Stake {stakeAmount} tTRUST</>
                   )}
                 </Button>
               </div>

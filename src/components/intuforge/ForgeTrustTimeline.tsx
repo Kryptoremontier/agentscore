@@ -12,6 +12,7 @@ import type { LucideIcon } from 'lucide-react'
 import { buildForgeTimeline } from '@/lib/forge/timeline'
 import type { TimelineEvent } from '@/lib/trust-timeline'
 import { ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
+import { formatDate } from '@/lib/format'
 
 // ─── Severity styles (matches TrustTimeline) ──────────────────────────────────
 
@@ -36,12 +37,6 @@ function getEventIcon(event: TimelineEvent): { Icon: LucideIcon; color: string }
     case 'a2a_ready':       return { Icon: Wifi, color: '#2EE6D6' }
     default:                return { Icon: Hammer, color: '#7A838D' }
   }
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  })
 }
 
 function EventCard({ event, isLast }: { event: TimelineEvent; isLast: boolean }) {

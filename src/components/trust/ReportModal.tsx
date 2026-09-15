@@ -202,7 +202,7 @@ export function ReportModal({
             {/* Stake Amount */}
             <div className="space-y-2 mb-6">
               <label className="block text-sm font-medium">
-                Stake Amount (minimum 10 $TRUST)
+                Stake Amount (minimum 10 tTRUST)
               </label>
               <input
                 type="number"
@@ -253,7 +253,7 @@ export function ReportModal({
                   </>
                 ) : (
                   <>
-                    Submit Report ({stakeAmount} $TRUST)
+                    Submit Report ({stakeAmount} tTRUST)
                   </>
                 )}
               </Button>

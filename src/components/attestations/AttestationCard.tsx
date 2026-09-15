@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn'
 import { EXPERT_WEIGHT } from '@/types/user'
 import type { Attestation, AttestationPredicate } from '@/types/attestation'
 import { isReportedFor, reportObject } from '@/lib/predicates'
+import { formatDate } from '@/lib/format'
 
 interface AttestationCardProps {
   attestation: Attestation
@@ -125,8 +126,7 @@ export function AttestationCard({ attestation, index = 0 }: AttestationCardProps
                 )}
               </div>
               <p className="text-sm text-text-muted mt-1">
-                {attestation.createdAt.toLocaleDateString()} at{' '}
-                {attestation.createdAt.toLocaleTimeString()}
+                {formatDate(attestation.createdAt, 'long')}
               </p>
             </div>
 
@@ -135,7 +135,7 @@ export function AttestationCard({ attestation, index = 0 }: AttestationCardProps
               variant={isPositive ? 'success' : isReport ? 'secondary' : 'destructive'}
               className="flex-shrink-0"
             >
-              {isPositive ? '+' : '-'}{formatStake(attestation.stakeAmount)} $TRUST
+              {isPositive ? '+' : '-'}{formatStake(attestation.stakeAmount)} tTRUST
             </Badge>
           </div>
 
