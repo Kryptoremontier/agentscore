@@ -61,6 +61,29 @@ export interface CohortAgent {
   createdAt: string
 }
 
+export interface CohortFetchResult {
+  agents: CohortAgent[]
+  /** True count of matching identity triples, from a separate aggregate query (no row fetch). */
+  total: number
+  /** True when `total` exceeds COHORT_FETCH_LIMIT — some real cohort agents are not in `agents`.
+   *  Thesis §6: never silently drop. Callers MUST surface this, not just render `agents`. */
+  truncated: boolean
+}
+
+// Hard cap on the identity query below. Testnet is at 264 live (2026-09-15) — dormant until the
+// cohort grows past it. Recon 2026-09-15 found Deep3 Labs published ~28.7k ERC-8004 identity
+// links to Intuition MAINNET (a separate, much larger dataset this app doesn't read — see
+// project memory). Raising this cap is a deliberate decision, not a casual bump: the batched
+// classification lookup below is chunked specifically so it survives a higher cap, but the
+// unvirtualized /agents render is not — see the recon notes before ever raising this.
+const COHORT_FETCH_LIMIT = 500
+
+// Hasura's `_in` filter is interpolated as a literal id list in the query string (no query
+// builder here) — an unbounded list scales the request body linearly with cohort size, well
+// past what a single Hasura request should carry. Chunking bounds each request regardless of
+// how large COHORT_FETCH_LIMIT ever becomes.
+const CLASSIFICATION_CHUNK_SIZE = 200
+
 interface SameAsRow {
   created_at: string
   subject: { term_id: string; label: string | null } | null
@@ -106,35 +129,89 @@ export function foldClassificationBySubject(rows: readonly ClassificationRow[]):
   return out
 }
 
+function chunkIds(ids: readonly string[], size: number): string[][] {
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size))
+  return out
+}
+
+/**
+ * Batched classification lookup (`has tag` / `has category`), chunked at
+ * CLASSIFICATION_CHUNK_SIZE subject ids per request so the query body stays
+ * bounded regardless of cohort size — see COHORT_FETCH_LIMIT's file-header
+ * note. Chunks fetch in parallel and merge; one chunk's failure degrades to
+ * [] for that chunk only (graceful degradation, same convention as the rest
+ * of this file), it doesn't drop the others.
+ */
+async function fetchClassification(predicateIds: readonly string[], termIds: readonly string[]): Promise<ClassificationRow[]> {
+  if (termIds.length === 0) return []
+  const predicateList = predicateIds.map((p) => `"${p}"`).join(', ')
+  const results = await Promise.all(
+    chunkIds(termIds, CLASSIFICATION_CHUNK_SIZE).map((idsChunk) => {
+      const idList = idsChunk.map((id) => JSON.stringify(id)).join(', ')
+      return gql<{ triples: ClassificationRow[] }>(`
+        query GetCohortClassification {
+          triples(
+            where: {
+              predicate_id: { _in: [${predicateList}] }
+              subject_id: { _in: [${idList}] }
+            }
+            limit: 2000
+          ) { subject_id object { term_id label } }
+        }
+      `).catch(() => ({ triples: [] }))
+    })
+  )
+  return results.flatMap((r) => r?.triples ?? [])
+}
+
 /**
  * Fetch the ERC-8004 cohort: agents Intuition indexed as `same as` a CAIP
  * on-chain identity, filtered to the ERC-8004 registry contract pattern.
  * Dedups agents with >1 same-as CAIP triple (rare, seen live: 1/168).
- * Attaches declared OASF skills/domains via a second batched query.
+ * Attaches declared OASF skills/domains via chunked batched queries.
+ *
+ * `total` comes from a separate aggregate query on the identical filter —
+ * cheap (no row fetch) — so `truncated` reflects the real underlying count,
+ * not just "did we get exactly COHORT_FETCH_LIMIT rows back."
  */
-export async function fetchCohortAgents(): Promise<CohortAgent[]> {
-  if (!APP_CONFIG.GRAPHQL_URL) return []
+export async function fetchCohortAgents(): Promise<CohortFetchResult> {
+  const empty: CohortFetchResult = { agents: [], total: 0, truncated: false }
+  if (!APP_CONFIG.GRAPHQL_URL) return empty
   try {
-    const sameAsData = await gql<{ triples: SameAsRow[] }>(`
-      query GetErc8004Cohort {
-        triples(
-          where: {
-            predicate_id: { _eq: "${SAME_AS_PREDICATE_ID}" }
-            object: { label: { _ilike: "%erc721:0x8004%" } }
+    const sameAsFilter = `
+      predicate_id: { _eq: "${SAME_AS_PREDICATE_ID}" }
+      object: { label: { _ilike: "%erc721:0x8004%" } }
+    `
+    const [sameAsData, countData] = await Promise.all([
+      gql<{ triples: SameAsRow[] }>(`
+        query GetErc8004Cohort {
+          triples(where: { ${sameAsFilter} } limit: ${COHORT_FETCH_LIMIT}) {
+            created_at
+            subject { term_id label }
+            object { label }
           }
-          limit: 500
-        ) {
-          created_at
-          subject { term_id label }
-          object { label }
         }
-      }
-    `)
+      `),
+      gql<{ triples_aggregate: { aggregate: { count: number } } }>(`
+        query GetErc8004CohortCount {
+          triples_aggregate(where: { ${sameAsFilter} }) {
+            aggregate { count }
+          }
+        }
+      `).catch(() => null),
+    ])
 
     const rows = (sameAsData?.triples ?? []).filter(
       (r) => r.subject?.term_id && r.object?.label && ERC8004_CAIP_PATTERN.test(r.object.label)
     )
-    if (rows.length === 0) return []
+    // A count-query failure must never look like "truncated: false, total: 0" (that reads as
+    // an empty cohort, not an unknown total) — fall back to the row count we did get, so
+    // `truncated` stays a safe `false` rather than lying in either direction.
+    const total = countData?.triples_aggregate?.aggregate?.count ?? rows.length
+    const truncated = total > COHORT_FETCH_LIMIT
+
+    if (rows.length === 0) return { agents: [], total, truncated }
 
     // Dedup: keep the earliest same-as triple per subject.
     const bySubject = new Map<string, SameAsRow>()
@@ -145,37 +222,16 @@ export async function fetchCohortAgents(): Promise<CohortAgent[]> {
     }
 
     const termIds = [...bySubject.keys()]
-    const idList = termIds.map((id) => JSON.stringify(id)).join(', ')
 
-    const [tagData, categoryData] = await Promise.all([
-      gql<{ triples: ClassificationRow[] }>(`
-        query GetCohortSkillTags {
-          triples(
-            where: {
-              predicate_id: { _in: [${HAS_TAG_PREDICATE_IDS.map((p) => `"${p}"`).join(', ')}] }
-              subject_id: { _in: [${idList}] }
-            }
-            limit: 2000
-          ) { subject_id object { term_id label } }
-        }
-      `).catch(() => ({ triples: [] })),
-      gql<{ triples: ClassificationRow[] }>(`
-        query GetCohortDomainCategories {
-          triples(
-            where: {
-              predicate_id: { _in: [${HAS_CATEGORY_PREDICATE_IDS.map((p) => `"${p}"`).join(', ')}] }
-              subject_id: { _in: [${idList}] }
-            }
-            limit: 2000
-          ) { subject_id object { term_id label } }
-        }
-      `).catch(() => ({ triples: [] })),
+    const [tagRows, categoryRows] = await Promise.all([
+      fetchClassification(HAS_TAG_PREDICATE_IDS, termIds),
+      fetchClassification(HAS_CATEGORY_PREDICATE_IDS, termIds),
     ])
 
-    const skillsBySubject = foldClassificationBySubject(tagData?.triples ?? [])
-    const domainsBySubject = foldClassificationBySubject(categoryData?.triples ?? [])
+    const skillsBySubject = foldClassificationBySubject(tagRows)
+    const domainsBySubject = foldClassificationBySubject(categoryRows)
 
-    return termIds
+    const agents = termIds
       .map((termId) => {
         const row = bySubject.get(termId)!
         return {
@@ -188,8 +244,10 @@ export async function fetchCohortAgents(): Promise<CohortAgent[]> {
         }
       })
       .sort((a, b) => a.label.localeCompare(b.label))
+
+    return { agents, total, truncated }
   } catch (err) {
     console.warn('[fetchCohortAgents] Network/GraphQL error:', err)
-    return []
+    return empty
   }
 }
