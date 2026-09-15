@@ -8,6 +8,73 @@
  * See `.env.local.example` for the full reference with explanations.
  */
 
+import { intuitionMainnet, intuitionTestnet } from '@0xintuition/protocol'
+
+// ── Network coherence guard ─────────────────────────────────────────────────
+// Three independent env vars each imply a network, and nothing enforced they
+// agreed before this: NEXT_PUBLIC_NETWORK is a display label only (API meta,
+// logs — see PLATFORM_TAG below); NEXT_PUBLIC_GRAPHQL_URL alone decides what
+// actually gets queried (this file); NEXT_PUBLIC_CHAIN_ID picks
+// attestation-gate.ts's sybil-defense config. A silent mismatch means the UI
+// SAYS one network while every read comes from another — exactly the risk
+// the 2026-09-15 ERC-8004 recon flagged: Deep3 Labs' ~28.7k-agent publish
+// landed on Intuition mainnet, a dataset this app has never queried, and
+// flipping NEXT_PUBLIC_NETWORK alone would not have changed that — nor
+// would anything have said so. Chain ids come from the SDK's own chain
+// definitions (@0xintuition/protocol), not a second hand-maintained constant.
+type NetworkLabel = 'testnet' | 'mainnet'
+
+function inferNetworkFromGraphqlUrl(url: string): NetworkLabel | null {
+  if (url.includes('testnet.intuition.sh')) return 'testnet'
+  if (url.includes('mainnet.intuition.sh')) return 'mainnet'
+  return null
+}
+
+function inferNetworkFromChainId(chainId: string | undefined): NetworkLabel | null {
+  if (!chainId) return null
+  if (chainId === String(intuitionTestnet.id)) return 'testnet'
+  if (chainId === String(intuitionMainnet.id)) return 'mainnet'
+  return null
+}
+
+/**
+ * Throws when NEXT_PUBLIC_NETWORK, NEXT_PUBLIC_GRAPHQL_URL, and
+ * NEXT_PUBLIC_CHAIN_ID don't all agree on the same network. A URL or chain id
+ * this doesn't recognize (a local proxy, a future third network) is not
+ * itself an error — only a RECOGNIZED, DISAGREEING value throws. Exported so
+ * this can be exercised directly with explicit inputs, without reloading the
+ * module per env-var combination.
+ */
+export function assertNetworkCoherence(network: string, graphqlUrl: string, chainId: string | undefined): void {
+  const declared: NetworkLabel = network === 'mainnet' ? 'mainnet' : 'testnet'
+
+  const urlNetwork = inferNetworkFromGraphqlUrl(graphqlUrl)
+  if (urlNetwork && urlNetwork !== declared) {
+    throw new Error(
+      `[app-config] Network mismatch: NEXT_PUBLIC_NETWORK="${network}" but NEXT_PUBLIC_GRAPHQL_URL points at ` +
+      `${urlNetwork} (${graphqlUrl}). Every read goes through this URL — fix one of the two env vars; ` +
+      `don't ship a build that SAYS ${declared} and READS ${urlNetwork}.`
+    )
+  }
+
+  const chainNetwork = inferNetworkFromChainId(chainId)
+  if (chainNetwork && chainNetwork !== declared) {
+    throw new Error(
+      `[app-config] Network mismatch: NEXT_PUBLIC_NETWORK="${network}" but NEXT_PUBLIC_CHAIN_ID="${chainId}" is ` +
+      `${chainNetwork} (testnet=${intuitionTestnet.id}, mainnet=${intuitionMainnet.id}). attestation-gate.ts picks ` +
+      `its sybil-defense config from this value — a mismatch silently applies the wrong network's gating rules.`
+    )
+  }
+}
+
+// Runs once, at import time — a mismatch fails the build/boot immediately
+// rather than reading the wrong network silently at runtime.
+assertNetworkCoherence(
+  process.env.NEXT_PUBLIC_NETWORK ?? 'testnet',
+  process.env.NEXT_PUBLIC_GRAPHQL_URL ?? 'https://testnet.intuition.sh/v1/graphql',
+  process.env.NEXT_PUBLIC_CHAIN_ID,
+)
+
 export const APP_CONFIG = {
   // ── GraphQL endpoint ────────────────────────────────────────────────────────
   GRAPHQL_URL: process.env.NEXT_PUBLIC_GRAPHQL_URL
