@@ -1453,8 +1453,9 @@ function AgentsPageContent() {
       reportCount,
       backerCount: combinedStakerCount,
       backerVaultWei,
+      signals: agentSignalsCount,
     })
-  }, [profileVector.attested, reportCount, combinedStakerCount, selectedAgent])
+  }, [profileVector.attested, reportCount, combinedStakerCount, selectedAgent, agentSignalsCount])
 
   // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
   const agentAvatar = useMemo(() => {
@@ -2091,8 +2092,8 @@ function AgentsPageContent() {
                     2x2 on mobile, 1x4 on desktop. Loading shows "—", never "0". */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {[
-                    { value: profileLoaded ? modalStats.attesters : '—', label: 'Attesters' },
-                    { value: profileLoaded ? modalStats.domains : '—', label: 'Domains attested' },
+                    { value: profileLoaded ? modalStats.attesters : '—', label: profileLoaded && modalStats.attesters === 1 ? 'Attester' : 'Attesters' },
+                    { value: profileLoaded ? modalStats.domains : '—', label: profileLoaded && modalStats.domains === 1 ? 'Domain attested' : 'Domains attested' },
                     { value: profileLoaded ? formatTTrust(modalStats.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
                     { value: profileLoaded ? modalStats.reports : '—', label: 'Reports' },
                   ].map((s, i) => (
@@ -2105,11 +2106,16 @@ function AgentsPageContent() {
 
                 {/* Secondary line — the atom vault (Backers). Muted, never a box: honesty
                     demotes this, never hides it (thesis §6). Only attestations above count
-                    toward the tier. */}
+                    toward the tier. Signals (raw deposit/redeem event count on the vault —
+                    NOT distinct wallets) ride along here too when non-zero: no primary box of
+                    its own (dropped from the header entirely would violate thesis §6 for any
+                    agent whose signal count is real, e.g. OPEN CLAW at 13 live), but it isn't
+                    always zero so it can't just be omitted either. */}
                 <div className="mt-2.5">
                   <TooltipWrapper content="Backers stake on the agent's atom; attesters stake on a domain claim. Only attestations count toward the tier.">
                     <p className="text-xs text-[#7A838D] cursor-help">
                       Backers: {positionsLoading ? '—' : modalStats.backerCount} · {positionsLoading ? '—' : formatTTrust(modalStats.backerVaultWei)} on atom vault
+                      {!signalsLoading && modalStats.signals > 0 ? ` · ${modalStats.signals} signal${modalStats.signals !== 1 ? 's' : ''}` : ''}
                     </p>
                   </TooltipWrapper>
                 </div>

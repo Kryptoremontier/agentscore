@@ -197,6 +197,10 @@ export interface ModalStatSummary {
   backerCount: number
   /** Total stake on the agent's own atom vault — wei. */
   backerVaultWei: bigint
+  /** Raw signal/event count on the agent's own vault (deposits+redemptions, NOT distinct wallets — a
+   *  wallet can produce several). Demoted onto the Backers line when non-zero, never a primary stat
+   *  and never hidden outright (thesis §6) — see the Etap 4b follow-up that added this field. */
+  signals: number
 }
 
 /**
@@ -213,6 +217,7 @@ export function computeModalStatSummary(input: {
   reportCount: number
   backerCount: number
   backerVaultWei: bigint
+  signals: number
 }): ModalStatSummary {
   return {
     domains: input.attested.length,
@@ -221,6 +226,7 @@ export function computeModalStatSummary(input: {
     reports: input.reportCount,
     backerCount: input.backerCount,
     backerVaultWei: input.backerVaultWei,
+    signals: input.signals,
   }
 }
 
