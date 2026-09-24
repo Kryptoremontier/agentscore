@@ -79,6 +79,10 @@ card_response.json
 new_agent.json
 xyz_card.json
 data/feedback.json
+# Screenshot harness output (`npm run shots`) — artifacts, not repo content
+/screenshots/
+/test-results/
+/playwright-report/
 
 # ═══════════════════════════════════════════
 # MISC
