@@ -33,11 +33,14 @@ export function ReportsSection({ reports, loading, className }: ReportsSectionPr
 
   if (reports.length === 0) {
     return (
-      <p className={`text-[11px] text-[#7A838D] flex items-center gap-1.5 ${className ?? ''}`} data-testid="reports-empty">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#4A5260]" />
-        No reports on-chain
-        <span className="text-[#4A5260]">· no <code className="font-mono">reported for</code> claims exist for this atom — not a vetting result</span>
-      </p>
+      <div
+        className={`rounded-xl border px-4 py-2.5 flex items-center gap-2 ${className ?? ''}`}
+        style={{ background: 'rgba(249,115,22,0.05)', borderColor: 'rgba(249,115,22,0.3)' }}
+        data-testid="reports-empty"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-[#4A5260] flex-shrink-0" />
+        <span className="text-xs text-[#7A838D]">No reports on-chain — not a vetting result.</span>
+      </div>
     )
   }
 

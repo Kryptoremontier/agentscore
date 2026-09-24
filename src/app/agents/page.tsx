@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Layers, Globe, LayoutGrid, List, ExternalLink } from 'lucide-react'
+import { Layers, Globe, LayoutGrid, List, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther, getAddress } from 'viem'
 import Link from 'next/link'
@@ -40,13 +40,13 @@ import { TrustSparkline } from '@/components/TrustSparkline'
 import { AgentRadar } from '@/components/AgentRadar'
 import { TrustTimeline, ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
-import { AttestButton } from '@/components/attest/AttestButton'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
-import { fetchAgentProfileVector, summarizeAttesters, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
+import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { filterAgents } from '@/lib/agent-junk-filter'
@@ -55,6 +55,12 @@ const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
   if (process.env.NODE_ENV === 'development') console.log(...args)
 }
+
+// Etap 4b modal — display-only progress fraction next to the tier chip.
+// Does NOT feed calculateTier() (vault-based, untouched) — a separate,
+// honest readout of the canonical attestation unit's own threshold.
+const VERIFIED_MIN_ATTESTERS = 3
+const VERIFIED_MIN_TTRUST = '0.1'
 
 interface GraphQLAgent {
   term_id: string
@@ -193,6 +199,8 @@ function AgentsPageContent() {
   // and reports (reported for + stake). The profile's headline data.
   const [profileVector, setProfileVector] = useState<AgentProfileVector>({ attested: [], reports: [] })
   const [profileLoaded, setProfileLoaded] = useState(false)
+  // Etap 4b: "Back this agent" (Buy/Sell) is secondary to the attestation unit — collapsed by default.
+  const [backAccordionOpen, setBackAccordionOpen] = useState(false)
   // Cache hybrid scores keyed by agent term_id, populated when modal computes them.
   // Cards fall back to trust score until the modal has been opened for that agent.
   const [objectScoreByTermId, setObjectScoreByTermId] = useState<Record<string, number>>({})
@@ -597,6 +605,11 @@ function AgentsPageContent() {
         }))
         .catch(() => setAgentTriple({ termId: null, counterTermId: null, loading: false }))
     })
+  }, [selectedAgent?.term_id])
+
+  // Collapse "Back this agent" whenever a different agent's modal opens.
+  useEffect(() => {
+    setBackAccordionOpen(false)
   }, [selectedAgent?.term_id])
 
   // Fetch skill triples when modal opens (for skill trust breakdown + empty-state CTA)
@@ -1428,6 +1441,22 @@ function AgentsPageContent() {
     }
   }, [selectedAgent, combinedStakerCount, agentTrust, compositeTrust, hybridScore])
 
+  // Etap 4b — modal stat rows: primary (attestation unit, canonical) + secondary
+  // (Backers, atom vault). No new fetch — derived from profileVector +
+  // combinedStakerCount/positions_aggregate, both already loaded for this modal.
+  const modalStats = useMemo(() => {
+    let backerVaultWei = 0n
+    const raw = selectedAgent?.positions_aggregate?.aggregate?.sum?.shares
+    if (raw) { try { backerVaultWei = BigInt(raw) } catch { backerVaultWei = 0n } }
+    return computeModalStatSummary({
+      attested: profileVector.attested,
+      reportCount,
+      backerCount: combinedStakerCount,
+      backerVaultWei,
+      signals: agentSignalsCount,
+    })
+  }, [profileVector.attested, reportCount, combinedStakerCount, selectedAgent, agentSignalsCount])
+
   // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
   const agentAvatar = useMemo(() => {
     if (!selectedAgent?.term_id) return null
@@ -1987,10 +2016,17 @@ function AgentsPageContent() {
                         {getAgentNameFromAtom(selectedAgent)}
                       </h2>
                       {agentTrustTier && (
-                        <TrustTierBadgeWithProgress
-                          tier={agentTrustTier.tier}
-                          progress={agentTrustTier.progress}
-                        />
+                        <div className="flex items-center gap-1.5">
+                          <TrustTierBadgeWithProgress
+                            tier={agentTrustTier.tier}
+                            progress={agentTrustTier.progress}
+                          />
+                          <TooltipWrapper content={`Verified requires ≥${VERIFIED_MIN_ATTESTERS} distinct attesters and ≥${VERIFIED_MIN_TTRUST} tTRUST attested.`}>
+                            <span className="text-[10px] text-[#7A838D] cursor-help">
+                              · {profileLoaded ? modalStats.attesters : '—'}/{VERIFIED_MIN_ATTESTERS} attesters
+                            </span>
+                          </TooltipWrapper>
+                        </div>
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
@@ -2052,13 +2088,14 @@ function AgentsPageContent() {
                   </div>
                 </div>
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-4 gap-2">
+                {/* Primary stat row — the attestation unit (canonical, thesis §4).
+                    2x2 on mobile, 1x4 on desktop. Loading shows "—", never "0". */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {[
-                    { value: agentSignalsCount, label: 'Signals' },
-                    { value: combinedStakerCount, label: 'Stakers' },
-                    { value: formatTTrust(selectedAgent.positions_aggregate?.aggregate?.sum?.shares ?? 0n), label: 'Total Stake' },
-                    { value: reportCount, label: 'Reports' },
+                    { value: profileLoaded ? modalStats.attesters : '—', label: profileLoaded && modalStats.attesters === 1 ? 'Attester' : 'Attesters' },
+                    { value: profileLoaded ? modalStats.domains : '—', label: profileLoaded && modalStats.domains === 1 ? 'Domain attested' : 'Domains attested' },
+                    { value: profileLoaded ? formatTTrust(modalStats.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
+                    { value: profileLoaded ? modalStats.reports : '—', label: 'Reports' },
                   ].map((s, i) => (
                     <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-white">{s.value}</p>
@@ -2067,13 +2104,21 @@ function AgentsPageContent() {
                   ))}
                 </div>
 
-                {/* PRIMARY ACTION — attest competence (the core data unit of the product) */}
-                <AttestButton
-                  agentId={selectedAgent.term_id}
-                  agentName={getAgentNameFromAtom(selectedAgent)}
-                  variant="hero"
-                  className="mt-4"
-                />
+                {/* Secondary line — the atom vault (Backers). Muted, never a box: honesty
+                    demotes this, never hides it (thesis §6). Only attestations above count
+                    toward the tier. Signals (raw deposit/redeem event count on the vault —
+                    NOT distinct wallets) ride along here too when non-zero: no primary box of
+                    its own (dropped from the header entirely would violate thesis §6 for any
+                    agent whose signal count is real, e.g. OPEN CLAW at 13 live), but it isn't
+                    always zero so it can't just be omitted either. */}
+                <div className="mt-2.5">
+                  <TooltipWrapper content="Backers stake on the agent's atom; attesters stake on a domain claim. Only attestations count toward the tier.">
+                    <p className="text-xs text-[#7A838D] cursor-help">
+                      Backers: {positionsLoading ? '—' : modalStats.backerCount} · {positionsLoading ? '—' : formatTTrust(modalStats.backerVaultWei)} on atom vault
+                      {!signalsLoading && modalStats.signals > 0 ? ` · ${modalStats.signals} signal${modalStats.signals !== 1 ? 's' : ''}` : ''}
+                    </p>
+                  </TooltipWrapper>
+                </div>
               </div>
 
               {/* ETAP 3 — profile hierarchy (thesis §5), always visible above the
@@ -2092,11 +2137,23 @@ function AgentsPageContent() {
               )}
               <ReportsSection reports={profileVector.reports} loading={!profileLoaded} className="mb-3 px-1" />
 
-              {/* === ACTION SECTION: Buy / Sell Shares === */}
+              {/* === ACTION SECTION: Back this agent (Buy/Sell) — collapsed by default.
+                  Secondary to the attestation unit above (thesis §4/§6): backing is a
+                  vault stake, not a competence claim, and never changes the tier. */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
-                <p className="text-[#B5BDC6] text-xs font-semibold mb-1">Buy / Sell Shares</p>
-                <p className="text-[#7A838D] text-xs mb-3">
-                  Buy shares to back this agent — early buyers get more shares per tTRUST. Price rises as demand grows.
+                <button
+                  type="button"
+                  onClick={() => setBackAccordionOpen(v => !v)}
+                  className="w-full flex items-center justify-between gap-2 text-left"
+                  aria-expanded={backAccordionOpen}
+                >
+                  <span className="text-[#B5BDC6] text-xs font-semibold">Back this agent</span>
+                  {backAccordionOpen ? <ChevronUp className="w-4 h-4 text-[#7A838D]" /> : <ChevronDown className="w-4 h-4 text-[#7A838D]" />}
+                </button>
+                {backAccordionOpen && (
+                <>
+                <p className="text-[#7A838D] text-xs mt-2 mb-3">
+                  Stake tTRUST on this agent&apos;s atom vault. Backing is not attesting — it does not change the tier.
                 </p>
 
                 {isConnected ? (
@@ -2437,6 +2494,8 @@ function AgentsPageContent() {
                     <p className="text-[#B5BDC6] font-semibold mb-1">Connect wallet to stake</p>
                     <p className="text-xs text-[#7A838D]">Intuition Testnet · Chain ID 13579</p>
                   </div>
+                )}
+                </>
                 )}
               </div>
 

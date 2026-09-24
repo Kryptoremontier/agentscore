@@ -40,7 +40,9 @@ export function AttestEmptyState({ agentId, agentName, className }: AttestEmptyS
           </p>
         </div>
       </div>
-      <AttestButton agentId={agentId} agentName={agentName} variant="hero" />
+      {/* Desktop only — mobile has its own always-visible AttestStickyBar
+          (see agents/page.tsx); showing both would double the CTA there. */}
+      <AttestButton agentId={agentId} agentName={agentName} variant="hero" className="hidden md:block" />
     </div>
   )
 }
