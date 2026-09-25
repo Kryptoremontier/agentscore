@@ -136,7 +136,7 @@ describe('fetchCohortAgents — truncation is surfaced, never silently dropped (
     expect(result.truncated).toBe(false)
   })
 
-  it('count-query failure degrades to the row count, not to 0 — never reports a false "empty cohort"', async () => {
+  it('count-query failure on a short (complete) fetch: the deduped rows ARE the total — never a false "empty cohort"', async () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body ?? '{}'))
       const query = String(body.query)
@@ -148,6 +148,50 @@ describe('fetchCohortAgents — truncation is surfaced, never silently dropped (
     expect(result.total).toBe(2)
     expect(result.truncated).toBe(false)
     expect(result.agents).toHaveLength(2)
+  })
+
+  it('limit + 1: 500 fetched, 501 distinct agents in the registry -> truncated true, total 501', async () => {
+    stubGql(500, 501)
+    const result = await fetchCohortAgents()
+    expect(result.truncated).toBe(true)
+    expect(result.total).toBe(501)
+  })
+
+  it('counts DISTINCT subjects on the SAME filter as the rows (units match: agents, not triples)', async () => {
+    const queries: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const query = String(JSON.parse(String(init?.body ?? '{}')).query)
+      queries.push(query)
+      if (query.includes('GetErc8004CohortCount')) return { json: async () => ({ data: { triples_aggregate: { aggregate: { count: 2 } } } }) }
+      if (query.includes('GetCohortClassification')) return { json: async () => ({ data: { triples: [] } }) }
+      // 3 same-as triples, 2 subjects: agent0 has two identity links (seen live 1/168).
+      const dup = { ...sameAsRow(0), created_at: '2026-09-02T00:00:00Z' }
+      return { json: async () => ({ data: { triples: [sameAsRow(0), dup, sameAsRow(1)] } }) }
+    }))
+    const result = await fetchCohortAgents()
+    expect(result.agents).toHaveLength(2)
+    expect(result.total).toBe(2) // was 3 (triples) before — a unit mismatch with agents.length
+    const count = queries.find(q => q.includes('GetErc8004CohortCount'))!
+    const rows = queries.find(q => q.includes('GetErc8004Cohort ') || (q.includes('GetErc8004Cohort') && !q.includes('Count')))!
+    expect(count).toContain('count(columns: [subject_id], distinct: true)')
+    for (const q of [count, rows]) {
+      expect(q).toContain('%erc721:0x8004a169%')
+      expect(q).toContain('subject_id: { _is_null: false }')
+    }
+  })
+
+  it('at the cap with the count unavailable -> total and truncated are unknown (null), never rows.length', async () => {
+    const rows = Array.from({ length: 500 }, (_, i) => sameAsRow(i))
+    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const query = String(JSON.parse(String(init?.body ?? '{}')).query)
+      if (query.includes('GetErc8004CohortCount')) throw new Error('count query down')
+      if (query.includes('GetCohortClassification')) return { json: async () => ({ data: { triples: [] } }) }
+      return { json: async () => ({ data: { triples: rows } }) }
+    }))
+    const result = await fetchCohortAgents()
+    expect(result.agents).toHaveLength(500)
+    expect(result.total).toBeNull()
+    expect(result.truncated).toBeNull()
   })
 
   it('chunks the classification lookup at 200 ids and merges results across chunks', async () => {

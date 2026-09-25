@@ -211,6 +211,82 @@ async function batchFetchOpposeShares(rows: AgentRow[]): Promise<Map<string, big
 }
 
 /**
+ * Cap on the AgentScore corpus fetch. One constant for every path (list, detail,
+ * stats) so /api/v1/agents and /api/v1/stats count the same rows — they used
+ * 200 and 500 and could disagree once the corpus grew.
+ */
+const AGENT_CORPUS_LIMIT = 500
+
+/** True size of the AgentScore corpus (pre-junk), from an aggregate on the SAME filter. */
+async function fetchAgentCorpusCount(): Promise<number | null> {
+  try {
+    const data = await gql<{ atoms_aggregate: { aggregate: { count: number } } }>(`
+      query ApiAgentsCount {
+        atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } }
+      }
+    `)
+    const n = data?.atoms_aggregate?.aggregate?.count
+    return typeof n === 'number' ? n : null
+  } catch {
+    return null
+  }
+}
+
+interface AgentCorpus {
+  /** Post-junk items, in GraphQL order (created_at desc). */
+  kept: AgentApiItem[]
+  junk: Array<{ item: AgentApiItem; reason: AgentJunkReason }>
+  /** Raw rows keyed by term_id — for callers that need fields beyond AgentApiItem. */
+  rowsById: Map<string, AgentRow>
+  /** REPO_MAP §7 rule 1: capped fetch reports its own truncation (null = count unknown). */
+  truncated: boolean | null
+}
+
+/**
+ * The ONE AgentScore corpus read shared by /api/v1/agents, /api/v1/stats and
+ * MCP platform_stats: fetch → oppose shares → rowToAgentItem → filterAgents.
+ * Every path passes the RAW label to the junk filter (REPO_MAP §7 rule 4).
+ */
+async function loadAgentCorpus(): Promise<AgentCorpus> {
+  const [rows, rawTotal] = await Promise.all([fetchAgentRows(AGENT_CORPUS_LIMIT), fetchAgentCorpusCount()])
+  const opposeMap = await batchFetchOpposeShares(rows)
+
+  const allItems = rows.map(row => {
+    const ctid = row.as_subject_triples?.[0]?.counter_term_id
+    const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
+    return rowToAgentItem(row, opposeWei)
+  })
+
+  // Test fixtures + duplicate re-registrations, counted and surfaced
+  // (thesis §6 — never silently dropped). See agent-junk-filter.ts. Pass the
+  // RAW label (rawLabel = effectiveLabel(row), not the cleaned display name)
+  // — agent-junk-filter.ts owns all fold-matching normalization itself now,
+  // so this path and agents/page.tsx's client-side fetch can't drift apart
+  // on how a label is read.
+  const candidates = allItems.map(a => ({
+    termId: a.id,
+    label: a.rawLabel ?? a.name,
+    stakerCount: a.stakerCount,
+    totalStake: a.supportStake,
+    createdAt: a.createdAt,
+    original: a,
+  }))
+  const { kept, junk } = filterAgents(candidates)
+
+  // A fetch that returned fewer rows than its cap is complete, count or no count.
+  const truncated = rows.length < AGENT_CORPUS_LIMIT
+    ? false
+    : rawTotal == null ? null : rawTotal > rows.length
+
+  return {
+    kept,
+    junk: junk.map(j => ({ item: j.item, reason: j.reason })),
+    rowsById: new Map(rows.map(r => [r.term_id, r])),
+    truncated,
+  }
+}
+
+/**
  * Builds an AgentApiItem for list contexts.
  * - qualityScore is always null here: signal history is not fetched in bulk.
  *   score.objectScore will be null; consumers fall back to trustScore for display.
@@ -266,38 +342,21 @@ export async function getAgentsWithScores(options: {
   minTrust?: number
   /** Debug/audit escape hatch — includes filtered test fixtures/duplicates, each tagged `junkReason`. */
   includeJunk?: boolean
-} = {}): Promise<{ agents: Array<AgentApiItem & { junkReason?: AgentJunkReason }>; total: number; junkFiltered: number }> {
+} = {}): Promise<{
+  agents: Array<AgentApiItem & { junkReason?: AgentJunkReason }>
+  total: number
+  junkFiltered: number
+  /** The corpus fetch hit its cap (REPO_MAP §7 rule 1); null = unknown. */
+  truncated: boolean | null
+}> {
   const { sort = 'score', limit = 20, offset = 0, minTrust = 0, includeJunk = false } = options
 
-  const rows = await fetchAgentRows(200)
-  const opposeMap = await batchFetchOpposeShares(rows)
-
-  const allItems = rows.map(row => {
-    const ctid = row.as_subject_triples?.[0]?.counter_term_id
-    const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
-    return rowToAgentItem(row, opposeWei)
-  })
-
-  // Test fixtures + duplicate re-registrations, counted and surfaced
-  // (thesis §6 — never silently dropped). See agent-junk-filter.ts. Pass the
-  // RAW label (rawLabel = effectiveLabel(row), not the cleaned display name)
-  // — agent-junk-filter.ts owns all fold-matching normalization itself now,
-  // so this path and agents/page.tsx's client-side fetch can't drift apart
-  // on how a label is read.
-  const candidates = allItems.map(a => ({
-    termId: a.id,
-    label: a.rawLabel ?? a.name,
-    stakerCount: a.stakerCount,
-    totalStake: a.supportStake,
-    createdAt: a.createdAt,
-    original: a,
-  }))
-  const { kept, junk } = filterAgents(candidates)
+  const { kept, junk, truncated } = await loadAgentCorpus()
   const junkFiltered = junk.length
 
   let items: Array<AgentApiItem & { junkReason?: AgentJunkReason }> = includeJunk
     ? [...kept, ...junk.map(j => ({ ...j.item, junkReason: j.reason }))]
-    : kept
+    : [...kept]
 
   if (minTrust > 0) {
     items = items.filter(a => a.agentScore >= minTrust)
@@ -311,7 +370,7 @@ export async function getAgentsWithScores(options: {
   // 'newest' = keep default desc created_at order from GraphQL
 
   const total = items.length
-  return { agents: items.slice(offset, offset + limit), total, junkFiltered }
+  return { agents: items.slice(offset, offset + limit), total, junkFiltered, truncated }
 }
 
 // ─── Agent Detail ─────────────────────────────────────────────────────────────
@@ -330,7 +389,7 @@ export type AgentDetailApiItem = AgentApiItem & {
 }
 
 export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem | null> {
-  const rows = await fetchAgentRows(200)
+  const rows = await fetchAgentRows(AGENT_CORPUS_LIMIT)
   const row = rows.find(r => r.term_id === termId)
   if (!row) return null
 
@@ -1055,8 +1114,9 @@ export async function trustQuery(params: {
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export async function getPlatformStats() {
-  const [agentRows, skillData, evaluatorProfiles, { triples: domainTriples }] = await Promise.all([
-    fetchAgentRows(500),
+  const [corpus, skillData, evaluatorProfiles, { triples: domainTriples }] = await Promise.all([
+    // Same post-junk corpus as /api/v1/agents — `agents` here must equal its meta.total.
+    loadAgentCorpus(),
     gql<{ atoms: Array<{ term_id: string }> }>(`
       query ApiSkillCount {
         atoms(where: ${SKILL_WHERE_STR} limit: 500) { term_id }
@@ -1066,30 +1126,23 @@ export async function getPlatformStats() {
     fetchDomainTriplesInternal(),
   ])
 
-  const opposeMap = await batchFetchOpposeShares(agentRows)
-
   let totalStakedWei = 0n
   const stakerSet = new Set<string>()
   let topAgentScore = 0
   let topAgentName = ''
 
-  for (const row of agentRows) {
-    const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
-    const ctid = row.as_subject_triples?.[0]?.counter_term_id
-    const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
-    totalStakedWei += supportWei
-    const stakerCount = row.positions_aggregate?.aggregate?.count || 0
+  for (const item of corpus.kept) {
+    const row = corpus.rowsById.get(item.id)!
+    totalStakedWei += parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
+    const stakerCount = item.stakerCount
 
-    const supportRatio = (supportWei + opposeWei) > 0n
-      ? Number((supportWei * 100n) / (supportWei + opposeWei)) : 50
-    const tr = calculateTrustScoreFromStakes(supportWei, opposeWei)
     // List context: qualityScore=null (no signal history). Rank by trustScore.
-    // topAgent.score in the response is therefore trustScore, not a hybrid.
-    const score = tr.score
-
-    if (score > topAgentScore) {
+    // topAgent.score in the response is therefore trustScore, not a hybrid —
+    // and only a measured one: a zero-stake prior can't be "top agent".
+    const score = item.score.trustScore
+    if (item.scoreBasis === 'measured' && score > topAgentScore) {
       topAgentScore = score
-      topAgentName = cleanLabel(effectiveLabel(row))
+      topAgentName = item.name
     }
 
     // Count unique stakers (use staker count as proxy — no address list in batch)
@@ -1114,7 +1167,9 @@ export async function getPlatformStats() {
   } catch { /* non-critical */ }
 
   return {
-    agents: agentRows.length,
+    // Post-junk corpus total — identical to /api/v1/agents meta.total (same loadAgentCorpus).
+    agents: corpus.kept.length,
+    agentsTruncated: corpus.truncated,
     skills: skillData?.atoms?.length || 0,
     domains: domains.length,
     claims: claimCount,

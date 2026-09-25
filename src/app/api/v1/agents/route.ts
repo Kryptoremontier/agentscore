@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const { limit, offset } = parsePagination(sp)
     const includeJunk = sp.get('includeJunk') === 'true'
 
-    const { agents, total, junkFiltered } = await getAgentsWithScores({
+    const { agents, total, junkFiltered, truncated } = await getAgentsWithScores({
       sort: sortParam as SortOption,
       limit,
       offset,
@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
       includeJunk,
     })
 
-    return apiSuccess(agents, { total, limit, offset, junkFiltered })
+    // truncated: the corpus fetch hit its cap, so `total` counts only fetched rows (REPO_MAP §7 rule 1).
+    return apiSuccess(agents, { total, limit, offset, junkFiltered, truncated })
   } catch (error) {
     console.error('[API] /agents error:', error)
     return apiError('Internal server error', 500)

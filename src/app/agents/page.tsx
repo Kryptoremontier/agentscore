@@ -48,6 +48,7 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
+import { fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine } from '@/lib/agent-list'
 import {
   readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, measuredTier, NO_STAKE_TOOLTIP,
 } from '@/lib/score-basis'
@@ -131,6 +132,10 @@ function AgentsPageContent() {
 
   const [agents, setAgents] = useState<GraphQLAgent[]>([])
   const [agentJunkFilteredCount, setAgentJunkFilteredCount] = useState(0)
+  // Raw fetched rows / corpus size / truncation for the header (REPO_MAP §7 rule 1).
+  const [agentCorpusMeta, setAgentCorpusMeta] = useState<{ fetched: number; total: number | null; truncated: boolean | null }>(
+    { fetched: 0, total: null, truncated: null },
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -139,8 +144,8 @@ function AgentsPageContent() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
   const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>([])
-  const [cohortTotal, setCohortTotal] = useState(0)
-  const [cohortTruncated, setCohortTruncated] = useState(false)
+  const [cohortTotal, setCohortTotal] = useState<number | null>(null)
+  const [cohortTruncated, setCohortTruncated] = useState<boolean | null>(null)
   const [cohortLoading, setCohortLoading] = useState(true)
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
@@ -268,87 +273,16 @@ function AgentsPageContent() {
     }
   }, [])
 
-  const fetchAgents = async (search = '') => {
+  const fetchAgents = async () => {
     setLoading(true)
     setError(null)
     try {
-      const whereConditions = [AGENT_WHERE_STR]
-      if (search) {
-        whereConditions.push(`{ label: { _ilike: "%${search}%" } }`)
-      }
-
-      const whereClause = whereConditions.length > 0
-        ? `where: { _and: [${whereConditions.join(', ')}] }`
-        : ''
-
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query {
-              atoms(
-                ${whereClause}
-                limit: 50
-                order_by: { created_at: desc }
-              ) {
-                term_id
-                label
-                data
-                type
-                emoji
-                created_at
-                creator { label id }
-                positions_aggregate {
-                  aggregate {
-                    count
-                    sum { shares }
-                  }
-                }
-                as_subject_triples(
-                  where: { predicate_id: { _eq: "0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba" } }
-                  limit: 1
-                ) { counter_term_id }
-              }
-            }
-          `
-        })
-      })
-      const data = await response.json()
-      if (data.errors) throw new Error(data.errors[0].message)
-
-      const atoms: GraphQLAgent[] = data.data.atoms || []
-
-      // Batch-fetch oppose vault shares for all trust triples
-      const counterTermIds = atoms
-        .map(a => a.as_subject_triples?.[0]?.counter_term_id)
-        .filter(Boolean) as string[]
-
-      if (counterTermIds.length > 0) {
-        try {
-          const opposeRes = await fetch(GRAPHQL_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
-            })
-          })
-          const opposeData = await opposeRes.json()
-          const opposeMap = new Map<string, bigint>()
-          for (const pos of opposeData.data?.positions ?? []) {
-            const prev = opposeMap.get(pos.term_id) || 0n
-            try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
-          }
-          // Annotate atoms with their oppose counterTermId (used in card trust calc)
-          for (const atom of atoms) {
-            const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-            if (ctid && opposeMap.has(ctid)) {
-              // Store oppose shares in a synthetic field for the card renderer
-              ;(atom as any).__opposeWei = opposeMap.get(ctid) || 0n
-            }
-          }
-        } catch { /* non-critical, cards fall back to opposeWei=0 */ }
-      }
+      // The AgentScore CORPUS — fetched once, never search-dependent (search is
+      // client-side, same rule for both corpora). Rows + a same-filter aggregate
+      // count, so a capped fetch reports its truncation (lib/agent-list.ts).
+      const corpus = await fetchAgentListCorpus<GraphQLAgent>()
+      const atoms = corpus.rows
+      setAgentCorpusMeta({ fetched: atoms.length, total: corpus.total, truncated: corpus.truncated })
 
       for (const atom of atoms) atom.origin = 'agentscore'
 
@@ -419,10 +353,8 @@ function AgentsPageContent() {
     }
   }, [agents, cohortAgents, searchParams])
 
-  useEffect(() => {
-    const timer = setTimeout(() => fetchAgents(searchTerm), 500)
-    return () => clearTimeout(timer)
-  }, [searchTerm])
+  // Search no longer re-queries the server: it filters both corpora client-side
+  // (grid below), so the header's corpus totals can't move while typing.
 
   // Sync selectedAgent with latest agents data after refetch
   useEffect(() => {
@@ -1012,7 +944,7 @@ function AgentsPageContent() {
 
       // Refetch after 2s (indexer lag) + again at 5s (backup)
       const refetchAll = () => {
-        fetchAgents(searchTerm)
+        fetchAgents()
         fetchAgentSignals(agent.term_id, pendingVote.counterTermId)
           .then(({ signals, totalCount }) => {
             setAgentSignals(signals)
@@ -1605,9 +1537,20 @@ function AgentsPageContent() {
             <div className="flex items-center gap-2 mt-4">
               <div className="w-2 h-2 rounded-full bg-[#C8963C] animate-pulse" />
               <span className="text-xs text-[#7A838D]">
-                {agents.length} AgentScore{cohortAgents.length > 0 ? ` · ${cohortAgents.length} ERC-8004` : ''}
-                {agentJunkFilteredCount > 0 ? ` · ${agentJunkFilteredCount} hidden` : ''}
-                {cohortTruncated ? ` · showing first ${cohortAgents.length} of ${cohortTotal}` : ''} · GraphQL live feed
+                {/* Corpus totals only — no search/filter input (lib/agent-list.ts). */}
+                {[
+                  ...agentListHeaderSegments({
+                    agentScore: {
+                      kept: agents.length,
+                      junk: agentJunkFilteredCount,
+                      fetched: agentCorpusMeta.fetched,
+                      total: agentCorpusMeta.total,
+                      truncated: agentCorpusMeta.truncated,
+                    },
+                    cohort: { count: cohortAgents.length, total: cohortTotal, truncated: cohortTruncated },
+                  }),
+                  'GraphQL live feed',
+                ].join(' · ')}
               </span>
             </div>
           </motion.div>
@@ -1740,7 +1683,7 @@ function AgentsPageContent() {
           {error && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg mb-6">
               <p className="text-red-400">Error: {error}</p>
-              <button onClick={() => fetchAgents(searchTerm)} className="mt-2 text-sm text-accent-cyan hover:underline">
+              <button onClick={() => fetchAgents()} className="mt-2 text-sm text-accent-cyan hover:underline">
                 Try again →
               </button>
             </div>
@@ -1789,17 +1732,19 @@ function AgentsPageContent() {
 
           {/* Agents Grid */}
           {!(loading || cohortLoading) && (agents.length + cohortAgents.length) > 0 && (() => {
-            // Etap 2c: merge AgentScore + ERC-8004 cohort per originFilter. Cohort wasn't
-            // server-side search-filtered (single fetch, no score data) — apply client-side.
-            const searchedCohort = searchTerm
-              ? cohortAgents.filter(a => a.label.toLowerCase().includes(searchTerm.toLowerCase()))
-              : cohortAgents
+            // Etap 2c: merge AgentScore + ERC-8004 cohort per originFilter. sourceAgents is the
+            // origin's CORPUS; search (one rule for both corpora — the displayed name or the raw
+            // label) and the quality filter narrow it below. The results line prints the
+            // narrowed count; the header above prints corpus totals only.
             const sourceAgents =
               originFilter === 'agentscore' ? agents :
-              originFilter === 'erc8004' ? searchedCohort :
-              [...agents, ...searchedCohort]
+              originFilter === 'erc8004' ? cohortAgents :
+              [...agents, ...cohortAgents]
+            const searchedAgents = searchTerm
+              ? sourceAgents.filter(a => matchesAgentSearch(searchTerm, [getAgentNameFromAtom(a), effectiveLabel(a)]))
+              : sourceAgents
 
-            const enriched = sourceAgents.map(agent => {
+            const enriched = searchedAgents.map(agent => {
               // null = the vault was never read (cohort rows) — not zero (lib/score-basis.ts).
               const supportWei = readSharesWei(agent.positions_aggregate)
               const opposeWei: bigint = (agent as any).__opposeWei ?? 0n
@@ -1825,8 +1770,15 @@ function AgentsPageContent() {
             >
               <div className="mb-6 flex items-center justify-between">
                 <p className="text-sm text-[#7A838D]">
-                  <span className="font-semibold text-white">{sorted.length}</span>
-                  {sorted.length !== sourceAgents.length && <span className="text-[#4A5260]"> of {sourceAgents.length}</span>} agents
+                  {(() => {
+                    const line = agentResultsLine(sorted.length, sourceAgents.length)
+                    return (
+                      <>
+                        <span className="font-semibold text-white">{line.shown}</span>
+                        {line.of != null && <span className="text-[#4A5260]"> of {line.of}</span>} {line.noun}
+                      </>
+                    )
+                  })()}
                   {selectedCategory !== 'all' && (
                     <span className="text-[#4A5260]"> · <span className="text-[#B5BDC6]">{selectedCategory}</span></span>
                   )}
@@ -1872,9 +1824,11 @@ function AgentsPageContent() {
 
               {sorted.length === 0 ? (
                 <div className="text-center py-16">
-                  <p className="text-[#7A838D] text-sm">No agents match this filter</p>
+                  <p className="text-[#7A838D] text-sm">
+                    {searchTerm ? <>No agents match &quot;{searchTerm}&quot;{selectedCategory !== 'all' ? ' in this filter' : ''}</> : 'No agents match this filter'}
+                  </p>
                   <button
-                    onClick={() => setSelectedCategory('all')}
+                    onClick={() => { setSelectedCategory('all'); setSearchTerm('') }}
                     className="mt-2 text-xs text-[#C8963C] hover:underline"
                   >
                     Show all agents

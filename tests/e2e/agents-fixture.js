@@ -113,8 +113,11 @@ function answer(query, variables = {}) {
     const ids = new Set(variables.vaultIds ?? [])
     return { positions: ATTESTATIONS.filter((a) => ids.has(a.term_id)).flatMap((a) => a.positions.map((p) => ({ term_id: a.term_id, ...p }))) }
   }
-  if (query.includes('atoms_aggregate')) return failAgents ? null : { atoms_aggregate: { aggregate: { count: AS_ROWS.length } } }
-  if (query.includes('atoms(')) return failAgents ? null : { atoms: AS_ROWS }
+  // /agents asks for rows and their same-filter count in ONE request (lib/agent-list.ts).
+  if (query.includes('atoms(') || query.includes('atoms_aggregate')) {
+    if (failAgents) return null
+    return { atoms: AS_ROWS, atoms_aggregate: { aggregate: { count: AS_ROWS.length } } }
+  }
   if (query.includes('positions_aggregate')) return { positions_aggregate: { aggregate: { count: 0, sum: { shares: null } } } }
   if (query.includes('positions(')) return { positions: [] }
   if (query.includes('signals')) return { signals: [], signals_aggregate: { aggregate: { count: 0 } } }
@@ -127,6 +130,12 @@ async function newFixturePage(browser, contextOptions) {
   await ctx.route('**/*', (route) => {
     const req = route.request()
     const url = req.url()
+    // The landing badge's corpus total comes from /api/v1/agents (server-side read) —
+    // answer it from the same fixture so the badge matches the rows.
+    if (url.startsWith(BASE + '/api/v1/agents?limit=1')) {
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [], meta: { total: AS_ROWS.length, truncated: false } }) })
+    }
     if (url.startsWith(BASE)) return route.continue()
     if (url.includes('/v1/graphql')) {
       // Cross-origin JSON POST → preflight; fulfilled responses need CORS headers.

@@ -63,11 +63,16 @@ export interface CohortAgent {
 
 export interface CohortFetchResult {
   agents: CohortAgent[]
-  /** True count of matching identity triples, from a separate aggregate query (no row fetch). */
-  total: number
-  /** True when `total` exceeds COHORT_FETCH_LIMIT — some real cohort agents are not in `agents`.
+  /**
+   * Number of DISTINCT cohort agents (subjects) in the registry — the same unit
+   * as `agents.length`. Exact when the fetch was not capped; otherwise from a
+   * distinct-subject aggregate on the identical filter; null when that count is
+   * unavailable at the cap (never guessed).
+   */
+  total: number | null
+  /** True when some real cohort agents are not in `agents`; null = unknown.
    *  Thesis §6: never silently drop. Callers MUST surface this, not just render `agents`. */
-  truncated: boolean
+  truncated: boolean | null
 }
 
 // Hard cap on the identity query below. Testnet is at 264 live (2026-09-15) — dormant until the
@@ -171,17 +176,23 @@ async function fetchClassification(predicateIds: readonly string[], termIds: rea
  * Dedups agents with >1 same-as CAIP triple (rare, seen live: 1/168).
  * Attaches declared OASF skills/domains via chunked batched queries.
  *
- * `total` comes from a separate aggregate query on the identical filter —
- * cheap (no row fetch) — so `truncated` reflects the real underlying count,
- * not just "did we get exactly COHORT_FETCH_LIMIT rows back."
+ * `total` counts distinct cohort agents — the unit `agents` is in. When the
+ * fetch hit its cap, it comes from a distinct-subject aggregate on the
+ * identical filter (cheap, no row fetch), so `truncated` reflects the real
+ * underlying count rather than "did we get exactly COHORT_FETCH_LIMIT rows back".
  */
 export async function fetchCohortAgents(): Promise<CohortFetchResult> {
   const empty: CohortFetchResult = { agents: [], total: 0, truncated: false }
   if (!APP_CONFIG.GRAPHQL_URL) return empty
   try {
+    // ONE filter for the rows and the count (REPO_MAP §7 rule 1: "the SAME filter"). The
+    // LIKE matches the registry-contract pattern the JS guard below checks (it used to be the
+    // broader "%erc721:0x8004%", so the count included objects the list then dropped), and a
+    // row with no subject can't become an agent, so it isn't counted either.
     const sameAsFilter = `
       predicate_id: { _eq: "${SAME_AS_PREDICATE_ID}" }
-      object: { label: { _ilike: "%erc721:0x8004%" } }
+      object: { label: { _ilike: "%erc721:0x8004a169%" } }
+      subject_id: { _is_null: false }
     `
     const [sameAsData, countData] = await Promise.all([
       gql<{ triples: SameAsRow[] }>(`
@@ -193,25 +204,33 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
           }
         }
       `),
+      // Distinct SUBJECTS, not triples: an agent with 2 same-as triples is one agent
+      // (the list dedups it), so the total must count it once too.
       gql<{ triples_aggregate: { aggregate: { count: number } } }>(`
         query GetErc8004CohortCount {
           triples_aggregate(where: { ${sameAsFilter} }) {
-            aggregate { count }
+            aggregate { count(columns: [subject_id], distinct: true) }
           }
         }
       `).catch(() => null),
     ])
 
-    const rows = (sameAsData?.triples ?? []).filter(
+    const rawRows = sameAsData?.triples ?? []
+    const rows = rawRows.filter(
       (r) => r.subject?.term_id && r.object?.label && ERC8004_CAIP_PATTERN.test(r.object.label)
     )
-    // A count-query failure must never look like "truncated: false, total: 0" (that reads as
-    // an empty cohort, not an unknown total) — fall back to the row count we did get, so
-    // `truncated` stays a safe `false` rather than lying in either direction.
-    const total = countData?.triples_aggregate?.aggregate?.count ?? rows.length
-    const truncated = total > COHORT_FETCH_LIMIT
+    // A fetch that returned fewer rows than its cap is complete: the deduped agent count
+    // below IS the total. Only at the cap does the aggregate decide — and if it failed
+    // there, total/truncated are unknown (null), never a substituted rows.length.
+    const complete = rawRows.length < COHORT_FETCH_LIMIT
+    const distinctTotal = countData?.triples_aggregate?.aggregate?.count
+    const countedTotal = typeof distinctTotal === 'number' ? distinctTotal : null
 
-    if (rows.length === 0) return { agents: [], total, truncated }
+    if (rows.length === 0) {
+      return complete
+        ? { agents: [], total: 0, truncated: false }
+        : { agents: [], total: countedTotal, truncated: countedTotal == null ? null : countedTotal > 0 }
+    }
 
     // Dedup: keep the earliest same-as triple per subject.
     const bySubject = new Map<string, SameAsRow>()
@@ -245,6 +264,8 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
       })
       .sort((a, b) => a.label.localeCompare(b.label))
 
+    const total = complete ? agents.length : countedTotal
+    const truncated = complete ? false : countedTotal == null ? null : countedTotal > agents.length
     return { agents, total, truncated }
   } catch (err) {
     console.warn('[fetchCohortAgents] Network/GraphQL error:', err)

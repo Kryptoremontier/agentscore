@@ -71,7 +71,7 @@ const handler = createMcpHandler(
       },
       async ({ sort, minTrust, limit, includeJunk }) => {
         try {
-          const { agents, junkFiltered } = await getAgentsWithScores({
+          const { agents, total, junkFiltered, truncated } = await getAgentsWithScores({
             sort: sort || 'score',
             limit: limit || 20,
             offset: 0,
@@ -94,8 +94,10 @@ const handler = createMcpHandler(
                   skills: a.skillCount,
                   ...(a.junkReason ? { junkReason: a.junkReason } : {}),
                 })),
-                total: agents.length,
+                // Corpus total after filters — was agents.length, i.e. the page size.
+                total,
                 junkFiltered,
+                truncated,
                 network: process.env.NEXT_PUBLIC_NETWORK || 'testnet',
               }, null, 2),
             }],
