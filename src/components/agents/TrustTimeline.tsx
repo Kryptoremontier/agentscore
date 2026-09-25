@@ -40,7 +40,8 @@ interface TrustTimelineProps {
   agentId: string
   agentName: string
   createdAt: string
-  currentScore: number
+  /** null = no measured score (the modal shows "—"). */
+  currentScore: number | null
   currentTier: string
   agentSignals: AgentSignal[]
   counterTermId?: string | null
@@ -324,7 +325,8 @@ export function TrustTimeline({
     : timeline.events
 
   const { summary } = timeline
-  const hasChart = timeline.scoreHistory.length >= 2
+  // ≥2 real points needed for a trend — and a measured current score to pin the end to.
+  const hasChart = timeline.scoreHistory.length >= 2 && currentScore != null
 
   return (
     <div className="p-5">
@@ -388,7 +390,7 @@ export function TrustTimeline({
           >
             <ScoreTrajectoryChart
               scoreHistory={timeline.scoreHistory}
-              currentScore={currentScore}
+              currentScore={currentScore!}
             />
           </div>
         ) : (

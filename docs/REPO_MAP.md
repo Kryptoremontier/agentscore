@@ -10,7 +10,7 @@
 ### 2. API Routes (`src/app/api`)
 **`/api/v1`** (Trust API, all wrapped in `apiSuccess`/`apiError`, CORS `*`):
 - `GET /api/v1` — index of all endpoints
-- `GET /api/v1/agents` — list agents w/ scores (sort: score/stakers/newest), revalidate 300. Test-fixture atoms and duplicate re-registrations are filtered out by default (`lib/agent-junk-filter.ts`, §3) and counted in `meta.junkFiltered`; pass `?includeJunk=true` to get all atoms back, each junk one tagged with a `junkReason`.
+- `GET /api/v1/agents` — list agents w/ scores (sort: score/stakers/newest), revalidate 300. Test-fixture atoms and duplicate re-registrations are filtered out by default (`lib/agent-junk-filter.ts`, §3) and counted in `meta.junkFiltered`; pass `?includeJunk=true` to get all atoms back, each junk one tagged with a `junkReason`. Every row carries **`scoreBasis: 'measured' | 'prior'`** next to the unchanged `score` envelope (also on `/agents/:id`): `'prior'` = the atom holds no stake (support + oppose shares = 0), so `score.trustScore` is the engine's neutral 50 anchor and `agentScore`/`objectScore` rest on it — not a measurement; consumers should render it as "—". Same rule as the UI (`lib/score-basis.ts`, §4).
 - `GET /api/v1/agents/:id` — agent detail
 - `GET /api/v1/agents/:id/trust` — full trust/quality/object score breakdown
 - `GET /api/v1/agents/:id/card` — A2A-compatible agent card (detail+trust in parallel)
@@ -34,7 +34,7 @@
 
 **Other:**
 - `GET/POST /api/mcp` — 307 redirect to `/api/mcp/mcp`
-- `GET/POST /api/mcp/[transport]` — MCP server (`mcp-handler`), 9 tools wired here (search/detail/trust/domains/evaluators/query/stats/register/timeline)
+- `GET/POST /api/mcp/[transport]` — MCP server (`mcp-handler`), 9 tools wired here (search/detail/trust/domains/evaluators/query/stats/register/timeline). Agent rows in `search_agents`, `get_agent_trust` (`agent`), `compare_agents`, `trust_query` and `get_domain_ranking` carry the same `scoreBasis` field (domain rows: basis = the domain triple's own stake).
 - `GET /api/feedback` — list feedback entries (admin-token protected)
 - `POST /api/feedback` — submit feedback (public)
 - `PATCH /api/feedback/:id` — mark resolved (admin-token protected)
@@ -64,6 +64,7 @@ interface ScoreEnvelope {
 ```
 - **`lib/scoring/engine.ts`** → `computeScoreEnvelope(input: ComputeScoreInput): ScoreEnvelope` — thin orchestrator, delegates math.
 - **`lib/hybrid-trust.ts`** → `calculateHybridScore(trustScore, compositeScore, supportRatio): number` (60/40 blend, rounded to 0.1) and `getHybridLevel(score): TrustLevel` (80/60/40/20 bands).
+- **`lib/score-basis.ts`** → `hasMeasuredScore({ supportWei, opposeWei })`: the ONE rule for whether a trust score may be printed — total stake on the atom (support + oppose shares) > 0 with the support side actually read (`readSharesWei` returns `null` for a never-fetched aggregate, `0n` for a fetched empty one). At zero stake `calculateTrustScoreFromStakes` returns its neutral 50 anchor (confidence 0); that formula is correct and untouched, but the result is a prior, not a measurement. `measuredScore()` → number or `null` ("—" + "No stake yet — nothing to measure."), `qualityBucket()` → level or `'unrated'` (the /agents quality filter never files an unmeasured row under Moderate), `scoreBasisOf()` → the API's `scoreBasis`. Gate on stake, never on staker count: a zero-share position still counts in `positions_aggregate.count`.
 - **`lib/composite-trust.ts`** → `calculateCompositeTrust(input: CompositeTrustInput): CompositeResult` — 4-pillar composite (signal 40%, staker diversity 25% log2-scaled, stability 25%, price retention 10%); also whale-exit helpers (`getMaxDailySell`, `getLoyaltyMultiplier`).
 - **`lib/evaluator-score.ts`** → `calculateEvaluatorScore(address, positions, options): EvaluatorProfile` — accuracy-weighted evaluator tiering (0.5x–1.5x), consumes `PositionPNL`/`WalletPNL` from pnl-engine when present, falls back to raw trust-score good-pick logic otherwise. Tiers: newcomer/scout/analyst/oracle/sage.
 - **`lib/pnl-engine.ts`** (pure + I/O split):

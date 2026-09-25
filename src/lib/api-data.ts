@@ -10,6 +10,7 @@ import { intuitionTestnet } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR, SKILL_WHERE_STR } from './gql-filters'
 import { calculateTrustScoreFromStakes } from './trust-score-engine'
+import { scoreBasisOf, type ScoreBasis } from './score-basis'
 import { calculateHybridScore, getHybridLevel } from './hybrid-trust'
 import { calculateCompositeTrust, calculateStableDays, findPeakPrice } from './composite-trust'
 import { calculateWeightedTrust } from './reputation-decay'
@@ -139,6 +140,14 @@ export type AgentApiItem = {
   name: string
   rawLabel?: string    // original atom label — may be JSON (Phase 2A+) or plain string (legacy)
   score: ScoreEnvelope
+  /**
+   * Whether `score` is a measurement. 'prior' = the atom holds no stake
+   * (support + oppose shares = 0): trustScore is the engine's neutral 50 anchor
+   * and objectScore/agentScore rest on it — not a measurement. The envelope is
+   * unchanged for existing consumers; honest consumers render 'prior' as "—".
+   * Same rule as the UI: lib/score-basis.ts.
+   */
+  scoreBasis: ScoreBasis
   /** @deprecated Use score.objectScore ?? score.trustScore instead. Removed in next major. */
   agentScore: number
   trustTier: string
@@ -237,6 +246,7 @@ function rowToAgentItem(row: AgentRow, opposeWei: bigint): AgentApiItem {
     name: cleanLabel(effLabel),
     rawLabel: effLabel,
     score,
+    scoreBasis: scoreBasisOf({ supportWei, opposeWei }),
     agentScore,
     trustTier: trustTier.tier,
     momentum: Math.round(trustResult.momentum * 10) / 10,
@@ -825,6 +835,8 @@ export async function getDomainAgents(
       agentId: a.agentId,
       agentName: a.agentName,
       domainScore: a.domainScore,
+      // Domain stake basis: 'prior' when the domain triple holds no stake.
+      scoreBasis: scoreBasisOf({ supportWei: a.supportShares, opposeWei: a.opposeShares }),
       supportRatio: a.supportRatio,
       stakerCount: a.stakerCount,
       level: a.level,
@@ -1008,6 +1020,7 @@ export async function trustQuery(params: {
         qualityScore: null,
         softGateActive: false,
       }),
+      scoreBasis: scoreBasisOf({ supportWei: a.supportShares, opposeWei: a.opposeShares }),
       agentId: a.agentId,
       agentName: a.agentName,
       domainScore: a.domainScore,
@@ -1026,6 +1039,7 @@ export async function trustQuery(params: {
 
     const results = filtered.slice(0, limit).map(a => ({
       score: a.score,
+      scoreBasis: a.scoreBasis,
       agentId: a.id,
       agentName: a.name,
       agentScore: a.agentScore,

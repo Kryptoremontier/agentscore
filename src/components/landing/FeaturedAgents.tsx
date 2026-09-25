@@ -7,6 +7,7 @@ import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
+import { readSharesWei, hasMeasuredScore, measuredScore, NO_STAKE_TOOLTIP } from '@/lib/score-basis'
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
@@ -342,11 +343,14 @@ export function FeaturedAgents() {
                         const name = cleanAtomName(effLabel)
                         const description = getDescription(effLabel, cfg.prefix)
                         const stakers = item.positions_aggregate?.aggregate?.count || 0
-                        const sharesWei = BigInt(item.positions_aggregate?.aggregate?.sum?.shares || '0')
-                        const totalStaked = Number(sharesWei) / 1e18
+                        const sharesWei = readSharesWei(item.positions_aggregate)
+                        const totalStaked = Number(sharesWei ?? 0n) / 1e18
                         const opposeWei: bigint = (item as any).__opposeWei ?? 0n
-                        const trust = calculateTrustScoreFromStakes(sharesWei, opposeWei)
-                        const scoreColor = trust.score >= 70 ? '#2ECC71' : trust.score >= 50 ? '#EAB308' : '#EF4444'
+                        // Only a measured score is printed: at zero stake the formula returns
+                        // its 50 prior, which is not a measurement (lib/score-basis.ts).
+                        const measured = hasMeasuredScore({ supportWei: sharesWei, opposeWei })
+                        const score = measuredScore(calculateTrustScoreFromStakes(sharesWei ?? 0n, opposeWei), measured)
+                        const scoreColor = score == null ? '#7A838D' : score >= 70 ? '#2ECC71' : score >= 50 ? '#EAB308' : '#EF4444'
                         const IconComp = cfg.icon
                         return (
                           <motion.div key={item.term_id}
@@ -366,7 +370,11 @@ export function FeaturedAgents() {
                               >
                                 {/* Score */}
                                 <div className="absolute top-4 right-4 text-right">
-                                  <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }}>{trust.score}</span>
+                                  {score != null ? (
+                                    <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }}>{score}</span>
+                                  ) : (
+                                    <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }} title={NO_STAKE_TOOLTIP}>—</span>
+                                  )}
                                   <span className="block text-[10px] text-[#4A5260]">Score</span>
                                 </div>
 
@@ -392,8 +400,10 @@ export function FeaturedAgents() {
                                 </div>
 
                                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full transition-all"
-                                    style={{ width: `${trust.score}%`, backgroundColor: scoreColor }} />
+                                  {score != null && (
+                                    <div className="h-full rounded-full transition-all"
+                                      style={{ width: `${score}%`, backgroundColor: scoreColor }} />
+                                  )}
                                 </div>
                               </div>
                             </Link>

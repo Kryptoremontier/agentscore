@@ -8,15 +8,18 @@
  * the app's own render cost at a chosen cohort size — independent of live
  * testnet data volume or latency. Fixture shape: the 9 live AgentScore rows
  * (stake/staker counts as returned by /api/v1/agents on 2026-09-24) + N
- * synthetic ERC-8004 cohort rows.
+ * ERC-8004 cohort rows (row 0 = Captain Dackie, real id; the rest synthetic),
+ * plus the reference attestations (see ATTESTATIONS).
  *
  * Needs a running app (production build recommended — dev-mode React is
  * several times slower and not what users get):
  *   npm run build && npx next start -p 3100
  * then:
  *   node tests/e2e/agents-fixture.js measure [rows=264] [cpuThrottle=1] [runs=5] [baseUrl]
- *   node tests/e2e/agents-fixture.js shots   [rows=264] [baseUrl]
- * Shots go to screenshots/<date>/synthetic/<viewport>/ (gitignored) — they are
+ *   node tests/e2e/agents-fixture.js shots   [rows=264] [label=synthetic] [baseUrl]
+ *   FIXTURE_FAIL=cohort|agents|both node tests/e2e/agents-fixture.js shots 264 <label>
+ *     (forces those reads to fail — captures the error states of the header)
+ * Shots go to screenshots/<date>/<label>/<viewport>/ (gitignored) — they are
  * FIXTURE renders, never evidence of live data.
  */
 const { chromium } = require('@playwright/test')
@@ -26,17 +29,40 @@ const [, , MODE = 'measure', ...rest] = process.argv
 const N = Number(rest[0] ?? 264)
 const THROTTLE = MODE === 'measure' ? Number(rest[1] ?? 1) : 1
 const RUNS = MODE === 'measure' ? Number(rest[2] ?? 5) : 1
-const BASE = (MODE === 'measure' ? rest[3] : rest[1]) ?? 'http://localhost:3100'
+const BASE = (MODE === 'measure' ? rest[3] : rest[2]) ?? 'http://localhost:3100'
+// shots only: output folder under screenshots/<date>/ (e.g. synthetic-before, synthetic-after).
+const LABEL = (MODE === 'shots' ? rest[1] : null) ?? 'synthetic'
 
 // ── Fixture ──────────────────────────────────────────────────────────────────
+// The three reference agents keep their REAL term ids so shots and assertions
+// name real rows. Values are live where recorded: AgentScore stake/staker counts
+// from /api/v1/agents (2026-09-24); Dackie 1 attester / 0.0099 tTRUST on
+// Crypto (commit 5e898f4, live 2026-09-15). Luda's attestation stake (1e15) is
+// the unit-test fixture value, not a recorded live number.
+const REF = {
+  dackie: '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb',
+  luda: '0x82d87d9517b68e653418c0e49805b36aca3e33a00536af25fc319f5c24802c5a',
+  openclaw: '0x0d579846f21a66f35efafb2339d182e27560ec9f9d8ea64f7f1d9929d20a2d7d',
+}
+const BUCKET = {
+  crypto: '0xecc2b1dce5f8269777d9001faa532642691d7038eed3c639f04895ac5b312d42',
+  knowledge: '0x8a0e3710014141458ee303a6cc504704ee3da370450d7f5cd5a898186a2f66e4',
+}
+const W1 = '0x139219107C1eBE569f543C581b3B807Cf6740006'
+
 const AS_ROWS = [
-  ['OPEN CLAW', '335061000000000000', 1], ['Code Helper AI', '224900000000000000', 3],
-  ['AGI Tracker', '117600000000000000', 1], ['AgentScore Sorting Agent', '99960000000000000', 2],
-  ['CodeBuddy', '98980000000000000', 2], ['Talaria', '49980000000000000', 1],
-  ['Luda', '980000000000000', 1], ['On-Chain Data Analyzer', '0', 1], ['Agent Avatar Coder', '0', 1],
-].map(([name, shares, count], i) => ({
-  term_id: '0xa9e0' + (i + 1).toString(16).padStart(60, '0'),
-  label: `Agent: ${name}`, data: null, type: 'Thing', emoji: null,
+  [REF.openclaw, 'Agent: OPEN CLAW from Kryptoremontier - OPEN CLAW from Kryptoremontier for Testing AgentScore.', '335061000000000000', 1],
+  [null, 'Agent:INTU: Code Helper AI - First On-Chain with Full reputation and identity Helper AI for Coding systems.', '224900000000000000', 3],
+  [null, 'AGI Tracker - AGI Tracker for AGI Models', '117600000000000000', 1],
+  [null, 'AgentScore Sorting Agent', '99960000000000000', 2],
+  [null, 'Agent: CodeBuddy - Suggest buddy for coding explanation.', '98980000000000000', 2],
+  [null, 'Agent:INTU:Talaria', '49980000000000000', 1],
+  [REF.luda, '{"@context":"https://schema.org","@type":"Thing","name":"Luda","description":"AI watch for ludarep"}', '980000000000000', 1],
+  [null, 'Skill: On-Chain Data Analyzer - Reads and interprets blockchain transaction data.', '0', 1],
+  [null, 'Agent: Agent Avatar Coder - Agent Avatar Coder from Kryptoremontier', '0', 1],
+].map(([id, label, shares, count], i) => ({
+  term_id: id ?? '0xa9e0' + (i + 1).toString(16).padStart(60, '0'),
+  label, data: null, type: 'Thing', emoji: null,
   created_at: new Date(Date.UTC(2026, 1, 1 + i)).toISOString(),
   creator: { label: 'x', id: '0x0' },
   positions_aggregate: { aggregate: { count, sum: { shares } } },
@@ -44,10 +70,11 @@ const AS_ROWS = [
 }))
 
 // Zero-padded after a fixed prefix — padding with a hex digit would collide ids.
-const cohortId = (i) => '0xc0de' + (i + 1).toString(16).padStart(60, '0')
+// Row 0 is Captain Dackie (real id); the rest are synthetic.
+const cohortId = (i) => (i === 0 ? REF.dackie : '0xc0de' + (i + 1).toString(16).padStart(60, '0'))
 const COHORT = Array.from({ length: N }, (_, i) => ({
   created_at: new Date(Date.UTC(2026, 6, 1) + i * 60000).toISOString(),
-  subject: { term_id: cohortId(i), label: `Cohort Agent ${String(i).padStart(3, '0')}` },
+  subject: { term_id: cohortId(i), label: i === 0 ? 'Captain Dackie' : `Cohort Agent ${String(i).padStart(3, '0')}` },
   object: { label: `eip155:8453/erc721:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432/${1000 + i}` },
 }))
 const CLASSIFICATION = COHORT.flatMap((c, i) => [
@@ -55,11 +82,39 @@ const CLASSIFICATION = COHORT.flatMap((c, i) => [
   { subject_id: c.subject.term_id, object: { term_id: '0xd' + (i % 5), label: `domain_${i % 5}` } },
 ])
 
-function answer(query) {
-  if (query.includes('GetErc8004CohortCount')) return { triples_aggregate: { aggregate: { count: N } } }
-  if (query.includes('GetErc8004Cohort')) return { triples: COHORT }
+// Attestation triples ([agent] — is skilled in — [bucket]) and their vault positions.
+const ATTESTATIONS = [
+  { term_id: '0xa77e57000000000000000000000000000000000000000000000000000000d4c1', counter_term_id: null,
+    subject: { term_id: REF.dackie, label: 'Captain Dackie' }, object: { term_id: BUCKET.crypto },
+    positions: [{ account_id: W1, shares: '9900000000000000' }] },
+  { term_id: '0xa77e57000000000000000000000000000000000000000000000000000000d4c2', counter_term_id: null,
+    subject: { term_id: REF.luda, label: 'Luda' }, object: { term_id: BUCKET.knowledge },
+    positions: [{ account_id: W1, shares: '1000000000000000' }] },
+]
+
+// FIXTURE_FAIL=cohort|agents|both makes those reads fail (HTTP 500), to capture error states.
+const FAIL = process.env.FIXTURE_FAIL ?? ''
+
+function answer(query, variables = {}) {
+  const failCohort = FAIL === 'cohort' || FAIL === 'both'
+  const failAgents = FAIL === 'agents' || FAIL === 'both'
+  if (query.includes('GetErc8004Cohort')) {
+    if (failCohort) return null
+    return query.includes('GetErc8004CohortCount')
+      ? { triples_aggregate: { aggregate: { count: N } } }
+      : { triples: COHORT }
+  }
   if (query.includes('GetCohortClassification')) return { triples: CLASSIFICATION }
-  if (query.includes('atoms(')) return { atoms: AS_ROWS }
+  if (query.includes('GetAttestationTriples')) {
+    const rows = ATTESTATIONS.filter((a) => !variables.subject || a.subject.term_id === variables.subject)
+    return { triples: rows.map(({ positions, ...t }) => t) }
+  }
+  if (query.includes('GetAttestationPositions')) {
+    const ids = new Set(variables.vaultIds ?? [])
+    return { positions: ATTESTATIONS.filter((a) => ids.has(a.term_id)).flatMap((a) => a.positions.map((p) => ({ term_id: a.term_id, ...p }))) }
+  }
+  if (query.includes('atoms_aggregate')) return failAgents ? null : { atoms_aggregate: { aggregate: { count: AS_ROWS.length } } }
+  if (query.includes('atoms(')) return failAgents ? null : { atoms: AS_ROWS }
   if (query.includes('positions_aggregate')) return { positions_aggregate: { aggregate: { count: 0, sum: { shares: null } } } }
   if (query.includes('positions(')) return { positions: [] }
   if (query.includes('signals')) return { signals: [], signals_aggregate: { aggregate: { count: 0 } } }
@@ -77,9 +132,11 @@ async function newFixturePage(browser, contextOptions) {
       // Cross-origin JSON POST → preflight; fulfilled responses need CORS headers.
       const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' }
       if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors })
-      let q = ''
-      try { q = JSON.parse(req.postData() || '{}').query || '' } catch {}
-      return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ data: answer(q) }) })
+      let body = {}
+      try { body = JSON.parse(req.postData() || '{}') } catch {}
+      const data = answer(body.query || '', body.variables || {})
+      if (data === null) return route.fulfill({ status: 500, headers: cors, contentType: 'text/plain', body: 'fixture: forced failure' })
+      return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ data }) })
     }
     return route.abort() // RPC, WalletConnect, analytics — not part of the page's render cost
   })
@@ -165,40 +222,78 @@ const VIEWPORTS = {
   mobile: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
 }
 
-async function shot(browser, vp, name, url, prep, modal) {
+const LIST_READY = (p) => p.getByText(/^\d+( of \d+)? agents?$/)
+  .or(p.getByText(/^Error:/))
+  .or(p.getByText('No agents registered yet'))
+  .first()
+
+/**
+ * opts.prep: steps after the page is ready; opts.modal: capture the modal at
+ * full height; opts.fold: first viewport only (readable crops of huge lists);
+ * opts.ready: custom readiness locator factory (default: /agents results line).
+ */
+// ONLY=name1,name2 re-captures just those shots.
+const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null
+
+async function shot(browser, vp, name, url, opts = {}) {
+  if (ONLY && !ONLY.has(name)) return
   const { ctx, page } = await newFixturePage(browser, { ...VIEWPORTS[vp], colorScheme: 'dark' })
-  await page.goto(BASE + url)
-  await page.getByText(/^\d+( of \d+)? agents?/).first().waitFor({ timeout: 60000 })
-  if (prep) await prep(page)
-  await page.waitForTimeout(2500)
-  const file = path.join(__dirname, '../../screenshots', new Date().toISOString().slice(0, 10), 'synthetic', vp, `${name}.png`)
-  if (modal) {
-    const m = page.locator('div.fixed.inset-0.overflow-y-auto').filter({ hasText: 'Atom ID:' }).first()
-    await m.waitFor({ timeout: 30000 })
-    await page.waitForTimeout(3000)
-    await m.evaluate((el) => {
-      Object.assign(el.style, { position: 'absolute', inset: 'auto', top: getComputedStyle(el).top, left: '0', width: '100%', height: 'auto', overflow: 'visible', backgroundAttachment: 'scroll' })
-      document.body.style.overflow = ''
-    })
-    await m.screenshot({ path: file })
-  } else {
-    await page.screenshot({ path: file, fullPage: true })
+  try {
+    await page.goto(BASE + url)
+    await (opts.ready ?? LIST_READY)(page).waitFor({ timeout: 60000 })
+    if (opts.prep) await opts.prep(page)
+    await page.waitForTimeout(2500)
+    const file = path.join(__dirname, '../../screenshots', new Date().toISOString().slice(0, 10), LABEL, vp, `${name}.png`)
+    if (opts.modal) {
+      const m = page.locator('div.fixed.inset-0.overflow-y-auto').filter({ hasText: 'Atom ID:' }).first()
+      await m.waitFor({ timeout: 30000 })
+      await page.waitForTimeout(3000)
+      await m.evaluate((el) => {
+        Object.assign(el.style, { position: 'absolute', inset: 'auto', top: getComputedStyle(el).top, left: '0', width: '100%', height: 'auto', overflow: 'visible', backgroundAttachment: 'scroll' })
+        document.body.style.overflow = ''
+      })
+      await m.screenshot({ path: file })
+    } else {
+      await page.screenshot({ path: file, fullPage: !opts.fold })
+    }
+    console.log('wrote', path.relative(path.join(__dirname, '../..'), file))
+  } catch (e) {
+    console.log(`skipped ${vp}/${name}: ${e.message.split('\n')[0]}`)
+  } finally {
+    await ctx.close()
   }
-  console.log('wrote', path.relative(path.join(__dirname, '../..'), file))
-  await ctx.close()
+}
+
+const clickIfPresent = (name) => async (p) => {
+  const b = p.getByRole('button', { name, exact: true })
+  if ((await b.count()) === 0) throw new Error(`no "${name}" filter on this build`)
+  await b.first().click()
 }
 
 async function shots() {
   const browser = await chromium.launch()
   for (const vp of Object.keys(VIEWPORTS)) {
+    await shot(browser, vp, 'agents-list-fold', '/agents', { fold: true })
+    if (FAIL) continue // failure runs only need the header/fold state
     await shot(browser, vp, 'agents-list', '/agents')
-    await shot(browser, vp, 'agents-list-erc8004', '/agents', (p) => p.locator('button[title^="Real agents from the ERC-8004"]').click())
-    await shot(browser, vp, 'agents-list-listview', '/agents', (p) => p.getByRole('button', { name: 'List' }).click())
-    await shot(browser, vp, 'agents-quality-moderate', '/agents', (p) => p.getByRole('button', { name: 'Moderate' }).click())
-    await shot(browser, vp, 'agents-quality-low', '/agents', (p) => p.getByRole('button', { name: 'Low' }).click())
+    await shot(browser, vp, 'agents-list-erc8004', '/agents', { prep: (p) => p.locator('button[title^="Real agents from the ERC-8004"]').click() })
+    await shot(browser, vp, 'agents-card-dackie', '/agents', {
+      fold: true,
+      prep: async (p) => {
+        await p.locator('button[title^="Real agents from the ERC-8004"]').click()
+        await p.locator('input[placeholder^="Search agents"]').fill('Dackie')
+      },
+    })
+    await shot(browser, vp, 'agents-list-listview', '/agents', { fold: true, prep: (p) => p.getByRole('button', { name: 'List' }).click() })
+    for (const bucket of ['Moderate', 'Low', 'Unrated']) {
+      await shot(browser, vp, `agents-quality-${bucket.toLowerCase()}`, '/agents', { fold: true, prep: clickIfPresent(bucket) })
+    }
+    await shot(browser, vp, 'modal-dackie', `/agents?open=${REF.dackie}`, { modal: true })
+    await shot(browser, vp, 'modal-luda', `/agents?open=${REF.luda}`, { modal: true })
+    await shot(browser, vp, 'modal-openclaw', `/agents?open=${REF.openclaw}`, { modal: true })
     // "Agent Avatar Coder" shape: 1 position, 0 shares.
-    await shot(browser, vp, 'modal-zero-stake-agentscore', `/agents?open=${AS_ROWS[8].term_id}`, null, true)
-    await shot(browser, vp, 'modal-cohort', `/agents?open=${cohortId(0)}`, null, true)
+    await shot(browser, vp, 'modal-zero-stake-agentscore', `/agents?open=${AS_ROWS[8].term_id}`, { modal: true })
+    await shot(browser, vp, 'landing', '/', { ready: (p) => p.getByText(/indexed$/).first() })
   }
   await browser.close()
 }

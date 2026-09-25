@@ -48,6 +48,10 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
+import {
+  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP,
+  type QualityBucket,
+} from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { filterAgents } from '@/lib/agent-junk-filter'
 
@@ -61,6 +65,10 @@ const debugLog = (...args: unknown[]) => {
 // honest readout of the canonical attestation unit's own threshold.
 const VERIFIED_MIN_ATTESTERS = 3
 const VERIFIED_MIN_TTRUST = '0.1'
+
+// Neutral colour for rows without a measured score — never the yellow "moderate"
+// the 50 prior would otherwise paint them (lib/score-basis.ts).
+const UNRATED_COLOR = '#7A838D'
 
 interface GraphQLAgent {
   term_id: string
@@ -168,6 +176,8 @@ function AgentsPageContent() {
     termId: string | null
     counterTermId: string | null
     loading: boolean
+    /** The lookup failed — "no oppose vault" is unknown, not established. */
+    failed?: boolean
   }>({ termId: null, counterTermId: null, loading: false })
   const [creatingTriple, setCreatingTriple] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -185,6 +195,10 @@ function AgentsPageContent() {
   const [allPositions, setAllPositions] = useState<any[]>([])
   const [combinedStakerCount, setCombinedStakerCount] = useState(0)
   const [positionsLoading, setPositionsLoading] = useState(false)
+  // term_id whose positions were actually read. combinedStakerCount starts at 0 and
+  // positionsLoading starts false, so without this the modal prints "Backers: 0"
+  // before any fetch (and on a failed one).
+  const [positionsLoadedFor, setPositionsLoadedFor] = useState<string | null>(null)
   const [supportSupply, setSupportSupply] = useState(0)
   const [opposeSupply, setOpposeSupply] = useState(0)
   const [onChainPrice, setOnChainPrice] = useState<number | null>(null)
@@ -543,7 +557,7 @@ function AgentsPageContent() {
   const fetchAllPositions = async (
     termId: string,
     counterTermId?: string | null
-  ): Promise<{ positions: any[]; uniqueCount: number }> => {
+  ): Promise<{ positions: any[]; uniqueCount: number } | null> => {
     try {
       const termIds = [termId]
       if (counterTermId) termIds.push(counterTermId)
@@ -571,15 +585,17 @@ function AgentsPageContent() {
         })
       })
       const data = await response.json()
-      const raw = data.data?.positions || []
+      if (data.errors || !data.data) throw new Error(data.errors?.[0]?.message ?? 'no data')
+      const raw = data.data.positions || []
       // Only active holders (shares > 0)
       const active = raw.filter((p: any) => p.shares && BigInt(p.shares) > 0n)
       // Unique wallets
       const wallets = new Set(active.map((p: any) => p.account_id))
       return { positions: active, uniqueCount: wallets.size }
     } catch (e) {
+      // A failed read is not "no positions" — null, and callers keep showing "—".
       console.error('fetchAllPositions error:', e)
-      return { positions: [], uniqueCount: 0 }
+      return null
     }
   }
 
@@ -603,7 +619,7 @@ function AgentsPageContent() {
           counterTermId: triple?.counterTermId ?? null,
           loading: false,
         }))
-        .catch(() => setAgentTriple({ termId: null, counterTermId: null, loading: false }))
+        .catch(() => setAgentTriple({ termId: null, counterTermId: null, loading: false, failed: true }))
     })
   }, [selectedAgent?.term_id])
 
@@ -707,9 +723,12 @@ function AgentsPageContent() {
       }
 
       // Resolve positions for the leaderboard table
-      const { positions, uniqueCount } = await positionsPromise
+      const read = await positionsPromise
+      if (!read) return
+      const { positions, uniqueCount } = read
       setAllPositions(positions)
       setCombinedStakerCount(uniqueCount)
+      setPositionsLoadedFor(termId)
 
       // FALLBACK: compute supply from indexed positions when publicClient is unavailable
       if (!publicClient) {
@@ -736,6 +755,7 @@ function AgentsPageContent() {
     if (!selectedAgent) {
       setAllPositions([])
       setCombinedStakerCount(0)
+      setPositionsLoadedFor(null)
       setSupportSupply(0)
       setOpposeSupply(0)
       setOnChainPrice(null)
@@ -762,17 +782,19 @@ function AgentsPageContent() {
     return () => clearInterval(interval)
   }, [selectedAgent?.term_id, agentTriple.counterTermId])
 
-  // Compute trust score from real on-chain data whenever agent or triple changes
+  // Compute trust score from real on-chain data whenever agent or triple changes.
+  // null (rendered "—") while loading, when the atom vault was never read (cohort
+  // rows), and when a read failed — never a fallback computed from a missing side.
   useEffect(() => {
-    if (!selectedAgent) {
-      setAgentTrust(null)
-      return
-    }
+    let cancelled = false
+    setAgentTrust(null)
+    if (!selectedAgent || agentTriple.loading || agentTriple.failed) return
 
-    let supportWei = 0n
-    try { supportWei = BigInt(selectedAgent.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
+    const supportWei = readSharesWei(selectedAgent.positions_aggregate)
+    if (supportWei == null) return
 
     if (!agentTriple.counterTermId) {
+      // Lookup succeeded and there is no trust triple → no oppose vault → oppose is 0.
       setAgentTrust(calculateTrustScoreFromStakes(supportWei, 0n))
       return
     }
@@ -797,14 +819,16 @@ function AgentsPageContent() {
     })
       .then(r => r.json())
       .then(data => {
-        let opposeWei = 0n
-        try { opposeWei = BigInt(data?.data?.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { opposeWei = 0n }
+        if (cancelled || data?.errors) return
+        const opposeWei = readSharesWei(data?.data?.positions_aggregate)
+        if (opposeWei == null) return
         setAgentTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
       })
       .catch(() => {
-        setAgentTrust(calculateTrustScoreFromStakes(supportWei, 0n))
+        // A failed oppose read is not "0 oppose" — the score stays unmeasured ("—").
       })
-  }, [selectedAgent?.term_id, selectedAgent?.positions_aggregate?.aggregate?.sum?.shares, agentTriple.counterTermId])
+    return () => { cancelled = true }
+  }, [selectedAgent?.term_id, selectedAgent?.positions_aggregate?.aggregate?.sum?.shares, agentTriple.counterTermId, agentTriple.loading, agentTriple.failed])
 
   // Reset redeem input when switching signal side to avoid stale values
   useEffect(() => {
@@ -1286,7 +1310,8 @@ function AgentsPageContent() {
     )
     let supportTotal = 0
     let opposeTotal = 0
-    return sorted.map(signal => {
+    const points: Array<{ date: string; trustRatio: number }> = []
+    for (const signal of sorted) {
       const delta = Math.abs(Number(signal.delta || 0)) / 1e18
       const isDeposit = !!signal.deposit_id
       const isAgainst = counterTermId ? signal.term_id === counterTermId : false
@@ -1299,14 +1324,15 @@ function AgentsPageContent() {
       if (supportTotal < 0) supportTotal = 0
       if (opposeTotal < 0) opposeTotal = 0
 
+      // No stake at this point → no ratio to plot (a 50 here would be invented).
       const total = supportTotal + opposeTotal
-      const trustRatio = total > 0 ? Math.round((supportTotal / total) * 100) : 50
-
-      return {
+      if (total <= 0) continue
+      points.push({
         date: formatDateShort(signal.created_at),
-        trustRatio,
-      }
-    })
+        trustRatio: Math.round((supportTotal / total) * 100),
+      })
+    }
+    return points
   }
 
   // ─── Weighted trust z decay dla wybranego agenta ───
@@ -1374,10 +1400,19 @@ function AgentsPageContent() {
     }
   }, [agentSignals, weightedTrust, supportSupply, combinedStakerCount, agentTriple.counterTermId, onChainPrice, peakOnChainPrice])
 
+  // The modal's trust score is a measurement only when the vault was read and holds
+  // stake (lib/score-basis.ts). Everything score-shaped below is gated on this.
+  const modalStakeReading = agentTrust
+    ? { supportWei: agentTrust.supportStake, opposeWei: agentTrust.opposeStake }
+    : null
+  const modalMeasured = hasMeasuredScore(modalStakeReading)
+
   // ─── Hybrid Score (AGENTSCORE = 60% economic confidence + 40% quality metrics) ───
   const hybridScore = useMemo((): number | null => {
     try {
-      if (!agentTrust || !compositeTrust) return null
+      // A hybrid built on the zero-stake prior would be cached onto the card
+      // (objectScoreByTermId) as if measured — no measured trust score, no hybrid.
+      if (!agentTrust || !compositeTrust || !modalMeasured) return null
       // Support positions are in the ATOM vault (selectedAgent.term_id), NOT the triple vault (agentTriple.termId).
       // agentTriple.termId is the triple's own support-vault termId, which differs from the atom's termId.
       const supportPositions = allPositions.filter(
@@ -1388,16 +1423,14 @@ function AgentsPageContent() {
       )
       const supportRatio = (supportPositions.length > 0 || opposePositions.length > 0)
         ? calculateDiversityWeightedRatio(supportPositions, opposePositions, evaluatorWeights)
-        : (() => {
-            const totalWei = agentTrust.supportStake + agentTrust.opposeStake
-            return totalWei > 0n ? Number((agentTrust.supportStake * 100n) / totalWei) : 50
-          })()
+        : supportPercent(modalStakeReading)
+      if (supportRatio == null) return null
       return calculateHybridScore(agentTrust.score, compositeTrust.score, supportRatio)
     } catch (e) {
       console.error('[hybridScore]', e)
       return null
     }
-  }, [agentTrust, compositeTrust, allPositions, agentTriple.termId, agentTriple.counterTermId, evaluatorWeights])
+  }, [agentTrust, compositeTrust, modalMeasured, allPositions, agentTriple.termId, agentTriple.counterTermId, evaluatorWeights])
 
   // Populate hybrid score cache so the card shows the same number as the modal.
   // compositeScore requires per-agent signal history + on-chain RPC calls (not available
@@ -1423,14 +1456,16 @@ function AgentsPageContent() {
   // ─── Trust Tier dla wybranego agenta ───
   const agentTrustTier = useMemo(() => {
     try {
-      if (!selectedAgent) return null
+      // No vault tier without its inputs: the staker count must be loaded for THIS
+      // agent, and a trust ratio exists only with stake behind it. calculateTier has
+      // no "unmeasured ratio" input, so an unmeasured agent gets no vault-tier chip
+      // (the ATTESTED fraction next to it still renders) rather than an invented ratio.
+      if (!selectedAgent || !agentTrust || !modalMeasured) return null
+      if (positionsLoadedFor !== selectedAgent.term_id) return null
       const stakers = combinedStakerCount
-      const supportWei = agentTrust?.supportStake ?? 0n
-      const opposeWei = agentTrust?.opposeStake ?? 0n
-      const totalWei = supportWei + opposeWei
-      const totalStake = Number(totalWei) / 1e18
-      const rawTrustRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
-      const trustRatio = hybridScore ?? compositeTrust?.score ?? rawTrustRatio
+      const totalStake = Number(agentTrust.totalStake) / 1e18
+      const trustRatio = hybridScore ?? compositeTrust?.score ?? supportPercent(modalStakeReading)
+      if (trustRatio == null) return null
       const ageDays = selectedAgent.created_at ? getAgentAgeDays(selectedAgent.created_at) : 0
       const tier = calculateTier(stakers, totalStake, trustRatio, ageDays)
       const progress = calculateTierProgress(stakers, totalStake, trustRatio, ageDays)
@@ -1439,23 +1474,33 @@ function AgentsPageContent() {
       console.error('[agentTrustTier]', e)
       return null
     }
-  }, [selectedAgent, combinedStakerCount, agentTrust, compositeTrust, hybridScore])
+  }, [selectedAgent, combinedStakerCount, positionsLoadedFor, agentTrust, modalMeasured, compositeTrust, hybridScore])
 
   // Etap 4b — modal stat rows: primary (attestation unit, canonical) + secondary
   // (Backers, atom vault). No new fetch — derived from profileVector +
   // combinedStakerCount/positions_aggregate, both already loaded for this modal.
+  // Backers are known only once THIS agent's positions were read; the atom-vault sum
+  // comes from the list's aggregate when it was fetched (AgentScore rows) or from the
+  // modal's own positions read (cohort rows never fetch the aggregate). Unknown → "—".
+  const positionsKnown = !!selectedAgent && positionsLoadedFor === selectedAgent.term_id
+  const backerVaultWei: bigint | null = useMemo(() => {
+    if (!selectedAgent) return null
+    const fromList = readSharesWei(selectedAgent.positions_aggregate)
+    if (fromList != null) return fromList
+    if (!positionsKnown) return null
+    return allPositions
+      .filter((p: any) => p.term_id === selectedAgent.term_id)
+      .reduce((sum: bigint, p: any) => { try { return sum + BigInt(p.shares) } catch { return sum } }, 0n)
+  }, [selectedAgent, positionsKnown, allPositions])
   const modalStats = useMemo(() => {
-    let backerVaultWei = 0n
-    const raw = selectedAgent?.positions_aggregate?.aggregate?.sum?.shares
-    if (raw) { try { backerVaultWei = BigInt(raw) } catch { backerVaultWei = 0n } }
     return computeModalStatSummary({
       attested: profileVector.attested,
       reportCount,
       backerCount: combinedStakerCount,
-      backerVaultWei,
+      backerVaultWei: backerVaultWei ?? 0n, // rendered only when backerVaultWei != null
       signals: agentSignalsCount,
     })
-  }, [profileVector.attested, reportCount, combinedStakerCount, selectedAgent, agentSignalsCount])
+  }, [profileVector.attested, reportCount, combinedStakerCount, backerVaultWei, agentSignalsCount])
 
   // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
   const agentAvatar = useMemo(() => {
@@ -1490,7 +1535,8 @@ function AgentsPageContent() {
   const scoreTrajectory = useMemo(() => {
     try {
       if (!selectedAgent) return []
-      const score = hybridScore ?? agentTrust?.score ?? 50
+      const score = hybridScore ?? measuredScore(agentTrust, modalMeasured)
+      if (score == null) return []  // nothing measured → no trajectory point
       const tier = agentTrustTier?.tier?.tier ?? 'unverified'
       const stakingEvts = agentSignals.map((s: any) => ({
         id: s.id as string,
@@ -1513,7 +1559,7 @@ function AgentsPageContent() {
       })
       return tl.scoreHistory
     } catch { return [] }
-  }, [selectedAgent, agentSignals, agentTriple.counterTermId, hybridScore, agentTrust, agentTrustTier])
+  }, [selectedAgent, agentSignals, agentTriple.counterTermId, hybridScore, agentTrust, modalMeasured, agentTrustTier])
 
   return (
     <PageBackground image="hero" opacity={0.4}>
@@ -1611,6 +1657,8 @@ function AgentsPageContent() {
                 { id: 'moderate', label: 'Moderate', color: '#EAB308' },
                 { id: 'low', label: 'Low', color: '#F97316' },
                 { id: 'critical', label: 'Critical', color: '#EF4444' },
+                // No measured score (zero stake / never read): never counted as Moderate.
+                { id: 'unrated', label: 'Unrated', color: '#7A838D' },
               ]).map(f => (
                 <button
                   key={f.id}
@@ -1753,20 +1801,21 @@ function AgentsPageContent() {
               [...agents, ...searchedCohort]
 
             const enriched = sourceAgents.map(agent => {
-              let supportWei = 0n
-              try { supportWei = BigInt(agent.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
+              // null = the vault was never read (cohort rows) — not zero (lib/score-basis.ts).
+              const supportWei = readSharesWei(agent.positions_aggregate)
               const opposeWei: bigint = (agent as any).__opposeWei ?? 0n
-              const cardTrust = calculateTrustScoreFromStakes(supportWei, opposeWei)
-              return { agent, trust: cardTrust }
+              const measured = hasMeasuredScore({ supportWei, opposeWei })
+              // Computed for every row (sort/filter plumbing), displayed only when measured.
+              const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei)
+              return { agent, trust: cardTrust, measured }
             })
 
             const filtered = selectedCategory === 'all'
               ? enriched
-              : enriched.filter(e => e.trust.level === selectedCategory)
+              : enriched.filter(e => qualityBucket(e.trust, e.measured) === selectedCategory)
 
-            // Honesty gate (thesis §6): see lib/agent-list-sort.ts — an atom with zero real
-            // stakers (cohort self-deposit included) must never outrank a genuinely staked
-            // agent by raw score alone.
+            // Honesty gate (thesis §6): see lib/agent-list-sort.ts — a row without a measured
+            // score (zero stake, or never read) must never rank among measured scores by its prior.
             const sorted = [...filtered].sort((a, b) => compareAgentEntries(a, b, sortBy))
 
             return (
@@ -1835,14 +1884,16 @@ function AgentsPageContent() {
               ) : viewMode === 'grid' ? (
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {sorted.map(({ agent, trust: cardTrust }) => {
+                {sorted.map(({ agent, trust: cardTrust, measured }) => {
                   // objectScore populated after modal opens (client) or from quality cache (server).
-                  // Falls back to trustScore on first paint.
-                  const cachedObjectScore = objectScoreByTermId[agent.term_id] ?? null
-                  const displayScore = cachedObjectScore ?? cardTrust.score
+                  // Falls back to trustScore on first paint. Only a MEASURED score is displayed:
+                  // at zero stake cardTrust.score is the formula's 50 prior (lib/score-basis.ts).
+                  const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
+                  const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
                   const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
-                  const color = effectiveLevel === 'excellent' ? '#34d399'
+                  const color = displayScore == null ? UNRATED_COLOR
+                    : effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
                     : effectiveLevel === 'moderate' ? '#eab308'
                     : effectiveLevel === 'low' ? '#f97316'
@@ -1885,15 +1936,17 @@ function AgentsPageContent() {
                           </div>
                         </div>
                         <div className="text-right">
-                          {stakers > 0 ? (
+                          {displayScore != null ? (
                             <div className="flex items-baseline justify-end gap-1 mb-0.5">
                               <p className="text-2xl font-bold leading-none" style={{ color }}>{displayScore}</p>
                               <span className="text-base leading-none" style={{ color: cardMi.color }}>{cardMi.arrow}</span>
                             </div>
                           ) : (
-                            <p className="text-lg font-semibold leading-none text-[#7A838D]">—</p>
+                            <TooltipWrapper content={NO_STAKE_TOOLTIP}>
+                              <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help">—</p>
+                            </TooltipWrapper>
                           )}
-                          <p className="text-[10px] text-[#7A838D]">{stakers > 0 ? 'AGENTSCORE' : 'UNVERIFIED'}</p>
+                          <p className="text-[10px] text-[#7A838D]">{displayScore != null ? 'AGENTSCORE' : 'UNVERIFIED'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
@@ -1901,7 +1954,7 @@ function AgentsPageContent() {
                         <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
                       </div>
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${stakers > 0 ? displayScore : 0}%`, backgroundColor: color }} />
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${displayScore ?? 0}%`, backgroundColor: color }} />
                       </div>
                     </motion.div>
                   )
@@ -1917,12 +1970,13 @@ function AgentsPageContent() {
                   <span className="text-right w-16">Stakers</span>
                   <span className="text-right w-12">Score</span>
                 </div>
-                {sorted.map(({ agent, trust: cardTrust }, i) => {
-                  const cachedObjectScore = objectScoreByTermId[agent.term_id] ?? null
-                  const displayScore = cachedObjectScore ?? cardTrust.score
+                {sorted.map(({ agent, trust: cardTrust, measured }, i) => {
+                  const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
+                  const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
                   const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
                   const stakers = agent.positions_aggregate?.aggregate?.count || 0
-                  const color = effectiveLevel === 'excellent' ? '#34d399'
+                  const color = displayScore == null ? UNRATED_COLOR
+                    : effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
                     : effectiveLevel === 'moderate' ? '#eab308'
                     : effectiveLevel === 'low' ? '#f97316' : '#ef4444'
@@ -1969,13 +2023,15 @@ function AgentsPageContent() {
                       <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{stakers}</span>
                       {/* Score + momentum */}
                       <div className="flex items-center justify-end gap-1 w-12">
-                        {stakers > 0 ? (
+                        {displayScore != null ? (
                           <>
                             <span className="text-sm font-bold font-mono" style={{ color }}>{displayScore}</span>
                             <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
                           </>
                         ) : (
-                          <span className="text-xs font-mono text-[#7A838D]">—</span>
+                          <TooltipWrapper content={NO_STAKE_TOOLTIP}>
+                            <span className="text-xs font-mono text-[#7A838D] cursor-help">—</span>
+                          </TooltipWrapper>
                         )}
                       </div>
                     </motion.div>
@@ -2015,19 +2071,21 @@ function AgentsPageContent() {
                       <h2 className="text-xl font-bold text-white">
                         {getAgentNameFromAtom(selectedAgent)}
                       </h2>
-                      {agentTrustTier && (
-                        <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        {/* Vault tier chip only when its inputs are measured (see agentTrustTier);
+                            the attestation fraction always renders — it is the canonical unit. */}
+                        {agentTrustTier && (
                           <TrustTierBadgeWithProgress
                             tier={agentTrustTier.tier}
                             progress={agentTrustTier.progress}
                           />
-                          <TooltipWrapper content={`Verified requires ≥${VERIFIED_MIN_ATTESTERS} distinct attesters and ≥${VERIFIED_MIN_TTRUST} tTRUST attested.`}>
-                            <span className="text-[10px] text-[#7A838D] cursor-help">
-                              · {profileLoaded ? modalStats.attesters : '—'}/{VERIFIED_MIN_ATTESTERS} attesters
-                            </span>
-                          </TooltipWrapper>
-                        </div>
-                      )}
+                        )}
+                        <TooltipWrapper content={`Verified requires ≥${VERIFIED_MIN_ATTESTERS} distinct attesters and ≥${VERIFIED_MIN_TTRUST} tTRUST attested.`}>
+                          <span className="text-[10px] text-[#7A838D] cursor-help">
+                            {agentTrustTier ? '· ' : ''}{profileLoaded ? modalStats.attesters : '—'}/{VERIFIED_MIN_ATTESTERS} attesters
+                          </span>
+                        </TooltipWrapper>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
                       <span className={`px-2 py-0.5 rounded text-xs ${
@@ -2114,7 +2172,7 @@ function AgentsPageContent() {
                 <div className="mt-2.5">
                   <TooltipWrapper content="Backers stake on the agent's atom; attesters stake on a domain claim. Only attestations count toward the tier.">
                     <p className="text-xs text-[#7A838D] cursor-help">
-                      Backers: {positionsLoading ? '—' : modalStats.backerCount} · {positionsLoading ? '—' : formatTTrust(modalStats.backerVaultWei)} on atom vault
+                      Backers: {positionsKnown ? modalStats.backerCount : '—'} · {backerVaultWei != null ? formatTTrust(backerVaultWei) : '—'} on atom vault
                       {!signalsLoading && modalStats.signals > 0 ? ` · ${modalStats.signals} signal${modalStats.signals !== 1 ? 's' : ''}` : ''}
                     </p>
                   </TooltipWrapper>
@@ -2553,31 +2611,20 @@ function AgentsPageContent() {
               {/* === AGENTSCORE + STAKE BREAKDOWN === */}
               {(() => {
                 const t = agentTrust
-                // Agent Score = pure economic trust score (same as card preview)
-                const agentScore = t?.score ?? 50
-                const agentLevel = t?.level ?? 'moderate'
-                const confidence = t?.confidence ?? 0
-                const momentum = t?.momentum ?? 0
-                const supportWei = t?.supportStake ?? BigInt(0)
-                const opposeWei = t?.opposeStake ?? BigInt(0)
-                const netWei = t?.netStake ?? BigInt(0)
-                const totalWei = t?.totalStake ?? BigInt(0)
-                const supportPct = totalWei > BigInt(0)
-                  ? Number((supportWei * BigInt(1000)) / totalWei) / 10
-                  : 100
-                const scoreColor = agentLevel === 'excellent' ? '#2ECC71'
-                  : agentLevel === 'good' ? '#22C55E'
-                  : agentLevel === 'moderate' ? '#EAB308'
-                  : agentLevel === 'low' ? '#F97316'
+                // Agent Score = pure economic trust score (same as card preview).
+                // null while loading, when the vault was never read, and at zero
+                // stake (the formula's 50 prior is not a measurement) → "—".
+                const agentScore = measuredScore(t, modalMeasured)
+                const scoreColor = agentScore == null ? '#7A838D'
+                  : t!.level === 'excellent' ? '#2ECC71'
+                  : t!.level === 'good' ? '#22C55E'
+                  : t!.level === 'moderate' ? '#EAB308'
+                  : t!.level === 'low' ? '#F97316'
                   : '#EF4444'
-                const momDir = momentum > 0.1 ? 'up' : momentum < -0.1 ? 'down' : 'stable'
-                const momText = momDir === 'up'
-                  ? `+${momentum.toFixed(1)} pts`
-                  : momDir === 'down'
-                    ? `${momentum.toFixed(1)} pts`
-                    : 'Stable'
-                const circumference = 2 * Math.PI * 32
-                const dashLen = (agentScore / 100) * circumference
+                // Support share exists only when there is stake to share (no 100% of nothing).
+                const supportPct = modalMeasured && t
+                  ? Number((t.supportStake * 1000n) / t.totalStake) / 10
+                  : null
 
                 // Hybrid Score = 60% Agent Score + 40% composite quality (separate metric)
                 const hybridColor = hybridScore == null ? '#7A838D'
@@ -2596,7 +2643,13 @@ function AgentsPageContent() {
                         {/* Header row: label + big score */}
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="text-xs font-semibold uppercase tracking-wider text-[#7A838D]">Agent Score</h3>
-                          <span className="text-2xl font-bold tabular-nums" style={{ color: scoreColor }}>{agentScore}</span>
+                          {agentScore != null ? (
+                            <span className="text-2xl font-bold tabular-nums" style={{ color: scoreColor }}>{agentScore}</span>
+                          ) : (
+                            <TooltipWrapper content={NO_STAKE_TOOLTIP}>
+                              <span className="text-2xl font-bold tabular-nums cursor-help" style={{ color: scoreColor }}>—</span>
+                            </TooltipWrapper>
+                          )}
                         </div>
 
                         {/* Thick divider */}
@@ -2607,7 +2660,7 @@ function AgentsPageContent() {
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-[#7A838D]">Trust Score</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-white tabular-nums">{agentScore}</span>
+                              <span className="text-sm font-bold text-white tabular-nums">{agentScore ?? '—'}</span>
                               <span className="text-xs text-[#4A5260]">(60%)</span>
                             </div>
                           </div>
@@ -2642,29 +2695,33 @@ function AgentsPageContent() {
                         <h3 className="text-white font-bold mb-4">Stake Breakdown</h3>
 
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-[#C8963C]">Support ({supportPct.toFixed(1)}%)</span>
-                          <span className="text-[#f85149]">Oppose ({(100 - supportPct).toFixed(1)}%)</span>
+                          <span className="text-[#C8963C]">Support ({supportPct != null ? `${supportPct.toFixed(1)}%` : '—'})</span>
+                          <span className="text-[#f85149]">Oppose ({supportPct != null ? `${(100 - supportPct).toFixed(1)}%` : '—'})</span>
                         </div>
                         <div className="h-2 bg-[#1E2229] rounded-full overflow-hidden mb-4">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-[#10b981] to-[#059669] transition-all"
-                            style={{ width: `${supportPct}%` }}
-                          />
+                          {supportPct != null && (
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-[#10b981] to-[#059669] transition-all"
+                              style={{ width: `${supportPct}%` }}
+                            />
+                          )}
                         </div>
 
+                        {/* Stake values: "—" only while loading / when the vault was never read;
+                            a read of 0 is a real measurement and prints as 0. */}
                         <div className="space-y-2">
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Support Stake</p>
-                            <p className="text-[#C8963C] font-bold">{formatTTrust(supportWei)}</p>
+                            <p className="text-[#C8963C] font-bold">{t ? formatTTrust(t.supportStake) : '—'}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Oppose Stake</p>
-                            <p className="text-[#f85149] font-bold">{formatTTrust(opposeWei)}</p>
+                            <p className="text-[#f85149] font-bold">{t ? formatTTrust(t.opposeStake) : '—'}</p>
                           </div>
                           <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
                             <p className="text-xs text-[#B5BDC6] mb-0.5">Net Stake</p>
                             <p className="text-[#C8963C] font-bold">
-                              {netWei >= BigInt(0) ? '+' : ''}{formatTTrust(netWei)}
+                              {t ? `${t.netStake >= 0n ? '+' : ''}${formatTTrust(t.netStake)}` : '—'}
                             </p>
                           </div>
                         </div>
@@ -2845,16 +2902,13 @@ function AgentsPageContent() {
 
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (() => {
-                  const score = agentTrust?.score ?? 50
-                  const level = agentTrust?.level ?? 'moderate'
-                  const confidence = agentTrust?.confidence ?? 0
-                  const momentum = agentTrust?.momentum ?? 0
-                  const supportWei = agentTrust?.supportStake ?? BigInt(0)
-                  const opposeWei = agentTrust?.opposeStake ?? BigInt(0)
-                  const totalWei = supportWei + opposeWei
-                  const supportPct = totalWei > BigInt(0) ? Number((supportWei * BigInt(100)) / totalWei) : 50
-                  const opsPct = 100 - supportPct
-                  const netStake = Number(supportWei - opposeWei) / 1e18
+                  const t = agentTrust
+                  // null → "—": loading, vault never read, or zero stake (the 50 prior).
+                  const score = measuredScore(t, modalMeasured)
+                  const level = score != null ? t!.level : null
+                  // A support/oppose split exists only when there is stake to split.
+                  const supportPct = modalMeasured && t ? Number((t.supportStake * 100n) / t.totalStake) : null
+                  const opsPct = supportPct != null ? 100 - supportPct : null
 
                   const levelColors: Record<string, { bg: string; text: string; border: string }> = {
                     excellent: { bg: '#2ECC7120', text: '#2ECC71', border: '#2ECC7140' },
@@ -2863,7 +2917,8 @@ function AgentsPageContent() {
                     low:       { bg: '#f9731620', text: '#f97316', border: '#f9731640' },
                     critical:  { bg: '#ef444420', text: '#ef4444', border: '#ef444440' },
                   }
-                  const lc = levelColors[level] || levelColors.moderate
+                  const UNRATED_COLORS = { bg: '#7A838D20', text: '#7A838D', border: '#7A838D40' }
+                  const lc = level ? levelColors[level] : UNRATED_COLORS
 
                   const ageDays = Math.floor((Date.now() - new Date(selectedAgent.created_at).getTime()) / 86400000)
                   const ageLabel = ageDays === 0 ? 'today' : ageDays === 1 ? '1 day' : `${ageDays} days`
@@ -2878,13 +2933,14 @@ function AgentsPageContent() {
                           className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
                           style={{ backgroundColor: lc.bg, color: lc.text, border: `1px solid ${lc.border}` }}
                         >
-                          {level}
+                          {level ?? 'unrated'}
                         </span>
                       </div>
 
                       {/* Score gauge */}
                       {(() => {
-                        const mi = getMomentumIndicator(momentum)
+                        const momentum = score != null ? t!.momentum : null
+                        const mi = getMomentumIndicator(momentum ?? 0)
                         const sparkData = buildTrustChartData(agentSignals, agentTriple.counterTermId)
                           .map((d: { trustRatio: number }) => d.trustRatio)
                           .slice(-10)
@@ -2892,13 +2948,21 @@ function AgentsPageContent() {
                           <div className="mb-3">
                             {/* Score number */}
                             <div className="flex items-baseline gap-2 mb-3">
-                              <span className="text-4xl font-bold text-white leading-none">
-                                {typeof score === 'number' ? score.toFixed(1) : score}
-                              </span>
-                              <span className="text-[#7A838D] text-sm leading-none">/100</span>
+                              {score != null ? (
+                                <>
+                                  <span className="text-4xl font-bold text-white leading-none">{score.toFixed(1)}</span>
+                                  <span className="text-[#7A838D] text-sm leading-none">/100</span>
+                                </>
+                              ) : (
+                                <TooltipWrapper content={NO_STAKE_TOOLTIP}>
+                                  <span className="text-4xl font-bold text-[#7A838D] leading-none cursor-help">—</span>
+                                </TooltipWrapper>
+                              )}
                             </div>
 
-                            {/* Momentum pill — prominent, own row */}
+                            {/* Momentum pill — prominent, own row. Only for a measured score:
+                                at zero stake "Stable" would describe the prior. */}
+                            {momentum != null && (
                             <div
                               className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-lg mb-3"
                               style={{
@@ -2917,6 +2981,7 @@ function AgentsPageContent() {
                                 </span>
                               )}
                             </div>
+                            )}
 
                             {/* Sparkline */}
                             {sparkData.length >= 2 && (
@@ -2931,13 +2996,15 @@ function AgentsPageContent() {
 
                       {/* Score bar */}
                       <div className="w-full h-2 bg-[#1E2229] rounded-full overflow-hidden mb-2">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{
-                            width: `${score}%`,
-                            background: `linear-gradient(90deg, ${lc.text}80, ${lc.text})`
-                          }}
-                        />
+                        {score != null && (
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${score}%`,
+                              background: `linear-gradient(90deg, ${lc.text}80, ${lc.text})`
+                            }}
+                          />
+                        )}
                       </div>
                       <div className="flex justify-between text-[10px] text-[#7A838D]">
                         <span>Critical</span>
@@ -3079,40 +3146,41 @@ function AgentsPageContent() {
 
                       {/* Stacked bar */}
                       <div className="w-full h-3 bg-[#1E2229] rounded-full overflow-hidden flex mb-2">
-                        {supportPct > 0 && (
+                        {supportPct != null && supportPct > 0 && (
                           <div className="h-full bg-[#34a872] transition-all duration-500" style={{ width: `${supportPct}%` }} />
                         )}
-                        {opsPct > 0 && (
+                        {opsPct != null && opsPct > 0 && (
                           <div className="h-full bg-[#c45454] transition-all duration-500" style={{ width: `${opsPct}%` }} />
                         )}
                       </div>
 
+                      {/* Amounts: "—" only while loading / never read; a read of 0 prints 0. */}
                       <div className="flex justify-between mb-3">
                         <div className="flex items-center gap-1.5">
                           <div className="w-2.5 h-2.5 rounded-full bg-[#34a872]" />
-                          <span className="text-white text-xs font-medium">{supportPct}% Support</span>
-                          <span className="text-[#7A838D] text-[10px]">({(Number(supportWei) / 1e18).toFixed(4)} tTRUST)</span>
+                          <span className="text-white text-xs font-medium">{supportPct != null ? `${supportPct}%` : '—'} Support</span>
+                          <span className="text-[#7A838D] text-[10px]">({t ? (Number(t.supportStake) / 1e18).toFixed(4) : '—'} tTRUST)</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[#7A838D] text-[10px]">({(Number(opposeWei) / 1e18).toFixed(4)} tTRUST)</span>
-                          <span className="text-white text-xs font-medium">{opsPct}% Oppose</span>
+                          <span className="text-[#7A838D] text-[10px]">({t ? (Number(t.opposeStake) / 1e18).toFixed(4) : '—'} tTRUST)</span>
+                          <span className="text-white text-xs font-medium">{opsPct != null ? `${opsPct}%` : '—'} Oppose</span>
                           <div className="w-2.5 h-2.5 rounded-full bg-[#c45454]" />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-2">
                         <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
-                          <p className="text-white text-sm font-bold">{(Number(totalWei) / 1e18).toFixed(4)}</p>
+                          <p className="text-white text-sm font-bold">{t ? (Number(t.totalStake) / 1e18).toFixed(4) : '—'}</p>
                           <p className="text-[#7A838D] text-[10px]">Total TVL</p>
                         </div>
                         <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
-                          <p className={`text-sm font-bold ${netStake >= 0 ? 'text-[#34a872]' : 'text-[#c45454]'}`}>
-                            {netStake >= 0 ? '+' : ''}{netStake.toFixed(4)}
+                          <p className={`text-sm font-bold ${!t || t.netStake >= 0n ? 'text-[#34a872]' : 'text-[#c45454]'}`}>
+                            {t ? `${t.netStake >= 0n ? '+' : ''}${(Number(t.netStake) / 1e18).toFixed(4)}` : '—'}
                           </p>
                           <p className="text-[#7A838D] text-[10px]">Net Stake</p>
                         </div>
                         <div className="bg-[#0F1113] rounded-lg p-2.5 text-center">
-                          <p className="text-white text-sm font-bold">{(confidence * 100).toFixed(0)}%</p>
+                          <p className="text-white text-sm font-bold">{t ? `${(t.confidence * 100).toFixed(0)}%` : '—'}</p>
                           <p className="text-[#7A838D] text-[10px]">Confidence</p>
                         </div>
                       </div>
@@ -3238,7 +3306,8 @@ function AgentsPageContent() {
                       <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4" style={{ height: 200 }}>
                         <ScoreTrajectoryChart
                           scoreHistory={scoreTrajectory}
-                          currentScore={hybridScore ?? agentTrust?.score ?? 50}
+                          // ≥2 trajectory points only exist for a measured score (scoreTrajectory memo).
+                          currentScore={(hybridScore ?? measuredScore(agentTrust, modalMeasured))!}
                         />
                       </div>
                     ) : (
@@ -3719,7 +3788,7 @@ function AgentsPageContent() {
                 {activeTab === 'timeline' && selectedAgent && (() => {
                   const agentCard = parseAgentCard(effectiveLabel(selectedAgent))
                   const completeness = calculateProfileCompleteness({ name: agentCard.name ?? '', ...agentCard })
-                  const score = hybridScore ?? agentTrust?.score ?? 50
+                  const score = hybridScore ?? measuredScore(agentTrust, modalMeasured)
                   const tier = agentTrustTier?.tier?.tier ?? 'unverified'
                   return (
                     <TrustTimeline

@@ -65,3 +65,24 @@ describe('compareAgentEntries — sort modes within the staked group', () => {
     expect(compareAgentEntries(a, b, 'newest')).toBe(0)
   })
 })
+
+describe('measured flag — a zero-share "staker" does not rank by its prior', () => {
+  // One position with 0 shares (live: On-Chain Data Analyzer, Agent Avatar Coder): count 1,
+  // so the count-based gate called it staked and ranked its prior 50 among real scores.
+  const ZERO_SHARE: SortableAgentEntry = { ...entry(1, '0', 50), measured: false }
+  const MEASURED_LOW: SortableAgentEntry = { ...entry(1, '980000000000000', 50), measured: true }
+  const MEASURED_HIGH: SortableAgentEntry = { ...entry(1, '335061000000000000', 98), measured: true }
+
+  it('hasStake follows the measured flag when provided', () => {
+    expect(hasStake(ZERO_SHARE)).toBe(false)
+    expect(hasStake(MEASURED_LOW)).toBe(true)
+  })
+  it('sinks the unmeasured row below every measured row, under score_desc and score_asc', () => {
+    const rows = [ZERO_SHARE, MEASURED_HIGH, MEASURED_LOW]
+    expect([...rows].sort((x, y) => compareAgentEntries(x, y, 'score_desc'))).toEqual([MEASURED_HIGH, MEASURED_LOW, ZERO_SHARE])
+    expect([...rows].sort((x, y) => compareAgentEntries(x, y, 'score_asc'))).toEqual([MEASURED_LOW, MEASURED_HIGH, ZERO_SHARE])
+  })
+  it('without the flag the original count gate still applies (other callers unchanged)', () => {
+    expect(hasStake(entry(1, '0', 50))).toBe(true)
+  })
+})
