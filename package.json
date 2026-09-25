@@ -13,7 +13,8 @@
     "type-check": "tsc --noEmit",
     "type-check:tests": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "shots": "playwright test -c tests/e2e/playwright.config.ts"
   },
   "dependencies": {
     "@0xintuition/protocol": "^2.0.2",
@@ -40,6 +41,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
