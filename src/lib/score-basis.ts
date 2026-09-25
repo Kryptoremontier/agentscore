@@ -16,6 +16,7 @@
  */
 
 import type { TrustLevel } from '@/types/agent'
+import { calculateTier, type TierConfig } from './trust-tiers'
 
 export type ScoreBasis = 'measured' | 'prior'
 
@@ -82,4 +83,28 @@ export function supportPercent(reading: StakeReading | null | undefined): number
   const support = reading!.supportWei!
   const total = support + (reading!.opposeWei ?? 0n)
   return Number((support * 100n) / total)
+}
+
+/**
+ * Vault tier from MEASURED inputs only — the list card's chip. Same inputs as
+ * the API's trustTier (rowToAgentItem): staker count, support + oppose stake,
+ * and the real support ratio; never a literal ratio.
+ *
+ * calculateTier has no "unmeasured ratio" input and is not changed here. A
+ * ratio exists only when there is stake to take a share of, so an unmeasured
+ * row gets null — no chip — instead of an invented ratio. (No information is
+ * lost: at zero stake calculateTier returns Unverified for ANY ratio, because
+ * every higher tier requires minTotalStake > 0 — pinned by tests.)
+ */
+export function measuredTier(input: {
+  stakers: number
+  supportWei: bigint | null | undefined
+  opposeWei?: bigint | null
+  ageDays: number
+}): TierConfig | null {
+  const reading = { supportWei: input.supportWei, opposeWei: input.opposeWei }
+  const ratio = supportPercent(reading)
+  if (ratio == null) return null
+  const totalWei = input.supportWei! + (input.opposeWei ?? 0n)
+  return calculateTier(input.stakers, Number(totalWei) / 1e18, ratio, input.ageDays)
 }

@@ -49,8 +49,7 @@ import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, t
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import {
-  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP,
-  type QualityBucket,
+  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, measuredTier, NO_STAKE_TOOLTIP,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { filterAgents } from '@/lib/agent-junk-filter'
@@ -1901,6 +1900,12 @@ function AgentsPageContent() {
                   const cardMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getAgentNameFromAtom(agent)
+                  const cardTier = measuredTier({
+                    stakers,
+                    supportWei: readSharesWei(agent.positions_aggregate),
+                    opposeWei: (agent as any).__opposeWei ?? 0n,
+                    ageDays: agent.created_at ? getAgentAgeDays(agent.created_at) : 0,
+                  })
 
                   return (
                     <motion.div
@@ -1926,7 +1931,10 @@ function AgentsPageContent() {
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
                               <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
-                              {(() => { try { return <TrustTierBadge tier={calculateTier(stakers, Number(agent.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18, 50, agent.created_at ? getAgentAgeDays(agent.created_at) : 0)} size="sm" /> } catch { return null } })()}
+                              {/* Vault tier from the real support ratio (lib/score-basis.ts measuredTier) —
+                                  was a hardcoded 50, which capped every card at Sandbox. No chip when
+                                  there is no stake to take a ratio of. */}
+                              {cardTier && <TrustTierBadge tier={cardTier} size="sm" />}
                             </div>
                             <span className={`text-xs px-2 py-0.5 rounded inline-block ${
                               agent.origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
