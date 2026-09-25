@@ -38,7 +38,7 @@ export interface StakeReading {
  * 0n    → fetched, and the atom holds no shares.
  */
 export function readSharesWei(
-  agg: { aggregate?: { sum?: { shares?: string | number | null } | null } | null } | null | undefined,
+  agg: { aggregate?: { count?: number; sum?: { shares?: string | number | null } | null } | null } | null | undefined,
 ): bigint | null {
   if (!agg || !agg.aggregate) return null
   const raw = agg.aggregate.sum?.shares

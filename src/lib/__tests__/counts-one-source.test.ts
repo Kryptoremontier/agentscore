@@ -106,11 +106,12 @@ describe('landing badge: the corpus total, never the 8-row fetch length', () => 
 })
 
 describe('/agents header: corpus totals, stable under search', () => {
-  const corpus = { kept: 9, junk: 6, fetched: 15, total: 15, truncated: false }
-  const cohort = { count: 264, total: 264, truncated: false }
+  const corpus = { status: 'ok' as const, kept: 9, junk: 6, fetched: 15, total: 15, truncated: false }
+  const cohort = { status: 'ok' as const, count: 264, total: 264, truncated: false }
 
-  it('header segments today: "9 AgentScore · 264 ERC-8004 · 6 hidden"', () => {
-    expect(agentListHeaderSegments({ agentScore: corpus, cohort }).join(' · ')).toBe('9 AgentScore · 264 ERC-8004 · 6 hidden')
+  it('header segments today: "9 AgentScore · 264 ERC-8004 · 6 hidden · GraphQL live feed"', () => {
+    expect(agentListHeaderSegments({ agentScore: corpus, cohort }).join(' · '))
+      .toBe('9 AgentScore · 264 ERC-8004 · 6 hidden · GraphQL live feed')
   })
 
   it('typing a search changes the results line, never the header', () => {
@@ -138,8 +139,8 @@ describe('/agents header: corpus totals, stable under search', () => {
 
   it('truncation segments appear only when truncated, in the fetch\'s own unit', () => {
     const segs = agentListHeaderSegments({
-      agentScore: { kept: 44, junk: 6, fetched: 50, total: 51, truncated: true },
-      cohort: { count: 500, total: 612, truncated: true },
+      agentScore: { status: 'ok', kept: 44, junk: 6, fetched: 50, total: 51, truncated: true },
+      cohort: { status: 'ok', count: 500, total: 612, truncated: true },
     })
     expect(segs).toContain('showing first 50 of 51 AgentScore atoms')
     expect(segs).toContain('showing first 500 of 612 ERC-8004 agents')

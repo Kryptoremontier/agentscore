@@ -17,8 +17,9 @@
  * noise atom, contrary to the July 2026 recon on a smaller corpus). Skipping
  * either would silently drop real declared classifications.
  *
- * Graceful degradation per repo convention: fetchCohortAgents() returns []
- * on any transport/GraphQL error, never throws.
+ * Graceful degradation per repo convention: fetchCohortAgents() never throws;
+ * on any transport/GraphQL error it returns `status: 'error'` (no agents,
+ * unknown total) — distinct from an empty cohort, which is `status: 'ok'`.
  */
 
 import { APP_CONFIG } from './app-config'
@@ -73,6 +74,12 @@ export interface CohortFetchResult {
   /** True when some real cohort agents are not in `agents`; null = unknown.
    *  Thesis §6: never silently drop. Callers MUST surface this, not just render `agents`. */
   truncated: boolean | null
+  /**
+   * 'error' = the cohort could not be read (transport/GraphQL failure, or no
+   * endpoint). Never collapse this into an empty cohort: callers must show the
+   * feed as unavailable, not as "0 agents".
+   */
+  status: 'ok' | 'error'
 }
 
 // Hard cap on the identity query below. Testnet is at 264 live (2026-09-15) — dormant until the
@@ -182,8 +189,9 @@ async function fetchClassification(predicateIds: readonly string[], termIds: rea
  * underlying count rather than "did we get exactly COHORT_FETCH_LIMIT rows back".
  */
 export async function fetchCohortAgents(): Promise<CohortFetchResult> {
-  const empty: CohortFetchResult = { agents: [], total: 0, truncated: false }
-  if (!APP_CONFIG.GRAPHQL_URL) return empty
+  // Failure is its own state — `total: 0` would read as "the registry is empty".
+  const failed: CohortFetchResult = { agents: [], total: null, truncated: null, status: 'error' }
+  if (!APP_CONFIG.GRAPHQL_URL) return failed
   try {
     // ONE filter for the rows and the count (REPO_MAP §7 rule 1: "the SAME filter"). The
     // LIKE matches the registry-contract pattern the JS guard below checks (it used to be the
@@ -228,8 +236,8 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
 
     if (rows.length === 0) {
       return complete
-        ? { agents: [], total: 0, truncated: false }
-        : { agents: [], total: countedTotal, truncated: countedTotal == null ? null : countedTotal > 0 }
+        ? { agents: [], total: 0, truncated: false, status: 'ok' }
+        : { agents: [], total: countedTotal, truncated: countedTotal == null ? null : countedTotal > 0, status: 'ok' }
     }
 
     // Dedup: keep the earliest same-as triple per subject.
@@ -266,9 +274,9 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
 
     const total = complete ? agents.length : countedTotal
     const truncated = complete ? false : countedTotal == null ? null : countedTotal > agents.length
-    return { agents, total, truncated }
+    return { agents, total, truncated, status: 'ok' }
   } catch (err) {
     console.warn('[fetchCohortAgents] Network/GraphQL error:', err)
-    return empty
+    return failed
   }
 }

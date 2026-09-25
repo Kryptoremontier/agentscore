@@ -48,7 +48,7 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
-import { fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine } from '@/lib/agent-list'
+import { fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus } from '@/lib/agent-list'
 import {
   readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, measuredTier, NO_STAKE_TOOLTIP,
 } from '@/lib/score-basis'
@@ -147,6 +147,8 @@ function AgentsPageContent() {
   const [cohortTotal, setCohortTotal] = useState<number | null>(null)
   const [cohortTruncated, setCohortTruncated] = useState<boolean | null>(null)
   const [cohortLoading, setCohortLoading] = useState(true)
+  // 'error' ≠ empty: a failed cohort read must never look like "0 ERC-8004".
+  const [cohortStatus, setCohortStatus] = useState<FeedStatus>('loading')
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
@@ -324,6 +326,7 @@ function AgentsPageContent() {
     import('@/lib/cohort-reader').then(({ fetchCohortAgents }) => {
       fetchCohortAgents().then(cohort => {
         if (cancelled) return
+        setCohortStatus(cohort.status)
         setCohortAgents(cohort.agents.map((c): GraphQLAgent => ({
           term_id: c.termId,
           label: c.label,
@@ -338,6 +341,11 @@ function AgentsPageContent() {
         setCohortTruncated(cohort.truncated)
         setCohortLoading(false)
       })
+    }).catch(() => {
+      // Chunk-load failure: without this the grid (gated on cohortLoading) never rendered at all.
+      if (cancelled) return
+      setCohortStatus('error')
+      setCohortLoading(false)
     })
     return () => { cancelled = true }
   }, [])
@@ -1537,20 +1545,19 @@ function AgentsPageContent() {
             <div className="flex items-center gap-2 mt-4">
               <div className="w-2 h-2 rounded-full bg-[#C8963C] animate-pulse" />
               <span className="text-xs text-[#7A838D]">
-                {/* Corpus totals only — no search/filter input (lib/agent-list.ts). */}
-                {[
-                  ...agentListHeaderSegments({
-                    agentScore: {
-                      kept: agents.length,
-                      junk: agentJunkFilteredCount,
-                      fetched: agentCorpusMeta.fetched,
-                      total: agentCorpusMeta.total,
-                      truncated: agentCorpusMeta.truncated,
-                    },
-                    cohort: { count: cohortAgents.length, total: cohortTotal, truncated: cohortTruncated },
-                  }),
-                  'GraphQL live feed',
-                ].join(' · ')}
+                {/* Corpus totals only — no search/filter input; loading → "—", failed →
+                    "feed unavailable", "live feed" only when both reads succeeded (lib/agent-list.ts). */}
+                {agentListHeaderSegments({
+                  agentScore: {
+                    status: loading ? 'loading' : error ? 'error' : 'ok',
+                    kept: agents.length,
+                    junk: agentJunkFilteredCount,
+                    fetched: agentCorpusMeta.fetched,
+                    total: agentCorpusMeta.total,
+                    truncated: agentCorpusMeta.truncated,
+                  },
+                  cohort: { status: cohortStatus, count: cohortAgents.length, total: cohortTotal, truncated: cohortTruncated },
+                }).join(' · ')}
               </span>
             </div>
           </motion.div>
@@ -1690,7 +1697,8 @@ function AgentsPageContent() {
           )}
 
           {/* Empty State - No agents registered */}
-          {!loading && !error && (agents.length + cohortAgents.length) === 0 && !searchTerm && (
+          {/* "None registered" only when BOTH corpora were actually read and are empty. */}
+          {!loading && !error && cohortStatus === 'ok' && (agents.length + cohortAgents.length) === 0 && !searchTerm && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1854,6 +1862,9 @@ function AgentsPageContent() {
                   const cardMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getAgentNameFromAtom(agent)
+                  // Cohort rows never fetch the atom vault: their stake/stakers were never
+                  // measured, so they are not printed (thesis §6: null ≠ 0.0).
+                  const vaultRead = readSharesWei(agent.positions_aggregate) != null
                   const cardTier = measuredTier({
                     stakers,
                     supportWei: readSharesWei(agent.positions_aggregate),
@@ -1911,10 +1922,12 @@ function AgentsPageContent() {
                           <p className="text-[10px] text-[#7A838D]">{displayScore != null ? 'AGENTSCORE' : 'UNVERIFIED'}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
-                        <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
-                        <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
-                      </div>
+                      {vaultRead && (
+                        <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
+                          <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
+                          <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
+                        </div>
+                      )}
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
                         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${displayScore ?? 0}%`, backgroundColor: color }} />
                       </div>
@@ -1945,6 +1958,7 @@ function AgentsPageContent() {
                   const listMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getAgentNameFromAtom(agent)
+                  const listVaultRead = readSharesWei(agent.positions_aggregate) != null
 
                   return (
                     <motion.div
@@ -1980,9 +1994,9 @@ function AgentsPageContent() {
                         )}
                       </div>
                       {/* Stakes */}
-                      <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{stakes}</span>
+                      <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{listVaultRead ? stakes : '—'}</span>
                       {/* Stakers */}
-                      <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{stakers}</span>
+                      <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{listVaultRead ? stakers : '—'}</span>
                       {/* Score + momentum */}
                       <div className="flex items-center justify-end gap-1 w-12">
                         {displayScore != null ? (

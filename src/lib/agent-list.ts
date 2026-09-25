@@ -142,7 +142,11 @@ export function matchesAgentSearch(term: string, fields: ReadonlyArray<string | 
   return fields.some(f => !!f && f.toLowerCase().includes(q))
 }
 
+/** State of one corpus read. 'error' is never shown as an empty corpus. */
+export type FeedStatus = 'loading' | 'ok' | 'error'
+
 export interface AgentScoreCorpusCounts {
+  status: FeedStatus
   /** Post-junk rows shown in the list. */
   kept: number
   /** Junk-filtered rows among the fetched ones. */
@@ -154,6 +158,7 @@ export interface AgentScoreCorpusCounts {
 }
 
 export interface CohortCorpusCounts {
+  status: FeedStatus
   /** Distinct cohort agents fetched. */
   count: number
   /** Distinct cohort agents in the registry; null if unknown. */
@@ -161,24 +166,34 @@ export interface CohortCorpusCounts {
   truncated: boolean | null
 }
 
+export const LIVE_FEED_LABEL = 'GraphQL live feed'
+
 /**
  * Header segments — CORPUS totals only. Takes no search/filter input on
  * purpose: typing a search must not change the header.
+ *
+ * A corpus that is still loading prints "—", one that failed prints
+ * "… feed unavailable" — never a 0 it didn't measure, and never a silently
+ * missing segment. "GraphQL live feed" is claimed only when both reads succeeded.
  */
 export function agentListHeaderSegments(input: {
   agentScore: AgentScoreCorpusCounts
-  cohort: CohortCorpusCounts | null
+  cohort: CohortCorpusCounts
 }): string[] {
-  const { agentScore, cohort } = input
-  const segs = [`${agentScore.kept} AgentScore`]
-  if (cohort && cohort.count > 0) segs.push(`${cohort.count} ERC-8004`)
-  if (agentScore.junk > 0) segs.push(`${agentScore.junk} hidden`)
-  if (agentScore.truncated && agentScore.total != null) {
-    segs.push(`showing first ${agentScore.fetched} of ${agentScore.total} AgentScore atoms`)
+  const { agentScore: a, cohort: c } = input
+  const segs: string[] = []
+
+  segs.push(a.status === 'ok' ? `${a.kept} AgentScore` : a.status === 'error' ? 'AgentScore feed unavailable' : '— AgentScore')
+  segs.push(c.status === 'ok' ? `${c.count} ERC-8004` : c.status === 'error' ? 'ERC-8004 feed unavailable' : '— ERC-8004')
+
+  if (a.status === 'ok' && a.junk > 0) segs.push(`${a.junk} hidden`)
+  if (a.status === 'ok' && a.truncated && a.total != null) {
+    segs.push(`showing first ${a.fetched} of ${a.total} AgentScore atoms`)
   }
-  if (cohort?.truncated && cohort.total != null) {
-    segs.push(`showing first ${cohort.count} of ${cohort.total} ERC-8004 agents`)
+  if (c.status === 'ok' && c.truncated && c.total != null) {
+    segs.push(`showing first ${c.count} of ${c.total} ERC-8004 agents`)
   }
+  if (a.status === 'ok' && c.status === 'ok') segs.push(LIVE_FEED_LABEL)
   return segs
 }
 
