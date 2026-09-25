@@ -1915,9 +1915,9 @@ function AgentsPageContent() {
                               <span className="text-base leading-none" style={{ color: cardMi.color }}>{cardMi.arrow}</span>
                             </div>
                           ) : (
-                            <TooltipWrapper content={NO_STAKE_TOOLTIP}>
-                              <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help">—</p>
-                            </TooltipWrapper>
+                            // Native title, not TooltipWrapper: one Radix tooltip per card × 266
+                            // unmeasured cards doubled the list's render cost (measured).
+                            <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help" title={NO_STAKE_TOOLTIP}>—</p>
                           )}
                           <p className="text-[10px] text-[#7A838D]">{displayScore != null ? 'AGENTSCORE' : 'UNVERIFIED'}</p>
                         </div>
@@ -2005,9 +2005,7 @@ function AgentsPageContent() {
                             <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
                           </>
                         ) : (
-                          <TooltipWrapper content={NO_STAKE_TOOLTIP}>
-                            <span className="text-xs font-mono text-[#7A838D] cursor-help">—</span>
-                          </TooltipWrapper>
+                          <span className="text-xs font-mono text-[#7A838D] cursor-help" title={NO_STAKE_TOOLTIP}>—</span>
                         )}
                       </div>
                     </motion.div>
