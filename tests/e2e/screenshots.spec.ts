@@ -9,26 +9,23 @@
  * and this harness deliberately doesn't invent wallet mocking.
  *
  * Honesty rule for the harness itself: a shot is only "clean" if the page's
- * own loading states resolved first. If they don't within SETTLE_TIMEOUT the
- * PNG is still written (so you can see what was stuck) but the test is marked
- * failed with the reason, never silently passed.
+ * own loading states resolved first. Every wait is a concrete DOM condition
+ * capped at WAIT_CAP; if one misses, the PNG is still written (so you can see
+ * what was stuck) but the test is marked failed with the reason, never
+ * silently passed.
+ *
+ * Never `waitForLoadState('networkidle')`: the agent modal polls positions
+ * every 15 s (src/app/agents/page.tsx), so the network is never idle there.
  */
 import { test, expect, type Page, type Locator } from '@playwright/test'
 import path from 'node:path'
-
-// Term ids of the three reference agents used across the Etap 3/4b work
-// (same ids as src/lib/__tests__/agent-profile.test.ts; OPEN CLAW from
-// /api/v1/agents). `/agents?open=<id>` is the page's own deep-link.
-const AGENTS = {
-  dackie: '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb',
-  luda: '0x82d87d9517b68e653418c0e49805b36aca3e33a00536af25fc319f5c24802c5a',
-  openclaw: '0x0d579846f21a66f35efafb2339d182e27560ec9f9d8ea64f7f1d9929d20a2d7d',
-} as const
+import { AGENTS, ROUTES } from './shots-routes'
 
 const REPO_ROOT = path.resolve(__dirname, '../..')
-const SETTLE_TIMEOUT = 60_000
-// Total wait per shot (settle + prepare + settle) — must stay below the 180s test timeout.
-const SETTLE_BUDGET = 90_000
+// Cap for each individual wait. Routes are pre-compiled by warmup.ts, so the
+// cap measures the page's own data loading; a shot does at most ~5 waits,
+// well inside the 180 s test timeout.
+const WAIT_CAP = 10_000
 // framer-motion entrance animations are JS-driven (not stopped by `animations: 'disabled'`).
 const ANIMATION_GRACE_MS = 1_200
 
@@ -42,30 +39,34 @@ interface Shot {
 }
 
 const SHOTS: Shot[] = [
-  { name: 'landing', url: '/' },
-  { name: 'agents-list', url: '/agents', prepare: agentsListReady },
+  { name: 'landing', url: ROUTES.landing },
+  { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady },
   {
     name: 'agents-list-erc8004',
-    url: '/agents',
+    url: ROUTES.agents,
     prepare: async (page) => {
       await agentsListReady(page)
-      await page.locator('button[title^="Real agents from the ERC-8004"]').click()
-      await agentsListReady(page)
+      const erc = page.locator('button[title^="Real agents from the ERC-8004"]')
+      await erc.click()
+      // The "All" results line already matches agentsListReady — wait for the filter itself:
+      // the toggle is active and no AgentScore-origin card is left.
+      await expect(erc).toHaveClass(/border-\[#C8963C\]\/50/, { timeout: WAIT_CAP })
+      await expect(page.getByText('via AgentScore', { exact: true })).toHaveCount(0, { timeout: WAIT_CAP })
     },
   },
   ...(['dackie', 'luda', 'openclaw'] as const).map((key): Shot => ({
     name: `agent-modal-${key}`,
-    url: `/agents?open=${AGENTS[key]}`,
+    url: `${ROUTES.agents}?open=${AGENTS[key]}`,
     prepare: modalReady,
     target: unfixModal,
   })),
-  { name: 'agent-profile-dackie', url: `/agents/${AGENTS.dackie}` },
-  { name: 'domains', url: '/domains' },
-  { name: 'evaluators', url: '/evaluators' },
-  { name: 'leaderboard', url: '/leaderboard' },
-  { name: 'claims', url: '/claims' },
-  { name: 'skills', url: '/skills' },
-  { name: 'intuforge', url: '/explore/intuforge' },
+  { name: 'agent-profile-dackie', url: ROUTES.agentProfile(AGENTS.dackie), prepare: profileReady },
+  { name: 'domains', url: ROUTES.domains },
+  { name: 'evaluators', url: ROUTES.evaluators },
+  { name: 'leaderboard', url: ROUTES.leaderboard },
+  { name: 'claims', url: ROUTES.claims },
+  { name: 'skills', url: ROUTES.skills },
+  { name: 'intuforge', url: ROUTES.intuforge },
 ]
 
 for (const shot of SHOTS) {
@@ -76,26 +77,15 @@ for (const shot of SHOTS) {
 
     await page.goto(shot.url, { waitUntil: 'domcontentloaded' })
 
-    // One budget for all waiting, well inside the test timeout, so a PNG is always written.
+    // Each wait is capped at WAIT_CAP; the first one that misses is recorded and
+    // the shot is still taken, so a PNG is always written.
     let unsettled: string | null = null
-    let budgetTimer: ReturnType<typeof setTimeout> | undefined
-    const waited = (async () => {
+    try {
       await settle(page)
       await shot.prepare?.(page)
       await settle(page)
-    })()
-    waited.catch(() => {}) // may still reject after the budget wins the race
-    try {
-      await Promise.race([
-        waited,
-        new Promise((_, reject) => {
-          budgetTimer = setTimeout(() => reject(new Error(`not settled within ${SETTLE_BUDGET / 1000}s`)), SETTLE_BUDGET)
-        }),
-      ])
     } catch (e) {
       unsettled = (e as Error).message.split('\n')[0]
-    } finally {
-      clearTimeout(budgetTimer)
     }
     await page.waitForTimeout(ANIMATION_GRACE_MS)
 
@@ -113,47 +103,69 @@ for (const shot of SHOTS) {
 }
 
 /**
- * Network idle, then the page's own loading indicators gone: no visible
- * spinner, no skeleton block (pulsing element > 24px — excludes the 8px live
- * dots), no "Loading…" copy.
+ * The page's own loading indicators are gone: no visible spinner, no skeleton
+ * block (pulsing element > 24px — excludes the 8px live dots), no "Loading…"
+ * copy. Deliberately not network-based (see file header).
  */
 async function settle(page: Page) {
-  await page.waitForLoadState('networkidle', { timeout: SETTLE_TIMEOUT }).catch(() => {})
   await page.waitForFunction(() => {
     const shown = (el: Element) => {
       const r = el.getBoundingClientRect()
       return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'
     }
     const spinner = [...document.querySelectorAll('.animate-spin')].some(shown)
-    const skeleton = [...document.querySelectorAll('.animate-pulse')].some((el) => {
+    // .animate-pulse (most pages) and .shimmer (shared LoadingSkeleton, e.g. /agents/[id]).
+    const skeleton = [...document.querySelectorAll('.animate-pulse, .shimmer')].some((el) => {
       const r = el.getBoundingClientRect()
       return r.width > 24 && r.height > 24
     })
     const loadingCopy = /\bLoading\b/.test(document.body.innerText)
     return !spinner && !skeleton && !loadingCopy
-  }, null, { timeout: SETTLE_TIMEOUT, polling: 250 })
+  }, null, { timeout: WAIT_CAP, polling: 250 })
 }
 
 /** /agents renders its grid only after BOTH corpora (AgentScore + ERC-8004 cohort) resolved. */
 async function agentsListReady(page: Page) {
   await page
-    .getByText(/^\d+( of \d+)? agents/)
+    .getByText(/^\d+( of \d+)? agents?/)
     .or(page.getByText('No agents registered yet'))
     .or(page.getByText(/^Error:/))
     .first()
-    .waitFor({ timeout: SETTLE_TIMEOUT })
+    .waitFor({ timeout: WAIT_CAP })
 }
 
 /**
  * Modal is open and its own "—" loading placeholders resolved: the four
  * primary stat boxes and the Backers line render "—" only while loading
- * (see the Etap 4b comments in src/app/agents/page.tsx).
+ * (see the Etap 4b comments in src/app/agents/page.tsx), and the ATTESTED
+ * section left its skeleton — either the "Attested Domains" heading (≥1
+ * attestation) or the empty state (0 attestations, e.g. OPEN CLAW).
  */
 async function modalReady(page: Page) {
   const modal = modalLocator(page)
-  await modal.waitFor({ timeout: SETTLE_TIMEOUT })
-  await expect(modal.getByText(/^Backers: \d/)).toBeVisible({ timeout: SETTLE_TIMEOUT })
-  await expect(modal.getByText(/\d+\/\d+ attesters/)).toBeVisible({ timeout: SETTLE_TIMEOUT })
+  await modal.waitFor({ timeout: WAIT_CAP })
+  await expect(modal.getByText(/^Backers: \d/)).toBeVisible({ timeout: WAIT_CAP })
+  await expect(modal.getByText(/\d+\/\d+ attesters/)).toBeVisible({ timeout: WAIT_CAP })
+  // The four primary stat boxes print "—" only while their data loads.
+  await expect(modal.locator('p.text-lg.font-bold.text-white', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
+  await expect(
+    modal.getByText('Attested Domains', { exact: true })
+      .or(modal.getByText('Unverified — no attestations yet', { exact: true }))
+      .first(),
+  ).toBeVisible({ timeout: WAIT_CAP })
+}
+
+/**
+ * /agents/[id] resolved: the ATTESTED section rendered (heading or empty
+ * state) or the page's own not-found state.
+ */
+async function profileReady(page: Page) {
+  await page
+    .getByText('Attested Domains', { exact: true })
+    .or(page.getByText('Unverified — no attestations yet', { exact: true }))
+    .or(page.getByText('Agent Not Found', { exact: true }))
+    .first()
+    .waitFor({ timeout: WAIT_CAP })
 }
 
 function modalLocator(page: Page) {

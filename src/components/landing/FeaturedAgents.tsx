@@ -7,14 +7,22 @@ import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
+import { readSharesWei, hasMeasuredScore, measuredScore, NO_STAKE_TOOLTIP } from '@/lib/score-basis'
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
 import { cleanAtomName } from '@/types/claim'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import { effectiveLabel } from '@/lib/api-data'
+import { filterAgents } from '@/lib/agent-junk-filter'
+import { fetchFeaturedTotal, featuredBadgeText, type FeaturedTotal } from '@/lib/featured-counts'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
+
+// Same `where` for the claims tab's rows and its aggregate count (REPO_MAP §7 rule 1).
+const CLAIM_WHERE = TRIPLE_SUBJECT_OR_STR && TRIPLE_OBJECT_OR_STR
+  ? `where: { _and: [ { ${TRIPLE_SUBJECT_OR_STR} }, { ${TRIPLE_OBJECT_OR_STR} } ] }`
+  : 'where: {}'
 
 interface FeaturedItem {
   term_id: string
@@ -60,15 +68,20 @@ export function FeaturedAgents() {
   const [items, setItems] = useState<FeaturedItem[]>([])
   const [claims, setClaims] = useState<FeaturedClaim[]>([])
   const [loading, setLoading] = useState(true)
+  // Corpus total behind the active tab (null = unknown → no number printed).
+  const [corpusTotal, setCorpusTotal] = useState<FeaturedTotal | null>(null)
+  // A failed row read is not "none registered" — it gets its own state.
+  const [rowsFailed, setRowsFailed] = useState(false)
 
-  const fetchItems = async (tab: Tab) => {
+  const fetchItems = async (tab: Tab, isCancelled: () => boolean) => {
     setLoading(true)
+    setCorpusTotal(null)
+    setRowsFailed(false)
+    fetchFeaturedTotal(tab, { graphqlUrl: GRAPHQL_URL, skillWhere: SKILL_WHERE_STR, claimWhere: CLAIM_WHERE })
+      .then(t => { if (!isCancelled()) setCorpusTotal(t) })
     try {
       if (tab === 'claims') {
-        const hasScope = TRIPLE_SUBJECT_OR_STR && TRIPLE_OBJECT_OR_STR
-        const whereClause = hasScope
-          ? `where: { _and: [ { ${TRIPLE_SUBJECT_OR_STR} }, { ${TRIPLE_OBJECT_OR_STR} } ] }`
-          : 'where: {}'
+        const whereClause = CLAIM_WHERE
         const res = await fetch(GRAPHQL_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -87,7 +100,9 @@ export function FeaturedAgents() {
           }` }),
         })
         const d = await res.json()
-        setClaims(d.data?.triples || [])
+        if (isCancelled()) return
+        if (d.errors || !d.data) throw new Error('claims read failed')
+        setClaims(d.data.triples || [])
         setItems([])
       } else {
         const whereStr = tab === 'agents' ? AGENT_WHERE_STR : SKILL_WHERE_STR
@@ -110,7 +125,8 @@ export function FeaturedAgents() {
           }` }),
         })
         const d = await res.json()
-        const atoms: FeaturedItem[] = d.data?.atoms || []
+        if (d.errors || !d.data) throw new Error('atoms read failed')
+        const atoms: FeaturedItem[] = d.data.atoms || []
 
         // Batch-fetch oppose vault shares for accurate card Trust Score
         const counterTermIds = atoms
@@ -139,20 +155,39 @@ export function FeaturedAgents() {
             }
           } catch { /* non-critical, falls back to opposeWei=0 */ }
         }
-        setItems(atoms)
+        if (isCancelled()) return
+        // Agents: the same junk filter as /agents and /api/v1/agents, fed the RAW label
+        // (REPO_MAP §7 rule 4) — the badge total is post-junk, so the rows must be too.
+        const shown = tab === 'agents'
+          ? filterAgents(atoms.map(a => ({
+              termId: a.term_id,
+              label: effectiveLabel(a),
+              stakerCount: a.positions_aggregate?.aggregate?.count || 0,
+              totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
+              createdAt: a.created_at,
+              original: a,
+            }))).kept
+          : atoms
+        setItems(shown)
         setClaims([])
       }
-    } catch { setItems([]); setClaims([]) }
-    setLoading(false)
+    } catch { if (!isCancelled()) { setItems([]); setClaims([]); setRowsFailed(true) } }
+    if (!isCancelled()) setLoading(false)
   }
 
-  useEffect(() => { fetchItems(activeTab) }, [activeTab])
+  useEffect(() => {
+    let cancelled = false
+    fetchItems(activeTab, () => cancelled)
+    return () => { cancelled = true }
+  }, [activeTab])
 
   const scroll = (dir: 'left' | 'right') =>
     scrollRef.current?.scrollBy({ left: dir === 'left' ? -340 : 340, behavior: 'smooth' })
 
   const tabCfg = TABS.find(t => t.id === activeTab)!
-  const totalCount = activeTab === 'claims' ? claims.length : items.length
+  // Rows on screen (layout only). The printed number is corpusTotal — never this.
+  const rowCount = activeTab === 'claims' ? claims.length : items.length
+  const badge = featuredBadgeText(corpusTotal)
 
   return (
     <section className="py-28 relative overflow-hidden">
@@ -191,7 +226,7 @@ export function FeaturedAgents() {
             </div>
 
             {/* Scroll arrows */}
-            {totalCount > 3 && (
+            {rowCount > 3 && (
               <div className="hidden md:flex gap-2 shrink-0">
                 <button onClick={() => scroll('left')}
                   className="w-9 h-9 rounded-full flex items-center justify-center transition-all"
@@ -240,12 +275,12 @@ export function FeaturedAgents() {
               )
             })}
 
-            {/* Live count badge */}
-            {!loading && (
+            {/* Live count badge — the corpus total, not the 8 rows fetched */}
+            {!loading && badge && (
               <div className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-[#7A838D]"
                 style={{ background: 'rgba(255,255,255,0.03)', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
                 <TrendingUp className="w-3 h-3" style={{ color: tabCfg.accentHex }} />
-                <span>{totalCount} indexed</span>
+                <span>{badge}</span>
               </div>
             )}
           </div>
@@ -267,7 +302,7 @@ export function FeaturedAgents() {
                     style={{ background: `rgba(${tabCfg.accentRgb},0.04)`, border: `1px solid rgba(${tabCfg.accentRgb},0.08)` }} />
                 ))}
               </div>
-            ) : totalCount === 0 ? (
+            ) : rowCount === 0 ? (
               <div className="text-center py-16 rounded-2xl"
                 style={{ background: `rgba(${tabCfg.accentRgb},0.04)`, border: `1px solid rgba(${tabCfg.accentRgb},0.1)` }}>
                 <div className="flex justify-center mb-4">
@@ -276,8 +311,17 @@ export function FeaturedAgents() {
                     <tabCfg.icon className="w-7 h-7" style={{ color: tabCfg.accentHex }} />
                   </div>
                 </div>
-                <p className="text-[#B5BDC6] font-semibold mb-1">No {tabCfg.label.toLowerCase()} registered yet</p>
-                <p className="text-[#7A838D] text-sm">Be the first to add one on AgentScore</p>
+                {rowsFailed ? (
+                  <>
+                    <p className="text-[#B5BDC6] font-semibold mb-1">Couldn&apos;t load {tabCfg.label.toLowerCase()} right now</p>
+                    <p className="text-[#7A838D] text-sm">The live feed didn&apos;t answer — this is not an empty registry.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[#B5BDC6] font-semibold mb-1">No {tabCfg.label.toLowerCase()} registered yet</p>
+                    <p className="text-[#7A838D] text-sm">Be the first to add one on AgentScore</p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="relative">
@@ -342,11 +386,14 @@ export function FeaturedAgents() {
                         const name = cleanAtomName(effLabel)
                         const description = getDescription(effLabel, cfg.prefix)
                         const stakers = item.positions_aggregate?.aggregate?.count || 0
-                        const sharesWei = BigInt(item.positions_aggregate?.aggregate?.sum?.shares || '0')
-                        const totalStaked = Number(sharesWei) / 1e18
+                        const sharesWei = readSharesWei(item.positions_aggregate)
+                        const totalStaked = Number(sharesWei ?? 0n) / 1e18
                         const opposeWei: bigint = (item as any).__opposeWei ?? 0n
-                        const trust = calculateTrustScoreFromStakes(sharesWei, opposeWei)
-                        const scoreColor = trust.score >= 70 ? '#2ECC71' : trust.score >= 50 ? '#EAB308' : '#EF4444'
+                        // Only a measured score is printed: at zero stake the formula returns
+                        // its 50 prior, which is not a measurement (lib/score-basis.ts).
+                        const measured = hasMeasuredScore({ supportWei: sharesWei, opposeWei })
+                        const score = measuredScore(calculateTrustScoreFromStakes(sharesWei ?? 0n, opposeWei), measured)
+                        const scoreColor = score == null ? '#7A838D' : score >= 70 ? '#2ECC71' : score >= 50 ? '#EAB308' : '#EF4444'
                         const IconComp = cfg.icon
                         return (
                           <motion.div key={item.term_id}
@@ -366,7 +413,11 @@ export function FeaturedAgents() {
                               >
                                 {/* Score */}
                                 <div className="absolute top-4 right-4 text-right">
-                                  <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }}>{trust.score}</span>
+                                  {score != null ? (
+                                    <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }}>{score}</span>
+                                  ) : (
+                                    <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }} title={NO_STAKE_TOOLTIP}>—</span>
+                                  )}
                                   <span className="block text-[10px] text-[#4A5260]">Score</span>
                                 </div>
 
@@ -392,8 +443,10 @@ export function FeaturedAgents() {
                                 </div>
 
                                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full transition-all"
-                                    style={{ width: `${trust.score}%`, backgroundColor: scoreColor }} />
+                                  {score != null && (
+                                    <div className="h-full rounded-full transition-all"
+                                      style={{ width: `${score}%`, backgroundColor: scoreColor }} />
+                                  )}
                                 </div>
                               </div>
                             </Link>
@@ -411,7 +464,7 @@ export function FeaturedAgents() {
         </AnimatePresence>
 
         {/* "View all" link */}
-        {totalCount > 0 && (
+        {rowCount > 0 && (
           <motion.div
             className="text-center mt-10"
             initial={{ opacity: 0 }}
@@ -423,7 +476,7 @@ export function FeaturedAgents() {
               className="inline-flex items-center gap-2 font-semibold transition-colors text-sm"
               style={{ color: tabCfg.accentHex }}
             >
-              View all {totalCount} {tabCfg.label.toLowerCase()} in Explorer
+              View all {corpusTotal ? `${corpusTotal.total}${corpusTotal.truncated ? '+' : ''} ` : ''}{tabCfg.label.toLowerCase()} in Explorer
               <ChevronRight className="w-4 h-4" />
             </Link>
           </motion.div>

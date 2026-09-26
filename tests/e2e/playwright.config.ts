@@ -23,6 +23,8 @@ const BASE_URL = `http://localhost:${PORT}`
 export default defineConfig({
   testDir: '.',
   testMatch: 'screenshots.spec.ts',
+  // Pre-compiles every route so the per-wait 10 s caps measure data, not `next dev` compilation.
+  globalSetup: path.join(__dirname, 'warmup.ts'),
   outputDir: path.join(REPO_ROOT, 'test-results'),
   // `next dev` compiles each route on first hit — cold routes routinely take 20–40s.
   timeout: 180_000,

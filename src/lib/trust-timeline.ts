@@ -48,7 +48,8 @@ export interface TimelineEvent {
 export interface AgentTimeline {
   agentId: string
   agentName: string
-  currentScore: number
+  /** null = no measured score (zero stake / never read) — never the 50 prior. */
+  currentScore: number | null
   currentTier: string
   events: TimelineEvent[]                          // newest first, real timestamps
   /**
@@ -98,7 +99,8 @@ interface BuildTimelineInput {
   agentId: string
   agentName: string
   createdAt?: string
-  currentScore: number
+  /** null = no measured score: the history then has no point at all. */
+  currentScore: number | null
   currentTier: string
   stakingEvents: StakingEvent[]
   skillEvents: SkillEvent[]
@@ -272,7 +274,10 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
   events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
   // ── Score history — exactly one REAL point, never a fabricated curve ──────
-  const scoreHistory = [{ date: new Date().toISOString(), score: input.currentScore }]
+  // …and none at all when there is no measured score to record.
+  const scoreHistory = input.currentScore == null
+    ? []
+    : [{ date: new Date().toISOString(), score: input.currentScore }]
 
   // ── Summary ───────────────────────────────────────────────────────────────
   const oldestEvent = events.length > 0 ? events[events.length - 1] : null

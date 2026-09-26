@@ -18,6 +18,13 @@ export interface SortableAgentEntry {
     positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
   }
   trust: { score: number }
+  /**
+   * Does this row have a measured score (lib/score-basis.ts hasMeasuredScore:
+   * support + oppose stake > 0)? When provided it decides the group instead of
+   * the staker count — a zero-share position counts as a "staker" but its score
+   * is only the 50 prior, which must not rank among measured scores.
+   */
+  measured?: boolean
 }
 
 /**
@@ -51,7 +58,12 @@ export function compareAgentEntries(
   }
 }
 
-/** Does this agent have at least one real staker (not just a self-registration deposit)? */
+/**
+ * Does this entry rank among scored entries? Uses the precomputed `measured`
+ * flag when the caller supplies it (/agents does); otherwise falls back to
+ * "at least one position" (the original Etap 2c gate).
+ */
 export function hasStake(entry: SortableAgentEntry): boolean {
+  if (entry.measured !== undefined) return entry.measured
   return (entry.agent.positions_aggregate?.aggregate?.count || 0) > 0
 }

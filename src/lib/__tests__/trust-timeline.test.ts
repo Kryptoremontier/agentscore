@@ -184,6 +184,16 @@ describe('buildAgentTimeline', () => {
     expect(Date.now() - new Date(tl.scoreHistory[0].date).getTime()).toBeLessThan(5000)
   })
 
+  test('no measured score (zero stake / never read) → no score point at all, never a 50', () => {
+    const tl = buildAgentTimeline({
+      agentId: 'unmeasured', agentName: 'Test',
+      currentScore: null, currentTier: 'unverified',
+      stakingEvents: [], skillEvents: [],
+    })
+    expect(tl.currentScore).toBeNull()
+    expect(tl.scoreHistory).toEqual([])
+  })
+
   test('historyStatus explicitly marks that no periodic score snapshots are persisted', () => {
     const tl = buildAgentTimeline({
       agentId: 'hist2', agentName: 'Test',

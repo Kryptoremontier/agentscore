@@ -71,7 +71,7 @@ const handler = createMcpHandler(
       },
       async ({ sort, minTrust, limit, includeJunk }) => {
         try {
-          const { agents, junkFiltered } = await getAgentsWithScores({
+          const { agents, total, junkFiltered, truncated } = await getAgentsWithScores({
             sort: sort || 'score',
             limit: limit || 20,
             offset: 0,
@@ -86,6 +86,7 @@ const handler = createMcpHandler(
                   id: a.id,
                   name: a.name,
                   score: a.score,
+                  scoreBasis: a.scoreBasis,
                   agentScore: a.agentScore,
                   tier: a.trustTier,
                   momentum: a.momentumDirection,
@@ -93,8 +94,10 @@ const handler = createMcpHandler(
                   skills: a.skillCount,
                   ...(a.junkReason ? { junkReason: a.junkReason } : {}),
                 })),
-                total: agents.length,
+                // Corpus total after filters — was agents.length, i.e. the page size.
+                total,
                 junkFiltered,
+                truncated,
                 network: process.env.NEXT_PUBLIC_NETWORK || 'testnet',
               }, null, 2),
             }],
@@ -141,6 +144,7 @@ const handler = createMcpHandler(
                   id: detail.id,
                   name: detail.name,
                   score: detail.score,
+                  scoreBasis: detail.scoreBasis,
                   agentScore: detail.agentScore,
                   tier: detail.trustTier,
                 },
@@ -404,6 +408,7 @@ const handler = createMcpHandler(
                 id: detail.id,
                 name: detail.name,
                 score: detail.score,
+                scoreBasis: detail.scoreBasis,
                 agentScore: detail.agentScore,
                 tier: detail.trustTier,
                 momentum: detail.momentumDirection,
