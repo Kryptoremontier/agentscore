@@ -1947,7 +1947,7 @@ function AgentsPageContent() {
                         data-card="compact"
                       >
                         <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                          <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
+                          <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
                           {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
                           {originChip}
                         </div>
@@ -1977,7 +1977,7 @@ function AgentsPageContent() {
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                              <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
+                              <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
                               {/* Agent tier chip — Trusted / Verified only (attestations, thesis §6). */}
                               {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
                             </div>
