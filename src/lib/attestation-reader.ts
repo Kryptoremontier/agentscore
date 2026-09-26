@@ -232,14 +232,15 @@ const ATTESTATION_TRIPLES_MAX = 5_000
  * Fetch attestations from the app's GraphQL endpoint and aggregate them —
  * corpus-wide by default, or for one subject atom via `options.subjectId`.
  * Triples and positions are paged to their aggregate counts (lib/gql-pager.ts).
- * Graceful degradation: returns [] on any transport/GraphQL error (the
- * Attested tier renders its empty states; it must never crash the page).
- * A read that didn't reach the end counts as failed — never a partial count.
+ * THROWS on any transport/GraphQL error or a read that didn't reach the end
+ * (REPO_MAP §7 rule 5): `[]` means "no attestations", never "couldn't read
+ * them". Callers render their own unavailable state (fetchAgentProfileVector
+ * → null, /domains → Attested tier unavailable).
  */
 export async function fetchAttestations(options: FetchAttestationsOptions = {}): Promise<AttestedEntry[]> {
   const url = APP_CONFIG.GRAPHQL_URL
   if (!url) return []
-  try {
+  {
     const bucketIds = CANONICAL_DOMAINS_REGISTRY.map((d) => d.termId)
     const subjectFilter = options.subjectId ? ', subject_id: { _eq: $subject }' : ''
     const subjectVar = options.subjectId ? ', $subject: String!' : ''
@@ -307,9 +308,6 @@ export async function fetchAttestations(options: FetchAttestationsOptions = {}):
     }))
 
     return aggregateAttestations(raw)
-  } catch (err) {
-    console.warn('[fetchAttestations] Network error:', err)
-    return []
   }
 }
 

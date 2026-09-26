@@ -66,8 +66,9 @@ function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
     trustScore: Math.round(apiAgent.score.objectScore ?? apiAgent.score.trustScore),
     positiveStake: BigInt(Math.round(apiAgent.supportStake * 1e18)),
     negativeStake: BigInt(Math.round(apiAgent.opposeStake * 1e18)),
-    attestationCount: 0,
-    reportCount: 0,
+    // Filled from the profile vector once it loads; "—" until then (never an unread 0).
+    attestationCount: null,
+    reportCount: null,
     stakerCount: apiAgent.stakerCount,
   }
 }
@@ -85,7 +86,7 @@ export default function AgentDetailPage() {
   const [error, setError] = useState<string | null>(null)
   // ETAP 3 canonical profile vector — shared by every tier.
   const [vector, setVector] = useState<AgentProfileVector>(EMPTY_VECTOR)
-  const [backers, setBackers] = useState<Backer[]>([])
+  const [backers, setBackers] = useState<Backer[] | null>([])
   const [profileLoading, setProfileLoading] = useState(true)
 
   useEffect(() => {
@@ -141,7 +142,7 @@ export default function AgentDetailPage() {
       setVector(v)
       setBackers(b)
       setProfileLoading(false)
-      setAgent(prev => prev ? { ...prev, attestationCount: v.attested.length, reportCount: v.reports.length } : prev)
+      setAgent(prev => prev ? { ...prev, attestationCount: v.attested?.length ?? null, reportCount: v.reports?.length ?? null } : prev)
     }
 
     load()
@@ -169,7 +170,8 @@ export default function AgentDetailPage() {
     )
   }
 
-  const attesters = summarizeAttesters(vector.attested)
+  // null = the attestation read failed: the Attesters list says so instead of "no one".
+  const attesters = vector.attested ? summarizeAttesters(vector.attested) : null
 
   // ── Non-scored tier: cohort agent, attested human, any real atom outside the scored corpus ──
   if (!agent && minimalAtom) {
@@ -205,7 +207,7 @@ export default function AgentDetailPage() {
 
               <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
 
-              {vector.attested.length > 0 && (
+              {(vector.attested?.length ?? 0) > 0 && (
                 <AttestButton agentId={agentId} agentName={name} variant="hero" />
               )}
             </motion.div>

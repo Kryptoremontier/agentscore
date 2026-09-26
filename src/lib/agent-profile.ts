@@ -55,9 +55,10 @@ export interface AttesterSummary {
   totalStake: bigint
 }
 
+/** null = that read failed — "couldn't read", never "none" (REPO_MAP §7 rule 5). */
 export interface AgentProfileVector {
-  attested: AttestedEntry[]
-  reports: AgentReport[]
+  attested: AttestedEntry[] | null
+  reports: AgentReport[] | null
 }
 
 export interface RawReportRow {
@@ -316,12 +317,15 @@ export async function fetchAgentReports(agentId: string): Promise<AgentReport[]>
     return aggregateReports(rows, positions)
   } catch (err) {
     console.warn('[fetchAgentReports] error:', err)
-    return []
+    throw err
   }
 }
 
-/** Positions on the agent's own vault + its trust counter-vault, aggregated per wallet. */
-export async function fetchAgentBackers(agentId: string): Promise<Backer[]> {
+/**
+ * Positions on the agent's own vault + its trust counter-vault, aggregated per wallet.
+ * null = the read failed (never an empty list for a failure).
+ */
+export async function fetchAgentBackers(agentId: string): Promise<Backer[] | null> {
   try {
     const t = await gql<{ triples: Array<{ counter_term_id: string | null }> }>(
       `query GetTrustCounter($id: String!, $pred: String!) {
@@ -336,15 +340,19 @@ export async function fetchAgentBackers(agentId: string): Promise<Backer[]> {
     return aggregateBackers(positions, agentId, counter)
   } catch (err) {
     console.warn('[fetchAgentBackers] error:', err)
-    return []
+    return null
   }
 }
 
-/** Everything the profile's canonical sections need, in parallel. Never throws. */
+/**
+ * Everything the profile's canonical sections need, in parallel. Never throws:
+ * a part whose read failed is null, so the page can say "couldn't read" instead
+ * of printing an empty record as a fact.
+ */
 export async function fetchAgentProfileVector(agentId: string): Promise<AgentProfileVector> {
   const [attested, reports] = await Promise.all([
-    fetchAgentAttestations(agentId),
-    fetchAgentReports(agentId),
+    fetchAgentAttestations(agentId).catch((err) => { console.warn('[fetchAgentAttestations] error:', err); return null }),
+    fetchAgentReports(agentId).catch(() => null),
   ])
   return { attested, reports }
 }

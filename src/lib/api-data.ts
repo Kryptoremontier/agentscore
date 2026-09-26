@@ -162,6 +162,41 @@ export type AgentApiItem = {
   createdAt: string
 }
 
+/** The AgentRow selection — one list for the corpus read and the single-agent read. */
+const AGENT_ROW_FIELDS = `
+  term_id
+  label
+  data
+  type
+  emoji
+  created_at
+  creator { label id }
+  positions_aggregate {
+    aggregate {
+      sum { shares }
+      max { created_at }
+    }
+  }
+  as_subject_triples(
+    where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
+    limit: 1
+  ) { counter_term_id }
+`
+
+/**
+ * One AgentScore agent by term_id (same filter as the corpus). null only when
+ * it isn't an AgentScore agent; a failed read throws. The detail used to scan
+ * the capped corpus, so an agent past the cap answered 404.
+ */
+async function fetchAgentRow(termId: string): Promise<AgentRow | null> {
+  const data = await gql<{ atoms: AgentRow[] }>(`
+    query ApiAgent($id: String!) {
+      atoms(where: { _and: [${AGENT_WHERE_STR}, { term_id: { _eq: $id } }] }, limit: 1) { ${AGENT_ROW_FIELDS} }
+    }
+  `, { id: termId })
+  return data.atoms?.[0] ?? null
+}
+
 /**
  * AgentScore corpus rows, paged past the endpoint's 250-row cap up to `limit`
  * (our cap), with the aggregate on the SAME filter for total/truncation.
@@ -176,25 +211,7 @@ async function fetchAgentRows(limit: number): Promise<PagedRows<AgentRow>> {
         limit: $limit
         offset: $offset
         order_by: [{ created_at: desc }, { term_id: asc }]
-      ) {
-        term_id
-        label
-        data
-        type
-        emoji
-        created_at
-        creator { label id }
-        positions_aggregate {
-          aggregate {
-            sum { shares }
-            max { created_at }
-          }
-        }
-        as_subject_triples(
-          where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
-          limit: 1
-        ) { counter_term_id }
-      }
+      ) { ${AGENT_ROW_FIELDS} }
     }
   `,
     field: 'atoms',
@@ -240,6 +257,9 @@ async function agentVaultReads(rows: AgentRow[]): Promise<AgentVaultReads> {
  * 200 and 500 and could disagree once the corpus grew.
  */
 const AGENT_CORPUS_LIMIT = 500
+
+/** Our ceiling on the domain-claim triples read (the pager reports it; live 2026-09-26: 75). */
+const DOMAIN_TRIPLES_MAX = 5_000
 
 interface AgentCorpus {
   /** Post-junk items, in GraphQL order (created_at desc). */
@@ -396,8 +416,7 @@ export type AgentDetailApiItem = AgentApiItem & {
 }
 
 export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem | null> {
-  const { rows } = await fetchAgentRows(AGENT_CORPUS_LIMIT)
-  const row = rows.find(r => r.term_id === termId)
+  const row = await fetchAgentRow(termId)
   if (!row) return null
 
   const vault = await agentVaultReads([row])
@@ -684,36 +703,39 @@ async function fetchDomainTriplesInternal(): Promise<{
   /** Folded-away skillId → representative skillId (see refineSkillTriples). */
   foldedSkillIds: ReadonlyMap<string, string>
 }> {
-  // Step 1: fetch all skill triples ("is skilled in" by term_id + legacy isTrustedFor)
-  const res = await gql<{
-    triples: Array<{
-      term_id: string
-      counter_term_id: string | null
-      subject: { term_id: string; label: string }
-      predicate: { label: string }
-      object: { term_id: string; label: string }
-    }>
-  }>(`
-    query GetAllDomainTriples {
-      triples(
-        where: {
-          _or: [
-            { predicate_id: { _eq: "${IS_SKILLED_IN_PREDICATE_ID}" } }
-            { predicate: { label: { _eq: "isTrustedFor" } } }
-          ]
+  // Step 1: all skill triples ("is skilled in" by term_id + legacy isTrustedFor), paged —
+  // `limit: 500` got at most 250 back, silently (lib/gql-pager.ts).
+  const where = `{ _or: [
+    { predicate_id: { _eq: "${IS_SKILLED_IN_PREDICATE_ID}" } }
+    { predicate: { label: { _eq: "isTrustedFor" } } }
+  ] }`
+  const page = await fetchAllRows<{
+    term_id: string
+    counter_term_id: string | null
+    subject: { term_id: string; label: string }
+    predicate: { label: string }
+    object: { term_id: string; label: string }
+  }>({
+    query: `
+      query GetAllDomainTriples($limit: Int!, $offset: Int!) {
+        triples(where: ${where}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
+          term_id
+          counter_term_id
+          subject { term_id label }
+          predicate { label }
+          object { term_id label }
         }
-        limit: 500
-      ) {
-        term_id
-        counter_term_id
-        subject { term_id label }
-        predicate { label }
-        object { term_id label }
       }
-    }
-  `)
-
-  const triples = res?.triples || []
+    `,
+    field: 'triples',
+    countQuery: `query GetAllDomainTriplesCount { triples_aggregate(where: ${where}) { aggregate { count } } }`,
+    countField: 'triples_aggregate',
+    pageSize: SERVER_ROW_CAP.triples,
+    maxRows: DOMAIN_TRIPLES_MAX,
+    request: pagedRequest,
+  })
+  if (page.truncated !== false) throw new Error('domain triples not read to the end')
+  const triples = page.rows
   if (triples.length === 0) return { triples: [], foldedSkillIds: new Map() }
 
   const vaultIds: string[] = []

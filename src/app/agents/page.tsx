@@ -465,13 +465,28 @@ function AgentsPageContent() {
 
   const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
     try {
-      const normalizedAddress = userAddress.toLowerCase()
-      // Every position on the vault (paged) — one request stopped at 100, so on a larger vault the
-      // user's own row could be missing and redeem read 0 shares.
-      const positions = await fetchVaultPositions([termId])
-      const pos = positions.find(
-        (p) => p.account_id?.toLowerCase() === normalizedAddress
-      )
+      // Only this wallet's rows on this vault, in one request. Reading the whole vault stopped at
+      // 100 rows (redeem could read 0 shares on a larger vault); paging it would put a vault-sized
+      // read inside the transaction flow. account_id is stored checksummed: `_ilike` matches any casing.
+      const res = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `
+            query GetUserVaultPosition($termId: String!, $account: String!) {
+              positions(where: { term_id: { _eq: $termId }, account_id: { _ilike: $account } }, order_by: { id: asc }) {
+                account_id
+                shares
+              }
+            }
+          `,
+          variables: { termId, account: userAddress },
+        }),
+      })
+      if (!res.ok) throw new Error(`GraphQL HTTP ${res.status}`)
+      const data = await res.json()
+      if (data.errors || !data.data) throw new Error(data.errors?.[0]?.message ?? 'no data')
+      const pos = data.data.positions?.[0]
       let sharesBigInt = 0n
       try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
       return sharesBigInt
@@ -1136,7 +1151,7 @@ function AgentsPageContent() {
     fetchAgentProfileVector(selectedAgent.term_id).then(v => {
       if (cancelled) return
       setProfileVector(v)
-      setReportCount(v.reports.length)
+      setReportCount(v.reports?.length ?? 0) // null reports render "—" below, never this 0
       setProfileLoaded(true)
     })
     return () => { cancelled = true }
@@ -1398,9 +1413,13 @@ function AgentsPageContent() {
       .filter((p: any) => p.term_id === selectedAgent.term_id)
       .reduce((sum: bigint, p: any) => { try { return sum + BigInt(p.shares) } catch { return sum } }, 0n)
   }, [selectedAgent, positionsKnown, allPositions])
+  // A part whose read failed is null (fetchAgentProfileVector): its numbers render "—",
+  // never the zeros computeModalStatSummary would derive from nothing.
+  const attestedRead = profileLoaded && profileVector.attested != null
+  const reportsRead = profileLoaded && profileVector.reports != null
   const modalStats = useMemo(() => {
     return computeModalStatSummary({
-      attested: profileVector.attested,
+      attested: profileVector.attested ?? [],
       reportCount,
       backerCount: combinedStakerCount,
       backerVaultWei: backerVaultWei ?? 0n, // rendered only when backerVaultWei != null
@@ -2024,7 +2043,7 @@ function AgentsPageContent() {
                         )}
                         <TooltipWrapper content={`Verified requires ≥${VERIFIED_MIN_ATTESTERS} distinct attesters and ≥${VERIFIED_MIN_TTRUST} tTRUST attested.`}>
                           <span className="text-[10px] text-[#7A838D] cursor-help">
-                            {agentTrustTier ? '· ' : ''}{profileLoaded ? modalStats.attesters : '—'}/{VERIFIED_MIN_ATTESTERS} attesters
+                            {agentTrustTier ? '· ' : ''}{attestedRead ? modalStats.attesters : '—'}/{VERIFIED_MIN_ATTESTERS} attesters
                           </span>
                         </TooltipWrapper>
                       </div>
@@ -2092,10 +2111,10 @@ function AgentsPageContent() {
                     2x2 on mobile, 1x4 on desktop. Loading shows "—", never "0". */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {[
-                    { value: profileLoaded ? modalStats.attesters : '—', label: profileLoaded && modalStats.attesters === 1 ? 'Attester' : 'Attesters' },
-                    { value: profileLoaded ? modalStats.domains : '—', label: profileLoaded && modalStats.domains === 1 ? 'Domain attested' : 'Domains attested' },
-                    { value: profileLoaded ? formatTTrust(modalStats.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
-                    { value: profileLoaded ? modalStats.reports : '—', label: 'Reports' },
+                    { value: attestedRead ? modalStats.attesters : '—', label: attestedRead && modalStats.attesters === 1 ? 'Attester' : 'Attesters' },
+                    { value: attestedRead ? modalStats.domains : '—', label: attestedRead && modalStats.domains === 1 ? 'Domain attested' : 'Domains attested' },
+                    { value: attestedRead ? formatTTrust(modalStats.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
+                    { value: reportsRead ? modalStats.reports : '—', label: 'Reports' },
                   ].map((s, i) => (
                     <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-white">{s.value}</p>
@@ -3518,7 +3537,7 @@ function AgentsPageContent() {
                     {/* ETAP 3: attesters from the canonical unit FIRST; the signal-based
                         list below is BACKERS (positions on this agent) — a different claim. */}
                     <AttestersList
-                      attesters={summarizeAttesters(profileVector.attested)}
+                      attesters={profileVector.attested ? summarizeAttesters(profileVector.attested) : null}
                       loading={!profileLoaded}
                       className="mb-6"
                     />

@@ -23,6 +23,10 @@ import {
 } from '@/lib/skill-domain-map'
 import { fetchAttestations, truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
 import { fetchVaultPositions, vaultStakeStats } from '@/lib/vault-positions'
+import { fetchAllRows, SERVER_ROW_CAP } from '@/lib/gql-pager'
+
+// Our ceiling on the domain-claim triples read (the pager reports it; live 2026-09-26: 75).
+const DOMAIN_TRIPLES_MAX = 5_000
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -68,42 +72,38 @@ const IS_SKILLED_IN_PREDICATE_ID =
 async function fetchDomainTriples(): Promise<{ triples: DomainTripleData[]; junkCount: number }> {
   if (!GRAPHQL_URL) return { triples: [], junkCount: 0 }
   try {
-    // Step 1: fetch all skill triples ("is skilled in" by term_id + legacy isTrustedFor)
-    const res = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetAllDomainTriples {
-            triples(
-              where: {
-                _or: [
-                  { predicate_id: { _eq: "${IS_SKILLED_IN_PREDICATE_ID}" } }
-                  { predicate: { label: { _eq: "isTrustedFor" } } }
-                ]
-              }
-              limit: 500
-            ) {
-              term_id
-              counter_term_id
-              subject { term_id label }
-              predicate { label }
-              object { term_id label }
-            }
-          }
-        `,
-      }),
-    })
-    const data = await res.json()
-    if (data.errors) throw new Error(data.errors[0].message)
-
-    const triples: Array<{
+    // Step 1: all skill triples ("is skilled in" by term_id + legacy isTrustedFor), paged —
+    // `limit: 500` got at most 250 back, silently (lib/gql-pager.ts).
+    const where = `{ _or: [
+      { predicate_id: { _eq: "${IS_SKILLED_IN_PREDICATE_ID}" } }
+      { predicate: { label: { _eq: "isTrustedFor" } } }
+    ] }`
+    const page = await fetchAllRows<{
       term_id: string
       counter_term_id: string | null
       subject: { term_id: string; label: string }
       predicate: { label: string }
       object: { term_id: string; label: string }
-    }> = data?.data?.triples || []
+    }>({
+      query: `
+        query GetAllDomainTriples($limit: Int!, $offset: Int!) {
+          triples(where: ${where}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
+            term_id
+            counter_term_id
+            subject { term_id label }
+            predicate { label }
+            object { term_id label }
+          }
+        }
+      `,
+      field: 'triples',
+      countQuery: `query GetAllDomainTriplesCount { triples_aggregate(where: ${where}) { aggregate { count } } }`,
+      countField: 'triples_aggregate',
+      pageSize: SERVER_ROW_CAP.triples,
+      maxRows: DOMAIN_TRIPLES_MAX,
+    })
+    if (page.truncated !== false) throw new Error('domain triples not read to the end')
+    const triples = page.rows
 
     if (triples.length === 0) return { triples: [], junkCount: 0 }
 
@@ -213,10 +213,11 @@ function AttestedEntryRow({ entry }: { entry: AttestedEntry }) {
   )
 }
 
-function AttestedSection({ entries, loading }: { entries: AttestedEntry[]; loading: boolean }) {
+/** `entries` null = the attestation read failed — shown as unavailable, never as "no attested agents". */
+function AttestedSection({ entries, loading }: { entries: AttestedEntry[] | null; loading: boolean }) {
   const byDomain = useMemo(() => {
     const m = new Map<string, AttestedEntry[]>()
-    for (const e of entries) {
+    for (const e of entries ?? []) {
       const arr = m.get(e.domain.termId)
       if (arr) arr.push(e)
       else m.set(e.domain.termId, [e])
@@ -229,6 +230,20 @@ function AttestedSection({ entries, loading }: { entries: AttestedEntry[]; loadi
       <div className="mb-6 rounded-2xl p-4 animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }}>
         <div className="h-5 w-40 bg-white/10 rounded mb-3" />
         <div className="h-10 bg-white/5 rounded-xl" />
+      </div>
+    )
+  }
+
+  if (entries == null) {
+    return (
+      <div className="mb-6 rounded-2xl p-5" style={{ background: 'rgba(16,185,129,0.02)', border: '1px solid rgba(16,185,129,0.1)' }} data-testid="attested-failed">
+        <div className="flex items-center gap-2 mb-1">
+          <BadgeCheck className="w-5 h-5" style={{ color: '#10b981' }} />
+          <h2 className="text-base font-bold text-white">Attested</h2>
+        </div>
+        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          Couldn&apos;t read attestations right now — this is not an empty record.
+        </p>
       </div>
     )
   }
@@ -465,7 +480,8 @@ export default function DomainsPage() {
 
 function DomainsPageContent() {
   const [allTriples, setAllTriples] = useState<DomainTripleData[]>([])
-  const [attested, setAttested] = useState<AttestedEntry[]>([])
+  // null = the attestation read failed (its own state — the ecosystem signals still render).
+  const [attested, setAttested] = useState<AttestedEntry[] | null>([])
   const [junkCount, setJunkCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -476,7 +492,7 @@ function DomainsPageContent() {
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
-    Promise.all([fetchDomainTriples(), fetchAttestations()])
+    Promise.all([fetchDomainTriples(), fetchAttestations().catch(() => null)])
       .then(([{ triples, junkCount }, attestedEntries]) => {
         setAllTriples(triples)
         setJunkCount(junkCount)
@@ -594,9 +610,9 @@ function DomainsPageContent() {
                 </div>
               </div>
             )}
-            {!loading && (allDomains.length > 0 || junkCount > 0 || attested.length > 0) && (
+            {!loading && (allDomains.length > 0 || junkCount > 0 || (attested?.length ?? 0) > 0) && (
               <p className="mt-2 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                {attested.length} attested · {allDomains.length} {allDomains.length === 1 ? 'skill' : 'skills'} shown · {junkCount} junk filtered
+                {attested ? attested.length : '—'} attested · {allDomains.length} {allDomains.length === 1 ? 'skill' : 'skills'} shown · {junkCount} junk filtered
               </p>
             )}
           </div>

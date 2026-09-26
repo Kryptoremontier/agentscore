@@ -28,8 +28,10 @@ export interface Agent {
   trustScore: number           // 0-100
   positiveStake: bigint        // Total positive tTRUST
   negativeStake: bigint        // Total negative tTRUST
-  attestationCount: number
-  reportCount: number
+  /** null = not read yet, or the read failed — rendered "—", never 0. */
+  attestationCount: number | null
+  /** null = not read yet, or the read failed — rendered "—", never 0. */
+  reportCount: number | null
   stakerCount: number
 }
 

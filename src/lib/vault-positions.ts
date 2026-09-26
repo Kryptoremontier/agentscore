@@ -11,6 +11,8 @@ import { TRUST_PREDICATE_TERM_ID } from './gql-filters'
 import { countLiveStakers, liveStakerWallets } from './live-position'
 
 export interface VaultPosition {
+  /** `${term_id}-${curve_id}-${account}` — unique and immutable, the paging key. */
+  id?: string
   term_id: string
   account_id: string | null
   shares: string
@@ -31,11 +33,20 @@ export const VAULT_POSITIONS_MAX = 50_000
 
 export type PositionOrder = 'id' | 'shares-desc' | 'created-asc'
 
-// Every ordering ends on `id` (unique) so offset pages neither overlap nor skip.
-const ORDER_BY: Record<PositionOrder, string> = {
-  id: '{ id: asc }',
-  'shares-desc': '[{ shares: desc }, { id: asc }]',
-  'created-asc': '[{ created_at: asc }, { id: asc }]',
+// Pages are always read in `id` order — unique and immutable — and the requested order is
+// applied after the full read. Paging on `shares` would skip or repeat a wallet whose shares
+// change between two page requests (a trade mid-read), and still report the read complete.
+function sharesOf(p: VaultPosition): bigint {
+  try { return BigInt(p.shares || '0') } catch { return 0n }
+}
+const byId = (a: VaultPosition, b: VaultPosition) => ((a.id ?? '') < (b.id ?? '') ? -1 : (a.id ?? '') > (b.id ?? '') ? 1 : 0)
+const COMPARE: Record<PositionOrder, (a: VaultPosition, b: VaultPosition) => number> = {
+  id: byId,
+  'shares-desc': (a, b) => {
+    const x = sharesOf(a), y = sharesOf(b)
+    return x === y ? byId(a, b) : x > y ? -1 : 1
+  },
+  'created-asc': (a, b) => ((a.created_at ?? '') < (b.created_at ?? '') ? -1 : (a.created_at ?? '') > (b.created_at ?? '') ? 1 : byId(a, b)),
 }
 
 export interface FetchVaultPositionsOptions {
@@ -64,14 +75,14 @@ export async function fetchVaultPositions(
   const ids = [...new Set(vaultIds.filter(Boolean))]
   if (ids.length === 0) return []
   const fields = options.withMeta
-    ? 'term_id account_id shares created_at updated_at account { label }'
-    : 'term_id account_id shares'
+    ? 'id term_id account_id shares created_at updated_at account { label }'
+    : 'id term_id account_id shares'
   const page = await fetchAllRows<VaultPosition>({
     query: `
       query VaultPositions($vaultIds: [String!]!, $limit: Int!, $offset: Int!) {
         positions(
           where: { term_id: { _in: $vaultIds } }
-          order_by: ${ORDER_BY[options.order ?? 'id']}
+          order_by: { id: asc }
           limit: $limit
           offset: $offset
         ) { ${fields} }
@@ -90,7 +101,7 @@ export async function fetchVaultPositions(
     request: options.request,
   })
   if (page.truncated !== false) throw new Error('vault positions not read to the end')
-  return page.rows
+  return options.order && options.order !== 'id' ? [...page.rows].sort(COMPARE[options.order]) : page.rows
 }
 
 /**

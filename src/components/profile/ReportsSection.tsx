@@ -18,7 +18,8 @@ import { formatTTrust, formatDate } from '@/lib/format'
 import type { AgentReport } from '@/lib/agent-profile'
 
 interface ReportsSectionProps {
-  reports: AgentReport[]
+  /** null = the read failed — never shown as "No reports on-chain". */
+  reports: AgentReport[] | null
   loading: boolean
   className?: string
 }
@@ -29,6 +30,19 @@ export function ReportsSection({ reports, loading, className }: ReportsSectionPr
 
   if (loading) {
     return <div className={`h-8 rounded-lg bg-white/[0.03] animate-pulse ${className ?? ''}`} />
+  }
+
+  if (reports == null) {
+    return (
+      <div
+        className={`rounded-xl border px-4 py-2.5 flex items-center gap-2 ${className ?? ''}`}
+        style={{ background: 'rgba(249,115,22,0.03)', borderColor: 'rgba(249,115,22,0.2)' }}
+        data-testid="reports-failed"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-[#4A5260] flex-shrink-0" />
+        <span className="text-xs text-[#7A838D]">Couldn&apos;t read reports right now — not the same as none.</span>
+      </div>
+    )
   }
 
   if (reports.length === 0) {

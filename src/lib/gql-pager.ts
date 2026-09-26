@@ -31,9 +31,6 @@ export const SERVER_ROW_CAP = {
   positions: 100,
 } as const
 
-/** Pages per fetchAllRows call — a backstop behind `maxRows`, never the intended stop. */
-export const MAX_PAGES = 200
-
 /** 429 retries (one transport, so every caller backs off the same way). */
 const RATE_LIMIT_RETRY_MS = [400, 1200] as const
 
@@ -125,7 +122,8 @@ export async function fetchAllRows<T>(spec: PageSpec): Promise<PagedRows<T>> {
 
   const rows: T[] = []
   let reachedEnd = false
-  for (let page = 0; page < MAX_PAGES && rows.length < spec.maxRows; page++) {
+  // Bounded by maxRows: every page either adds at least one row or ends the read.
+  while (rows.length < spec.maxRows) {
     const limit = Math.min(pageSize, spec.maxRows - rows.length)
     const data = await request<Record<string, T[]>>(spec.query, { ...spec.variables, limit, offset: rows.length })
     const batch = data?.[spec.field]
@@ -142,7 +140,7 @@ export async function fetchAllRows<T>(spec: PageSpec): Promise<PagedRows<T>> {
     const total = count == null ? rows.length : Math.max(count, rows.length)
     return { rows, total, truncated: total > rows.length }
   }
-  // Stopped at maxRows (or the page backstop) before the end.
+  // Stopped at maxRows before the end.
   if (count == null) return { rows, total: null, truncated: null }
   return { rows, total: count, truncated: count > rows.length }
 }

@@ -128,7 +128,7 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
           <div className="grid grid-cols-2 gap-4">
             {/* Attestations */}
             <div className="glass rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold font-mono">{agent.attestationCount}</p>
+              <p className="text-2xl font-bold font-mono">{agent.attestationCount ?? '—'}</p>
               <p className="text-sm text-text-muted">Attestations</p>
             </div>
 
@@ -149,15 +149,15 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
             {/* Reports */}
             <div className={cn(
               "glass rounded-lg p-4 text-center",
-              agent.reportCount > 0 && "border-trust-low"
+              (agent.reportCount ?? 0) > 0 && "border-trust-low"
             )}>
-              <p className="text-2xl font-bold font-mono">{agent.reportCount}</p>
+              <p className="text-2xl font-bold font-mono">{agent.reportCount ?? '—'}</p>
               <p className="text-sm text-text-muted">Reports</p>
             </div>
           </div>
 
           {/* Warning if high report count */}
-          {agent.reportCount > 10 && (
+          {(agent.reportCount ?? 0) > 10 && (
             <div className="mt-4 p-3 rounded-lg bg-trust-low/10 border border-trust-low/20 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-trust-low flex-shrink-0 mt-0.5" />
               <p className="text-sm text-trust-low">

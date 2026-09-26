@@ -21,7 +21,8 @@ import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestButton } from '@/components/attest/AttestButton'
 
 interface AttestedDomainsProps {
-  entries: AttestedEntry[]
+  /** null = the read failed — shown as unavailable, never as "no attestations yet". */
+  entries: AttestedEntry[] | null
   loading: boolean
   agentId: string
   agentName: string
@@ -59,6 +60,15 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
       <div className={`rounded-2xl p-5 animate-pulse ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.05)', border: '1px solid rgba(46,204,113,0.15)' }}>
         <div className="h-3 w-40 rounded bg-white/10 mb-3" />
         <div className="h-10 rounded bg-white/5" />
+      </div>
+    )
+  }
+
+  if (entries == null) {
+    return (
+      <div className={`rounded-2xl px-5 py-4 ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.03)', border: '1px solid rgba(46,204,113,0.15)' }} data-testid="attested-failed">
+        <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#2ECC71' }}>Attested Domains</p>
+        <p className="text-xs text-[#7A838D]">Couldn&apos;t read attestations right now — this is not an empty record.</p>
       </div>
     )
   }

@@ -478,8 +478,10 @@ export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array
       }
     })
   } catch (err) {
+    // A failed read is not "no skills": rethrow, so the modal keeps its unknown state and the
+    // REST detail answers 500 instead of 200 with the skill breakdown (and score) silently gone.
     console.warn('[fetchAgentSkillTriples] Failed:', err)
-    return []
+    throw err
   }
 }
 

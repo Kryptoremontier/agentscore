@@ -219,13 +219,13 @@ describe('fetchAttestations — raw 0-share rows from the indexer never become a
     expect(fake.rowCalls('positions').map((c) => c.variables.offset)).toEqual([0, 100])
   })
 
-  it('a positions page failing mid-way → no entry at all, never a count of the first 100', async () => {
+  it('a positions page failing mid-way → the read fails: never a count of the first 100, never "no attestations"', async () => {
     const wallets = Array.from({ length: 130 }, (_, i) => `0x${(i + 1).toString(16).padStart(40, '0')}`)
     fakeAttestations(
       wallets.map((w) => ({ term_id: DACKIE_TRIPLE, account_id: w, shares: String(STAKE) })),
       (q, v) => (q.includes('VaultPositions(') && v.offset === 100 ? 'throw' : undefined),
     )
-    expect(await fetchAttestations({ subjectId: DACKIE })).toEqual([])
+    await expect(fetchAttestations({ subjectId: DACKIE })).rejects.toThrow()
   })
 })
 
