@@ -18,6 +18,9 @@ import { AGENT_WHERE_STR } from './gql-filters'
 import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
 import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
 import { countLiveStakers } from './live-position'
+import { summarizeAttesters } from './agent-profile'
+import { calculateAgentTier, type AgentTierResult } from './agent-tier'
+import type { AttestedEntry } from './attestation-reader'
 
 /** Cap on the /agents AgentScore fetch. Truncation past it is reported, never silent. */
 export const AGENT_LIST_LIMIT = 50
@@ -198,3 +201,68 @@ export function agentResultsLine(shown: number, of: number): { shown: number; of
   const narrowed = shown !== of
   return { shown, of: narrowed ? of : null, noun: (narrowed ? of : shown) === 1 ? 'agent' : 'agents' }
 }
+
+// ─── Attestations on the card ───────────────────────────────────────────────
+
+/**
+ * One agent's attestations as a card shows them. Same derivation as the modal
+ * (computeModalStatSummary + calculateAgentTier): attesters =
+ * summarizeAttesters(entries).length (distinct live wallets across all
+ * domains), domains = entries.length (one entry per attested domain; a
+ * domain with no live attester has no entry). The list and the modal read
+ * the same rows (attestation-reader), so they print the same numbers.
+ */
+export interface CardAttestationView {
+  attesters: number
+  domains: number
+  tier: AgentTierResult
+}
+
+export function cardAttestationView(entries: readonly AttestedEntry[]): CardAttestationView {
+  const summary = summarizeAttesters(entries)
+  return { attesters: summary.length, domains: entries.length, tier: calculateAgentTier(summary) }
+}
+
+/**
+ * The card's attester line (REPO_MAP §7 rule 5: failed ≠ empty). `claim` is the
+ * text the card prints (null = none), `cta` whether the Attest button follows it.
+ * - `loading`: the bulk read is in flight → "— attesters".
+ * - `unread`: the read failed → no claim at all, the Attest CTA only.
+ * - `none`: the read succeeded and found no live attester → "No attestations yet · Attest".
+ * - `some`: "{n} attester(s) · {k} domain(s)".
+ */
+export type CardAttesterLine =
+  | { kind: 'loading'; claim: string; cta: false }
+  | { kind: 'unread'; claim: null; cta: true }
+  | { kind: 'none'; claim: string; cta: true }
+  | { kind: 'some'; claim: string; cta: false; attesters: number; domains: number }
+
+export const CARD_NO_ATTESTATIONS = 'No attestations yet'
+
+/** `view`: undefined = not read yet, null = the read failed. */
+export function cardAttesterLine(view: CardAttestationView | null | undefined): CardAttesterLine {
+  if (view === undefined) return { kind: 'loading', claim: '— attesters', cta: false }
+  if (view === null) return { kind: 'unread', claim: null, cta: true }
+  if (view.attesters === 0) return { kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true }
+  return {
+    kind: 'some',
+    claim: `${pluralize(view.attesters, 'attester')} · ${pluralize(view.domains, 'domain')}`,
+    cta: false,
+    attesters: view.attesters,
+    domains: view.domains,
+  }
+}
+
+/**
+ * Compact card: name, origin, tier chip (Trusted/Verified only) and the attester
+ * line — no score slot, caption, stake line, bar or shield. Only for a row whose
+ * atom vault the list never read (ERC-8004 cohort rows) and that is not known to
+ * have an attester. For those rows the dropped elements are the same on every
+ * card ("—", no stake read, an empty bar): they carry nothing about the row
+ * (docs/audit/4b-list-findings.md §2). A row with attesters (Captain Dackie)
+ * keeps the full card.
+ */
+export function isCompactCard(input: { vaultRead: boolean; line: CardAttesterLine }): boolean {
+  return !input.vaultRead && input.line.kind !== 'some'
+}
+

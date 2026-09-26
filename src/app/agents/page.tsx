@@ -18,7 +18,7 @@ import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
 import { useAgentStakerWeights } from '@/hooks/useEvaluatorScore'
-import { calculateAgentTier, type AgentTierResult } from '@/lib/agent-tier'
+import { calculateAgentTier } from '@/lib/agent-tier'
 import { AgentTierChip } from '@/components/agents/AgentTierChip'
 import { fetchAttestationsForSubjects, type AttestedEntry } from '@/lib/attestation-reader'
 import { calculateWeightedTrust } from '@/lib/reputation-decay'
@@ -52,7 +52,11 @@ import { fetchVaultPositions } from '@/lib/vault-positions'
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
-import { fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus } from '@/lib/agent-list'
+import {
+  fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus,
+  cardAttestationView, cardAttesterLine, isCompactCard, type CardAttestationView,
+} from '@/lib/agent-list'
+import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import {
   readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP,
 } from '@/lib/score-basis'
@@ -367,16 +371,22 @@ function AgentsPageContent() {
   }, [loading, cohortLoading, agents, cohortAgents])
 
   // Per agent: attesters, domains and the tier — the same derivation as the modal
-  // (summarizeAttesters → calculateAgentTier), computed once per read, not per render.
+  // (lib/agent-list.ts cardAttestationView), computed once per read, not per render.
   const attestationViewBySubject = useMemo(() => {
     if (!attestedBySubject) return attestedBySubject
-    const out = new Map<string, { attesters: number; domains: number; tier: AgentTierResult }>()
-    for (const [id, entries] of attestedBySubject) {
-      const summary = summarizeAttesters(entries)
-      out.set(id, { attesters: summary.length, domains: entries.length, tier: calculateAgentTier(summary) })
-    }
+    const out = new Map<string, CardAttestationView>()
+    for (const [id, entries] of attestedBySubject) out.set(id, cardAttestationView(entries))
     return out
   }, [attestedBySubject])
+
+  // A card's "Attest" CTA opens the modal scrolled to its ATTESTED section, once the
+  // profile has loaded (the section's height depends on it).
+  const [focusAttested, setFocusAttested] = useState(false)
+  const attestedSectionRef = useRef<HTMLDivElement>(null)
+  const openAgentAtAttested = (agent: GraphQLAgent) => {
+    setFocusAttested(true)
+    setSelectedAgent(agent)
+  }
 
   // Auto-open agent modal when ?open=TERM_ID is in URL (checks both corpora)
   useEffect(() => {
@@ -1181,6 +1191,20 @@ function AgentsPageContent() {
     return () => { cancelled = true }
   }, [selectedAgent?.term_id])
 
+  // Card "Attest" CTA: scroll the modal to ATTESTED once the profile is in (its height
+  // settles then). Cards are only clickable with the modal closed, when profileLoaded is false.
+  useEffect(() => {
+    if (!selectedAgent) { setFocusAttested(false); return }
+    if (!focusAttested || !profileLoaded) return
+    let cancelled = false
+    const frame = requestAnimationFrame(() => {
+      if (cancelled) return
+      attestedSectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      setFocusAttested(false)
+    })
+    return () => { cancelled = true; cancelAnimationFrame(frame) }
+  }, [selectedAgent, focusAttested, profileLoaded])
+
   // Submit a report on-chain
   const handleSubmitReport = async () => {
     if (!selectedAgent || reportSubmitting) return
@@ -1863,10 +1887,51 @@ function AgentsPageContent() {
                   // Cohort rows never fetch the atom vault: their stake/stakers were never
                   // measured, so they are not printed (thesis §6: null ≠ 0.0).
                   const vaultRead = readSharesWei(agent.positions_aggregate) != null
+                  // Attestations — the same read and derivation as the modal (lib/agent-list.ts).
+                  // undefined = still reading, null = the read failed (no claim, CTA only).
+                  const cardView = attestationViewBySubject === undefined ? undefined
+                    : attestationViewBySubject === null ? null
+                    : attestationViewBySubject.get(agent.term_id)
+                  const attesterLine = cardAttesterLine(cardView)
                   // The agent tier — attestations only (thesis §6). The card shows only Trusted /
                   // Verified; Unverified is the default state, carried by the attester line.
-                  const cardAgentTier = attestationViewBySubject?.get(agent.term_id)?.tier ?? null
+                  const cardAgentTier = cardView?.tier ?? null
                   const cardTierChip = cardAgentTier && cardAgentTier.tier !== 'unverified' ? cardAgentTier.display : null
+                  const originChip = (
+                    <span className={`text-xs px-2 py-0.5 rounded inline-block ${
+                      agent.origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
+                    }`}>
+                      {agent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
+                    </span>
+                  )
+                  const cardClass = `bg-[#111318] border border-[#1e2028] rounded-2xl
+                                 cursor-pointer transition-all duration-300 ease-out
+                                 hover:-translate-y-1 hover:border-[#C8963C]/15
+                                 hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]`
+
+                  // Compact: a cohort row (vault never read on the list) not known to have an
+                  // attester. Its score slot, caption, stake line and bar would be the same on
+                  // every such card, so they are not drawn (lib/agent-list.ts isCompactCard).
+                  if (isCompactCard({ vaultRead, line: attesterLine })) {
+                    return (
+                      <motion.div
+                        key={agent.term_id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.05 }}
+                        onClick={() => setSelectedAgent(agent)}
+                        className={`${cardClass} p-4`}
+                        data-card="compact"
+                      >
+                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                          <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
+                          {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
+                          {originChip}
+                        </div>
+                        <CardAttesterLine line={attesterLine} onAttest={() => openAgentAtAttested(agent)} />
+                      </motion.div>
+                    )
+                  }
 
                   return (
                     <motion.div
@@ -1875,10 +1940,8 @@ function AgentsPageContent() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.05 }}
                       onClick={() => setSelectedAgent(agent)}
-                      className="bg-[#111318] border border-[#1e2028] rounded-2xl p-5
-                                 cursor-pointer transition-all duration-300 ease-out
-                                 hover:-translate-y-1 hover:border-[#C8963C]/15
-                                 hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]"
+                      className={`${cardClass} p-5`}
+                      data-card="full"
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
@@ -1895,11 +1958,7 @@ function AgentsPageContent() {
                               {/* Agent tier chip — Trusted / Verified only (attestations, thesis §6). */}
                               {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
                             </div>
-                            <span className={`text-xs px-2 py-0.5 rounded inline-block ${
-                              agent.origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
-                            }`}>
-                              {agent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
-                            </span>
+                            {originChip}
                           </div>
                         </div>
                         <div className="text-right">
@@ -1913,9 +1972,13 @@ function AgentsPageContent() {
                             // unmeasured cards doubled the list's render cost (measured).
                             <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help" title={NO_STAKE_TOOLTIP}>—</p>
                           )}
-                          <p className="text-[10px] text-[#7A838D]">{displayScore != null ? 'AGENTSCORE' : 'UNVERIFIED'}</p>
+                          {/* "No score", not "Unverified": the tier is its own chip and comes only
+                              from attestations (thesis §6) — a Trusted agent can have no stake. */}
+                          <p className="text-[10px] text-[#7A838D]">{displayScore != null ? 'AGENTSCORE' : 'NO SCORE'}</p>
                         </div>
                       </div>
+                      {/* The canonical unit first, above the vault line (4b-modal's order). */}
+                      <CardAttesterLine line={attesterLine} onAttest={() => openAgentAtAttested(agent)} className="mb-3" />
                       {vaultRead && (
                         <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
                           <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
@@ -2142,13 +2205,15 @@ function AgentsPageContent() {
                   tabs: ATTESTED (headline, canonical unit) > DECLARED (2c, cohort
                   only) > REPORTS (collapsed). Zero attestations renders the
                   AttestEmptyState "be the first" CTA (thesis §6). */}
-              <AttestedDomains
-                entries={profileVector.attested}
-                loading={!profileLoaded}
-                agentId={selectedAgent.term_id}
-                agentName={getAgentNameFromAtom(selectedAgent)}
-                className="mb-3"
-              />
+              <div ref={attestedSectionRef} className="scroll-mt-4">
+                <AttestedDomains
+                  entries={profileVector.attested}
+                  loading={!profileLoaded}
+                  agentId={selectedAgent.term_id}
+                  agentName={getAgentNameFromAtom(selectedAgent)}
+                  className="mb-3"
+                />
+              </div>
               {selectedAgent.origin === 'erc8004' && (
                 <DeclaredDomains declaredDomains={selectedAgent.declaredDomains} className="mb-3" />
               )}
