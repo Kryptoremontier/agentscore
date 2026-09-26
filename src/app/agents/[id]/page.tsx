@@ -85,6 +85,8 @@ export default function AgentDetailPage() {
   const [legacySkillClaimCount, setLegacySkillClaimCount] = useState(0)
   const [minimalAtom, setMinimalAtom] = useState<ProfileAtom | null>(null)
   const [cohortMatch, setCohortMatch] = useState<CohortAgent | null>(null)
+  // The ERC-8004 identity read failed: unknown — never shown as "not a cohort agent".
+  const [cohortFailed, setCohortFailed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // ETAP 3 canonical profile vector — shared by every tier.
   const [vector, setVector] = useState<AgentProfileVector>(EMPTY_VECTOR)
@@ -101,6 +103,7 @@ export default function AgentDetailPage() {
       setAgent(null)
       setMinimalAtom(null)
       setCohortMatch(null)
+      setCohortFailed(false)
       setVector(EMPTY_VECTOR)
       setBackers([])
 
@@ -123,11 +126,17 @@ export default function AgentDetailPage() {
           setLegacySkillClaimCount(api.skillBreakdown?.length ?? 0)
         } else if (atom) {
           setMinimalAtom(atom)
-          // Cohort membership only matters for the DECLARED chips.
-          const { fetchCohortAgents } = await import('@/lib/cohort-reader')
-          const cohort = await fetchCohortAgents()
-          if (cancelled) return
-          setCohortMatch(cohort.agents.find(c => c.termId === agentId) ?? null)
+          // ONE agent's ERC-8004 identity + declarations (lib/cohort-reader.ts fetchCohortAgent) —
+          // not the whole cohort (~15 requests) to find one row. The same lookup REST/MCP use.
+          const { fetchCohortAgent } = await import('@/lib/cohort-reader')
+          try {
+            const match = await fetchCohortAgent(agentId)
+            if (cancelled) return
+            setCohortMatch(match)
+          } catch {
+            if (cancelled) return
+            setCohortFailed(true)
+          }
         } else {
           throw new Error('Agent not found')
         }
@@ -198,7 +207,9 @@ export default function AgentDetailPage() {
                 <p className="text-text-muted text-sm">
                   {cohortMatch
                     ? 'Real agent from the ERC-8004 registry cohort — self-declared, not scored by AgentScore.'
-                    : 'Not in the scored AgentScore corpus — shown because it has on-chain claims. No score is computed for it.'}
+                    : cohortFailed
+                      ? 'Not in the scored AgentScore corpus. Couldn’t read its ERC-8004 identity right now — this is not a “no”.'
+                      : 'Not in the scored AgentScore corpus — shown because it has on-chain claims. No score is computed for it.'}
                 </p>
                 {cohortMatch && (
                   <p className="text-xs text-text-muted font-mono break-all opacity-60 mt-1">{cohortMatch.caipIdentity}</p>
@@ -207,7 +218,7 @@ export default function AgentDetailPage() {
 
               {/* ATTESTED > DECLARED > REPORTS (thesis §5 hierarchy) */}
               <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agentId} agentName={name} />
-              <DeclaredDomains declaredDomains={cohortMatch?.declaredDomains} />
+              <DeclaredDomains declaredDomains={cohortFailed ? null : cohortMatch?.declaredDomains} />
               <ReportsSection reports={vector.reports} loading={profileLoading} />
 
               <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />

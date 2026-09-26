@@ -33,6 +33,7 @@ import { getAttestationCount, getAttestationConfig } from './attestation-gate'
 import { calculateAgentTier, AGENT_TIER_BASIS, type AgentTier, type AgentTierBasis } from './agent-tier'
 import { fetchAttestations, fetchAttestationsForSubjects, type AttestedEntry } from './attestation-reader'
 import { summarizeAttesters } from './agent-profile'
+import { fetchCohortAgent } from './cohort-reader'
 import { filterAgents, type AgentJunkReason } from './agent-junk-filter'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP, type GqlRequest, type PagedRows } from './gql-pager'
 import { fetchVaultPositions, sumSharesByVault, vaultStakeStats, type VaultPosition } from './vault-positions'
@@ -481,6 +482,62 @@ export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem
     supportRatio,
     skillBreakdown,
     hasRadar: skillBreakdown.length >= 3,
+  }
+}
+
+// ─── ERC-8004 cohort agent detail ─────────────────────────────────────────────
+
+/**
+ * Detail for an ERC-8004 cohort agent — an agent outside the scored AgentScore corpus
+ * (e.g. Captain Dackie, the first attested one). REST /api/v1/agents/:id and MCP
+ * get_agent_trust fall back to it when getAgentDetail finds nothing, so an attested
+ * agent is never a 404.
+ *
+ * Only what is read is present (REPO_MAP §7 rule 5): identity, declarations and the
+ * attestation tier. No score, stake or staker fields — the cohort's vault is not
+ * scored; `scoreBasis: null` says "not a scored AgentScore agent" (same as the timeline).
+ * A failed attestation read → tier and counts null (unknown), never "unverified" / 0.
+ * null = not a cohort agent. A failed identity read throws (→ 500, never 404).
+ */
+export interface CohortAgentDetail {
+  id: string
+  name: string
+  origin: 'erc8004'
+  caipIdentity: string
+  createdAt: string
+  /** null = the classification read failed (unknown, not "declares nothing"). */
+  declaredDomains: string[] | null
+  declaredSkills: string[] | null
+  trustTier: AgentTier | null
+  tierBasis: AgentTierBasis
+  scoreBasis: null
+  /** Distinct live attesters across all domains (summarizeAttesters). null = unread. */
+  attesters: number | null
+  attestedDomains: Array<{ domain: string; attesters: number; tTrustAttested: number }> | null
+  tTrustAttested: number | null
+}
+
+export async function getCohortAgentDetail(termId: string): Promise<CohortAgentDetail | null> {
+  const cohort = await fetchCohortAgent(termId)
+  if (!cohort) return null
+  const attested = await fetchAttestations({ subjectId: termId }).catch(() => null)
+  const summary = attested ? summarizeAttesters(attested) : null
+  return {
+    id: termId,
+    name: cohort.label,
+    origin: 'erc8004',
+    caipIdentity: cohort.caipIdentity,
+    createdAt: cohort.createdAt,
+    declaredDomains: cohort.declaredDomains,
+    declaredSkills: cohort.declaredSkills,
+    trustTier: summary ? calculateAgentTier(summary).tier : null,
+    tierBasis: AGENT_TIER_BASIS,
+    scoreBasis: null,
+    attesters: summary ? summary.length : null,
+    attestedDomains: attested
+      ? attested.map(e => ({ domain: e.domain.label, attesters: e.distinctAttesters, tTrustAttested: weiToFloat(e.totalStake) }))
+      : null,
+    tTrustAttested: attested ? weiToFloat(attested.reduce((sum, e) => sum + e.totalStake, 0n)) : null,
   }
 }
 

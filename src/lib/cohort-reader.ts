@@ -117,6 +117,14 @@ export interface ClassificationRow {
   object: { term_id: string; label: string }
 }
 
+// The ERC-8004 identity filter: `same as` a CAIP id on the registry contract. ONE filter for the
+// cohort rows, their count, and the single-agent lookup (fetchCohortAgent) — REPO_MAP §7 rule 1.
+const SAME_AS_FILTER = `
+      predicate_id: { _eq: "${SAME_AS_PREDICATE_ID}" }
+      object: { label: { _ilike: "%erc721:0x8004a169%" } }
+      subject_id: { _is_null: false }
+    `
+
 // One transport: throws on HTTP errors (incl. 429 rate limits), GraphQL errors and a body
 // without data — a failed read is never an empty one.
 const gql = gqlRequest
@@ -222,11 +230,7 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
     // LIKE matches the registry-contract pattern the JS guard below checks (it used to be the
     // broader "%erc721:0x8004%", so the count included objects the list then dropped), and a
     // row with no subject can't become an agent, so it isn't counted either.
-    const sameAsFilter = `
-      predicate_id: { _eq: "${SAME_AS_PREDICATE_ID}" }
-      object: { label: { _ilike: "%erc721:0x8004a169%" } }
-      subject_id: { _is_null: false }
-    `
+    const sameAsFilter = SAME_AS_FILTER
     const [paged, countData] = await Promise.all([
       fetchAllRows<SameAsRow>({
         query: `
@@ -315,3 +319,42 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
     return failed
   }
 }
+
+/**
+ * One ERC-8004 cohort agent by term id — the same identity filter, dedup (earliest
+ * `same as` triple) and classification as fetchCohortAgents, for one subject. Used by
+ * the /agents/[id] profile and the REST/MCP detail, which used to download the whole
+ * cohort (or not look at all) to answer for one agent.
+ *
+ * null = not a cohort agent. Throws when the identity read fails: "couldn't read" is
+ * never "not an ERC-8004 agent". A failed classification read leaves declared* null
+ * (unknown), as in fetchCohortAgents.
+ */
+export async function fetchCohortAgent(termId: string): Promise<CohortAgent | null> {
+  if (!APP_CONFIG.GRAPHQL_URL) throw new Error('GraphQL endpoint not configured')
+  const data = await gql<{ triples: SameAsRow[] }>(`
+    query GetErc8004CohortAgent($id: String!) {
+      triples(where: { _and: [{ ${SAME_AS_FILTER} }, { subject_id: { _eq: $id } }] }, order_by: [{ created_at: asc }, { term_id: asc }], limit: 20) {
+        term_id
+        created_at
+        subject { term_id label }
+        object { label }
+      }
+    }
+  `, { id: termId })
+  const row = (data.triples ?? []).find((r) => r.subject?.term_id && r.object?.label && ERC8004_CAIP_PATTERN.test(r.object.label))
+  if (!row) return null
+  const [tags, categories] = await Promise.all([
+    fetchClassification(HAS_TAG_PREDICATE_IDS, [termId]),
+    fetchClassification(HAS_CATEGORY_PREDICATE_IDS, [termId]),
+  ])
+  return {
+    termId,
+    label: row.subject?.label ?? 'Unknown',
+    caipIdentity: row.object?.label ?? '',
+    declaredSkills: tags.unread.has(termId) ? null : (foldClassificationBySubject(tags.rows).get(termId) ?? []),
+    declaredDomains: categories.unread.has(termId) ? null : (foldClassificationBySubject(categories.rows).get(termId) ?? []),
+    createdAt: row.created_at,
+  }
+}
+

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
   getAgentsWithScores,
   getAgentDetail,
+  getCohortAgentDetail,
   getAgentTrustBreakdown,
   getDomains,
   getDomainAgents,
@@ -125,7 +126,9 @@ const handler = createMcpHandler(
           'per-skill breakdown (contextual trust), ' +
           'trust score components (economic confidence, composite quality), ' +
           'anti-manipulation metrics (whale detection, evaluator weights), ' +
-          'and the attestation tier with what the next rung needs (distinct attesters, tTRUST attested — never backing).',
+          'and the attestation tier with what the next rung needs (distinct attesters, tTRUST attested — never backing). ' +
+          "ERC-8004 cohort agents (outside the scored corpus) return origin 'erc8004' with their identity, declared " +
+          'domains and attestation tier; they carry no score (scoreBasis null), and no stake/staker fields are invented.',
         inputSchema: {
           agentId: z.string()
             .describe('Agent\'s term ID (get from search_agents)'),
@@ -138,7 +141,10 @@ const handler = createMcpHandler(
             getAgentTrustBreakdown(agentId),
           ])
           if (!detail) {
-            return { content: [{ type: 'text' as const, text: 'Agent not found' }] }
+            // Not in the scored corpus: an ERC-8004 cohort agent still answers (tier from attestations).
+            const cohort = await getCohortAgentDetail(agentId)
+            if (!cohort) return { content: [{ type: 'text' as const, text: 'Agent not found' }] }
+            return { content: [{ type: 'text' as const, text: JSON.stringify({ agent: cohort }, null, 2) }] }
           }
           return {
             content: [{
