@@ -16,6 +16,7 @@ import Link from 'next/link'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
+import { summarizeAttesters } from '@/lib/agent-profile'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestButton } from '@/components/attest/AttestButton'
 
@@ -66,6 +67,9 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
     return <AttestEmptyState agentId={agentId} agentName={agentName} className={className} />
   }
 
+  // The same distinct-attester count as the modal's stat row: one derivation, never a local Set.
+  const attesterCount = summarizeAttesters(entries).length
+
   return (
     <div className={`rounded-2xl p-5 ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.3)' }}>
       <div className="flex items-center justify-between gap-2 mb-1">
@@ -80,8 +84,7 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
       </div>
       <p className="text-[11px] text-[#7A838D] mb-3">
         {entries.length} domain{entries.length !== 1 ? 's' : ''} · attested by{' '}
-        {new Set(entries.flatMap((e) => e.attesters.map((a) => a.toLowerCase()))).size} distinct wallet
-        {new Set(entries.flatMap((e) => e.attesters.map((a) => a.toLowerCase()))).size !== 1 ? 's' : ''}
+        {attesterCount} distinct wallet{attesterCount !== 1 ? 's' : ''}
       </p>
       <div className="space-y-2">
         {entries.map((e) => (

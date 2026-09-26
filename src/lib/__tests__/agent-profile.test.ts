@@ -57,6 +57,67 @@ describe('summarizeAttesters — according to WHOM, across domains', () => {
   })
 })
 
+describe('summarizeAttesters — only live stakes count (a wallet that sold out is not an attester)', () => {
+  it('drops a 0-share stake even from entries not built by aggregateAttestations', () => {
+    const [e] = aggregateAttestations([att(AGENT, CRYPTO, [[W1, 10n]])])
+    const handBuilt = { ...e, attesterStakes: [...e.attesterStakes, { wallet: W2, shares: 0n }] }
+    const s = summarizeAttesters([handBuilt])
+    expect(s.map((a) => a.wallet)).toEqual([W1])
+  })
+
+  it('a wallet live in one domain and sold out of another: 1 attester, only the live domain listed', () => {
+    const entries = aggregateAttestations([
+      att(AGENT, CRYPTO, [[W1, 10n]]),
+      att(AGENT, KNOWLEDGE, [[W1, 0n], [W2, 0n]]),
+    ])
+    const s = summarizeAttesters(entries)
+    expect(s).toEqual([{ wallet: W1, domains: ['Crypto / Onchain'], totalStake: 10n }])
+    // …and the sold-out domain is not "attested" at all: no entry, so no domain count either.
+    expect(computeModalStatSummary({ attested: entries, reportCount: 0, backerCount: 0, backerVaultWei: 0n, signals: 0 }).domains).toBe(1)
+  })
+})
+
+describe('live attester counts — testnet 2026-09-26, exact rows (is skilled in → canonical bucket)', () => {
+  // Every attestation triple on testnet that day: 3 `is skilled in` triples whose object is a
+  // canonical bucket (the other 70 `is skilled in` triples point elsewhere and are skipped):
+  //   Captain Dackie → Crypto / Onchain         0xe8565630…  1 position, W1, 0.0099 tTRUST
+  //   Luda           → Knowledge / Productivity 0x54c64639…  1 position, W1, 0.02079 tTRUST
+  //   9ytshade.eth   → Social                   0x15bbaeb6…  no positions (never staked)
+  // OPEN CLAW has no attestation triple. Same values the live modal printed (npm run shots).
+  const DACKIE = '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb'
+  const LUDA = '0x82d87d9517b68e653418c0e49805b36aca3e33a00536af25fc319f5c24802c5a'
+  const NINE_YT = '0xff7efa59887f0adc377c7712ef547b9df7004efd64895f16f9f9ff3d9c67ca01'
+  const SOCIAL = '0x9c7db27885e2e35f9a2f674943f61b02f321ea22d91dd48dea6d82647f884a91'
+  const SOLD_OUT = '0x5555555555555555555555555555555555555555'
+  const stats = (attested: ReturnType<typeof aggregateAttestations>) =>
+    computeModalStatSummary({ attested, reportCount: 0, backerCount: 0, backerVaultWei: 0n, signals: 0 })
+
+  it('Captain Dackie: 1 attester, 0.0099 tTRUST — and still 1 with a sold-out wallet on the same triple', () => {
+    const live = stats(aggregateAttestations([att(DACKIE, CRYPTO, [[W1, 9_900_000_000_000_000n]])]))
+    expect(live.attesters).toBe(1)
+    expect(live.tTrustAttestedWei).toBe(9_900_000_000_000_000n)
+    const withSoldOut = stats(aggregateAttestations([att(DACKIE, CRYPTO, [[W1, 9_900_000_000_000_000n], [SOLD_OUT, 0n]])]))
+    expect(withSoldOut).toEqual(live)
+  })
+
+  it('Luda: 1 attester, 0.02079 tTRUST attested', () => {
+    const s = stats(aggregateAttestations([att(LUDA, KNOWLEDGE, [[W1, 20_790_000_000_000_000n]])]))
+    expect(s.attesters).toBe(1)
+    expect(s.domains).toBe(1)
+    expect(s.tTrustAttestedWei).toBe(20_790_000_000_000_000n)
+  })
+
+  it('OPEN CLAW: 0 attesters (no attestation triple)', () => {
+    expect(stats(aggregateAttestations([])).attesters).toBe(0)
+  })
+
+  it('9ytshade.eth: a triple with no position is 0 attesters and 0 domains, not a phantom attested domain', () => {
+    const s = stats(aggregateAttestations([att(NINE_YT, SOCIAL, [])]))
+    expect(s.attesters).toBe(0)
+    expect(s.domains).toBe(0)
+  })
+})
+
 describe('resolveReportCategory', () => {
   it('reads the canonical form from the object label', () => {
     expect(resolveReportCategory('reported for', 'Phishing')).toBe('Phishing')

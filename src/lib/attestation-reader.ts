@@ -62,7 +62,7 @@ export interface AttestedEntry {
   totalStake: bigint
   /** Total counter-vault shares. */
   opposeStake: bigint
-  /** Raw support position count (a wallet may hold several). */
+  /** Live support position count (a wallet may hold several) — 0-share rows are not counted. */
   positionCount: number
   /** Attested score v1 — see scoreAttestation. */
   score: number
@@ -92,6 +92,23 @@ export function scoreAttestation(distinctAttesters: number, totalStake: bigint):
 
 // ─── Pure aggregation ────────────────────────────────────────────────────────
 
+/**
+ * THE attester rule (thesis §4 rule 5, §8 mine 6): a position is an
+ * attestation only while it holds shares. The indexer keeps a wallet's
+ * position row after a full redeem, with shares "0" (477 such rows on testnet,
+ * 2026-09-26), so having a position row does not make a wallet an attester.
+ * A wallet counts only if it holds shares > 0 when we read. One that redeemed
+ * and bought back holds shares again, so it counts.
+ *
+ * Every attester count and every tTRUST-attested sum goes through this
+ * predicate, via aggregateAttestations (raw positions) and summarizeAttesters
+ * (agent-profile.ts). Callers pass RAW positions and never filter on their own
+ * (REPO_MAP §7 rule 4).
+ */
+export function isLivePosition(p: { shares: bigint }): boolean {
+  return p.shares > 0n
+}
+
 const DOMAIN_BY_TERM_ID: ReadonlyMap<string, CanonicalDomainDef> = new Map(
   CANONICAL_DOMAINS_REGISTRY.map((d) => [d.termId, d]),
 )
@@ -102,10 +119,12 @@ const DOMAIN_BY_TERM_ID: ReadonlyMap<string, CanonicalDomainDef> = new Map(
  * same wallet count as ONE attester (dedup by lowercased address). Rows whose
  * domainTermId is not in the canonical registry are skipped.
  *
- * A pair with ZERO support positions yields NO entry: per the thesis the
- * attestation is triple + staked positions — a triple whose stake was fully
- * redeemed (live on testnet: 9ytshade.eth → Social) is not an attestation.
- * Sorted by score desc, then agent name.
+ * Only live positions count (isLivePosition): a 0-share row adds no
+ * attester, no stake and no position. A pair with ZERO live support
+ * positions yields NO entry: per the thesis the attestation is triple +
+ * staked positions. So a triple that was never staked (live on testnet:
+ * 9ytshade.eth → Social, no deposit ever indexed) or whose every position
+ * was sold out is not an attestation. Sorted by score desc, then agent name.
  */
 export function aggregateAttestations(raw: readonly RawAttestation[]): AttestedEntry[] {
   const acc = new Map<string, {
@@ -141,7 +160,7 @@ export function aggregateAttestations(raw: readonly RawAttestation[]): AttestedE
     }
 
     for (const p of r.supportPositions ?? []) {
-      if (!p?.wallet) continue
+      if (!p?.wallet || !isLivePosition(p)) continue
       const lower = p.wallet.toLowerCase()
       if (!e.attesters.has(lower)) e.attesters.set(lower, p.wallet)
       e.stakeByWallet.set(lower, (e.stakeByWallet.get(lower) ?? 0n) + p.shares)
@@ -149,7 +168,8 @@ export function aggregateAttestations(raw: readonly RawAttestation[]): AttestedE
       e.positionCount++
     }
     for (const p of r.opposePositions ?? []) {
-      if (!p?.wallet) continue
+      // A 0-share row adds 0n either way; the check keeps both sides on one rule.
+      if (!p?.wallet || !isLivePosition(p)) continue
       e.opposeStake += p.shares
     }
   }

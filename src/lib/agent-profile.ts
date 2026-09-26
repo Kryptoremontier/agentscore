@@ -19,7 +19,7 @@
 import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR } from './gql-filters'
 import { TRUST_PREDICATE_TERM_ID } from './intuition'
-import { fetchAttestations, type AttestedEntry } from './attestation-reader'
+import { fetchAttestations, isLivePosition, type AttestedEntry } from './attestation-reader'
 
 // `reported for` — the canonical (mainnet-minted, cross-network) report
 // predicate. Same term_id the modal's report query and predicates.ts use.
@@ -168,11 +168,20 @@ export function aggregateBackers(
  * Attesters across all of an agent's attested domains: one row per wallet
  * listing which canonical domains it attested and its total support stake.
  * Dedup by wallet across domains (case-insensitive). Sorted by stake desc.
+ *
+ * An agent's distinct-attester count (thesis §4, the sybil-safe measure) is
+ * this function's `.length`, across all of its domains. The modal stat row
+ * (computeModalStatSummary) and the AttestedDomains header read it. Per-domain
+ * rows print `entry.distinctAttesters`, which aggregateAttestations computes.
+ * Both counts use the same predicate, isLivePosition: a wallet that sold out is
+ * not an attester. aggregateAttestations already drops 0-share rows. The check
+ * runs here too, so a count can't disagree with the rule whatever built the entries.
  */
 export function summarizeAttesters(entries: readonly AttestedEntry[]): AttesterSummary[] {
   const acc = new Map<string, AttesterSummary>()
   for (const e of entries ?? []) {
     for (const { wallet, shares } of e.attesterStakes ?? []) {
+      if (!wallet || !isLivePosition({ shares })) continue
       const key = wallet.toLowerCase()
       const s = acc.get(key) ?? { wallet, domains: [], totalStake: 0n }
       if (!s.domains.includes(e.domain.label)) s.domains.push(e.domain.label)
