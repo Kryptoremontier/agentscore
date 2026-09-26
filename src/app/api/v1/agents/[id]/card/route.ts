@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { apiError } from '@/lib/api-helpers'
+import { apiError, cacheControlFor, freshnessMeta, withReadLedger } from '@/lib/api-helpers'
 import { getAgentDetail, getAgentTrustBreakdown } from '@/lib/api-data'
 import { parseAgentCard, calculateProfileCompleteness } from '@/lib/agent-card'
 
@@ -13,7 +13,7 @@ import { parseAgentCard, calculateProfileCompleteness } from '@/lib/agent-card'
  * 4-pillar composite) in parallel so the score envelope contains a real
  * qualityScore and objectScore, not the list-path null values.
  */
-export async function GET(
+async function handleGET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -92,9 +92,11 @@ export async function GET(
       // Meta
       agentScoreUrl: `https://agentscore-gilt.vercel.app/agents?open=${id}`,
       network: process.env.NEXT_PUBLIC_NETWORK || 'testnet',
+      // How old the data behind this card is (lib/server-cache.ts).
+      meta: freshnessMeta(),
     }, {
       headers: {
-        'Cache-Control': 'public, s-maxage=60',
+        'Cache-Control': cacheControlFor(undefined, 'public, s-maxage=60'),
         'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
       },
@@ -114,3 +116,6 @@ export async function OPTIONS() {
     },
   })
 }
+
+// One read ledger per request: meta.dataAgeSeconds (lib/server-cache.ts).
+export const GET = withReadLedger(handleGET)

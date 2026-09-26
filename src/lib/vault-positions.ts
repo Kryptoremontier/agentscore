@@ -101,7 +101,12 @@ export async function fetchVaultPositions(
     request: options.request,
   })
   if (page.truncated !== false) throw new Error('vault positions not read to the end')
-  return options.order && options.order !== 'id' ? [...page.rows].sort(COMPARE[options.order]) : page.rows
+  return options.order && options.order !== 'id' ? sortPositions(page.rows, options.order) : page.rows
+}
+
+/** Positions already read, in one of the read's orders (a copy). */
+export function sortPositions<T extends VaultPosition>(rows: readonly T[], order: PositionOrder): T[] {
+  return [...rows].sort(COMPARE[order])
 }
 
 /**

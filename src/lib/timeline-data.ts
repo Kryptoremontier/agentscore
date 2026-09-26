@@ -14,6 +14,7 @@ import { cleanAtomName } from '@/types/claim'
 import { type StakingEvent, type SkillEvent } from './trust-timeline'
 import { IS_SKILLED_IN } from './canonical-domains'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
+import { completeReadCache, SERVER_CACHE_TTL } from './server-cache'
 
 // Our ceilings (reported by the pager, never a silent first N). The signals read kept only the
 // OLDEST 200 events; the skill-triple reads the first 50 of each kind.
@@ -198,3 +199,15 @@ export async function fetchTimelineData(agentTermId: string): Promise<TimelineRa
     throw err
   }
 }
+
+/**
+ * fetchTimelineData through the shared server cache — per agent, SERVER_CACHE_TTL.agentDetail
+ * seconds (lib/server-cache.ts). For the machine-read surfaces (REST timeline, MCP
+ * get_agent_timeline), whose answers carry meta.dataAgeSeconds. The read throws on any failed or
+ * capped page, so only a complete history (or a complete "no such atom") is stored.
+ */
+export const fetchTimelineDataCached = completeReadCache(
+  'agent-timeline',
+  async (agentTermId: string) => ({ value: await fetchTimelineData(agentTermId), complete: true }),
+  { revalidate: SERVER_CACHE_TTL.agentDetail, tags: (agentTermId) => [`agent:${agentTermId}`] },
+)

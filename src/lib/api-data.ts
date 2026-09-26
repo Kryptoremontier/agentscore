@@ -36,8 +36,15 @@ import { summarizeAttesters } from './agent-profile'
 import { fetchCohortAgent } from './cohort-reader'
 import { filterAgents, type AgentJunkReason } from './agent-junk-filter'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP, type GqlRequest, type PagedRows } from './gql-pager'
-import { fetchVaultPositions, sumSharesByVault, vaultStakeStats, type VaultPosition } from './vault-positions'
+import { fetchVaultPositions, sortPositions, sumSharesByVault, vaultStakeStats, type VaultPosition, type VaultPositionWithMeta } from './vault-positions'
 import { countLiveStakers, liveStakerWallets } from './live-position'
+import {
+  completeReadCache,
+  recordLiveRead,
+  unknownOnFailure,
+  SERVER_CACHE_TTL,
+  type CompleteRead,
+} from './server-cache'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const TRUST_PREDICATE_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
@@ -235,7 +242,7 @@ async function fetchAgentRows(limit: number): Promise<PagedRows<AgentRow>> {
 
 interface AgentVaultReads {
   /** Every position on the agents' atom vaults + trust counter-vaults (0-share rows included, raw). */
-  positions: VaultPosition[]
+  positions: VaultPositionWithMeta[]
   /** term_id → oppose shares (the trust counter-vault's sum). */
   opposeWeiOf(row: AgentRow): bigint
   /** term_id → stakers: distinct wallets with a live position on the atom or counter-vault. */
@@ -252,7 +259,8 @@ async function agentVaultReads(rows: AgentRow[]): Promise<AgentVaultReads> {
   const counterOf = (row: AgentRow) => row.as_subject_triples?.[0]?.counter_term_id ?? null
   const vaultIds = rows.flatMap(r => [r.term_id, counterOf(r)]).filter((id): id is string => !!id)
   // Paged: one request used to return at most 100 positions across ALL counter-vaults.
-  const positions = vaultIds.length ? await fetchVaultPositions(vaultIds, { request: pagedRequest }) : []
+  // withMeta: the trust breakdown's signal history (created_at) reads these same rows.
+  const positions = vaultIds.length ? await fetchVaultPositions(vaultIds, { withMeta: true, request: pagedRequest }) : []
   const sums = sumSharesByVault(positions)
   return {
     positions,
@@ -280,15 +288,25 @@ interface AgentCorpus {
   /** REPO_MAP §7 rule 1: capped fetch reports its own truncation (null = count unknown). */
   truncated: boolean | null
   /** Raw positions on every corpus agent's atom vault + trust counter-vault. */
-  positions: VaultPosition[]
+  positions: VaultPositionWithMeta[]
+  /** term_id → attestation entries; null = the attestation read failed (every tier unknown). */
+  attestationsBySubject: Map<string, AttestedEntry[]> | null
 }
 
 /**
- * The ONE AgentScore corpus read shared by /api/v1/agents, /api/v1/stats and
- * MCP platform_stats: fetch → oppose shares → rowToAgentItem → filterAgents.
- * Every path passes the RAW label to the junk filter (REPO_MAP §7 rule 4).
+ * The ONE AgentScore corpus read shared by /api/v1/agents, /api/v1/stats, the agent detail and
+ * trust breakdown, and MCP: fetch → oppose shares → rowToAgentItem → filterAgents. Every path
+ * passes the RAW label to the junk filter (REPO_MAP §7 rule 4).
+ *
+ * Served from the shared server cache for SERVER_CACHE_TTL.agentCorpus seconds — only when
+ * complete: read to the end (not truncated, count known) with the attestation read answered.
  */
-async function loadAgentCorpus(): Promise<AgentCorpus> {
+const loadAgentCorpus = completeReadCache('agent-corpus', readAgentCorpus, {
+  revalidate: SERVER_CACHE_TTL.agentCorpus,
+  tags: () => [],
+})
+
+async function readAgentCorpus(): Promise<CompleteRead<AgentCorpus>> {
   const corpus = await fetchAgentRows(AGENT_CORPUS_LIMIT)
   const rows = corpus.rows
   const [vault, attestations] = await Promise.all([
@@ -321,11 +339,15 @@ async function loadAgentCorpus(): Promise<AgentCorpus> {
   const truncated = corpus.truncated
 
   return {
-    kept,
-    junk: junk.map(j => ({ item: j.item, reason: j.reason })),
-    rowsById: new Map(rows.map(r => [r.term_id, r])),
-    truncated,
-    positions: vault.positions,
+    value: {
+      kept,
+      junk: junk.map(j => ({ item: j.item, reason: j.reason })),
+      rowsById: new Map(rows.map(r => [r.term_id, r])),
+      truncated,
+      positions: vault.positions,
+      attestationsBySubject: attestations,
+    },
+    complete: truncated === false && attestations !== null,
   }
 }
 
@@ -430,23 +452,70 @@ export type AgentDetailApiItem = AgentApiItem & {
   hasRadar: boolean
 }
 
-export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem | null> {
+const counterOfRow = (row: AgentRow): string | null => row.as_subject_triples?.[0]?.counter_term_id ?? null
+
+/** One AgentScore agent: its row, the positions on its atom + trust counter-vault, its attestations. */
+interface AgentSnapshot {
+  row: AgentRow
+  counterId: string | null
+  positions: VaultPositionWithMeta[]
+  /** null = the attestation read failed (tier unknown). */
+  attested: AttestedEntry[] | null
+}
+
+/**
+ * The agent from the cached corpus when it holds it — the list, the detail and the trust
+ * breakdown then read the same snapshot (and cost nothing within its TTL) — else read live
+ * (the corpus stopped at its cap, or its count is unknown). null = not an AgentScore agent: a
+ * corpus read to the end is every AgentScore agent, so an id it lacks is not one (a newly
+ * registered agent appears within the corpus TTL).
+ */
+async function agentSnapshot(termId: string): Promise<AgentSnapshot | null> {
+  const corpus = await loadAgentCorpus()
+  const cachedRow = corpus.rowsById.get(termId)
+  if (cachedRow) {
+    const counterId = counterOfRow(cachedRow)
+    return {
+      row: cachedRow,
+      counterId,
+      positions: corpus.positions.filter(p => p.term_id === termId || (!!counterId && p.term_id === counterId)),
+      attested: corpus.attestationsBySubject ? (corpus.attestationsBySubject.get(termId) ?? []) : null,
+    }
+  }
+  if (corpus.truncated === false) return null
+
   const row = await fetchAgentRow(termId)
   if (!row) return null
-
-  const [vault, attested] = await Promise.all([
-    agentVaultReads([row]),
-    fetchAttestations({ subjectId: termId }).catch(() => null), // the tier's only input
+  const counterId = counterOfRow(row)
+  const [positions, attested] = await Promise.all([
+    fetchVaultPositions(counterId ? [termId, counterId] : [termId], { withMeta: true, request: pagedRequest }),
+    unknownOnFailure('agent-attestations', fetchAttestations({ subjectId: termId })), // the tier's only input
   ])
-  const opposeWei = vault.opposeWeiOf(row)
+  recordLiveRead('agent-row', true)
+  return { row, counterId, positions, attested }
+}
 
-  const base = rowToAgentItem(row, opposeWei, vault.stakersOf(row), attested)
+/** An agent's skill triples with their stake — per agent, SERVER_CACHE_TTL.agentDetail seconds. */
+const cachedAgentSkillTriples = completeReadCache(
+  'agent-skill-triples',
+  // fetchAgentSkillTriples throws on a failed or capped read: nothing incomplete reaches the cache.
+  async (termId: string) => ({ value: await fetchAgentSkillTriples(termId), complete: true }),
+  { revalidate: SERVER_CACHE_TTL.agentDetail, tags: (termId) => [`agent:${termId}`] },
+)
+
+export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem | null> {
+  const snap = await agentSnapshot(termId)
+  if (!snap) return null
+  const { row, counterId, positions, attested } = snap
+
+  const opposeWei = counterId ? (sumSharesByVault(positions).get(counterId) ?? 0n) : 0n
+  const base = rowToAgentItem(row, opposeWei, countLiveStakers(positions, { atomId: termId, counterId }), attested)
 
   const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
   const totalWei = supportWei + opposeWei
   const supportRatio = totalWei > 0n ? Math.round(Number((supportWei * 100n) / totalWei) * 10) / 10 : 50
 
-  const skillTriples = await fetchAgentSkillTriples(termId)
+  const skillTriples = await cachedAgentSkillTriples(termId)
   const skillBreakdownResult = calculateSkillBreakdown(skillTriples)
 
   const skillBreakdown = skillBreakdownResult.skills.map(s => ({
@@ -517,12 +586,19 @@ export interface CohortAgentDetail {
   tTrustAttested: number | null
 }
 
-export async function getCohortAgentDetail(termId: string): Promise<CohortAgentDetail | null> {
+/** Per agent, SERVER_CACHE_TTL.agentDetail seconds — complete only with attestations and declarations read. */
+export const getCohortAgentDetail = completeReadCache('cohort-agent-detail', readCohortAgentDetail, {
+  revalidate: SERVER_CACHE_TTL.agentDetail,
+  tags: (termId) => [`agent:${termId}`],
+})
+
+async function readCohortAgentDetail(termId: string): Promise<CompleteRead<CohortAgentDetail | null>> {
   const cohort = await fetchCohortAgent(termId)
-  if (!cohort) return null
+  // "Not a cohort agent" is a complete answer.
+  if (!cohort) return { value: null, complete: true }
   const attested = await fetchAttestations({ subjectId: termId }).catch(() => null)
   const summary = attested ? summarizeAttesters(attested) : null
-  return {
+  const value: CohortAgentDetail = {
     id: termId,
     name: cohort.label,
     origin: 'erc8004',
@@ -539,6 +615,7 @@ export async function getCohortAgentDetail(termId: string): Promise<CohortAgentD
       : null,
     tTrustAttested: attested ? weiToFloat(attested.reduce((sum, e) => sum + e.totalStake, 0n)) : null,
   }
+  return { value, complete: attested !== null && cohort.declaredDomains !== null && cohort.declaredSkills !== null }
 }
 
 // ─── Agent Trust Breakdown ────────────────────────────────────────────────────
@@ -587,40 +664,16 @@ export type AgentTrustBreakdown = {
 }
 
 export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrustBreakdown | null> {
-  // Fetch atom data (no vault field — Hasura schema exposes positions at top level)
-  const data = await gql<{ atoms: AgentRow[] }>(`
-    query ApiAgentTrust {
-      atoms(
-        where: { _and: [${AGENT_WHERE_STR}, { term_id: { _eq: "${termId}" } }] }
-        limit: 1
-      ) {
-        term_id
-        label
-        data
-        created_at
-        positions_aggregate {
-          aggregate { sum { shares } }
-        }
-        as_subject_triples(
-          where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
-          limit: 1
-        ) { counter_term_id }
-      }
-    }
-  `)
+  // The same snapshot as the list and the detail (cached corpus; live when it doesn't hold the agent).
+  const snap = await agentSnapshot(termId)
+  if (!snap) return null
+  const { row, attested } = snap
+  const ctid = snap.counterId
 
-  const row = data?.atoms?.[0]
-  if (!row) return null
-
-  const ctid = row.as_subject_triples?.[0]?.counter_term_id
-
-  const termIds = ctid ? [termId, ctid] : [termId]
-  const [positionsData, sharePriceWei, attested] = await Promise.all([
-    fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true, request: pagedRequest })
-      .then(positions => ({ positions })),
-    getOnChainSharePrice(serverPublicClient, termId as `0x${string}`).catch(() => null),
-    fetchAttestations({ subjectId: termId }).catch(() => null), // the tier's only input
-  ])
+  const positionsData = { positions: sortPositions(snap.positions, 'shares-desc') }
+  // On-chain (not the indexer). A failed read falls back below — that answer is not complete.
+  const sharePriceWei = await getOnChainSharePrice(serverPublicClient, termId as `0x${string}`).catch(() => null)
+  if (sharePriceWei === null) recordLiveRead('share-price', false)
 
   // Oppose and stakers from the same positions read — stakers through the one live rule.
   const opposeWei = ctid ? (sumSharesByVault(positionsData.positions).get(ctid) ?? 0n) : 0n
@@ -776,11 +829,24 @@ const IS_SKILLED_IN_PREDICATE_ID =
 // (0xe39dc1c656b35d408dd772007f77cffddfa4e720b3cff91ef3c82cdbd65c7447) — it is
 // mainnet-only (0 testnet triples), so it is intentionally NOT added here yet.
 
-async function fetchDomainTriplesInternal(): Promise<{
+interface DomainTriples {
   triples: DomainTripleData[]
   /** Folded-away skillId → representative skillId (see refineSkillTriples). */
   foldedSkillIds: ReadonlyMap<string, string>
-}> {
+}
+
+/**
+ * Every skill/domain triple with its stake — shared by skills, domains, trust_query and stats.
+ * Served from the shared server cache for SERVER_CACHE_TTL.domains seconds. The read throws
+ * when it can't reach the end, so only a complete read is ever stored.
+ */
+const fetchDomainTriplesInternal = completeReadCache(
+  'domain-triples',
+  async (): Promise<CompleteRead<DomainTriples>> => ({ value: await readDomainTriples(), complete: true }),
+  { revalidate: SERVER_CACHE_TTL.domains, tags: () => [] },
+)
+
+async function readDomainTriples(): Promise<DomainTriples> {
   // Step 1: all skill triples ("is skilled in" by term_id + legacy isTrustedFor), paged —
   // `limit: 500` got at most 250 back, silently (lib/gql-pager.ts).
   const where = `{ _or: [
@@ -852,20 +918,34 @@ async function fetchDomainTriplesInternal(): Promise<{
   return { triples: refined.triples, foldedSkillIds: refined.foldedSkillIds }
 }
 
-export async function getSkills(): Promise<SkillApiItem[]> {
-  const data = await gql<{ atoms: Array<{ term_id: string; label: string }> }>(`
-    query ApiSkills {
-      atoms(
-        where: ${SKILL_WHERE_STR}
-        limit: 200
-        order_by: { created_at: desc }
-      ) {
-        term_id
-        label
+/** Our cap on the skill-atom list (a full page is reported as incomplete, never cached). */
+const SKILL_ATOMS_LIMIT = 200
+
+/** The skill atoms — shared server cache, SERVER_CACHE_TTL.domains seconds, complete reads only. */
+const loadSkillAtoms = completeReadCache(
+  'skill-atoms',
+  async (): Promise<CompleteRead<Array<{ term_id: string; label: string }>>> => {
+    const data = await gql<{ atoms: Array<{ term_id: string; label: string }> }>(`
+      query ApiSkills {
+        atoms(
+          where: ${SKILL_WHERE_STR}
+          limit: ${SKILL_ATOMS_LIMIT}
+          order_by: { created_at: desc }
+        ) {
+          term_id
+          label
+        }
       }
-    }
-  `)
-  const skillAtoms = data?.atoms || []
+    `)
+    const atoms = data?.atoms || []
+    // At our cap the list may stop short: served, never stored.
+    return { value: atoms, complete: atoms.length < SKILL_ATOMS_LIMIT }
+  },
+  { revalidate: SERVER_CACHE_TTL.domains, tags: () => [] },
+)
+
+export async function getSkills(): Promise<SkillApiItem[]> {
+  const skillAtoms = await loadSkillAtoms()
 
   // Get domain triples to compute agent count + stake per skill
   const { triples: domainTriples } = await fetchDomainTriplesInternal()
@@ -1055,13 +1135,15 @@ export async function getEvaluatorLeaderboard(options: {
 
 export async function getEvaluatorProfile(address: string) {
   // Fetch leaderboard, individual positions, and attestation in parallel
+  // The wallet's own positions and attestations are read live (wallet-specific: never cached).
   const [leaderboard, positions, attestation] = await Promise.all([
-    fetchEvaluatorLeaderboard(),
+    // A failed leaderboard read → computed from the wallet's positions below (answer incomplete).
+    unknownOnFailure('evaluator-leaderboard', fetchEvaluatorLeaderboard()),
     fetchStakerPositions(address),
     getAttestationCount(address, getAttestationConfig()),
   ])
 
-  const leaderboardEntry = leaderboard.find(p => p.address.toLowerCase() === address.toLowerCase())
+  const leaderboardEntry = leaderboard?.find(p => p.address.toLowerCase() === address.toLowerCase())
 
   // Must have at least one data source
   if (!leaderboardEntry && positions.length === 0) return null
@@ -1203,13 +1285,21 @@ export async function trustQuery(params: {
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
-export async function getPlatformStats() {
-  // The corpus is the one read the route can't answer without (agents, stake, stakers).
-  // Every other count settles on its own: a failed read is null for that field, never 0,
-  // and never takes the corpus numbers (the landing's tiles) down with it.
-  const [corpus, skills, evaluators, domainTriples, attesters, claimCount] = await Promise.all([
-    // Same post-junk corpus as /api/v1/agents — `agents` here must equal its meta.total.
-    loadAgentCorpus(),
+/** The counts only /stats reads. Each is null when its read failed (never 0). */
+interface StatsCounts {
+  skills: number | null
+  attesters: number | null
+  claims: number | null
+}
+
+/** SERVER_CACHE_TTL.platformStats seconds — stored only when every count was read. */
+const loadStatsCounts = completeReadCache('platform-stats', readStatsCounts, {
+  revalidate: SERVER_CACHE_TTL.platformStats,
+  tags: () => [],
+})
+
+async function readStatsCounts(): Promise<CompleteRead<StatsCounts>> {
+  const [skills, attesters, claims] = await Promise.all([
     // An aggregate, not rows: `atoms(limit: 500)` came back capped at 250 by the endpoint.
     gql<{ atoms_aggregate: { aggregate: { count: number } } }>(`
       query ApiSkillCount {
@@ -1217,8 +1307,6 @@ export async function getPlatformStats() {
       }
     `).then(d => (typeof d?.atoms_aggregate?.aggregate?.count === 'number' ? d.atoms_aggregate.aggregate.count : null))
       .catch(() => null),
-    fetchEvaluatorLeaderboard().then(profiles => profiles.length).catch(() => null),
-    fetchDomainTriplesInternal().then(r => r.triples).catch(() => null),
     // Distinct wallets with a live position on any attestation triple (is skilled in → canonical
     // domain), deduped across agents and domains — commit 1's rule (summarizeAttesters). The
     // landing's "Attesters". null = the read failed, never 0.
@@ -1229,6 +1317,28 @@ export async function getPlatformStats() {
     `).then(d => (typeof d?.triples_aggregate?.aggregate?.count === 'number' ? d.triples_aggregate.aggregate.count : null))
       .catch(() => null),
   ])
+  return { value: { skills, attesters, claims }, complete: skills !== null && attesters !== null && claims !== null }
+}
+
+/**
+ * Platform stats, composed from shared cached reads — each keeps its own entry and age, and the
+ * answer is as old as its oldest part (lib/server-cache.ts; cached reads are never nested):
+ * corpus (agents, stake, stakers) and domain triples 60 s, the counts and the evaluator
+ * leaderboard 300 s.
+ */
+export async function getPlatformStats() {
+  // The corpus is the one read the route can't answer without (agents, stake, stakers).
+  // Every other count settles on its own: a failed read is null for that field, never 0,
+  // and never takes the corpus numbers (the landing's tiles) down with it.
+  const [corpus, counts, evaluators, domainTriples] = await Promise.all([
+    // Same post-junk corpus as /api/v1/agents — `agents` here equals its meta.total whenever
+    // both answer from the same corpus read (compare their meta.dataReadAt).
+    loadAgentCorpus(),
+    loadStatsCounts(),
+    unknownOnFailure('evaluator-leaderboard', fetchEvaluatorLeaderboard().then(profiles => profiles.length)),
+    unknownOnFailure('domain-triples', fetchDomainTriplesInternal().then(r => r.triples)),
+  ])
+  const { skills, attesters, claims: claimCount } = counts
 
   let totalStakedWei = 0n
   let topAgentScore = 0

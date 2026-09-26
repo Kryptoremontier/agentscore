@@ -13,10 +13,11 @@ import {
   trustQuery,
   getPlatformStats,
 } from '@/lib/api-data'
-import { fetchTimelineData } from '@/lib/timeline-data'
+import { fetchTimelineDataCached as fetchTimelineData } from '@/lib/timeline-data'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
 import { publishedAgentScore } from '@/lib/score-basis'
 import { comparedBySkill, comparedOverall, rankComparison } from '@/lib/agent-compare'
+import { withFreshnessOnEveryTool } from '@/lib/mcp-freshness'
 import {
   calculateProfileCompleteness,
   serializeAgentCard,
@@ -44,7 +45,9 @@ function withCors(response: Response): Response {
 }
 
 const handler = createMcpHandler(
-  (server) => {
+  (mcpServer) => {
+    // Every tool answer carries meta.dataAgeSeconds (lib/mcp-freshness.ts).
+    const server = withFreshnessOnEveryTool(mcpServer)
 
     // ═══════════════════════════════════════════
     // TOOL 1: search_agents

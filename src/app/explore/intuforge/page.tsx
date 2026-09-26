@@ -8,7 +8,9 @@ import type { ForgeStats, ForgeProject } from '@/lib/forge/types'
 import { ForgeCategory } from '@/lib/forge/types'
 import { compareForgeScoreDesc, meanKnownForgeScore } from '@/lib/forge/scoring'
 
-export const revalidate = 60
+// Dynamic. A `revalidate = 60` here was inert — the forge reads are `no-store`, so every request
+// rendered live anyway (docs/audit/rate-limit.md) — while it looked like a one-minute cache.
+export const dynamic = 'force-dynamic'
 
 function deriveStats(projects: ForgeProject[]): ForgeStats {
   const totalStaked     = projects.reduce((s, p) => s + p.totalStaked, 0)

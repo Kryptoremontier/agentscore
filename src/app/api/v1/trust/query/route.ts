@@ -1,11 +1,11 @@
 import { type NextRequest } from 'next/server'
-import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
+import { apiSuccess, apiError, corsOptions, withReadLedger } from '@/lib/api-helpers'
 import { trustQuery } from '@/lib/api-data'
 
 const VALID_SORTS = ['score', 'stakers'] as const
 type SortOption = typeof VALID_SORTS[number]
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams
 
@@ -44,3 +44,6 @@ export async function GET(request: NextRequest) {
 export async function OPTIONS() {
   return corsOptions()
 }
+
+// One read ledger per request: meta.dataAgeSeconds (lib/server-cache.ts).
+export const GET = withReadLedger(handleGET)

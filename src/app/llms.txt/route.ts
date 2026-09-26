@@ -8,6 +8,7 @@ import {
   renderTrustText,
 } from '@/lib/agent-surface'
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
+import { SERVER_CACHE_TTL } from '@/lib/server-cache'
 
 function exampleJson(): string {
   return JSON.stringify({
@@ -18,6 +19,8 @@ function exampleJson(): string {
       network: 'testnet',
       version: AGENT_SURFACE_VERSION,
       disclaimer: TRUST_DISCLAIMER,
+      dataAgeSeconds: 0,
+      dataReadAt: '2026-08-31T17:53:59.563Z',
     },
   })
 }
@@ -90,8 +93,23 @@ signal.
 
 ## Limits & caching
 
-${trustPath} is cached with:
+Every REST answer's meta (and every MCP tool's JSON answer) says how old its data is:
+  meta.dataAgeSeconds  whole seconds since the oldest indexer read behind the answer,
+                       when the answer was built. 0 = read live.
+  meta.dataReadAt      ISO-8601 time of that read (absolute: a CDN hop can't hide it —
+                       a CDN adds its own "Age" header on top of dataAgeSeconds).
+Reads are shared through a server cache: the agent list/corpus (also behind the agent
+detail and trust breakdown) ${SERVER_CACHE_TTL.agentCorpus} s, domains and skills ${SERVER_CACHE_TTL.domains} s, per-agent skill triples,
+timeline and ERC-8004 agent detail ${SERVER_CACHE_TTL.agentDetail} s, platform-stats counts ${SERVER_CACHE_TTL.platformStats} s, the evaluator
+leaderboard ${SERVER_CACHE_TTL.evaluatorLeaderboard} s.
+Only complete reads are cached. An answer built on an incomplete read (a failed
+sub-read reported as null, a row cap) is sent "Cache-Control: no-store" and is
+never stored; the next request reads again. A connected wallet's own positions are
+never cached.
+
+${trustPath} is cached at the CDN with:
   Cache-Control: public, s-maxage=${TRUST_ROUTE_CACHE.sMaxAgeSeconds}, stale-while-revalidate=${TRUST_ROUTE_CACHE.staleWhileRevalidateSeconds}
+(no-store when incomplete). Other GET routes: public, s-maxage=15, stale-while-revalidate=30.
 
 Unknown agent id -> HTTP 404.
 Upstream (Hasura indexer) failure -> HTTP 502 with a JSON body:
