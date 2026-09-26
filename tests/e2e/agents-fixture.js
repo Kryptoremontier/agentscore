@@ -37,8 +37,8 @@ const LABEL = (MODE === 'shots' ? rest[1] : null) ?? 'synthetic'
 // The three reference agents keep their REAL term ids so shots and assertions
 // name real rows. Values are live where recorded: AgentScore stake/staker counts
 // from /api/v1/agents (2026-09-24); Dackie 1 attester / 0.0099 tTRUST on
-// Crypto (commit 5e898f4, live 2026-09-15). Luda's attestation stake (1e15) is
-// the unit-test fixture value, not a recorded live number.
+// Crypto (commit 5e898f4, live 2026-09-15); Luda 1 attester / 0.02079 tTRUST on
+// Knowledge / Productivity (live 2026-09-26, src/lib/__tests__/card-attester-line.test.ts).
 const REF = {
   dackie: '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb',
   luda: '0x82d87d9517b68e653418c0e49805b36aca3e33a00536af25fc319f5c24802c5a',
@@ -89,7 +89,7 @@ const ATTESTATIONS = [
     positions: [{ account_id: W1, shares: '9900000000000000' }] },
   { term_id: '0xa77e57000000000000000000000000000000000000000000000000000000d4c2', counter_term_id: null,
     subject: { term_id: REF.luda, label: 'Luda' }, object: { term_id: BUCKET.knowledge },
-    positions: [{ account_id: W1, shares: '1000000000000000' }] },
+    positions: [{ account_id: W1, shares: '20790000000000000' }] },
 ]
 
 // Positions on the AgentScore atom vaults: `count` wallets splitting the row's stake, so the

@@ -274,7 +274,7 @@ describe('getPlatformStats — attesters, and no 0 for a failed count', () => {
     { term_id: '0xt1', counter_term_id: null, subject: { term_id: '0xdackie', label: 'Captain Dackie' }, object: { term_id: CRYPTO } },
     { term_id: '0xt2', counter_term_id: null, subject: { term_id: '0xluda', label: 'Luda' }, object: { term_id: KNOWLEDGE } },
   ]
-  // Live 2026-09-26: one wallet attests both Dackie and Luda; a second sold out (0 shares).
+  // Live 2026-09-26: one wallet attests both Dackie and Luda. The sold-out (0-share) row is injected.
   const POSITIONS = [
     { id: '0xt1-1-w', term_id: '0xt1', account_id: W, shares: '9900000000000000' },
     { id: '0xt2-1-w', term_id: '0xt2', account_id: W.toLowerCase(), shares: '20790000000000000' },
@@ -432,5 +432,39 @@ describe('getAgentDetail — zero-stake skill triples never feed a "measured" AG
     fake('20000000000000000')
     const d = await detailOf()
     expect(d?.score.qualityScore).not.toBeNull()
+  })
+})
+
+describe('fetchTimelineData — a read failing AFTER the atom read is still a failure', () => {
+  it('atom found, signals read rate-limited → rejects (never 200 with an empty history)', async () => {
+    const actual = await vi.importActual<typeof import('../timeline-data')>('../timeline-data')
+    installFakeHasura({
+      tables: [{ match: (q) => q.includes('GetAgentSignals'), field: 'signals', rows: [] }],
+      other: (q) => (q.includes('GetAgentAtom') ? { atom: [{ term_id: '0xa', label: 'A', created_at: '2026-01-01T00:00:00Z', as_subject_triples: [] }] } : undefined),
+      fail: (q) => (q.includes('GetAgentSignals') ? 'rate-limit' : undefined),
+    })
+    await expect(actual.fetchTimelineData('0xa')).rejects.toThrow()
+  })
+})
+
+describe('MCP compare_agents with `skill` — a zero-stake skill triple never outranks a measured one', () => {
+  beforeEach(() => getAgentDetail.mockReset())
+  const skill = (score: number, stake: number) => ({ skillName: 'Crypto / Onchain', score, supportStake: stake, opposeStake: 0, stakerCount: stake > 0 ? 1 : 0, level: 'moderate' })
+  it('P: 50 prior on an unstaked Crypto triple (overall 90); M: measured 22 → M ranks first, P carries domainScore null', async () => {
+    getAgentDetail.mockImplementation(async (id: string) => id === '0xp'
+      ? { ...detail(90, 'measured'), id, name: 'P', skillBreakdown: [skill(50, 0)] }
+      : { ...detail(31, 'measured'), id, name: 'M', skillBreakdown: [skill(22, 0.04)] })
+    const out = await mcpCall('compare_agents', { agentIds: ['0xp', '0xm'], skill: 'crypto' })
+    expect(out.comparison.map((c: { name: string; comparedBasis: string; domainScore: number | null }) => [c.name, c.comparedBasis, c.domainScore]))
+      .toEqual([['M', 'measured', 22], ['P', 'prior', null]])
+    expect(out.recommendation).toBe('M')
+  })
+  it('an agent without the skill → comparedBasis "missing", domainScore null (was 0), ranked last', async () => {
+    getAgentDetail.mockImplementation(async (id: string) => id === '0xnone'
+      ? { ...detail(95, 'measured'), id, name: 'None', skillBreakdown: [] }
+      : { ...detail(40, 'measured'), id, name: 'Has', skillBreakdown: [skill(10, 0.01)] })
+    const out = await mcpCall('compare_agents', { agentIds: ['0xnone', '0xhas'], skill: 'crypto' })
+    expect(out.comparison.map((c: { name: string; comparedBasis: string; domainScore: number | null }) => [c.name, c.comparedBasis, c.domainScore]))
+      .toEqual([['Has', 'measured', 10], ['None', 'missing', null]])
   })
 })

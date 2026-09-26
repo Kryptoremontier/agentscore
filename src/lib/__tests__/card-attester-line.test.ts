@@ -16,7 +16,8 @@ import {
  * Rows are the live testnet attestations on 2026-09-26 (the only two canonical
  * attestation triples with a position): Captain Dackie → Crypto / Onchain, 1 wallet,
  * 0.0099 tTRUST; Luda → Knowledge / Productivity, the same wallet, 0.02079 tTRUST.
- * OPEN CLAW has no attestation triple.
+ * OPEN CLAW has no attestation triple. The 0-share row on Dackie's triple is INJECTED
+ * (live has no 0-share row on an attestation triple): it proves a sold-out wallet changes nothing.
  */
 
 const DACKIE = '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb'
@@ -38,7 +39,7 @@ const TRIPLES = [
 ]
 const POSITIONS = [
   { id: `${DACKIE_TRIPLE}-1-${ATTESTER}`, term_id: DACKIE_TRIPLE, account_id: ATTESTER, shares: '9900000000000000' },
-  // A wallet that sold out of Dackie's triple: raw row from the indexer, not an attester.
+  // Injected, not live: a wallet that sold out of Dackie's triple (a raw 0-share row), not an attester.
   { id: `${DACKIE_TRIPLE}-1-${SOLD_OUT}`, term_id: DACKIE_TRIPLE, account_id: SOLD_OUT, shares: '0' },
   { id: `${LUDA_TRIPLE}-1-${ATTESTER}`, term_id: LUDA_TRIPLE, account_id: ATTESTER, shares: '20790000000000000' },
 ]
