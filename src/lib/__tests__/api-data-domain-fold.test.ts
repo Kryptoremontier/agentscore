@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { getDomainAgents } from '../api-data'
+import { installFakeHasura } from './fake-hasura'
 
 /**
  * Folded-atom resolution in by-id consumers: `TypeScript` exists on live
@@ -24,13 +25,12 @@ const TRIPLES = [
 ]
 
 function stubGql() {
-  vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body ?? '{}'))
-    const data = String(body.query).includes('GetDomainPositions')
-      ? { positions: [] }
-      : { triples: TRIPLES }
-    return { json: async () => ({ data }) }
-  }))
+  installFakeHasura({
+    tables: [
+      { match: (q) => q.includes('VaultPositions'), field: 'positions', rows: [] },
+      { match: (q) => q.includes('GetAllDomainTriples'), field: 'triples', rows: TRIPLES },
+    ],
+  })
 }
 
 afterEach(() => vi.unstubAllGlobals())

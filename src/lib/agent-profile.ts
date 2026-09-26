@@ -149,7 +149,7 @@ export function aggregateBackers(
   for (const p of positions) {
     if (!p?.account_id) continue
     const shares = parseShares(p.shares)
-    if (shares <= 0n) continue
+    if (!isLivePosition({ shares })) continue // a wallet that sold out is not a backer
     const vault = p.term_id.toLowerCase()
     const isSupport = vault === agentId
     const isOppose = counterId !== null && vault === counterId
@@ -204,7 +204,8 @@ export interface ModalStatSummary {
   /** Sum of support stake across every attestation triple (the canonical unit, thesis §4) — wei. */
   tTrustAttestedWei: bigint
   reports: number
-  /** Distinct wallets with a position on the agent's OWN atom vault (Backers, not attesters). */
+  /** Stakers: distinct wallets with a LIVE position on the agent's atom vault or its trust
+   *  counter-vault (lib/live-position.ts countLiveStakers) — Backers, not attesters. */
   backerCount: number
   /** Total stake on the agent's own atom vault — wei. */
   backerVaultWei: bigint

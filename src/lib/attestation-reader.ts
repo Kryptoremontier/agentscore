@@ -19,6 +19,7 @@
 import { APP_CONFIG } from './app-config'
 import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
 import { fetchVaultPositions } from './vault-positions'
+import { isLivePosition } from './live-position'
 import {
   CANONICAL_DOMAINS_REGISTRY,
   IS_SKILLED_IN,
@@ -105,11 +106,10 @@ export function scoreAttestation(distinctAttesters: number, totalStake: bigint):
  * Every attester count and every tTRUST-attested sum goes through this
  * predicate, via aggregateAttestations (raw positions) and summarizeAttesters
  * (agent-profile.ts). Callers pass RAW positions and never filter on their own
- * (REPO_MAP §7 rule 4).
+ * (REPO_MAP §7 rule 4). It lives in live-position.ts with the vault staker
+ * counts derived from the same rule, and is re-exported here.
  */
-export function isLivePosition(p: { shares: bigint }): boolean {
-  return p.shares > 0n
-}
+export { isLivePosition }
 
 const DOMAIN_BY_TERM_ID: ReadonlyMap<string, CanonicalDomainDef> = new Map(
   CANONICAL_DOMAINS_REGISTRY.map((d) => [d.termId, d]),

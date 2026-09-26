@@ -7,6 +7,8 @@
  */
 
 import { fetchAllRows, SERVER_ROW_CAP, type GqlRequest } from './gql-pager'
+import { TRUST_PREDICATE_TERM_ID } from './gql-filters'
+import { countLiveStakers, liveStakerWallets } from './live-position'
 
 export interface VaultPosition {
   term_id: string
@@ -91,8 +93,77 @@ export async function fetchVaultPositions(
   return page.rows
 }
 
+/**
+ * Live stakers per agent — distinct wallets with a live position on the atom vault or its trust
+ * counter-vault (lib/live-position.ts countLiveStakers) — for surfaces that list agents without
+ * reading their positions (global search, landing cards). One paged positions read. A
+ * `counterId` left undefined is resolved from the agent's trust triple. Throws on a failed read.
+ */
+export async function fetchLiveStakerCounts(
+  agents: ReadonlyArray<{ atomId: string; counterId?: string | null }>,
+  options: { request?: GqlRequest } = {},
+): Promise<Map<string, number>> {
+  if (agents.length === 0) return new Map()
+  const unresolved = agents.filter((a) => a.counterId === undefined).map((a) => a.atomId)
+  const resolved = new Map<string, string | null>()
+  if (unresolved.length > 0) {
+    const page = await fetchAllRows<{ term_id: string; subject_id: string; counter_term_id: string | null }>({
+      query: `
+        query TrustCounterVaults($ids: [String!]!, $pred: String!, $limit: Int!, $offset: Int!) {
+          triples(where: { subject_id: { _in: $ids }, predicate_id: { _eq: $pred } }, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
+            term_id subject_id counter_term_id
+          }
+        }
+      `,
+      field: 'triples',
+      countQuery: `
+        query TrustCounterVaultsCount($ids: [String!]!, $pred: String!) {
+          triples_aggregate(where: { subject_id: { _in: $ids }, predicate_id: { _eq: $pred } }) { aggregate { count } }
+        }
+      `,
+      countField: 'triples_aggregate',
+      variables: { ids: unresolved, pred: TRUST_PREDICATE_TERM_ID },
+      pageSize: SERVER_ROW_CAP.triples,
+      maxRows: VAULT_POSITIONS_MAX,
+      request: options.request,
+    })
+    if (page.truncated !== false) throw new Error('trust triples not read to the end')
+    for (const t of page.rows) if (!resolved.has(t.subject_id)) resolved.set(t.subject_id, t.counter_term_id)
+  }
+  const withCounters = agents.map((a) => ({
+    atomId: a.atomId,
+    counterId: a.counterId === undefined ? (resolved.get(a.atomId) ?? null) : a.counterId,
+  }))
+  const positions = await fetchVaultPositions(
+    withCounters.flatMap((a) => (a.counterId ? [a.atomId, a.counterId] : [a.atomId])),
+    { request: options.request },
+  )
+  return new Map(withCounters.map((a) => [a.atomId, countLiveStakers(positions, a)]))
+}
+
 function parseShares(v: string | null | undefined): bigint {
   try { return BigInt(v || '0') } catch { return 0n }
+}
+
+/**
+ * Per vault: summed shares and stakers — distinct wallets with a live position on that
+ * vault (lib/live-position.ts). For triple vaults (skill / domain claims): a 0-share row
+ * after a full redeem is not a staker. Grouped once; look up any vault id.
+ */
+export function vaultStakeStats(positions: readonly VaultPosition[]): (vaultId: string | null | undefined) => { totalShares: bigint; count: number } {
+  const byVault = new Map<string, VaultPosition[]>()
+  for (const p of positions) {
+    if (!p?.term_id) continue
+    const key = p.term_id.toLowerCase()
+    const arr = byVault.get(key)
+    if (arr) arr.push(p)
+    else byVault.set(key, [p])
+  }
+  const stats = new Map<string, { totalShares: bigint; count: number }>()
+  for (const [key, rows] of byVault) {
+    stats.set(key, { totalShares: sumSharesByVault(rows).get(rows[0].term_id) ?? 0n, count: liveStakerWallets(rows, [key]).size })
+  }
+  return (vaultId) => (vaultId && stats.get(vaultId.toLowerCase())) || { totalShares: 0n, count: 0 }
 }
 
 /** Sum of shares per vault (a 0-share row adds 0n, so the sum needs no live filter). */

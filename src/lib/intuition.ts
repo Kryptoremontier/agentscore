@@ -15,7 +15,7 @@ import { type PublicClient, type WalletClient, parseEther, stringToHex, type Hex
 import { intuitionTestnet, MultiVaultAbi } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
 import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
-import { fetchVaultPositions } from './vault-positions'
+import { fetchVaultPositions, vaultStakeStats } from './vault-positions'
 import { saveRegistration } from './registrant-store'
 import {
   TRIPLE_SUBJECT_OR_STR,
@@ -452,25 +452,14 @@ export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array
     // Step 3: Batch-fetch positions for all vaults (paged — one request stopped at 100)
     const positions = await fetchVaultPositions(vaultIds)
 
-    // Step 4: Aggregate shares + count per vault
-    const vaultMap = new Map<string, { totalShares: bigint; count: number }>()
-    for (const pos of positions) {
-      if (!pos.shares) continue
-      const prev = vaultMap.get(pos.term_id) || { totalShares: 0n, count: 0 }
-      try {
-        vaultMap.set(pos.term_id, {
-          totalShares: prev.totalShares + BigInt(pos.shares),
-          count: prev.count + 1,
-        })
-      } catch { /* skip malformed */ }
-    }
+    // Step 4: shares per vault, and stakers per vault through the one live rule (a 0-share
+    // row after a full redeem is not a staker — lib/live-position.ts).
+    const vaultStats = vaultStakeStats(positions)
 
     // Step 5: Build enriched result
     return triples.map(t => {
-      const forVault = vaultMap.get(t.term_id) || { totalShares: 0n, count: 0 }
-      const againstVault = t.counter_term_id
-        ? (vaultMap.get(t.counter_term_id) || { totalShares: 0n, count: 0 })
-        : { totalShares: 0n, count: 0 }
+      const forVault = vaultStats(t.term_id)
+      const againstVault = t.counter_term_id ? vaultStats(t.counter_term_id) : { totalShares: 0n, count: 0 }
 
       return {
         id: t.term_id,

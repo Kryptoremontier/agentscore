@@ -17,6 +17,7 @@
 import { AGENT_WHERE_STR } from './gql-filters'
 import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
 import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
+import { countLiveStakers } from './live-position'
 
 /** Cap on the /agents AgentScore fetch. Truncation past it is reported, never silent. */
 export const AGENT_LIST_LIMIT = 50
@@ -32,8 +33,15 @@ export interface AgentListAtom {
   created_at: string
   emoji?: string
   creator?: { label: string; id?: string } | null
-  positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+  /** Atom-vault support stake. The row count is deliberately not read: it counts 0-share rows. */
+  positions_aggregate?: { aggregate: { sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /**
+   * Stakers: distinct wallets with a live position on the atom vault or its trust
+   * counter-vault (lib/live-position.ts countLiveStakers). undefined = never read
+   * (cohort rows), null = the positions read failed — never a 0 that wasn't measured.
+   */
+  liveStakerCount?: number | null
 }
 
 export interface AgentListFetch<T extends AgentListAtom = AgentListAtom> {
@@ -71,7 +79,6 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
         creator { label id }
         positions_aggregate {
           aggregate {
-            count
             sum { shares }
           }
         }
@@ -90,18 +97,25 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
   })
   const rows = page.rows
 
-  // Oppose vault shares for every trust triple — one paged read.
+  // One paged read of every position on the atom vaults + trust counter-vaults: oppose shares
+  // per counter-vault, and stakers per agent counted with the one live rule (0-share rows are
+  // not stakers — they are what `positions_aggregate.count` used to count).
   const counterTermIds = rows
     .map(a => a.as_subject_triples?.[0]?.counter_term_id)
     .filter((id): id is string => !!id)
-  if (counterTermIds.length > 0) {
+  if (rows.length > 0) {
     try {
-      const opposeMap = sumSharesByVault(await fetchVaultPositions(counterTermIds))
+      const positions = await fetchVaultPositions([...rows.map(a => a.term_id), ...counterTermIds])
+      const shareSums = sumSharesByVault(positions)
       for (const atom of rows) {
         const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-        if (ctid && opposeMap.has(ctid)) (atom as any).__opposeWei = opposeMap.get(ctid) || 0n
+        if (ctid && shareSums.has(ctid)) (atom as any).__opposeWei = shareSums.get(ctid) || 0n
+        atom.liveStakerCount = countLiveStakers(positions, { atomId: atom.term_id, counterId: ctid })
       }
-    } catch { /* non-critical: cards fall back to opposeWei = 0 (see audit — known gap) */ }
+    } catch {
+      // Stakers unknown ("—"), never 0. Oppose falls back to 0 (see audit — known gap).
+      for (const atom of rows) atom.liveStakerCount = null
+    }
   }
 
   return { rows, total: page.total, truncated: page.truncated }

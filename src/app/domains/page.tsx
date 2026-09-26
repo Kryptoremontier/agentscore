@@ -22,6 +22,7 @@ import {
   type SkillBucketStatus,
 } from '@/lib/skill-domain-map'
 import { fetchAttestations, truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
+import { fetchVaultPositions, vaultStakeStats } from '@/lib/vault-positions'
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -113,44 +114,14 @@ async function fetchDomainTriples(): Promise<{ triples: DomainTripleData[]; junk
       if (t.counter_term_id) vaultIds.push(t.counter_term_id)
     }
 
-    // Step 3: batch-fetch positions
-    const posRes = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetDomainPositions($vaultIds: [String!]!) {
-            positions(where: { term_id: { _in: $vaultIds } }) {
-              term_id
-              shares
-            }
-          }
-        `,
-        variables: { vaultIds },
-      }),
-    })
-    const posData = await posRes.json()
-    const positions: Array<{ term_id: string; shares: string }> = posData?.data?.positions || []
-
-    // Step 4: aggregate shares+count per vault
-    const vaultMap = new Map<string, { totalShares: bigint; count: number }>()
-    for (const pos of positions) {
-      if (!pos.shares) continue
-      const prev = vaultMap.get(pos.term_id) || { totalShares: 0n, count: 0 }
-      try {
-        vaultMap.set(pos.term_id, {
-          totalShares: prev.totalShares + BigInt(pos.shares),
-          count: prev.count + 1,
-        })
-      } catch { /* skip malformed */ }
-    }
+    // Step 3+4: every position on those vaults (paged — one request stopped at 100), shares and
+    // stakers per vault through the one live rule (lib/live-position.ts).
+    const vaultStats = vaultStakeStats(await fetchVaultPositions(vaultIds))
 
     // Step 5: build DomainTripleData[]
     const raw = triples.map(t => {
-      const forVault = vaultMap.get(t.term_id) || { totalShares: 0n, count: 0 }
-      const againstVault = t.counter_term_id
-        ? (vaultMap.get(t.counter_term_id) || { totalShares: 0n, count: 0 })
-        : { totalShares: 0n, count: 0 }
+      const forVault = vaultStats(t.term_id)
+      const againstVault = vaultStats(t.counter_term_id)
 
       return {
         tripleId: t.term_id,

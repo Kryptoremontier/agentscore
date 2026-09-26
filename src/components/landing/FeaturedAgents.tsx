@@ -16,6 +16,7 @@ import { formatPredicateLabel } from '@/lib/predicate-display'
 import { effectiveLabel } from '@/lib/api-data'
 import { filterAgents } from '@/lib/agent-junk-filter'
 import { fetchVaultPositions, sumSharesByVault } from '@/lib/vault-positions'
+import { countLiveStakers } from '@/lib/live-position'
 import { fetchFeaturedTotal, featuredBadgeText, type FeaturedTotal } from '@/lib/featured-counts'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -33,6 +34,8 @@ interface FeaturedItem {
   creator?: { label: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /** Agents tab: live stakers (lib/live-position.ts); null = the positions read failed. */
+  liveStakerCount?: number | null
 }
 
 
@@ -129,21 +132,26 @@ export function FeaturedAgents() {
         if (d.errors || !d.data) throw new Error('atoms read failed')
         const atoms: FeaturedItem[] = d.data.atoms || []
 
-        // Batch-fetch oppose vault shares for accurate card Trust Score
+        // One paged read of the atom vaults + trust counter-vaults: oppose shares for the card
+        // Trust Score, and (agents) stakers through the one live rule — a 0-share row isn't one.
         const counterTermIds = atoms
           .map(a => a.as_subject_triples?.[0]?.counter_term_id)
           .filter(Boolean) as string[]
-        if (counterTermIds.length > 0) {
+        if (atoms.length > 0) {
           try {
-            // Paged — one request stopped at 100 positions across all counter-vaults.
-            const opposeMap = sumSharesByVault(await fetchVaultPositions(counterTermIds))
+            const positions = await fetchVaultPositions([...atoms.map(a => a.term_id), ...counterTermIds])
+            const shareSums = sumSharesByVault(positions)
             for (const atom of atoms) {
               const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-              if (ctid && opposeMap.has(ctid)) {
-                ;(atom as any).__opposeWei = opposeMap.get(ctid) || 0n
+              if (ctid && shareSums.has(ctid)) {
+                ;(atom as any).__opposeWei = shareSums.get(ctid) || 0n
               }
+              if (tab === 'agents') atom.liveStakerCount = countLiveStakers(positions, { atomId: atom.term_id, counterId: ctid })
             }
-          } catch { /* non-critical, falls back to opposeWei=0 */ }
+          } catch {
+            /* non-critical, falls back to opposeWei=0; stakers unknown, never 0 */
+            for (const atom of atoms) if (tab === 'agents') atom.liveStakerCount = null
+          }
         }
         if (isCancelled()) return
         // Agents: the same junk filter as /agents and /api/v1/agents, fed the RAW label
@@ -152,7 +160,7 @@ export function FeaturedAgents() {
           ? filterAgents(atoms.map(a => ({
               termId: a.term_id,
               label: effectiveLabel(a),
-              stakerCount: a.positions_aggregate?.aggregate?.count || 0,
+              stakerCount: a.liveStakerCount ?? 0,
               totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
               createdAt: a.created_at,
               original: a,
@@ -375,7 +383,8 @@ export function FeaturedAgents() {
                         const effLabel = effectiveLabel(item)
                         const name = cleanAtomName(effLabel)
                         const description = getDescription(effLabel, cfg.prefix)
-                        const stakers = item.positions_aggregate?.aggregate?.count || 0
+                        // Agents: live stakers only (null = unread → not printed). Skills keep their own count.
+                        const stakers = activeTab === 'agents' ? item.liveStakerCount : (item.positions_aggregate?.aggregate?.count || 0)
                         const sharesWei = readSharesWei(item.positions_aggregate)
                         const totalStaked = Number(sharesWei ?? 0n) / 1e18
                         const opposeWei: bigint = (item as any).__opposeWei ?? 0n
@@ -428,7 +437,7 @@ export function FeaturedAgents() {
                                 }
 
                                 <div className="flex items-center gap-3 text-xs text-[#7A838D] mb-2.5">
-                                  <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {stakers} staker{stakers !== 1 ? 's' : ''}</span>
+                                  {stakers != null && <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {stakers} staker{stakers !== 1 ? 's' : ''}</span>}
                                   <span>{totalStaked > 0 ? `${totalStaked.toFixed(4)} tTRUST` : 'No stakes'}</span>
                                 </div>
 

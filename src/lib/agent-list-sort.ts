@@ -15,7 +15,9 @@ export type AgentListSortBy = 'newest' | 'score_desc' | 'score_asc' | 'stakers' 
 
 export interface SortableAgentEntry {
   agent: {
-    positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+    positions_aggregate?: { aggregate: { sum: { shares: string } | null } }
+    /** Live stakers (lib/live-position.ts). Unknown/unread sorts as 0. */
+    liveStakerCount?: number | null
   }
   trust: { score: number }
   /**
@@ -46,8 +48,7 @@ export function compareAgentEntries(
     case 'score_asc':
       return a.trust.score - b.trust.score
     case 'stakers':
-      return (b.agent.positions_aggregate?.aggregate?.count || 0)
-           - (a.agent.positions_aggregate?.aggregate?.count || 0)
+      return (b.agent.liveStakerCount ?? 0) - (a.agent.liveStakerCount ?? 0)
     case 'stake':
       return Number(
         BigInt(b.agent.positions_aggregate?.aggregate?.sum?.shares || '0')
@@ -61,9 +62,9 @@ export function compareAgentEntries(
 /**
  * Does this entry rank among scored entries? Uses the precomputed `measured`
  * flag when the caller supplies it (/agents does); otherwise falls back to
- * "at least one position" (the original Etap 2c gate).
+ * "at least one live staker" (the original Etap 2c gate, minus 0-share rows).
  */
 export function hasStake(entry: SortableAgentEntry): boolean {
   if (entry.measured !== undefined) return entry.measured
-  return (entry.agent.positions_aggregate?.aggregate?.count || 0) > 0
+  return (entry.agent.liveStakerCount ?? 0) > 0
 }

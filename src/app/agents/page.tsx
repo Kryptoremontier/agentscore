@@ -47,6 +47,7 @@ import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
 import { fetchVaultPositions } from '@/lib/vault-positions'
+import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import { fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus } from '@/lib/agent-list'
@@ -79,8 +80,10 @@ interface GraphQLAgent {
   created_at: string
   emoji?: string
   creator?: { label: string; id?: string } | null
-  positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+  positions_aggregate?: { aggregate: { sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /** Live stakers (lib/live-position.ts); undefined = never read (cohort), null = read failed. */
+  liveStakerCount?: number | null
   /** Etap 2c: which corpus this atom came from. Absent = AgentScore (legacy fetch paths). */
   origin?: 'agentscore' | 'erc8004'
   /** ERC-8004 cohort only — declared OASF domains/skills (`has category`/`has tag`), self-declared not attested. */
@@ -301,7 +304,7 @@ function AgentsPageContent() {
       const candidates = atoms.map(a => ({
         termId: a.term_id,
         label: effectiveLabel(a),
-        stakerCount: a.positions_aggregate?.aggregate?.count || 0,
+        stakerCount: a.liveStakerCount ?? 0,
         totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
         createdAt: a.created_at,
         original: a,
@@ -490,11 +493,11 @@ function AgentsPageContent() {
       // Every position on both vaults, paged past the endpoint's 100-row cap (was `limit: 100`,
       // so backers past the first 100 were dropped silently). Throws on a failed page.
       const raw: any[] = await fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true })
-      // Only active holders (shares > 0)
-      const active = raw.filter((p: any) => p.shares && BigInt(p.shares) > 0n)
-      // Unique wallets
-      const wallets = new Set(active.map((p: any) => p.account_id))
-      return { positions: active, uniqueCount: wallets.size }
+      // Rows and count through the one live rule (lib/live-position.ts) — no local filter.
+      return {
+        positions: livePositions(raw),
+        uniqueCount: countLiveStakers(raw, { atomId: termId, counterId: counterTermId }),
+      }
     } catch (e) {
       // A failed read is not "no positions" — null, and callers keep showing "—".
       console.error('fetchAllPositions error:', e)
@@ -1816,7 +1819,8 @@ function AgentsPageContent() {
                   const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
                   const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
                   const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
-                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
+                  // Live stakers only (lib/live-position.ts) — a 0-share row is not a staker.
+                  const stakers = agent.liveStakerCount
                   const color = displayScore == null ? UNRATED_COLOR
                     : effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -1830,7 +1834,7 @@ function AgentsPageContent() {
                   // measured, so they are not printed (thesis §6: null ≠ 0.0).
                   const vaultRead = readSharesWei(agent.positions_aggregate) != null
                   const cardTier = measuredTier({
-                    stakers,
+                    stakers: stakers ?? 0,
                     supportWei: readSharesWei(agent.positions_aggregate),
                     opposeWei: (agent as any).__opposeWei ?? 0n,
                     ageDays: agent.created_at ? getAgentAgeDays(agent.created_at) : 0,
@@ -1889,7 +1893,7 @@ function AgentsPageContent() {
                       {vaultRead && (
                         <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
                           <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
-                          <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
+                          <span>Stakers: <span className="text-white font-medium">{stakers ?? '—'}</span></span>
                         </div>
                       )}
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
@@ -1913,7 +1917,7 @@ function AgentsPageContent() {
                   const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
                   const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
                   const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
-                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
+                  const stakers = agent.liveStakerCount
                   const color = displayScore == null ? UNRATED_COLOR
                     : effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -1960,7 +1964,7 @@ function AgentsPageContent() {
                       {/* Stakes */}
                       <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{listVaultRead ? stakes : '—'}</span>
                       {/* Stakers */}
-                      <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{listVaultRead ? stakers : '—'}</span>
+                      <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{listVaultRead && stakers != null ? stakers : '—'}</span>
                       {/* Score + momentum */}
                       <div className="flex items-center justify-end gap-1 w-12">
                         {displayScore != null ? (
@@ -3498,10 +3502,16 @@ function AgentsPageContent() {
                     }
                   }
 
+                  // Backers are wallets holding a live position now (lib/live-position.ts): a wallet
+                  // that sold out stays in the Activity history, not in this list or its count.
+                  const liveWallets = positionsKnown
+                    ? liveStakerWallets(allPositions, [selectedAgent.term_id, agentTriple.counterTermId])
+                    : null
                   const profiles = Array.from(profileMap.values())
+                    .filter(p => liveWallets == null || liveWallets.has(p.accountId.toLowerCase()))
                     .sort((a, b) => b.totalSignals - a.totalSignals)
 
-                  const uniqueStakers = profiles.length
+                  const uniqueStakers = liveWallets == null ? null : profiles.length
 
                   return (
                   <div className="p-5">
@@ -3522,7 +3532,7 @@ function AgentsPageContent() {
                         </div>
                       </div>
                       <span className="text-xs text-[#B5BDC6] bg-[#1E2229] px-2 py-1 rounded-full">
-                        {uniqueStakers} profile{uniqueStakers !== 1 ? 's' : ''} · {agentSignalsCount} signal{agentSignalsCount !== 1 ? 's' : ''}
+                        {uniqueStakers ?? '—'} profile{uniqueStakers !== 1 ? 's' : ''} · {agentSignalsCount} signal{agentSignalsCount !== 1 ? 's' : ''}
                       </span>
                     </div>
 

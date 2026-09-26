@@ -33,7 +33,8 @@ import { getAttestationCount, getAttestationConfig } from './attestation-gate'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from './trust-tiers'
 import { filterAgents, type AgentJunkReason } from './agent-junk-filter'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP, type GqlRequest, type PagedRows } from './gql-pager'
-import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
+import { fetchVaultPositions, sumSharesByVault, vaultStakeStats, type VaultPosition } from './vault-positions'
+import { countLiveStakers, liveStakerWallets } from './live-position'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const TRUST_PREDICATE_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
@@ -96,7 +97,8 @@ type AgentRow = {
   emoji?: string
   created_at: string
   creator?: { label: string; id?: string } | null
-  positions_aggregate?: { aggregate: { count: number; sum: { shares: string | null } | null; max: { created_at: string | null } | null } | null }
+  /** Atom-vault support stake + last signal time. No row count: it counts 0-share rows (stakers come from agentVaultReads). */
+  positions_aggregate?: { aggregate: { sum: { shares: string | null } | null; max: { created_at: string | null } | null } | null }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
   subjectTriplesCount?: Array<{ id: string }>
 }
@@ -184,7 +186,6 @@ async function fetchAgentRows(limit: number): Promise<PagedRows<AgentRow>> {
         creator { label id }
         positions_aggregate {
           aggregate {
-            count
             sum { shares }
             max { created_at }
           }
@@ -205,14 +206,32 @@ async function fetchAgentRows(limit: number): Promise<PagedRows<AgentRow>> {
   })
 }
 
-async function batchFetchOpposeShares(rows: AgentRow[]): Promise<Map<string, bigint>> {
-  const counterTermIds = rows
-    .map(a => a.as_subject_triples?.[0]?.counter_term_id)
-    .filter((id): id is string => !!id)
+interface AgentVaultReads {
+  /** Every position on the agents' atom vaults + trust counter-vaults (0-share rows included, raw). */
+  positions: VaultPosition[]
+  /** term_id → oppose shares (the trust counter-vault's sum). */
+  opposeWeiOf(row: AgentRow): bigint
+  /** term_id → stakers: distinct wallets with a live position on the atom or counter-vault. */
+  stakersOf(row: AgentRow): number
+}
 
-  if (counterTermIds.length === 0) return new Map<string, bigint>()
+/**
+ * One paged read of every position on the agents' atom vaults and trust
+ * counter-vaults: oppose shares, and stakers counted with the one live rule
+ * (lib/live-position.ts). `positions_aggregate.count` counted 0-share rows —
+ * On-Chain Data Analyzer and Agent Avatar Coder showed 1 staker holding 0 shares.
+ */
+async function agentVaultReads(rows: AgentRow[]): Promise<AgentVaultReads> {
+  const counterOf = (row: AgentRow) => row.as_subject_triples?.[0]?.counter_term_id ?? null
+  const vaultIds = rows.flatMap(r => [r.term_id, counterOf(r)]).filter((id): id is string => !!id)
   // Paged: one request used to return at most 100 positions across ALL counter-vaults.
-  return sumSharesByVault(await fetchVaultPositions(counterTermIds, { request: pagedRequest }))
+  const positions = vaultIds.length ? await fetchVaultPositions(vaultIds, { request: pagedRequest }) : []
+  const sums = sumSharesByVault(positions)
+  return {
+    positions,
+    opposeWeiOf: (row) => { const c = counterOf(row); return c ? (sums.get(c) ?? 0n) : 0n },
+    stakersOf: (row) => countLiveStakers(positions, { atomId: row.term_id, counterId: counterOf(row) }),
+  }
 }
 
 /**
@@ -230,6 +249,8 @@ interface AgentCorpus {
   rowsById: Map<string, AgentRow>
   /** REPO_MAP §7 rule 1: capped fetch reports its own truncation (null = count unknown). */
   truncated: boolean | null
+  /** Raw positions on every corpus agent's atom vault + trust counter-vault. */
+  positions: VaultPosition[]
 }
 
 /**
@@ -240,13 +261,9 @@ interface AgentCorpus {
 async function loadAgentCorpus(): Promise<AgentCorpus> {
   const corpus = await fetchAgentRows(AGENT_CORPUS_LIMIT)
   const rows = corpus.rows
-  const opposeMap = await batchFetchOpposeShares(rows)
+  const vault = await agentVaultReads(rows)
 
-  const allItems = rows.map(row => {
-    const ctid = row.as_subject_triples?.[0]?.counter_term_id
-    const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
-    return rowToAgentItem(row, opposeWei)
-  })
+  const allItems = rows.map(row => rowToAgentItem(row, vault.opposeWeiOf(row), vault.stakersOf(row)))
 
   // Test fixtures + duplicate re-registrations, counted and surfaced
   // (thesis §6 — never silently dropped). See agent-junk-filter.ts. Pass the
@@ -273,6 +290,7 @@ async function loadAgentCorpus(): Promise<AgentCorpus> {
     junk: junk.map(j => ({ item: j.item, reason: j.reason })),
     rowsById: new Map(rows.map(r => [r.term_id, r])),
     truncated,
+    positions: vault.positions,
   }
 }
 
@@ -283,9 +301,8 @@ async function loadAgentCorpus(): Promise<AgentCorpus> {
  * - For detail contexts use getAgentTrustBreakdown(), which fetches signal
  *   history and calls calculateCompositeTrust() for the full 4-pillar composite.
  */
-function rowToAgentItem(row: AgentRow, opposeWei: bigint): AgentApiItem {
+function rowToAgentItem(row: AgentRow, opposeWei: bigint, stakerCount: number): AgentApiItem {
   const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
-  const stakerCount = row.positions_aggregate?.aggregate?.count || 0
   const totalWei = supportWei + opposeWei
   const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
 
@@ -383,11 +400,10 @@ export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem
   const row = rows.find(r => r.term_id === termId)
   if (!row) return null
 
-  const opposeMap = await batchFetchOpposeShares([row])
-  const ctid = row.as_subject_triples?.[0]?.counter_term_id
-  const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
+  const vault = await agentVaultReads([row])
+  const opposeWei = vault.opposeWeiOf(row)
 
-  const base = rowToAgentItem(row, opposeWei)
+  const base = rowToAgentItem(row, opposeWei, vault.stakersOf(row))
 
   const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
   const totalWei = supportWei + opposeWei
@@ -481,7 +497,7 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
         data
         created_at
         positions_aggregate {
-          aggregate { count sum { shares } }
+          aggregate { sum { shares } }
         }
         as_subject_triples(
           where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
@@ -497,16 +513,16 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const ctid = row.as_subject_triples?.[0]?.counter_term_id
 
   const termIds = ctid ? [termId, ctid] : [termId]
-  const [opposeMap, positionsData, sharePriceWei] = await Promise.all([
-    batchFetchOpposeShares([row]),
+  const [positionsData, sharePriceWei] = await Promise.all([
     fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true, request: pagedRequest })
       .then(positions => ({ positions })),
     getOnChainSharePrice(serverPublicClient, termId as `0x${string}`).catch(() => null),
   ])
 
-  const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
+  // Oppose and stakers from the same positions read — stakers through the one live rule.
+  const opposeWei = ctid ? (sumSharesByVault(positionsData.positions).get(ctid) ?? 0n) : 0n
   const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
-  const stakerCount = row.positions_aggregate?.aggregate?.count || 0
+  const stakerCount = countLiveStakers(positionsData.positions, { atomId: termId, counterId: ctid })
 
   const totalWei = supportWei + opposeWei
   const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
@@ -706,28 +722,12 @@ async function fetchDomainTriplesInternal(): Promise<{
     if (t.counter_term_id) vaultIds.push(t.counter_term_id)
   }
 
-  const posData = await gql<{ positions: Array<{ term_id: string; shares: string }> }>(
-    `query GetDomainPositions($vaultIds: [String!]!) {
-       positions(where: { term_id: { _in: $vaultIds } }) { term_id shares }
-     }`,
-    { vaultIds }
-  )
-  const positions = posData?.positions || []
-
-  const vaultMap = new Map<string, { totalShares: bigint; count: number }>()
-  for (const pos of positions) {
-    if (!pos.shares) continue
-    const prev = vaultMap.get(pos.term_id) || { totalShares: 0n, count: 0 }
-    try {
-      vaultMap.set(pos.term_id, { totalShares: prev.totalShares + parseBigInt(pos.shares), count: prev.count + 1 })
-    } catch { /* skip */ }
-  }
+  // Paged (one request stopped at 100 positions); stakers per vault through the one live rule.
+  const vaultStats = vaultStakeStats(await fetchVaultPositions(vaultIds, { request: pagedRequest }))
 
   const raw = triples.map(t => {
-    const forVault = vaultMap.get(t.term_id) || { totalShares: 0n, count: 0 }
-    const againstVault = t.counter_term_id
-      ? (vaultMap.get(t.counter_term_id) || { totalShares: 0n, count: 0 })
-      : { totalShares: 0n, count: 0 }
+    const forVault = vaultStats(t.term_id)
+    const againstVault = vaultStats(t.counter_term_id)
 
     return {
       tripleId: t.term_id,
@@ -1116,14 +1116,12 @@ export async function getPlatformStats() {
   ])
 
   let totalStakedWei = 0n
-  const stakerSet = new Set<string>()
   let topAgentScore = 0
   let topAgentName = ''
 
   for (const item of corpus.kept) {
     const row = corpus.rowsById.get(item.id)!
     totalStakedWei += parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
-    const stakerCount = item.stakerCount
 
     // List context: qualityScore=null (no signal history). Rank by trustScore.
     // topAgent.score in the response is therefore trustScore, not a hybrid —
@@ -1133,18 +1131,20 @@ export async function getPlatformStats() {
       topAgentScore = score
       topAgentName = item.name
     }
-
-    // Count unique stakers (use staker count as proxy — no address list in batch)
-    for (let i = 0; i < stakerCount; i++) {
-      stakerSet.add(`${row.term_id}-${i}`) // approximate uniqueness
-    }
   }
 
   const domains = aggregateDomains(domainTriples)
   const topDomain = domains[0] || null
 
-  // Approximate active stakers from evaluator data (more accurate)
-  const activeStakers = evaluatorProfiles.length || stakerSet.size
+  // Distinct wallets holding a live position on any kept agent's atom vault or trust
+  // counter-vault — the same live rule as every per-agent staker count (lib/live-position.ts),
+  // from the corpus's own paged positions read. Was the evaluator list (a GraphQL shares>0
+  // filter, silently capped at 100 rows), else a per-agent row-count sum.
+  const keptVaults = corpus.kept.flatMap(item => {
+    const row = corpus.rowsById.get(item.id)!
+    return [row.term_id, row.as_subject_triples?.[0]?.counter_term_id]
+  })
+  const activeStakers = liveStakerWallets(corpus.positions, keptVaults).size
 
   // Fetch claim count
   let claimCount = 0
