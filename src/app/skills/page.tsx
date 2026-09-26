@@ -1,5 +1,6 @@
 'use client'
 
+import { startVisiblePoll } from '@/lib/visible-poll'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -561,11 +562,12 @@ function SkillsPageContent() {
 
     refreshPositionsAndSupply(selectedSkill.term_id, skillTriple.counterTermId, true)
 
-    const interval = setInterval(() => {
-      refreshPositionsAndSupply(selectedSkill.term_id, skillTriple.counterTermId, false)
-    }, 15000)
-
-    return () => clearInterval(interval)
+    // Every 15 s while the tab is visible; back in view it refreshes at once (lib/visible-poll.ts).
+    return startVisiblePoll({
+      intervalMs: 15_000,
+      firstDelayMs: 15_000,
+      tick: () => refreshPositionsAndSupply(selectedSkill.term_id, skillTriple.counterTermId, false),
+    })
   }, [selectedSkill?.term_id, skillTriple.counterTermId])
 
   useEffect(() => {
