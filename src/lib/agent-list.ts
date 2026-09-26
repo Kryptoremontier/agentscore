@@ -138,10 +138,19 @@ export interface VaultAnnotatedRow {
  * `__opposeWei` null — unknown, never 0 (a failed read taken as 0 oppose inflates the score;
  * lib/score-basis.ts stakeReadingOf keeps it null and hasMeasuredScore says "not measured").
  */
-export function annotateVaultReads(rows: VaultAnnotatedRow[], positions: VaultPosition[] | null, opts: { stakers: boolean }): void {
+export function annotateVaultReads<T extends VaultAnnotatedRow>(
+  rows: T[],
+  positions: VaultPosition[] | null,
+  opts: {
+    stakers: boolean
+    /** Where the row's counter-vault id lives. Default: its trust triple (`as_subject_triples[0]`);
+     *  a claim (a triple itself) carries it as `counter_term_id`. */
+    counterOf?: (row: T) => string | null | undefined
+  },
+): void {
   const sums = positions ? sumSharesByVault(positions) : null
   for (const row of rows) {
-    const ctid = row.as_subject_triples?.[0]?.counter_term_id ?? null
+    const ctid = (opts.counterOf ? opts.counterOf(row) : row.as_subject_triples?.[0]?.counter_term_id) ?? null
     if (!sums) {
       if (ctid) row.__opposeWei = null
       if (opts.stakers) row.liveStakerCount = null

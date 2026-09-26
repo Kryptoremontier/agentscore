@@ -1083,10 +1083,11 @@ export async function getEvaluatorProfile(address: string) {
   const trackRecord = positions.filter(p => !p.isCreator).map(p => ({
     agentName: p.agentName,
     side: p.side,
+    // null = the agent's oppose read failed: trust and verdict unknown, never judged on 0 oppose.
     currentTrust: p.currentTrustScore,
-    correct:
+    correct: p.currentTrustScore == null ? null : (
       (p.side === 'support' && p.currentTrustScore > 50) ||
-      (p.side === 'oppose' && p.currentTrustScore < 50),
+      (p.side === 'oppose' && p.currentTrustScore < 50)),
   }))
 
   const cfg = getAttestationConfig()

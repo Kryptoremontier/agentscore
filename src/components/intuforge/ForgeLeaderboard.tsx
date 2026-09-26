@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { Crown, Shield, Award, Trophy } from 'lucide-react'
 import type { ForgeProject } from '@/lib/forge/types'
+import { OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
 
 const RANK_CONFIG = [
   {
@@ -79,11 +80,11 @@ export function ForgeLeaderboard({ projects }: ForgeLeaderboardProps) {
                 <div className="w-16 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${project.finalScore}%`, background: cfg.barColor }}
+                    style={{ width: `${project.finalScore ?? 0}%`, background: cfg.barColor }}
                   />
                 </div>
-                <span className="text-sm font-bold tabular-nums w-8 text-right" style={{ color: cfg.barColor }}>
-                  {project.finalScore}
+                <span className="text-sm font-bold tabular-nums w-8 text-right" style={{ color: cfg.barColor }} title={project.finalScore == null ? OPPOSE_UNREAD_TOOLTIP : undefined}>
+                  {project.finalScore ?? '—'}
                 </span>
               </div>
 

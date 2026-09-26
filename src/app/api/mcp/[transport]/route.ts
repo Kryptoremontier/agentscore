@@ -310,7 +310,8 @@ const handler = createMcpHandler(
           'Get the accuracy profile and track record of a specific staker/evaluator. ' +
           'Shows: accuracy percentage, evaluator weight (0.5x-1.5x), ' +
           'tier (Newcomer/Scout/Analyst/Oracle/Sage), track record ' +
-          '(which agents they backed and whether those picks were correct), ' +
+          '(which agents they backed and whether those picks were correct; currentTrust and correct ' +
+          'are null when that agent\'s oppose read failed — unknown picks are left out of accuracy), ' +
           'and attestation gate status (Layer 7 anti-manipulation): ' +
           'attestationCount, meetsAttestationThreshold, attestationGateActive. ' +
           'evaluatorWeight is capped at 1.0x if attestation threshold is not met.',

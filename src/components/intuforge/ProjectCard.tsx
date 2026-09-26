@@ -9,8 +9,11 @@ import { ForgeStakeButtons } from './ForgeStakeButtons'
 import { PROJECT_STAGE_DOT_COLORS } from '@/lib/forge/constants'
 import { PROJECT_STAGE_LABELS } from '@/lib/forge/types'
 import type { ForgeProject } from '@/lib/forge/types'
+import { OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
 
-function scoreColor(score: number): string {
+// null = the score is unknown (oppose read failed): neutral grey, never a level.
+function scoreColor(score: number | null): string {
+  if (score == null) return '#7A838D'
   if (score >= 80) return '#2ECC71'
   if (score >= 60) return '#22C55E'
   if (score >= 40) return '#EAB308'
@@ -110,8 +113,8 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
       {/* Trust score + sparkline */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-xl font-bold tabular-nums" style={{ color }}>
-            {project.finalScore}
+          <span className="text-xl font-bold tabular-nums" style={{ color }} title={project.finalScore == null ? OPPOSE_UNREAD_TOOLTIP : undefined}>
+            {project.finalScore ?? '—'}
           </span>
           <MomentumIcon momentum={project.momentum} />
         </div>
@@ -124,7 +127,7 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
       <div className="h-1 rounded-full bg-white/5 overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${project.finalScore}%`, background: color }}
+          style={{ width: `${project.finalScore ?? 0}%`, background: color }}
         />
       </div>
 

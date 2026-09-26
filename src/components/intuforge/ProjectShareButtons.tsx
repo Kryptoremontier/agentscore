@@ -2,7 +2,8 @@
 
 interface ProjectShareButtonsProps {
   projectName: string
-  finalScore: number
+  /** null = unknown (oppose read failed): the share text makes no score claim. */
+  finalScore: number | null
 }
 
 export function ProjectShareButtons({ projectName, finalScore }: ProjectShareButtonsProps) {
@@ -13,7 +14,9 @@ export function ProjectShareButtons({ projectName, finalScore }: ProjectShareBut
   }
 
   const tweetText = encodeURIComponent(
-    `Check out ${projectName} on IntuForge! Trust Score: ${finalScore}`
+    finalScore == null
+      ? `Check out ${projectName} on IntuForge!`
+      : `Check out ${projectName} on IntuForge! Trust Score: ${finalScore}`
   )
 
   return (

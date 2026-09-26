@@ -82,13 +82,27 @@ export function calculateForgeTrustScore(input: ForgeTrustInput): ForgeTrustResu
   }
 }
 
+/** The project's score envelope, or null when its scores are unknown (oppose read failed). */
 export function getForgeProjectScore(project: Pick<ForgeProject, 'trustScore' | 'compositeScore'>) {
+  if (project.trustScore == null) return null
   return computeScoreEnvelope({
     objectType: 'project',
     trustScore: project.trustScore,
     qualityScore: project.compositeScore,
     softGateActive: false,
   })
+}
+
+/** Sort by finalScore, highest first; a project whose score is unknown (null) ranks last. */
+export function compareForgeScoreDesc(a: Pick<ForgeProject, 'finalScore'>, b: Pick<ForgeProject, 'finalScore'>): number {
+  if (a.finalScore == null || b.finalScore == null) return (a.finalScore == null ? 1 : 0) - (b.finalScore == null ? 1 : 0)
+  return b.finalScore - a.finalScore
+}
+
+/** Mean finalScore over projects whose score is known; null when none is. */
+export function meanKnownForgeScore(projects: ReadonlyArray<Pick<ForgeProject, 'finalScore'>>): number | null {
+  const known = projects.map(p => p.finalScore).filter((s): s is number => s != null)
+  return known.length ? known.reduce((a, b) => a + b, 0) / known.length : null
 }
 
 /**

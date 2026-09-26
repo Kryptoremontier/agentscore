@@ -20,6 +20,34 @@ import { AGENT_WHERE_STR } from './gql-filters'
 
 import { calculateEvaluatorScore, type StakerPosition, type EvaluatorProfile } from './evaluator-score'
 import { batchGetAttestationCounts, getAttestationConfig } from './attestation-gate'
+import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
+import { stakeReadingOf } from './score-basis'
+
+/** Oppose shares per counter-vault, from one paged read. null = the read failed. */
+async function readOpposeSums(counterIds: readonly string[]): Promise<Map<string, bigint> | null> {
+  if (counterIds.length === 0) return new Map()
+  return fetchVaultPositions(counterIds).then(sumSharesByVault).catch(() => null)
+}
+
+/**
+ * An agent's support ratio 0–100 (Math.round) for the evaluator track record, read through
+ * the shared stakeReadingOf. null = its oppose read failed — unknown, never computed on 0
+ * oppose (which would count every such pick as the agent being fully supported).
+ */
+export function trustRatioOf(
+  atom: { positions_aggregate?: { aggregate?: { sum?: { shares?: string | null } | null } | null } | null; as_subject_triples?: Array<{ counter_term_id: string | null }> | null },
+  opposeSums: ReadonlyMap<string, bigint> | null,
+): number | null {
+  const ctid = atom.as_subject_triples?.[0]?.counter_term_id ?? null
+  const reading = stakeReadingOf({
+    positions_aggregate: atom.positions_aggregate as never,
+    __opposeWei: !ctid ? undefined : opposeSums ? (opposeSums.get(ctid) ?? 0n) : null,
+  })
+  if (reading.opposeWei === null) return null
+  const supportWei = reading.supportWei ?? 0n
+  const totalWei = supportWei + reading.opposeWei
+  return totalWei > 0n ? Math.round(Number(supportWei * 100n / totalWei)) : 50
+}
 import { fetchPositionPNL, computePositionPNL, type PositionPNL } from './pnl-engine'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -107,23 +135,9 @@ export async function fetchStakerPositions(
       .map(a => a.as_subject_triples?.[0]?.counter_term_id)
       .filter((id): id is string => !!id)
 
-    const opposeMap = new Map<string, bigint>()
-    if (counterTermIds.length > 0) {
-      try {
-        const opposeData = await gql<{ positions: Array<{ term_id: string; shares: string }> }>(`
-          {
-            positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } shares: { _gt: "0" } }) {
-              term_id
-              shares
-            }
-          }
-        `)
-        for (const pos of opposeData?.positions ?? []) {
-          const prev = opposeMap.get(pos.term_id) || 0n
-          try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
-        }
-      } catch { /* non-critical */ }
-    }
+    // Paged (the old one-shot read stopped at 100 rows). null = the read failed: those agents'
+    // trust is unknown (lib/score-basis.ts), never computed on 0 oppose.
+    const opposeSums = await readOpposeSums(counterTermIds)
 
     // Fetch PNL for all agent term IDs in parallel with the above (graceful fallback)
     const termIds = atoms.map(a => a.term_id)
@@ -135,17 +149,7 @@ export async function fetchStakerPositions(
 
     // Map atoms to StakerPosition[]
     return atoms.map(atom => {
-      const supportWei = (() => {
-        try { return BigInt(atom.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { return 0n }
-      })()
-
-      const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-      const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
-
-      const totalWei = supportWei + opposeWei
-      const trustScore = totalWei > 0n
-        ? Math.round(Number(supportWei * 100n / totalWei))
-        : 50
+      const trustScore = trustRatioOf(atom, opposeSums)
 
       return {
         agentAtomId: atom.term_id,
@@ -266,24 +270,8 @@ async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
       if (ctid) counterTermIdSet.add(ctid)
     }
 
-    // Fetch oppose vault shares
-    const opposeMap = new Map<string, bigint>()
-    if (counterTermIdSet.size > 0) {
-      try {
-        const counterIds = Array.from(counterTermIdSet)
-        const opposeData = await gql<{ positions: Array<{ term_id: string; shares: string }> }>(`
-          {
-            positions(where: { term_id: { _in: ${JSON.stringify(counterIds)} } shares: { _gt: "0" } }) {
-              term_id shares
-            }
-          }
-        `)
-        for (const op of opposeData?.positions ?? []) {
-          const prev = opposeMap.get(op.term_id) || 0n
-          try { opposeMap.set(op.term_id, prev + BigInt(op.shares)) } catch { /* skip */ }
-        }
-      } catch { /* non-critical */ }
-    }
+    // Oppose vault shares — paged; null = the read failed (trust unknown, never 0 oppose).
+    const opposeSums = await readOpposeSums(Array.from(counterTermIdSet))
 
     // Group positions by account_id, build StakerPosition[] per account
     const accountPositions = new Map<string, StakerPosition[]>()
@@ -296,16 +284,7 @@ async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
       const atom = p.vault?.term?.atom
       if (!atom) continue
 
-      const supportWei = (() => {
-        try { return BigInt(atom.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { return 0n }
-      })()
-
-      const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-      const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
-      const totalWei = supportWei + opposeWei
-      const trustScore = totalWei > 0n
-        ? Math.round(Number(supportWei * 100n / totalWei))
-        : 50
+      const trustScore = trustRatioOf(atom, opposeSums)
 
       const isCreator =
         !!atom.creator?.id &&

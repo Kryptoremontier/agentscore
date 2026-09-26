@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { apiSuccess, apiError, corsOptions, parsePagination } from '@/lib/api-helpers'
 import { fetchForgeProjectsWithJunkInfo } from '@/lib/forge/data'
 import { calculateForgeCompleteness } from '@/lib/forge/completeness'
-import { getForgeProjectScore } from '@/lib/forge/scoring'
+import { getForgeProjectScore, compareForgeScoreDesc } from '@/lib/forge/scoring'
 import { ForgeCategory, ProjectStage } from '@/lib/forge/types'
 
 export const revalidate = 300
@@ -72,11 +72,11 @@ export async function GET(request: NextRequest) {
     // Sort
     projects.sort((a, b) => {
       switch (sort) {
-        case 'trustScore':  return b.finalScore - a.finalScore
+        case 'trustScore':  return compareForgeScoreDesc(a, b)
         case 'newest':      return new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime()
         case 'mostStaked':  return b.totalStaked - a.totalStaked
         case 'mostStakers': return b.stakerCount - a.stakerCount
-        default:            return b.finalScore - a.finalScore
+        default:            return compareForgeScoreDesc(a, b)
       }
     })
 

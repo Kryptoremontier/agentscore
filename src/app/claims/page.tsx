@@ -35,6 +35,10 @@ import { TrustTimeline } from '@/components/agents/TrustTimeline'
 import { CreateClaimForm } from '@/components/claims/CreateClaimForm'
 import { PREDICATES, getPredicateConfig, getAtomName, getAtomType, formatClaimText, type Claim } from '@/types/claim'
 import { cn } from '@/lib/cn'
+import { fetchVaultPositions } from '@/lib/vault-positions'
+import { annotateVaultReads } from '@/lib/agent-list'
+import { stakeReadingOf, scoreUnlessOpposeUnread, OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
+import { OpposeUnreadNotice } from '@/components/shared/OpposeUnreadNotice'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import {
   Bot, Zap, MessageSquare, Globe, Layers,
@@ -79,12 +83,15 @@ interface GraphQLTriple {
   object: { term_id: string; label: string }
   creator?: { label?: string; id?: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+  /** Counter-vault shares (lib/agent-list.ts annotateVaultReads); null = that read failed. */
+  __opposeWei?: bigint | null
 }
 
 function tripleToDisplayClaim(t: GraphQLTriple): Claim {
   const predConfig = getPredicateConfig(t.predicate.label)
-  const supportWei = (() => { try { return BigInt(t.positions_aggregate?.aggregate?.sum?.shares ?? '0') } catch { return 0n } })()
-  const opposeWei: bigint = (t as any).__opposeWei ?? 0n
+  // opposeWei null = the oppose read failed (lib/score-basis.ts stakeReadingOf): no score.
+  const reading = stakeReadingOf(t)
+  const cardTrust = calculateTrustScoreFromStakes(reading.supportWei ?? 0n, reading.opposeWei ?? 0n)
   return {
     id: t.term_id,
     term_id: t.term_id,
@@ -112,7 +119,7 @@ function tripleToDisplayClaim(t: GraphQLTriple): Claim {
     positions_aggregate: t.positions_aggregate
       ? { aggregate: { count: t.positions_aggregate.aggregate?.count, sum: t.positions_aggregate.aggregate?.sum ?? undefined } }
       : undefined,
-    trust_score: calculateTrustScoreFromStakes(supportWei, opposeWei).score,
+    trust_score: scoreUnlessOpposeUnread(cardTrust, reading),
     stakers_count: t.positions_aggregate?.aggregate?.count ?? 0,
   }
 }
@@ -179,6 +186,8 @@ function ClaimsPageContent() {
   const [combinedStakerCount, setCombinedStakerCount] = useState(0)
   const [supportSupply, setSupportSupply] = useState(0)
   const [opposeSupply, setOpposeSupply] = useState(0)
+  // The modal's on-chain supply read failed: no trust score or pools (never ones computed on 0).
+  const [claimSupplyUnread, setClaimSupplyUnread] = useState(false)
   const [onChainPrice, setOnChainPrice] = useState<number | null>(null)
   const [peakOnChainPrice, setPeakOnChainPrice] = useState<number | null>(null)
   const [positionsLoading, setPositionsLoading] = useState(false)
@@ -264,27 +273,11 @@ function ClaimsPageContent() {
         .map((t: any) => t.counter_term_id)
         .filter(Boolean) as string[]
       if (counterTermIds.length > 0) {
-        try {
-          const opposeRes = await fetch(GRAPHQL_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
-            })
-          })
-          const opposeData = await opposeRes.json()
-          const opposeMap = new Map<string, bigint>()
-          for (const pos of opposeData.data?.positions ?? []) {
-            const prev = opposeMap.get(pos.term_id) || 0n
-            try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
-          }
-          for (const triple of triples) {
-            const ctid = triple.counter_term_id
-            if (ctid && opposeMap.has(ctid)) {
-              triple.__opposeWei = opposeMap.get(ctid) || 0n
-            }
-          }
-        } catch { /* non-critical, cards fall back to opposeWei=0 */ }
+        // The same paged read + annotation as /agents and /skills (lib/agent-list.ts): a failed
+        // read leaves oppose null (unknown), never 0. A claim is a triple: its counter-vault is
+        // its own counter_term_id.
+        const positions = await fetchVaultPositions(counterTermIds).catch(() => null)
+        annotateVaultReads(triples, positions, { stakers: false, counterOf: (t: any) => t.counter_term_id })
       }
 
       setClaims(triples.map(tripleToDisplayClaim))
@@ -456,12 +449,15 @@ function ClaimsPageContent() {
             counterTermId ? getVaultSupply(publicClient, counterTermId) : Promise.resolve(0),
             getSharePriceFloat(publicClient, hex).catch(() => null),
           ])
-          setSupportSupply(sup); setOpposeSupply(opp)
+          setSupportSupply(sup); setOpposeSupply(opp); setClaimSupplyUnread(false)
           if (sharePrice !== null) {
             setOnChainPrice(sharePrice)
             setPeakOnChainPrice(prev => prev !== null ? Math.max(prev, sharePrice) : sharePrice)
           }
-        } catch { /* fallback below */ }
+        } catch {
+          // Unknown, not 0: the modal shows no score and says why (OpposeUnreadNotice).
+          setClaimSupplyUnread(true)
+        }
       }
       const { positions, uniqueCount } = await posPromise
       setAllPositions(positions); setCombinedStakerCount(uniqueCount)
@@ -479,6 +475,7 @@ function ClaimsPageContent() {
     if (!selectedClaim) {
       setClaimTriple({ termId: null, counterTermId: null, loading: false })
       setAllPositions([]); setCombinedStakerCount(0); setSupportSupply(0); setOpposeSupply(0)
+      setClaimSupplyUnread(false)
       setOnChainPrice(null); setPeakOnChainPrice(null)
       return
     }
@@ -554,9 +551,10 @@ function ClaimsPageContent() {
 
   // ── Trust computations ──
   const claimTier = useMemo(() => {
-    if (!selectedClaim) return null
+    // Reads the same supply: unknown when that read failed, never a tier computed on 0.
+    if (!selectedClaim || claimSupplyUnread) return null
     return calculateTier(combinedStakerCount, supportSupply, 50, getAgentAgeDays(selectedClaim.created_at))
-  }, [selectedClaim, combinedStakerCount, supportSupply])
+  }, [selectedClaim, combinedStakerCount, supportSupply, claimSupplyUnread])
 
   const weightedTrust = useMemo(() => {
     try {
@@ -646,11 +644,11 @@ function ClaimsPageContent() {
 
   // ── Compute claimTrust from supply ──
   useEffect(() => {
-    if (!selectedClaim) { setClaimTrust(null); return }
+    if (!selectedClaim || claimSupplyUnread) { setClaimTrust(null); return }
     const supportWei = BigInt(Math.round(supportSupply * 1e18))
     const opposeWei = BigInt(Math.round(opposeSupply * 1e18))
     setClaimTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
-  }, [selectedClaim?.term_id, supportSupply, opposeSupply])
+  }, [selectedClaim?.term_id, supportSupply, opposeSupply, claimSupplyUnread])
 
   // ── Bonding curve preview ──
   const parseAmount = (v: string) => { try { return parseEther(v) } catch { return 0n } }
@@ -1037,8 +1035,9 @@ function ClaimsPageContent() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredClaims.map((claim, i) => {
                 const predCfg = claim.predicate.config
-                const tierCfg = calculateTier(claim.stakers_count || 0, claim.trust_score || 0, 50, getAgentAgeDays(claim.created_at))
-                const score = claim.trust_score ?? 0
+                // trust_score null = the oppose read failed: no score, and no tier computed from it.
+                const score = claim.trust_score ?? null
+                const tierCfg = score == null ? null : calculateTier(claim.stakers_count || 0, score, 50, getAgentAgeDays(claim.created_at))
                 return (
                   <motion.div
                     key={claim.term_id}
@@ -1072,11 +1071,15 @@ function ClaimsPageContent() {
                     {/* Stats */}
                     <div className="flex items-center justify-between mt-3">
                       <div className="flex items-center gap-2">
-                        <TrustTierBadge tier={tierCfg} size="sm" />
+                        {tierCfg && <TrustTierBadge tier={tierCfg} size="sm" />}
                         <span className="text-xs text-[#7A838D]">{claim.stakers_count ?? 0} stakers</span>
                       </div>
                       <div className="text-right">
-                        <p className={cn('text-sm font-bold font-mono', score >= 70 ? 'text-[#2ECC71]' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>{score}</p>
+                        {score != null ? (
+                          <p className={cn('text-sm font-bold font-mono', score >= 70 ? 'text-[#2ECC71]' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>{score}</p>
+                        ) : (
+                          <p className="text-sm font-bold font-mono text-[#7A838D] cursor-help" title={OPPOSE_UNREAD_TOOLTIP}>—</p>
+                        )}
                         <p className="text-[10px] text-[#4A5260]">Trust Score</p>
                       </div>
                     </div>
@@ -1084,7 +1087,7 @@ function ClaimsPageContent() {
                     <div className="w-full h-1 bg-white/5 rounded-full mt-2.5 overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all"
-                        style={{ width: `${Math.min(100, score)}%`, background: score >= 70 ? '#2ECC71' : score >= 40 ? '#EAB308' : '#6B7480' }}
+                        style={{ width: `${Math.min(100, score ?? 0)}%`, background: score == null ? '#6B7480' : score >= 70 ? '#2ECC71' : score >= 40 ? '#EAB308' : '#6B7480' }}
                       />
                     </div>
                   </motion.div>
@@ -1102,7 +1105,7 @@ function ClaimsPageContent() {
               </div>
               {filteredClaims.map((claim, i) => {
                 const predCfg = claim.predicate.config
-                const score = claim.trust_score ?? 0
+                const score = claim.trust_score ?? null
                 return (
                   <motion.div
                     key={claim.term_id}
@@ -1141,8 +1144,9 @@ function ClaimsPageContent() {
                     {/* Stakers */}
                     <span className="text-xs text-[#7A838D] text-right w-20 whitespace-nowrap">{claim.stakers_count ?? 0} stakers</span>
                     {/* Score */}
-                    <span className={cn('text-sm font-bold font-mono text-right w-12', score >= 70 ? 'text-[#2ECC71]' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}>
-                      {score}
+                    <span className={cn('text-sm font-bold font-mono text-right w-12', score == null ? 'text-[#7A838D]' : score >= 70 ? 'text-[#2ECC71]' : score >= 40 ? 'text-amber-400' : 'text-[#7A838D]')}
+                      title={score == null ? OPPOSE_UNREAD_TOOLTIP : undefined}>
+                      {score ?? '—'}
                     </span>
                   </motion.div>
                 )
@@ -1274,10 +1278,10 @@ function ClaimsPageContent() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { value: selectedClaim.trust_score ?? 0, label: 'Trust Score' },
+                    { value: claimSupplyUnread ? '—' : (selectedClaim.trust_score ?? '—'), label: 'Trust Score' },
                     { value: combinedStakerCount, label: 'Stakers' },
-                    { value: supportSupply.toFixed(3), label: 'Support Pool' },
-                    { value: opposeSupply.toFixed(3), label: 'Oppose Pool' },
+                    { value: claimSupplyUnread ? '—' : supportSupply.toFixed(3), label: 'Support Pool' },
+                    { value: claimSupplyUnread ? '—' : opposeSupply.toFixed(3), label: 'Oppose Pool' },
                   ].map((s, i) => (
                     <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-white">{s.value}</p>
@@ -1695,6 +1699,7 @@ function ClaimsPageContent() {
 
               {/* === CARD 3: AgentScore + Stake Breakdown === */}
               {(() => {
+                if (claimSupplyUnread) return <OpposeUnreadNotice className="mb-3" />
                 const t = claimTrust
                 const score = hybridScore ?? t?.score ?? 50
                 const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
@@ -1832,6 +1837,7 @@ function ClaimsPageContent() {
 
                 {/* ── OVERVIEW TAB ── */}
                 {activeTab === 'overview' && (() => {
+                  if (claimSupplyUnread) return <div className="p-5"><OpposeUnreadNotice /></div>
                   const t = claimTrust
                   const score = hybridScore ?? t?.score ?? 50
                   const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
@@ -2350,7 +2356,7 @@ function ClaimsPageContent() {
                     agentId={selectedClaim.term_id}
                     agentName={formatClaimText(selectedClaim)}
                     createdAt={selectedClaim.created_at}
-                    currentScore={hybridScore ?? claimTrust?.score ?? 50}
+                    currentScore={claimSupplyUnread ? null : (hybridScore ?? claimTrust?.score ?? 50)}
                     currentTier="unverified"
                     agentSignals={claimSignals}
                     counterTermId={claimTriple.counterTermId}

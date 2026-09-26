@@ -56,7 +56,9 @@ export interface StakerPosition {
   agentAtomId: string
   agentName: string
   side: 'support' | 'oppose'
-  currentTrustScore: number    // 0–100 support ratio of this agent
+  /** 0–100 support ratio of this agent. null = its oppose read failed (unknown): a pick that
+   *  can't be judged is left out of the track record, never judged on a 0 oppose stake. */
+  currentTrustScore: number | null
   isCreator: boolean           // exclude from track record if true
   stakedAt?: string            // ISO timestamp (optional, used for streak)
   pnl?: PositionPNL            // on-chain P&L data (optional — scoring falls back if absent)
@@ -87,7 +89,8 @@ export function calculateEvaluatorScore(
     walletPNL?: WalletPNL
   },
 ): EvaluatorProfile {
-  const validPositions = positions.filter(p => !p.isCreator)
+  // Self-created agents are excluded; so is a pick with no PNL whose trust couldn't be read.
+  const validPositions = positions.filter(p => !p.isCreator && (p.pnl !== undefined || p.currentTrustScore != null))
   const total = validPositions.length
 
   // Compute walletPNL from positions.pnl[] when available, fall back to options
@@ -125,6 +128,7 @@ export function calculateEvaluatorScore(
       if (!p.pnl.isProfit && p.side === 'oppose') return true
       return false
     }
+    if (p.currentTrustScore == null) return false // unreachable: filtered out of validPositions
     if (p.side === 'support' && p.currentTrustScore > 50) return true
     if (p.side === 'oppose'  && p.currentTrustScore < 50) return true
     return false
@@ -169,7 +173,7 @@ export function calculateEvaluatorScore(
             .reduce((best, p) => p.pnl!.pnlPercent > best.pnl!.pnlPercent ? p : best)
             .agentName
         : supportPositions.reduce((best, p) =>
-            p.currentTrustScore > best.currentTrustScore ? p : best
+            (p.currentTrustScore ?? 0) > (best.currentTrustScore ?? 0) ? p : best
           ).agentName)
     : null
 
@@ -180,7 +184,7 @@ export function calculateEvaluatorScore(
             .reduce((worst, p) => p.pnl!.pnlPercent < worst.pnl!.pnlPercent ? p : worst)
             .agentName
         : supportPositions.reduce((worst, p) =>
-            p.currentTrustScore < worst.currentTrustScore ? p : worst
+            (p.currentTrustScore ?? 0) < (worst.currentTrustScore ?? 0) ? p : worst
           ).agentName)
     : null
 

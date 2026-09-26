@@ -8,6 +8,8 @@ import { ForgeCategory, ProjectStage, FORGE_CATEGORIES, PROJECT_STAGE_LABELS } f
 import type { ForgeProject } from '@/lib/forge/types'
 import { ProjectCard } from './ProjectCard'
 import { mapLegacyCategory, CATEGORY_ICON_MAP, CATEGORY_HEX, CategoryPill, CategoryIconSquare } from './CategoryPill'
+import { OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
+import { compareForgeScoreDesc } from '@/lib/forge/scoring'
 
 type SortMode  = 'trustScore' | 'newest' | 'mostStaked' | 'mostStakers'
 type ViewMode  = 'grid' | 'list'
@@ -41,7 +43,9 @@ interface ProjectGridProps {
   projects: ForgeProject[]
 }
 
-function scoreColor(score: number): string {
+// null = the score is unknown (oppose read failed): neutral grey, never a level.
+function scoreColor(score: number | null): string {
+  if (score == null) return '#7A838D'
   if (score >= 80) return '#2ECC71'
   if (score >= 60) return '#22C55E'
   if (score >= 40) return '#EAB308'
@@ -93,7 +97,7 @@ export function ProjectGrid({ projects }: ProjectGridProps) {
     // Sort
     result.sort((a, b) => {
       switch (sort) {
-        case 'trustScore':   return b.finalScore - a.finalScore
+        case 'trustScore':   return compareForgeScoreDesc(a, b)
         case 'newest':       return new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime()
         case 'mostStaked':   return b.totalStaked - a.totalStaked
         case 'mostStakers':  return b.stakerCount - a.stakerCount
@@ -337,7 +341,7 @@ export function ProjectGrid({ projects }: ProjectGridProps) {
 
                 {/* Score + momentum */}
                 <div className="flex items-center justify-end gap-1 w-12">
-                  <span className="text-sm font-bold font-mono" style={{ color }}>{project.finalScore}</span>
+                  <span className="text-sm font-bold font-mono" style={{ color }} title={project.finalScore == null ? OPPOSE_UNREAD_TOOLTIP : undefined}>{project.finalScore ?? '—'}</span>
                   <MomentumIcon m={project.momentum} />
                 </div>
               </div>

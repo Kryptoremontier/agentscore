@@ -15,6 +15,8 @@ import { calculateForgeCompleteness } from '@/lib/forge/completeness'
 import { ForgeCategory, ProjectStage, FORGE_CATEGORY_LABELS } from '@/lib/forge/types'
 import type { ForgeProject, ForgeProjectRegistrationInput } from '@/lib/forge/types'
 import { filterForgeProjects } from '@/lib/agent-junk-filter'
+import { fetchVaultPositions, sumSharesByVault } from '@/lib/vault-positions'
+import { stakeReadingOf } from '@/lib/score-basis'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -152,34 +154,22 @@ async function gql<T>(query: string): Promise<T | null> {
 // ─── Fix 1: Batch-fetch oppose vault shares ──────────────────────────────────
 
 /**
- * Fetch total shares in oppose vaults for a list of counter_term_ids.
- * Same pattern as batchFetchOpposeShares() in api-data.ts.
+ * Total shares in oppose vaults for a list of counter_term_ids — one paged read
+ * (lib/vault-positions.ts; the old one-shot read stopped at 100 rows). null = the read
+ * FAILED: those projects' oppose is unknown, and so is every score computed from it.
+ * It used to come back as an empty map, i.e. 0 oppose for every project.
  */
 async function batchFetchForgeOpposeShares(
   counterTermIds: string[],
-): Promise<Map<string, bigint>> {
-  const map = new Map<string, bigint>()
-  if (!counterTermIds.length) return map
+): Promise<Map<string, bigint> | null> {
+  if (!counterTermIds.length) return new Map()
+  return fetchVaultPositions(counterTermIds).then(sumSharesByVault).catch(() => null)
+}
 
-  const data = await gql<{ positions: Array<{ term_id: string; shares: string }> }>(`
-    {
-      positions(
-        where: {
-          term_id: { _in: ${JSON.stringify(counterTermIds)} }
-          shares: { _gt: "0" }
-        }
-      ) {
-        term_id
-        shares
-      }
-    }
-  `)
-
-  for (const pos of data?.positions ?? []) {
-    const prev = map.get(pos.term_id) || 0n
-    try { map.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip malformed */ }
-  }
-  return map
+/** A project's oppose shares from that read: 0n with no counter-vault, null when the read failed. */
+export function forgeOpposeWei(ctid: string | null | undefined, sums: ReadonlyMap<string, bigint> | null): bigint | null {
+  if (!ctid) return 0n
+  return sums ? (sums.get(ctid) ?? 0n) : null
 }
 
 // ─── Fix 2: Individual positions for detail view ─────────────────────────────
@@ -235,7 +225,8 @@ async function fetchForgeProjectPositions(
 
 function atomToForgeProject(
   atom: RawForgeAtom,
-  opposeWei = 0n,
+  /** null = the oppose read failed: the scores are unknown (null), never computed on 0 oppose. */
+  opposeWei: bigint | null = 0n,
   positions?: { support: ForgePositionRow[]; oppose: ForgePositionRow[] },
 ): ForgeProject | null {
   // Two-atom arch: prefer JSON from [related to] metadata atom; fall back to atom.data
@@ -244,9 +235,10 @@ function atomToForgeProject(
   const meta = parseForgeAtomLabel(metaSource)
   if (!meta?.name) return null
 
-  const supportWei = (() => {
-    try { return BigInt(atom.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { return 0n }
-  })()
+  // The shared reading (lib/score-basis.ts stakeReadingOf): support from the aggregate,
+  // oppose null when its read failed.
+  const reading = stakeReadingOf({ positions_aggregate: atom.positions_aggregate as never, __opposeWei: opposeWei })
+  const supportWei = reading.supportWei ?? 0n
   const uniqueStakers = atom.positions_aggregate?.aggregate?.count || 0
 
   // Fix 4: neutral price defaults for testnet (no historical price data)
@@ -254,7 +246,8 @@ function atomToForgeProject(
   const peakPrice    = 1
 
   // Fix 10: stableDays — how long supportRatio has been > 50%
-  const totalWei    = supportWei + opposeWei
+  const knownOppose = reading.opposeWei ?? 0n // only used when reading.opposeWei != null
+  const totalWei    = supportWei + knownOppose
   const supportRatio = totalWei > 0n ? Number(supportWei * 100n / totalWei) : 50
   const daysActive  = Math.max(0, Math.floor((Date.now() - new Date(atom.created_at).getTime()) / 86_400_000))
   const stableDays  = supportRatio > 50 ? daysActive : 0
@@ -292,9 +285,9 @@ function atomToForgeProject(
     shares: (() => { try { return BigInt(p.sharesWei) } catch { return 0n } })(),
   }))
 
-  const scoring = calculateForgeTrustScore({
+  const scoring = reading.opposeWei === null ? null : calculateForgeTrustScore({
     supportStakeWei:  supportWei,
-    opposeStakeWei:   opposeWei,  // Fix 1: real oppose
+    opposeStakeWei:   reading.opposeWei,  // Fix 1: real oppose
     uniqueStakers,
     currentPrice,
     peakPrice,
@@ -329,15 +322,16 @@ function atomToForgeProject(
     hasMCPServer:      completenessInput.hasMCPServer,
     hasAPI:            completenessInput.hasAPI,
     completeness,
-    trustScore:        scoring.trustScore,
-    compositeScore:    scoring.compositeScore,
-    finalScore:        scoring.finalScore,
+    // null when the oppose read failed — unknown, never a score computed on 0 oppose.
+    trustScore:        scoring?.trustScore ?? null,
+    compositeScore:    scoring?.compositeScore ?? null,
+    finalScore:        scoring?.finalScore ?? null,
     stakerCount:       uniqueStakers,
     totalStaked:       Number(supportWei) / 1e18,
-    opposeStaked:      Number(opposeWei) / 1e18,  // Fix 1
+    opposeStaked:      reading.opposeWei === null ? null : Number(reading.opposeWei) / 1e18,  // Fix 1
     evaluatorCount:    0,
-    momentum:          scoring.momentum,
-    sparklineData:     buildSparkline([scoring.finalScore]),
+    momentum:          scoring?.momentum ?? 'stable',
+    sparklineData:     scoring ? buildSparkline([scoring.finalScore]) : [],
     daysActive,
     supportPositions:  positions?.support,
     opposePositions:   positions?.oppose,
@@ -413,8 +407,7 @@ async function fetchAllForgeProjects(limit: number): Promise<ForgeProject[]> {
 
   const projects: ForgeProject[] = []
   for (const atom of data.atoms) {
-    const ctid = atom.type_triple?.[0]?.counter_term_id
-    const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
+    const opposeWei = forgeOpposeWei(atom.type_triple?.[0]?.counter_term_id, opposeMap)
     const p = atomToForgeProject(atom, opposeWei)
     if (p) projects.push(p)
   }
@@ -480,6 +473,5 @@ export async function fetchForgeProjectById(id: string): Promise<ForgeProject | 
     fetchForgeProjectPositions(id, ctid),
   ])
 
-  const opposeWei = ctid ? (opposeMap.get(ctid) || 0n) : 0n
-  return atomToForgeProject(atom, opposeWei, positions)
+  return atomToForgeProject(atom, forgeOpposeWei(ctid, opposeMap), positions)
 }

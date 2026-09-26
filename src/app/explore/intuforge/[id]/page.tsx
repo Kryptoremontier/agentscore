@@ -20,13 +20,16 @@ import { ProjectShareButtons } from '@/components/intuforge/ProjectShareButtons'
 import { TrustSparkline } from '@/components/TrustSparkline'
 import { TrustTierBadge } from '@/components/agents/TrustTierBadge'
 import { formatDate } from '@/lib/format'
+import { OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
 
 async function getProject(id: string): Promise<ForgeProject | null> {
   if (!id.startsWith('0x')) return null
   return fetchForgeProjectById(id)
 }
 
-function scoreColor(score: number): string {
+// null = the score is unknown (oppose read failed): neutral grey, never a level.
+function scoreColor(score: number | null): string {
+  if (score == null) return '#7A838D'
   if (score >= 80) return '#2ECC71'
   if (score >= 60) return '#22C55E'
   if (score >= 40) return '#EAB308'
@@ -91,12 +94,14 @@ export default async function ProjectProfilePage({ params, searchParams: _search
 
   // Fix 5: calculate real tier
   const daysActive  = getAgentAgeDays(project.registeredAt)
-  const totalStake  = project.totalStaked + project.opposeStaked
+  // The tier reads the support ratio: unknown when the oppose read failed (opposeStaked null).
+  const opposeKnown = project.opposeStaked != null
+  const totalStake  = project.totalStaked + (project.opposeStaked ?? 0)
   const supportRatio = totalStake > 0
     ? (project.totalStaked / totalStake) * 100
     : 50
-  const tierCfg    = calculateTier(project.stakerCount, project.totalStaked, supportRatio, daysActive)
-  const currentTier = tierCfg.tier
+  const tierCfg    = opposeKnown ? calculateTier(project.stakerCount, project.totalStaked, supportRatio, daysActive) : null
+  const currentTier = tierCfg?.tier ?? null
 
   // Fix 3: evaluator profiles for top stakers (up to 10, parallel)
   const stakerAddresses = (project.supportPositions ?? [])
@@ -198,7 +203,7 @@ export default async function ProjectProfilePage({ params, searchParams: _search
               </div>
               <CategoryPill category={project.category} size="sm" />
               {/* Fix 5: tier badge */}
-              <TrustTierBadge tier={tierCfg} size="sm" />
+              {tierCfg && <TrustTierBadge tier={tierCfg} size="sm" />}
             </div>
 
             {/* Links row */}
@@ -394,9 +399,12 @@ export default async function ProjectProfilePage({ params, searchParams: _search
             <div className="flex items-end justify-between mb-3">
               <div>
                 <p className="text-xs text-white/30 uppercase tracking-wider mb-1">Forge Score</p>
-                <span className="text-4xl font-bold tabular-nums" style={{ color }}>
-                  {project.finalScore}
+                <span className="text-4xl font-bold tabular-nums" style={{ color }} title={project.finalScore == null ? OPPOSE_UNREAD_TOOLTIP : undefined}>
+                  {project.finalScore ?? '—'}
                 </span>
+                {project.finalScore == null && (
+                  <p className="text-[11px] text-white/40 mt-1 max-w-[16rem]">{OPPOSE_UNREAD_TOOLTIP}</p>
+                )}
                 <MomentumIcon momentum={project.momentum} />
               </div>
               {sparklineData.length >= 2 && (
@@ -406,7 +414,7 @@ export default async function ProjectProfilePage({ params, searchParams: _search
 
             {/* Score bar */}
             <div className="h-1.5 rounded-full bg-white/5 overflow-hidden mb-3">
-              <div className="h-full rounded-full" style={{ width: `${project.finalScore}%`, background: color }} />
+              <div className="h-full rounded-full" style={{ width: `${project.finalScore ?? 0}%`, background: color }} />
             </div>
 
             {/* Thick divider */}
@@ -420,14 +428,14 @@ export default async function ProjectProfilePage({ params, searchParams: _search
               <div className="flex items-center justify-between">
                 <span className="text-xs text-white/30">Trust Score</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white/60 tabular-nums">{project.trustScore}</span>
+                  <span className="text-sm font-bold text-white/60 tabular-nums">{project.trustScore ?? '—'}</span>
                   <span className="text-xs text-white/20">(60%)</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-white/30">Composite</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white/60 tabular-nums">{project.compositeScore}</span>
+                  <span className="text-sm font-bold text-white/60 tabular-nums">{project.compositeScore ?? '—'}</span>
                   <span className="text-xs text-white/20">(40%)</span>
                 </div>
               </div>
@@ -469,7 +477,7 @@ export default async function ProjectProfilePage({ params, searchParams: _search
             <div className="space-y-2">
               {[
                 { label: 'Support Staked', value: `${project.totalStaked.toFixed(3)} tTRUST` },
-                { label: 'Oppose Staked',  value: `${project.opposeStaked.toFixed(3)} tTRUST` },
+                { label: 'Oppose Staked',  value: project.opposeStaked == null ? '—' : `${project.opposeStaked.toFixed(3)} tTRUST` },
                 { label: 'Stakers',        value: project.stakerCount.toString() },
                 { label: 'Days Active',    value: daysActive.toString() },
                 { label: 'Registered',     value: formatDate(project.registeredAt) },
@@ -526,7 +534,7 @@ export default async function ProjectProfilePage({ params, searchParams: _search
           </div>
 
           {/* ForgeBadge */}
-          <ForgeBadge trustScore={project.finalScore} size="md" />
+          <ForgeBadge trustScore={project.finalScore ?? undefined} size="md" />
 
           {/* Share */}
           <ProjectShareButtons projectName={project.name} finalScore={project.finalScore} />

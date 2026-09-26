@@ -199,7 +199,8 @@ export interface Claim {
   created_at: string
 
   // Trust data
-  trust_score?: number
+  /** null = the claim's oppose read failed: no score (never one computed on 0 oppose). */
+  trust_score?: number | null
   trust_ratio?: number
   total_stake?: string
   stakers_count?: number
