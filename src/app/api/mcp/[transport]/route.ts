@@ -14,6 +14,8 @@ import {
 } from '@/lib/api-data'
 import { fetchTimelineData } from '@/lib/timeline-data'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
+import { publishedAgentScore } from '@/lib/score-basis'
+import { comparedBySkill, comparedOverall, rankComparison } from '@/lib/agent-compare'
 import {
   calculateProfileCompleteness,
   serializeAgentCard,
@@ -385,6 +387,11 @@ const handler = createMcpHandler(
           'Returns score envelope (objectScore = AGENTSCORE), skill breakdown, tier, momentum for each. ' +
           'qualityScore in the envelope reflects the full 4-pillar composite for each agent. ' +
           'Optionally filter comparison to a specific skill domain. ' +
+          'Rows come in rank order. Only measured scores compete: comparedScore is null and ' +
+          "comparedBasis is 'prior' for an agent (or skill triple) with no stake — its envelope " +
+          "score is the neutral 50 anchor, not a measurement — and 'missing' when it lacks the skill; " +
+          'those rank after every measured agent and are never the recommendation ' +
+          '(recommendation is null when no agent has a measured score). ' +
           'Use this when deciding between multiple agents for a task.',
         inputSchema: {
           agentIds: z.array(z.string()).min(2).max(5)
@@ -398,47 +405,44 @@ const handler = createMcpHandler(
           const comparisons = await Promise.all(
             agentIds.map(async (id) => {
               const detail = await getAgentDetail(id)
-              if (!detail) return { id, error: 'not found' }
+              if (!detail) return { id, error: 'not found' as const }
 
-              const skillScore = skill
-                ? detail.skillBreakdown?.find(
-                    (s: { skillName: string; score: number }) =>
-                      s.skillName.toLowerCase().includes(skill.toLowerCase())
-                  )
-                : null
+              // The score this agent is compared on — measured, or null with its basis
+              // (lib/agent-compare.ts). A prior is never ranked as if it were measured.
+              const bySkill = skill ? comparedBySkill(detail.skillBreakdown, skill) : null
+              const compared = bySkill ?? comparedOverall(detail)
 
               return {
                 id: detail.id,
                 name: detail.name,
+                comparedScore: compared.score,
+                comparedBasis: compared.basis,
                 score: detail.score,
                 scoreBasis: detail.scoreBasis,
                 agentScore: detail.agentScore,
                 tier: detail.trustTier,
                 tierBasis: detail.tierBasis,
                 momentum: detail.momentumDirection,
-                domainScore: skillScore?.score ?? null,
-                domainName: skillScore?.skillName ?? null,
+                domainScore: bySkill ? bySkill.score : null,
+                domainName: bySkill ? bySkill.skillName : null,
                 totalSkills: detail.skillBreakdown?.length || 0,
                 stakerCount: detail.stakerCount,
               }
             })
           )
 
-          const ranked = comparisons
-            .filter((c): c is Exclude<typeof c, { error: string }> => !('error' in c))
-            .sort((a, b) => {
-              const scoreA = skill ? (a.domainScore ?? 0) : a.agentScore
-              const scoreB = skill ? (b.domainScore ?? 0) : b.agentScore
-              return scoreB - scoreA
-            })
+          const found = comparisons.filter((c): c is Exclude<typeof c, { error: 'not found' }> => !('error' in c))
+          const { ranked, recommendation } = rankComparison(found, (c) => ({ score: c.comparedScore, basis: c.comparedBasis }))
+          const notFound = comparisons.filter((c) => 'error' in c)
 
           return {
             content: [{
               type: 'text' as const,
               text: JSON.stringify({
-                comparison: comparisons,
+                comparison: [...ranked, ...notFound],
                 skill: skill || 'overall',
-                recommendation: ranked[0]?.name ?? null,
+                recommendation: recommendation?.name ?? null,
+                ...(recommendation ? {} : { recommendationNote: 'No compared agent has a measured score — nothing to recommend on.' }),
               }, null, 2),
             }],
           }
@@ -552,6 +556,8 @@ const handler = createMcpHandler(
           'top domain, and top agent. ' +
           'topAgent.trustScore is trustScore-based (list context — no quality ' +
           'composite computed in aggregate; use get_agent_trust for the full envelope). ' +
+          'attesters = distinct wallets with a live position on any attestation triple ' +
+          '(is skilled in → canonical domain). A count whose read failed is null, never 0. ' +
           'Use this for a quick overview of the ecosystem.',
         inputSchema: {},
       },
@@ -585,7 +591,9 @@ const handler = createMcpHandler(
           'Use this to understand WHY an agent has its current score and WHEN ' +
           'specific events occurred. Historical score snapshots are not persisted — ' +
           'only the current score and these dated events are real; there is no ' +
-          'continuous score curve.',
+          'continuous score curve. currentScore is the measured AGENTSCORE or null, never a ' +
+          "default: scoreBasis 'prior' = no stake yet (nothing measured), null = the atom is not " +
+          'a scored AgentScore agent (e.g. an ERC-8004 cohort agent).',
         inputSchema: {
           agentId: z.string().describe("Agent's term ID (from search_agents or get_agent_trust)"),
           limit: z.number().min(1).max(50).optional().describe('Max events to return (default: 20)'),
@@ -603,15 +611,18 @@ const handler = createMcpHandler(
             getAgentDetail(agentId),
           ])
 
+          // null = no such atom; a failed read throws → "Error: …" below, never "not found".
           if (!rawData) {
             return { content: [{ type: 'text' as const, text: 'Agent not found.' }] }
           }
 
+          // Measured AGENTSCORE or null — never the 50 prior (lib/score-basis.ts).
+          const published = publishedAgentScore(agentDetail)
           const timeline = buildAgentTimeline({
             agentId: rawData.agentId,
             agentName: rawData.agentName,
             createdAt: rawData.createdAt,
-            currentScore: agentDetail?.agentScore ?? 50,
+            currentScore: published.score,
             currentTier: agentDetail?.trustTier ?? null, // attestation tier; null = unknown
             tierMilestones: 'none',
             stakingEvents: rawData.stakingEvents,
@@ -628,6 +639,7 @@ const handler = createMcpHandler(
               text: JSON.stringify({
                 agentName: timeline.agentName,
                 currentScore: timeline.currentScore,
+                scoreBasis: published.scoreBasis,
                 currentTier: timeline.currentTier,
                 tierBasis: 'attestations',
                 summary: timeline.summary,

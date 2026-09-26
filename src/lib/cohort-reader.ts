@@ -56,10 +56,12 @@ export interface CohortAgent {
   label: string
   /** The CAIP identity string this agent resolved `same as`, e.g. eip155:8453/erc721:0x8004.../16850 */
   caipIdentity: string
-  /** OASF skill tags this agent declares (`has tag`), duplicate atoms folded to one representative label. */
-  declaredSkills: string[]
-  /** OASF domain categories this agent declares (`has category`), duplicate atoms folded to one representative label. */
-  declaredDomains: string[]
+  /** OASF skill tags this agent declares (`has tag`), duplicate atoms folded to one representative label.
+   *  null = the classification read failed for this agent — unknown, never "declares nothing". */
+  declaredSkills: string[] | null
+  /** OASF domain categories this agent declares (`has category`), duplicate atoms folded to one representative label.
+   *  null = the classification read failed for this agent — unknown, never "declares nothing". */
+  declaredDomains: string[] | null
   createdAt: string
 }
 
@@ -154,11 +156,16 @@ function chunkIds(ids: readonly string[], size: number): string[][] {
  * bounded regardless of cohort size — see COHORT_FETCH_LIMIT's file-header
  * note. Each chunk is paged to its aggregate count (lib/gql-pager.ts), so no
  * edge is lost to the endpoint's 250-row cap. Chunks fetch in parallel and
- * merge; one chunk's failure degrades to [] for that chunk only, it doesn't
- * drop the others. A chunk is never returned half-read.
+ * merge. A chunk that fails (or can't be read to the end) is reported in
+ * `unread` — its agents' declarations are unknown, not empty (REPO_MAP §7
+ * rule 5) — and doesn't drop the other chunks. A chunk is never returned half-read.
  */
-async function fetchClassification(predicateIds: readonly string[], termIds: readonly string[]): Promise<ClassificationRow[]> {
-  if (termIds.length === 0) return []
+async function fetchClassification(
+  predicateIds: readonly string[],
+  termIds: readonly string[],
+): Promise<{ rows: ClassificationRow[]; unread: Set<string> }> {
+  const unread = new Set<string>()
+  if (termIds.length === 0) return { rows: [], unread }
   const predicateList = predicateIds.map((p) => `"${p}"`).join(', ')
   const results = await Promise.all(
     chunkIds(termIds, CLASSIFICATION_CHUNK_SIZE).map((idsChunk) => {
@@ -183,10 +190,13 @@ async function fetchClassification(predicateIds: readonly string[], termIds: rea
           if (page.truncated !== false) throw new Error('classification chunk not read to the end')
           return page.rows
         })
-        .catch(() => [] as ClassificationRow[])
+        .catch(() => {
+          for (const id of idsChunk) unread.add(id)
+          return [] as ClassificationRow[]
+        })
     })
   )
-  return results.flat()
+  return { rows: results.flat(), unread }
 }
 
 /**
@@ -274,13 +284,13 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
 
     const termIds = [...bySubject.keys()]
 
-    const [tagRows, categoryRows] = await Promise.all([
+    const [tags, categories] = await Promise.all([
       fetchClassification(HAS_TAG_PREDICATE_IDS, termIds),
       fetchClassification(HAS_CATEGORY_PREDICATE_IDS, termIds),
     ])
 
-    const skillsBySubject = foldClassificationBySubject(tagRows)
-    const domainsBySubject = foldClassificationBySubject(categoryRows)
+    const skillsBySubject = foldClassificationBySubject(tags.rows)
+    const domainsBySubject = foldClassificationBySubject(categories.rows)
 
     const agents = termIds
       .map((termId) => {
@@ -289,8 +299,9 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
           termId,
           label: row.subject?.label ?? 'Unknown',
           caipIdentity: row.object?.label ?? '',
-          declaredSkills: skillsBySubject.get(termId) ?? [],
-          declaredDomains: domainsBySubject.get(termId) ?? [],
+          // A failed chunk → null (unknown), never [] (declares nothing).
+          declaredSkills: tags.unread.has(termId) ? null : (skillsBySubject.get(termId) ?? []),
+          declaredDomains: categories.unread.has(termId) ? null : (domainsBySubject.get(termId) ?? []),
           createdAt: row.created_at,
         }
       })

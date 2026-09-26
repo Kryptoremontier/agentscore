@@ -44,7 +44,7 @@ function stubGraphql(extra: (q: string) => unknown = () => undefined) {
     const data = extra(q)
       ?? (q.includes('ApiAgentsCount') ? { atoms_aggregate: { aggregate: { count: RAW_ROWS.length } } }
         : q.includes('ApiAgents') ? { atoms: RAW_ROWS }
-        : q.includes('ApiSkillCount') ? { atoms: [] }
+        : q.includes('ApiSkillCount') ? { atoms_aggregate: { aggregate: { count: 0 } } }
         : q.includes('GetAllDomainTriples') ? { triples: [] }
         : q.includes('triples_aggregate') ? { triples_aggregate: { aggregate: { count: 0 } } }
         : { positions: [] })

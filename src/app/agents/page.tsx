@@ -58,7 +58,7 @@ import {
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import {
-  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP,
+  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP, noScoreTooltip,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { filterAgents } from '@/lib/agent-junk-filter'
@@ -87,8 +87,9 @@ interface GraphQLAgent {
   /** Etap 2c: which corpus this atom came from. Absent = AgentScore (legacy fetch paths). */
   origin?: 'agentscore' | 'erc8004'
   /** ERC-8004 cohort only — declared OASF domains/skills (`has category`/`has tag`), self-declared not attested. */
-  declaredDomains?: string[]
-  declaredSkills?: string[]
+  /** null = the cohort classification read failed for this agent (unknown, not none). */
+  declaredDomains?: string[] | null
+  declaredSkills?: string[] | null
   caipIdentity?: string
 }
 
@@ -1776,11 +1777,14 @@ function AgentsPageContent() {
             const enriched = searchedAgents.map(agent => {
               // null = the vault was never read (cohort rows) — not zero (lib/score-basis.ts).
               const supportWei = readSharesWei(agent.positions_aggregate)
-              const opposeWei: bigint = (agent as any).__opposeWei ?? 0n
-              const measured = hasMeasuredScore({ supportWei, opposeWei })
+              // null = the oppose read failed (lib/agent-list.ts): unknown, not 0 — no measured score.
+              const rawOppose: bigint | null | undefined = (agent as any).__opposeWei
+              const opposeWei = rawOppose === null ? null : (rawOppose ?? 0n)
+              const reading = { supportWei, opposeWei }
+              const measured = hasMeasuredScore(reading)
               // Computed for every row (sort/filter plumbing), displayed only when measured.
-              const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei)
-              return { agent, trust: cardTrust, measured }
+              const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei ?? 0n)
+              return { agent, trust: cardTrust, measured, noScoreTip: noScoreTooltip(reading) }
             })
 
             const filtered = selectedCategory === 'all'
@@ -1866,7 +1870,7 @@ function AgentsPageContent() {
               ) : viewMode === 'grid' ? (
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {sorted.map(({ agent, trust: cardTrust, measured }) => {
+                {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }) => {
                   // objectScore populated after modal opens (client) or from quality cache (server).
                   // Falls back to trustScore on first paint. Only a MEASURED score is displayed:
                   // at zero stake cardTrust.score is the formula's 50 prior (lib/score-basis.ts).
@@ -1970,7 +1974,7 @@ function AgentsPageContent() {
                           ) : (
                             // Native title, not TooltipWrapper: one Radix tooltip per card × 266
                             // unmeasured cards doubled the list's render cost (measured).
-                            <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help" title={NO_STAKE_TOOLTIP}>—</p>
+                            <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help" title={noScoreTip}>—</p>
                           )}
                           {/* "No score", not "Unverified": the tier is its own chip and comes only
                               from attestations (thesis §6) — a Trusted agent can have no stake. */}
@@ -2002,7 +2006,7 @@ function AgentsPageContent() {
                   <span className="text-right w-16">Stakers</span>
                   <span className="text-right w-12">Score</span>
                 </div>
-                {sorted.map(({ agent, trust: cardTrust, measured }, i) => {
+                {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }, i) => {
                   const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
                   const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
                   const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
@@ -2062,7 +2066,7 @@ function AgentsPageContent() {
                             <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
                           </>
                         ) : (
-                          <span className="text-xs font-mono text-[#7A838D] cursor-help" title={NO_STAKE_TOOLTIP}>—</span>
+                          <span className="text-xs font-mono text-[#7A838D] cursor-help" title={noScoreTip}>—</span>
                         )}
                       </div>
                     </motion.div>

@@ -23,11 +23,17 @@ export type ScoreBasis = 'measured' | 'prior'
 export type QualityBucket = TrustLevel | 'unrated'
 
 export const NO_STAKE_TOOLTIP = 'No stake yet — nothing to measure.'
+/** The oppose side couldn't be read: no score is printed rather than one computed from a 0. */
+export const OPPOSE_UNREAD_TOOLTIP = 'Couldn’t read the oppose stake — no score until it can be read.'
 
 /** Raw stake read for one atom. `supportWei: null` = never fetched (or unparseable), not zero. */
 export interface StakeReading {
   supportWei: bigint | null | undefined
-  /** Oppose (counter-vault) shares. Absent = no counter vault / no oppose positions. */
+  /**
+   * Oppose (counter-vault) shares. undefined = no counter vault (nothing to oppose, 0).
+   * null = the oppose read FAILED: unknown — the score is not a measurement then (a
+   * failed read is never taken as 0 oppose, which would inflate the score).
+   */
   opposeWei?: bigint | null
 }
 
@@ -49,14 +55,33 @@ export function readSharesWei(
   }
 }
 
-/** Total stake on the atom (support + oppose shares) > 0, with support actually read. */
+/** Total stake on the atom (support + oppose shares) > 0, with both sides actually read. */
 export function hasMeasuredScore(reading: StakeReading | null | undefined): boolean {
-  if (!reading || reading.supportWei == null) return false
+  if (!reading || reading.supportWei == null || reading.opposeWei === null) return false
   return reading.supportWei + (reading.opposeWei ?? 0n) > 0n
 }
 
 export function scoreBasisOf(reading: StakeReading | null | undefined): ScoreBasis {
   return hasMeasuredScore(reading) ? 'measured' : 'prior'
+}
+
+/** Why a row prints "—": its oppose side couldn't be read, or there is no stake to measure. */
+export function noScoreTooltip(reading: StakeReading | null | undefined): string {
+  return reading?.opposeWei === null ? OPPOSE_UNREAD_TOOLTIP : NO_STAKE_TOOLTIP
+}
+
+/**
+ * The score a machine-read surface (REST, MCP) publishes for one agent: the
+ * measured AGENTSCORE (`agentScore` = objectScore ?? trustScore), else null —
+ * never the 50 prior, never a fallback constant. `scoreBasis` goes next to it:
+ * 'measured' | 'prior', or null when the atom is not a scored AgentScore agent
+ * (no detail: an ERC-8004 cohort agent, a skill, any other atom).
+ */
+export function publishedAgentScore(
+  detail: { agentScore: number; scoreBasis: ScoreBasis } | null | undefined,
+): { score: number | null; scoreBasis: ScoreBasis | null } {
+  if (!detail) return { score: null, scoreBasis: null }
+  return { score: detail.scoreBasis === 'measured' ? detail.agentScore : null, scoreBasis: detail.scoreBasis }
 }
 
 /** The score to print, or null ("—") when it would only be the prior — or is still loading. */

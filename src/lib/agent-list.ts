@@ -45,6 +45,12 @@ export interface AgentListAtom {
    * (cohort rows), null = the positions read failed — never a 0 that wasn't measured.
    */
   liveStakerCount?: number | null
+  /**
+   * Oppose shares on the trust counter-vault. undefined = no counter vault or no
+   * oppose position (0); null = the positions read failed — unknown, so the row
+   * has no measured score (lib/score-basis.ts), never a score computed from 0 oppose.
+   */
+  __opposeWei?: bigint | null
 }
 
 export interface AgentListFetch<T extends AgentListAtom = AgentListAtom> {
@@ -59,7 +65,7 @@ export interface AgentListFetch<T extends AgentListAtom = AgentListAtom> {
 /**
  * Fetch the AgentScore corpus for /agents: rows (paged, capped) + a same-filter
  * aggregate count, then oppose shares for the trust triples (annotated as
- * `__opposeWei`, as the cards expect). Throws on a failed corpus read — the
+ * `__opposeWei`, as the cards expect; null when that read failed). Throws on a failed corpus read — the
  * page shows its error state; it never renders an empty list for a failure.
  */
 export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAtom>(): Promise<AgentListFetch<T>> {
@@ -112,12 +118,16 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
       const shareSums = sumSharesByVault(positions)
       for (const atom of rows) {
         const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-        if (ctid && shareSums.has(ctid)) (atom as any).__opposeWei = shareSums.get(ctid) || 0n
+        if (ctid && shareSums.has(ctid)) atom.__opposeWei = shareSums.get(ctid) || 0n
         atom.liveStakerCount = countLiveStakers(positions, { atomId: atom.term_id, counterId: ctid })
       }
     } catch {
-      // Stakers unknown ("—"), never 0. Oppose falls back to 0 (see audit — known gap).
-      for (const atom of rows) atom.liveStakerCount = null
+      // Stakers and oppose unknown ("—"), never 0: a row with a counter-vault gets
+      // __opposeWei null, so it has no measured score (lib/score-basis.ts).
+      for (const atom of rows) {
+        atom.liveStakerCount = null
+        if (atom.as_subject_triples?.[0]?.counter_term_id) atom.__opposeWei = null
+      }
     }
   }
 

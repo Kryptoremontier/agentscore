@@ -1143,16 +1143,26 @@ export async function trustQuery(params: {
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export async function getPlatformStats() {
-  const [corpus, skillData, evaluatorProfiles, { triples: domainTriples }] = await Promise.all([
+  const [corpus, skillData, evaluatorProfiles, { triples: domainTriples }, attesters, claimCount] = await Promise.all([
     // Same post-junk corpus as /api/v1/agents — `agents` here must equal its meta.total.
     loadAgentCorpus(),
-    gql<{ atoms: Array<{ term_id: string }> }>(`
+    // An aggregate, not rows: `atoms(limit: 500)` came back capped at 250 by the endpoint.
+    gql<{ atoms_aggregate: { aggregate: { count: number } } }>(`
       query ApiSkillCount {
-        atoms(where: ${SKILL_WHERE_STR} limit: 500) { term_id }
+        atoms_aggregate(where: ${SKILL_WHERE_STR}) { aggregate { count } }
       }
     `),
     fetchEvaluatorLeaderboard(),
     fetchDomainTriplesInternal(),
+    // Distinct wallets with a live position on any attestation triple (is skilled in → canonical
+    // domain), deduped across agents and domains — commit 1's rule (summarizeAttesters). The
+    // landing's "Attesters". null = the read failed, never 0.
+    fetchAttestations().then(entries => summarizeAttesters(entries).length).catch(() => null),
+    // Network-wide triple count. null = the read failed — never a 0 nobody counted.
+    gql<{ triples_aggregate: { aggregate: { count: number } } }>(`
+      { triples_aggregate { aggregate { count } } }
+    `).then(d => (typeof d?.triples_aggregate?.aggregate?.count === 'number' ? d.triples_aggregate.aggregate.count : null))
+      .catch(() => null),
   ])
 
   let totalStakedWei = 0n
@@ -1186,22 +1196,14 @@ export async function getPlatformStats() {
   })
   const activeStakers = liveStakerWallets(corpus.positions, keptVaults).size
 
-  // Fetch claim count
-  let claimCount = 0
-  try {
-    const claimData = await gql<{ triples_aggregate: { aggregate: { count: number } } }>(`
-      { triples_aggregate { aggregate { count } } }
-    `)
-    claimCount = claimData?.triples_aggregate?.aggregate?.count || 0
-  } catch { /* non-critical */ }
-
   return {
     // Post-junk corpus total — identical to /api/v1/agents meta.total (same loadAgentCorpus).
     agents: corpus.kept.length,
     agentsTruncated: corpus.truncated,
-    skills: skillData?.atoms?.length || 0,
+    skills: skillData.atoms_aggregate.aggregate.count,
     domains: domains.length,
     claims: claimCount,
+    attesters,
     evaluators: evaluatorProfiles.length,
     totalStaked: weiToFloat(totalStakedWei),
     activeStakers,

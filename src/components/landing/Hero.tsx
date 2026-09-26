@@ -6,17 +6,7 @@ import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
-import { APP_CONFIG } from '@/lib/app-config'
-import { AGENT_WHERE_STR } from '@/lib/gql-filters'
-
-const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
-
-interface PlatformStats {
-  agents: number
-  attestations: number
-  stakers: number
-  totalStaked: number
-}
+import { fetchLandingStats, landingStatItems, type LandingStatsState } from '@/lib/landing-stats'
 
 function WaveText({ text, className }: { text: string; className?: string }) {
   return (
@@ -72,70 +62,19 @@ function AnimatedNumber({ value, suffix = '', prefix = '', decimals = 0 }: {
 export function Hero() {
   const { scrollY } = useScroll()
   const opacity = useTransform(scrollY, [0, 300], [1, 0.3])
-  const [stats, setStats] = useState<PlatformStats>({ agents: 0, attestations: 0, stakers: 0, totalStaked: 0 })
+  // One source for every landing number: /api/v1/stats (lib/landing-stats.ts). Loading and
+  // failure print "—", never 0.
+  const [statsState, setStatsState] = useState<LandingStatsState>({ status: 'loading' })
 
   useEffect(() => {
-    (async () => {
-      try {
-        const agentsRes = await fetch(GRAPHQL_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `{
-              agents: atoms(where: ${AGENT_WHERE_STR}) {
-                term_id
-                positions_aggregate {
-                  aggregate { count sum { shares } }
-                }
-              }
-            }`
-          })
-        })
-        const agentsData = await agentsRes.json()
-        const agents = agentsData.data?.agents || []
-        let stakers = 0
-        let totalWei = 0n
-        const termIds: string[] = []
-        for (const a of agents) {
-          stakers += a.positions_aggregate?.aggregate?.count || 0
-          totalWei += BigInt(a.positions_aggregate?.aggregate?.sum?.shares || '0')
-          termIds.push(a.term_id)
-        }
-
-        let tripleCount = 0
-        if (termIds.length > 0) {
-          const triplesRes = await fetch(GRAPHQL_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `query($ids: [String!]!) {
-                triples_aggregate(where: { subject_id: { _in: $ids } }) {
-                  aggregate { count }
-                }
-              }`,
-              variables: { ids: termIds }
-            })
-          })
-          const triplesData = await triplesRes.json()
-          tripleCount = triplesData.data?.triples_aggregate?.aggregate?.count || 0
-        }
-
-        setStats({
-          agents: agents.length,
-          attestations: stakers + tripleCount,
-          stakers,
-          totalStaked: Number(totalWei) / 1e18,
-        })
-      } catch {}
-    })()
+    let cancelled = false
+    fetchLandingStats().then(stats => {
+      if (!cancelled) setStatsState(stats ? { status: 'ok', stats } : { status: 'error' })
+    })
+    return () => { cancelled = true }
   }, [])
 
-  const statItems = [
-    { label: 'Registered Agents', value: stats.agents, decimals: 0 },
-    { label: 'Attestations', value: stats.attestations, decimals: 0 },
-    { label: 'Total Staked', value: stats.totalStaked, decimals: 4, suffix: ' tTRUST' },
-    { label: 'Active Stakers', value: stats.stakers, decimals: 0 },
-  ]
+  const statItems = landingStatItems(statsState)
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
@@ -260,11 +199,15 @@ export function Hero() {
               )}
             >
               <div className="text-2xl sm:text-3xl font-bold text-white">
-                <AnimatedNumber
-                  value={stat.value}
-                  suffix={stat.suffix}
-                  decimals={stat.decimals}
-                />
+                {stat.value != null ? (
+                  <AnimatedNumber
+                    value={stat.value}
+                    suffix={stat.suffix}
+                    decimals={stat.decimals}
+                  />
+                ) : (
+                  <span className="font-mono text-slate-500" title={statsState.status === 'error' ? 'Couldn’t read platform stats' : undefined}>—</span>
+                )}
               </div>
               <div className="mt-1 text-sm text-slate-400">{stat.label}</div>
             </motion.div>

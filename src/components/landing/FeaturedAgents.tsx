@@ -7,7 +7,7 @@ import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
-import { readSharesWei, hasMeasuredScore, measuredScore, NO_STAKE_TOOLTIP } from '@/lib/score-basis'
+import { readSharesWei, hasMeasuredScore, measuredScore, noScoreTooltip } from '@/lib/score-basis'
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
@@ -149,8 +149,12 @@ export function FeaturedAgents() {
               if (tab === 'agents') atom.liveStakerCount = countLiveStakers(positions, { atomId: atom.term_id, counterId: ctid })
             }
           } catch {
-            /* non-critical, falls back to opposeWei=0; stakers unknown, never 0 */
-            for (const atom of atoms) if (tab === 'agents') atom.liveStakerCount = null
+            // Oppose and stakers unknown, never 0: a row with a counter-vault gets
+            // __opposeWei null → no measured score (lib/score-basis.ts).
+            for (const atom of atoms) {
+              if (atom.as_subject_triples?.[0]?.counter_term_id) (atom as any).__opposeWei = null
+              if (tab === 'agents') atom.liveStakerCount = null
+            }
           }
         }
         if (isCancelled()) return
@@ -387,11 +391,14 @@ export function FeaturedAgents() {
                         const stakers = activeTab === 'agents' ? item.liveStakerCount : (item.positions_aggregate?.aggregate?.count || 0)
                         const sharesWei = readSharesWei(item.positions_aggregate)
                         const totalStaked = Number(sharesWei ?? 0n) / 1e18
-                        const opposeWei: bigint = (item as any).__opposeWei ?? 0n
+                        // null = the oppose read failed: unknown, never 0 (which would inflate the score).
+                        const rawOppose: bigint | null | undefined = (item as any).__opposeWei
+                        const opposeWei = rawOppose === null ? null : (rawOppose ?? 0n)
+                        const reading = { supportWei: sharesWei, opposeWei }
                         // Only a measured score is printed: at zero stake the formula returns
                         // its 50 prior, which is not a measurement (lib/score-basis.ts).
-                        const measured = hasMeasuredScore({ supportWei: sharesWei, opposeWei })
-                        const score = measuredScore(calculateTrustScoreFromStakes(sharesWei ?? 0n, opposeWei), measured)
+                        const measured = hasMeasuredScore(reading)
+                        const score = measuredScore(calculateTrustScoreFromStakes(sharesWei ?? 0n, opposeWei ?? 0n), measured)
                         const scoreColor = score == null ? '#7A838D' : score >= 70 ? '#2ECC71' : score >= 50 ? '#EAB308' : '#EF4444'
                         const IconComp = cfg.icon
                         return (
@@ -415,7 +422,7 @@ export function FeaturedAgents() {
                                   {score != null ? (
                                     <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }}>{score}</span>
                                   ) : (
-                                    <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }} title={NO_STAKE_TOOLTIP}>—</span>
+                                    <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }} title={noScoreTooltip(reading)}>—</span>
                                   )}
                                   <span className="block text-[10px] text-[#4A5260]">Score</span>
                                 </div>

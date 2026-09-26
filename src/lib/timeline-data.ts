@@ -13,7 +13,7 @@ import { APP_CONFIG } from './app-config'
 import { cleanAtomName } from '@/types/claim'
 import { type StakingEvent, type SkillEvent } from './trust-timeline'
 import { IS_SKILLED_IN } from './canonical-domains'
-import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
+import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
 
 // Our ceilings (reported by the pager, never a silent first N). The signals read kept only the
 // OLDEST 200 events; the skill-triple reads the first 50 of each kind.
@@ -35,37 +35,36 @@ export interface TimelineRawData {
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
+/**
+ * null = no such atom (a 404). A failed read THROWS — the routes answer it as an
+ * error, never as "Agent not found" or as an empty history (REPO_MAP §7 rule 5).
+ */
 export async function fetchTimelineData(agentTermId: string): Promise<TimelineRawData | null> {
-  if (!GRAPHQL_URL) return null
+  if (!GRAPHQL_URL) throw new Error('GraphQL endpoint not configured')
 
   try {
     // ── Step 1: Agent atom + find trust triple (counterTermId) ──────────────
-    const atomRes = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetAgentAtom($termId: String!) {
-            atom: atoms(where: { term_id: { _eq: $termId } }, limit: 1) {
-              term_id
-              label
-              created_at
-              as_subject_triples(
-                where: {
-                  predicate: { label: { _in: ["isTrustedFor", "is", "trustsAs"] } }
-                }
-                limit: 1
-              ) {
-                counter_term_id
+    const atomData = await gqlRequest<{ atom: Array<{ term_id: string; label: string | null; created_at?: string; as_subject_triples?: Array<{ counter_term_id: string | null }> }> }>(
+      `
+        query GetAgentAtom($termId: String!) {
+          atom: atoms(where: { term_id: { _eq: $termId } }, limit: 1) {
+            term_id
+            label
+            created_at
+            as_subject_triples(
+              where: {
+                predicate: { label: { _in: ["isTrustedFor", "is", "trustsAs"] } }
               }
+              limit: 1
+            ) {
+              counter_term_id
             }
           }
-        `,
-        variables: { termId: agentTermId },
-      }),
-    })
-    const atomData = await atomRes.json()
-    const atom = atomData?.data?.atom?.[0]
+        }
+      `,
+      { termId: agentTermId },
+    )
+    const atom = atomData.atom?.[0]
     if (!atom) return null
 
     const agentName = cleanAtomName(atom.label || '')
@@ -196,6 +195,6 @@ export async function fetchTimelineData(agentTermId: string): Promise<TimelineRa
     }
   } catch (err) {
     console.warn('[fetchTimelineData] Failed:', err)
-    return null
+    throw err
   }
 }

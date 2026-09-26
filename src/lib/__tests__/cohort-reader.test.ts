@@ -213,7 +213,7 @@ describe('fetchCohortAgents — truncation is surfaced, never silently dropped (
     // 450 ids at 200/chunk -> 3 chunks, x2 predicate groups (tags + categories) = 6 classification row reads.
     expect(fake.rowCalls('triples').filter((c) => c.query.includes('GetCohortClassification(')).length).toBe(6)
     expect(result.agents).toHaveLength(450)
-    expect(result.agents.some(a => a.declaredSkills.includes('defi'))).toBe(true)
+    expect(result.agents.some(a => a.declaredSkills?.includes('defi'))).toBe(true)
   })
 
   it('a classification chunk with more than 250 edges is read to the end (live: 449 `has tag` edges in chunk 1)', async () => {
@@ -226,6 +226,6 @@ describe('fetchCohortAgents — truncation is surfaced, never silently dropped (
     })
     const result = await fetchCohortAgents()
     // 400 edges per predicate group: a single capped request would have left the last agents without chips.
-    expect(result.agents.every(a => a.declaredSkills.join(',') === 'defi,trading')).toBe(true)
+    expect(result.agents.every(a => a.declaredSkills?.join(',') === 'defi,trading')).toBe(true)
   })
 })
