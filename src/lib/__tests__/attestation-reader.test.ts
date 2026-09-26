@@ -11,6 +11,7 @@ import {
   type RawAttestation,
   type AttesterPosition,
 } from '../attestation-reader'
+import { installFakeHasura } from './fake-hasura'
 
 // The Knowledge / Productivity canonical bucket atom (canonical-domains.ts).
 const KNOWLEDGE_BUCKET_ID = '0x8a0e3710014141458ee303a6cc504704ee3da370450d7f5cd5a898186a2f66e4'
@@ -186,24 +187,45 @@ describe('fetchAttestations — raw 0-share rows from the indexer never become a
   const DACKIE_COUNTER = '0x2fa8f846b504ad6e3bd24f2282c53bb194eb667354bacbd6cf054686ac19823f'
   const LIVE_ATTESTER = '0x139219107C1eBE569f543C581b3B807Cf6740006'
 
+  const dackieTriple = { term_id: DACKIE_TRIPLE, counter_term_id: DACKIE_COUNTER, subject: { term_id: DACKIE, label: 'Captain Dackie' }, object: { term_id: CRYPTO_BUCKET_ID } }
+  const fakeAttestations = (positions: unknown[], fail?: Parameters<typeof installFakeHasura>[0]['fail']) => installFakeHasura({
+    tables: [
+      { match: (q) => q.includes('GetAttestationTriple'), field: 'triples', rows: [dackieTriple] },
+      { match: (q) => q.includes('VaultPositions'), field: 'positions', rows: positions },
+    ],
+    fail,
+  })
+
   it('Dackie stays at 1 attester / 0.0099 tTRUST with a 0-share row on the same vault', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const q = String(JSON.parse(String(init?.body ?? '{}')).query)
-      const data = q.includes('GetAttestationTriples')
-        ? { triples: [{ term_id: DACKIE_TRIPLE, counter_term_id: DACKIE_COUNTER, subject: { term_id: DACKIE, label: 'Captain Dackie' }, object: { term_id: CRYPTO_BUCKET_ID } }] }
-        : { positions: [
-          { term_id: DACKIE_TRIPLE, account_id: LIVE_ATTESTER, shares: '9900000000000000' },
-          { term_id: DACKIE_TRIPLE, account_id: WALLET_B, shares: '0' },
-          { term_id: DACKIE_COUNTER, account_id: WALLET_A, shares: '0' },
-        ] }
-      return { json: async () => ({ data }) }
-    }))
+    fakeAttestations([
+      { term_id: DACKIE_TRIPLE, account_id: LIVE_ATTESTER, shares: '9900000000000000' },
+      { term_id: DACKIE_TRIPLE, account_id: WALLET_B, shares: '0' },
+      { term_id: DACKIE_COUNTER, account_id: WALLET_A, shares: '0' },
+    ])
     const res = await fetchAttestations({ subjectId: DACKIE })
     expect(res).toHaveLength(1)
     expect(res[0].distinctAttesters).toBe(1)
     expect(res[0].attesters).toEqual([LIVE_ATTESTER])
     expect(res[0].totalStake).toBe(9_900_000_000_000_000n)
     expect(res[0].opposeStake).toBe(0n)
+  })
+
+  it('130 positions on one triple (endpoint caps positions at 100 per request) → all 130 attesters counted', async () => {
+    const wallets = Array.from({ length: 130 }, (_, i) => `0x${(i + 1).toString(16).padStart(40, '0')}`)
+    const fake = fakeAttestations(wallets.map((w) => ({ term_id: DACKIE_TRIPLE, account_id: w, shares: String(STAKE) })))
+    const [e] = await fetchAttestations({ subjectId: DACKIE })
+    expect(e.distinctAttesters).toBe(130)
+    expect(e.totalStake).toBe(130n * STAKE)
+    expect(fake.rowCalls('positions').map((c) => c.variables.offset)).toEqual([0, 100])
+  })
+
+  it('a positions page failing mid-way → no entry at all, never a count of the first 100', async () => {
+    const wallets = Array.from({ length: 130 }, (_, i) => `0x${(i + 1).toString(16).padStart(40, '0')}`)
+    fakeAttestations(
+      wallets.map((w) => ({ term_id: DACKIE_TRIPLE, account_id: w, shares: String(STAKE) })),
+      (q, v) => (q.includes('VaultPositions(') && v.offset === 100 ? 'throw' : undefined),
+    )
+    expect(await fetchAttestations({ subjectId: DACKIE })).toEqual([])
   })
 })
 

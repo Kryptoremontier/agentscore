@@ -5,7 +5,8 @@
  * - The header prints CORPUS totals: fetched once, never search-dependent.
  * - The results line prints the FILTERED count (search + origin + quality).
  * - A capped fetch reports its own truncation (REPO_MAP §7 rule 1): the rows
- *   and an aggregate count on the SAME `where` come back in one request.
+ *   are paged to an aggregate count on the SAME `where` (lib/gql-pager.ts),
+ *   so neither our cap nor the endpoint's 250-row cap truncates silently.
  *
  * Search is applied client-side to both corpora with one rule
  * (matchesAgentSearch), so the AgentScore and ERC-8004 segments can't drift
@@ -13,8 +14,9 @@
  * label-only, blind to JSON-labelled atoms) did.
  */
 
-import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR } from './gql-filters'
+import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
+import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
 
 /** Cap on the /agents AgentScore fetch. Truncation past it is reported, never silent. */
 export const AGENT_LIST_LIMIT = 50
@@ -37,36 +39,28 @@ export interface AgentListAtom {
 export interface AgentListFetch<T extends AgentListAtom = AgentListAtom> {
   /** Raw rows (pre-junk-filter), created_at desc, at most AGENT_LIST_LIMIT. */
   rows: T[]
-  /** Size of the whole corpus (pre-junk), from the aggregate; null if the count failed. */
+  /** Size of the whole corpus (pre-junk): the aggregate, or read to the end; null if unknown. */
   total: number | null
   /** true = rows is a prefix of the corpus; null = unknown (count failed at the cap). */
   truncated: boolean | null
 }
 
-async function gql<T>(query: string): Promise<T> {
-  const res = await fetch(APP_CONFIG.GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-  })
-  const json = await res.json()
-  if (json.errors) throw new Error(json.errors[0]?.message || 'GraphQL error')
-  return json.data as T
-}
-
 /**
- * Fetch the AgentScore corpus for /agents: rows (capped) + a same-filter
+ * Fetch the AgentScore corpus for /agents: rows (paged, capped) + a same-filter
  * aggregate count, then oppose shares for the trust triples (annotated as
  * `__opposeWei`, as the cards expect). Throws on a failed corpus read — the
  * page shows its error state; it never renders an empty list for a failure.
  */
 export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAtom>(): Promise<AgentListFetch<T>> {
-  const data = await gql<{ atoms: T[]; atoms_aggregate: { aggregate: { count: number } } | null }>(`
-    query AgentListCorpus {
+  const page = await fetchAllRows<T>({
+    // created_at ties are common (218 of the newest 250 atoms, live) — term_id makes the order unique.
+    query: `
+    query AgentListCorpus($limit: Int!, $offset: Int!) {
       atoms(
         where: ${AGENT_WHERE_STR}
-        limit: ${AGENT_LIST_LIMIT}
-        order_by: { created_at: desc }
+        limit: $limit
+        offset: $offset
+        order_by: [{ created_at: desc }, { term_id: asc }]
       ) {
         term_id
         label
@@ -86,27 +80,23 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
           limit: 1
         ) { counter_term_id }
       }
-      atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } }
     }
-  `)
-  const rows = data?.atoms ?? []
-  const count = data?.atoms_aggregate?.aggregate?.count
-  const total = typeof count === 'number' ? count : null
+  `,
+    field: 'atoms',
+    countQuery: `query AgentListCorpusCount { atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } } }`,
+    countField: 'atoms_aggregate',
+    pageSize: SERVER_ROW_CAP.atoms,
+    maxRows: AGENT_LIST_LIMIT,
+  })
+  const rows = page.rows
 
-  // Oppose vault shares for every trust triple — one batched read.
+  // Oppose vault shares for every trust triple — one paged read.
   const counterTermIds = rows
     .map(a => a.as_subject_triples?.[0]?.counter_term_id)
     .filter((id): id is string => !!id)
   if (counterTermIds.length > 0) {
     try {
-      const opposeData = await gql<{ positions: Array<{ term_id: string; shares: string }> }>(
-        `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`,
-      )
-      const opposeMap = new Map<string, bigint>()
-      for (const pos of opposeData?.positions ?? []) {
-        const prev = opposeMap.get(pos.term_id) || 0n
-        try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
-      }
+      const opposeMap = sumSharesByVault(await fetchVaultPositions(counterTermIds))
       for (const atom of rows) {
         const ctid = atom.as_subject_triples?.[0]?.counter_term_id
         if (ctid && opposeMap.has(ctid)) (atom as any).__opposeWei = opposeMap.get(ctid) || 0n
@@ -114,18 +104,7 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
     } catch { /* non-critical: cards fall back to opposeWei = 0 (see audit — known gap) */ }
   }
 
-  return { rows, total, truncated: listTruncation(rows.length, total, AGENT_LIST_LIMIT) }
-}
-
-/**
- * Was a capped fetch truncated? A fetch that returned fewer rows than its cap
- * is complete whatever the count says; at the cap, only the aggregate can tell
- * (null when it is unknown — never guessed).
- */
-export function listTruncation(fetched: number, total: number | null, limit: number): boolean | null {
-  if (fetched < limit) return false
-  if (total == null) return null
-  return total > fetched
+  return { rows, total: page.total, truncated: page.truncated }
 }
 
 // ─── Numbers the page prints ────────────────────────────────────────────────

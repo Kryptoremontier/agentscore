@@ -46,6 +46,7 @@ import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchVaultPositions } from '@/lib/vault-positions'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import { fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus } from '@/lib/agent-list'
@@ -462,26 +463,11 @@ function AgentsPageContent() {
   const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
     try {
       const normalizedAddress = userAddress.toLowerCase()
-      const res = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetVaultPositions($termId: String!) {
-              positions(
-                where: { term_id: { _eq: $termId } }
-              ) {
-                account_id
-                shares
-              }
-            }
-          `,
-          variables: { termId },
-        }),
-      })
-      const data = await res.json()
-      const pos = data?.data?.positions?.find(
-        (p: any) => p.account_id?.toLowerCase() === normalizedAddress
+      // Every position on the vault (paged) — one request stopped at 100, so on a larger vault the
+      // user's own row could be missing and redeem read 0 shares.
+      const positions = await fetchVaultPositions([termId])
+      const pos = positions.find(
+        (p) => p.account_id?.toLowerCase() === normalizedAddress
       )
       let sharesBigInt = 0n
       try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
@@ -501,31 +487,9 @@ function AgentsPageContent() {
       const termIds = [termId]
       if (counterTermId) termIds.push(counterTermId)
 
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetAllPositions($termIds: [String!]!) {
-              positions(
-                where: { term_id: { _in: $termIds } }
-                order_by: { shares: desc }
-                limit: 100
-              ) {
-                account_id
-                account { label }
-                shares
-                term_id
-                updated_at
-              }
-            }
-          `,
-          variables: { termIds }
-        })
-      })
-      const data = await response.json()
-      if (data.errors || !data.data) throw new Error(data.errors?.[0]?.message ?? 'no data')
-      const raw = data.data.positions || []
+      // Every position on both vaults, paged past the endpoint's 100-row cap (was `limit: 100`,
+      // so backers past the first 100 were dropped silently). Throws on a failed page.
+      const raw: any[] = await fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true })
       // Only active holders (shares > 0)
       const active = raw.filter((p: any) => p.shares && BigInt(p.shares) > 0n)
       // Unique wallets

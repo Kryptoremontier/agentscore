@@ -10,10 +10,11 @@ vi.mock('../evaluator-data', () => ({
 import { getAgentsWithScores, getPlatformStats } from '../api-data'
 import { qualityCacheClear } from '../scoring/quality-cache'
 import {
-  fetchAgentListCorpus, listTruncation, pluralize, matchesAgentSearch,
+  fetchAgentListCorpus, pluralize, matchesAgentSearch,
   agentListHeaderSegments, agentResultsLine, AGENT_LIST_LIMIT,
 } from '../agent-list'
 import { fetchFeaturedTotal, featuredBadgeText } from '../featured-counts'
+import { installFakeHasura } from './fake-hasura'
 
 /**
  * "One source per number" (REPO_MAP §7 rules 1 and 4). Live 2026-09-24 the
@@ -147,32 +148,45 @@ describe('/agents header: corpus totals, stable under search', () => {
   })
 })
 
-describe('truncation fires at limit + 1, never at the limit', () => {
-  it('listTruncation', () => {
-    expect(listTruncation(49, null, 50)).toBe(false)  // short fetch = complete, count not needed
-    expect(listTruncation(50, 50, 50)).toBe(false)
-    expect(listTruncation(50, 51, 50)).toBe(true)
-    expect(listTruncation(50, null, 50)).toBeNull()   // at the cap with no count: unknown, not guessed
-  })
+describe('truncation fires at limit + 1, never at the limit (paged — lib/gql-pager.ts)', () => {
+  const atomsTable = (rows: unknown[], match: (q: string) => boolean) =>
+    ({ match, field: 'atoms' as const, rows })
 
-  it('/agents corpus fetch: 50 rows + aggregate 51 → truncated, total 51', async () => {
-    const rows = Array.from({ length: AGENT_LIST_LIMIT }, (_, i) => row(`0x${String(i).padStart(64, '0')}`, `Agent: A${i}`))
-    vi.stubGlobal('fetch', vi.fn(async (_u: unknown, init?: RequestInit) => {
-      const q = String(JSON.parse(String(init?.body ?? '{}')).query)
-      expect(q).toContain('atoms_aggregate') // rows and count in the SAME request, same where
-      return { json: async () => ({ data: { atoms: rows, atoms_aggregate: { aggregate: { count: AGENT_LIST_LIMIT + 1 } } } }) }
-    }))
+  it('/agents corpus fetch: 51 atoms, our cap 50 → 50 rows, total 51, truncated — count on the SAME where', async () => {
+    const rows = Array.from({ length: AGENT_LIST_LIMIT + 1 }, (_, i) => row(`0x${String(i).padStart(64, '0')}`, `Agent: A${i}`))
+    const fake = installFakeHasura({ tables: [atomsTable(rows, q => q.includes('AgentListCorpus'))], other: () => ({ positions: [] }) })
     const r = await fetchAgentListCorpus()
     expect(r.rows).toHaveLength(AGENT_LIST_LIMIT)
     expect(r.total).toBe(AGENT_LIST_LIMIT + 1)
     expect(r.truncated).toBe(true)
+    const rowQ = fake.calls.find(c => c.query.includes('AgentListCorpus('))!.query
+    const countQ = fake.calls.find(c => c.query.includes('AgentListCorpusCount'))!.query
+    const where = (q: string) => q.match(/where: (\{[\s\S]*?\})\s*(limit|\))/)?.[1]?.replace(/\s+/g, ' ')
+    expect(where(rowQ)).toBe(where(countQ))
   })
 
-  it('/api/v1/agents: corpus at its 500 cap with aggregate 501 → truncated reported', async () => {
-    const many = Array.from({ length: 500 }, (_, i) => row(`0x${String(i + 1).padStart(64, '0')}`, `Agent: Real ${i}`))
-    stubGraphql(q => q.includes('ApiAgentsCount') ? { atoms_aggregate: { aggregate: { count: 501 } } }
-      : q.includes('ApiAgents') ? { atoms: many } : undefined)
+  it('/agents corpus fetch: exactly 50 atoms → not truncated', async () => {
+    const rows = Array.from({ length: AGENT_LIST_LIMIT }, (_, i) => row(`0x${String(i).padStart(64, '0')}`, `Agent: A${i}`))
+    installFakeHasura({ tables: [atomsTable(rows, q => q.includes('AgentListCorpus'))], other: () => ({ positions: [] }) })
+    expect(await fetchAgentListCorpus()).toMatchObject({ total: AGENT_LIST_LIMIT, truncated: false })
+  })
+
+  it('/api/v1/agents: 501 atoms, corpus cap 500 → paged past the 250 server cap, truncated reported', async () => {
+    const many = Array.from({ length: 501 }, (_, i) => row(`0x${String(i + 1).padStart(64, '0')}`, `Agent: Real ${i}`))
+    const fake = installFakeHasura({
+      tables: [atomsTable(many, q => q.includes('ApiAgents'))],
+      other: (q) => q.includes('positions') ? { positions: [] } : undefined,
+    })
     const r = await getAgentsWithScores({ limit: 1 })
     expect(r.truncated).toBe(true)
+    expect(fake.rowCalls('atoms').map(c => c.variables.offset)).toEqual([0, 250])
+  })
+
+  it('/api/v1/agents: 300 atoms (above the 250 server cap, under our 500) → all read, not truncated', async () => {
+    const many = Array.from({ length: 300 }, (_, i) => row(`0x${String(i + 1).padStart(64, '0')}`, `Agent: Real ${i}`))
+    installFakeHasura({ tables: [atomsTable(many, q => q.includes('ApiAgents'))], other: (q) => q.includes('positions') ? { positions: [] } : undefined })
+    const r = await getAgentsWithScores({ limit: 500 })
+    expect(r.truncated).toBe(false)
+    expect(r.total).toBe(300)
   })
 })

@@ -15,6 +15,7 @@ import { cleanAtomName } from '@/types/claim'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import { effectiveLabel } from '@/lib/api-data'
 import { filterAgents } from '@/lib/agent-junk-filter'
+import { fetchVaultPositions, sumSharesByVault } from '@/lib/vault-positions'
 import { fetchFeaturedTotal, featuredBadgeText, type FeaturedTotal } from '@/lib/featured-counts'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -134,19 +135,8 @@ export function FeaturedAgents() {
           .filter(Boolean) as string[]
         if (counterTermIds.length > 0) {
           try {
-            const opposeRes = await fetch(GRAPHQL_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                query: `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
-              })
-            })
-            const opposeData = await opposeRes.json()
-            const opposeMap = new Map<string, bigint>()
-            for (const pos of opposeData.data?.positions ?? []) {
-              const prev = opposeMap.get(pos.term_id) || 0n
-              try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
-            }
+            // Paged — one request stopped at 100 positions across all counter-vaults.
+            const opposeMap = sumSharesByVault(await fetchVaultPositions(counterTermIds))
             for (const atom of atoms) {
               const ctid = atom.as_subject_triples?.[0]?.counter_term_id
               if (ctid && opposeMap.has(ctid)) {

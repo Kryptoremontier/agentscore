@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { isErc8004Caip, foldClassificationBySubject, fetchCohortAgents, type ClassificationRow } from '../cohort-reader'
+import { installFakeHasura } from './fake-hasura'
 
 describe('isErc8004Caip — CAIP pattern filter', () => {
   it('matches a real ERC-8004 CAIP identity label (Base)', () => {
@@ -84,38 +85,63 @@ describe('foldClassificationBySubject — dual-resolution over cohort classifica
 })
 
 describe('fetchCohortAgents — truncation is surfaced, never silently dropped (thesis §6)', () => {
-  function sameAsRow(i: number) {
+  function sameAsRow(i: number, subject = i) {
     return {
+      term_id: `0xtriple${String(i).padStart(5, '0')}`,
       created_at: `2026-0${(i % 9) + 1}-01T00:00:00Z`,
-      subject: { term_id: `0xagent${i}`, label: `Agent 8453:${i}` },
+      subject: { term_id: `0xagent${subject}`, label: `Agent 8453:${subject}` },
       object: { label: `eip155:8453/erc721:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432/${i}` },
     }
   }
+  const distinctSubjects = (rows: Array<{ subject: { term_id: string } }>) => new Set(rows.map((r) => r.subject.term_id)).size
 
-  // Simulates Hasura respecting the fetch cap: the main query returns at most
-  // `returned` rows regardless of how large the real underlying cohort is —
-  // `total` is what the separate aggregate query reports.
-  function stubGql(returned: number, total: number) {
-    const rows = Array.from({ length: returned }, (_, i) => sameAsRow(i))
-    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body ?? '{}'))
-      const query = String(body.query)
-      let data: unknown
-      if (query.includes('GetErc8004CohortCount')) {
-        data = { triples_aggregate: { aggregate: { count: total } } }
-      } else if (query.includes('GetCohortClassification')) {
-        data = { triples: [] }
-      } else {
-        data = { triples: rows }
-      }
-      return { json: async () => ({ data }) }
-    }))
+  // The endpoint as it behaves live: rows capped at 250 per request whatever `limit` says,
+  // limit/offset honoured, the row count and the distinct-subject count on the same filter.
+  function fakeCohort(rows: ReturnType<typeof sameAsRow>[], opts: { countsFail?: boolean; classification?: (q: string) => unknown[] } = {}) {
+    return installFakeHasura({
+      tables: [
+        {
+          match: (q) => q.includes('GetErc8004Cohort'),
+          field: 'triples',
+          rows,
+          count: (q) => {
+            if (opts.countsFail) throw new Error('count query down')
+            return q.includes('distinct: true') ? distinctSubjects(rows) : rows.length
+          },
+        },
+        { match: (q) => q.includes('GetCohortClassification'), field: 'triples', rows: (q) => opts.classification?.(q) ?? [] },
+      ],
+    })
   }
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it('600 real rows, capped at 500 fetched -> truncated true, total 600, agents length 500', async () => {
-    stubGql(500, 600)
+  it('264 same-as triples across two pages (250 + 14) → 263 subjects, total 263, not truncated', async () => {
+    // Live shape 2026-09-26: 264 identity triples, one agent with two identity links.
+    const rows = [...Array.from({ length: 263 }, (_, i) => sameAsRow(i)), sameAsRow(263, 7)]
+    const fake = fakeCohort(rows)
+    const result = await fetchCohortAgents()
+    expect(fake.rowCalls('triples').filter((c) => c.query.includes('GetErc8004Cohort')).map((c) => c.variables.offset)).toEqual([0, 250])
+    expect(result).toMatchObject({ status: 'ok', total: 263, truncated: false })
+    expect(result.agents).toHaveLength(263)
+  })
+
+  it('a page failing mid-way (HTTP 429 on page 2) → status "error", never the first 250 presented as the cohort', async () => {
+    const rows = Array.from({ length: 264 }, (_, i) => sameAsRow(i))
+    installFakeHasura({
+      tables: [{ match: (q) => q.includes('GetErc8004Cohort'), field: 'triples', rows }],
+      fail: (q, v) => (q.includes('GetErc8004Cohort(') && v.offset === 250 ? 'rate-limit' : undefined),
+    })
+    vi.useFakeTimers()
+    const pending = fetchCohortAgents()
+    await vi.runAllTimersAsync()
+    const result = await pending
+    vi.useRealTimers()
+    expect(result).toEqual({ agents: [], total: null, truncated: null, status: 'error' })
+  })
+
+  it('600 real rows, our cap 500 → truncated true, total 600, agents length 500', async () => {
+    fakeCohort(Array.from({ length: 600 }, (_, i) => sameAsRow(i)))
     const result = await fetchCohortAgents()
     expect(result.truncated).toBe(true)
     expect(result.total).toBe(600)
@@ -123,7 +149,7 @@ describe('fetchCohortAgents — truncation is surfaced, never silently dropped (
   })
 
   it('264 rows, well under the cap -> truncated false', async () => {
-    stubGql(264, 264)
+    fakeCohort(Array.from({ length: 264 }, (_, i) => sameAsRow(i)))
     const result = await fetchCohortAgents()
     expect(result.truncated).toBe(false)
     expect(result.total).toBe(264)
@@ -131,48 +157,35 @@ describe('fetchCohortAgents — truncation is surfaced, never silently dropped (
   })
 
   it('exactly at the cap (500 of 500) -> not truncated', async () => {
-    stubGql(500, 500)
+    fakeCohort(Array.from({ length: 500 }, (_, i) => sameAsRow(i)))
     const result = await fetchCohortAgents()
     expect(result.truncated).toBe(false)
   })
 
-  it('count-query failure on a short (complete) fetch: the deduped rows ARE the total — never a false "empty cohort"', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body ?? '{}'))
-      const query = String(body.query)
-      if (query.includes('GetErc8004CohortCount')) throw new Error('count query down')
-      if (query.includes('GetCohortClassification')) return { json: async () => ({ data: { triples: [] } }) }
-      return { json: async () => ({ data: { triples: [sameAsRow(0), sameAsRow(1)] } }) }
-    }))
+  it('count-query failure on a complete read: the deduped rows ARE the total — never a false "empty cohort"', async () => {
+    fakeCohort([sameAsRow(0), sameAsRow(1)], { countsFail: true })
     const result = await fetchCohortAgents()
     expect(result.total).toBe(2)
     expect(result.truncated).toBe(false)
     expect(result.agents).toHaveLength(2)
   })
 
-  it('limit + 1: 500 fetched, 501 distinct agents in the registry -> truncated true, total 501', async () => {
-    stubGql(500, 501)
+  it('limit + 1: 501 distinct agents in the registry, our cap 500 → truncated true, total 501', async () => {
+    fakeCohort(Array.from({ length: 501 }, (_, i) => sameAsRow(i)))
     const result = await fetchCohortAgents()
     expect(result.truncated).toBe(true)
     expect(result.total).toBe(501)
   })
 
   it('counts DISTINCT subjects on the SAME filter as the rows (units match: agents, not triples)', async () => {
-    const queries: string[] = []
-    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const query = String(JSON.parse(String(init?.body ?? '{}')).query)
-      queries.push(query)
-      if (query.includes('GetErc8004CohortCount')) return { json: async () => ({ data: { triples_aggregate: { aggregate: { count: 2 } } } }) }
-      if (query.includes('GetCohortClassification')) return { json: async () => ({ data: { triples: [] } }) }
-      // 3 same-as triples, 2 subjects: agent0 has two identity links (seen live 1/168).
-      const dup = { ...sameAsRow(0), created_at: '2026-09-02T00:00:00Z' }
-      return { json: async () => ({ data: { triples: [sameAsRow(0), dup, sameAsRow(1)] } }) }
-    }))
+    // 3 same-as triples, 2 subjects: agent0 has two identity links (seen live).
+    const fake = fakeCohort([sameAsRow(0), { ...sameAsRow(2, 0), created_at: '2026-09-02T00:00:00Z' }, sameAsRow(1)])
     const result = await fetchCohortAgents()
     expect(result.agents).toHaveLength(2)
     expect(result.total).toBe(2) // was 3 (triples) before — a unit mismatch with agents.length
-    const count = queries.find(q => q.includes('GetErc8004CohortCount'))!
-    const rows = queries.find(q => q.includes('GetErc8004Cohort ') || (q.includes('GetErc8004Cohort') && !q.includes('Count')))!
+    const queries = fake.calls.map((c) => c.query)
+    const count = queries.find((q) => q.includes('GetErc8004CohortCount'))!
+    const rows = queries.find((q) => q.includes('GetErc8004Cohort('))!
     expect(count).toContain('count(columns: [subject_id], distinct: true)')
     for (const q of [count, rows]) {
       expect(q).toContain('%erc721:0x8004a169%')
@@ -180,14 +193,8 @@ describe('fetchCohortAgents — truncation is surfaced, never silently dropped (
     }
   })
 
-  it('at the cap with the count unavailable -> total and truncated are unknown (null), never rows.length', async () => {
-    const rows = Array.from({ length: 500 }, (_, i) => sameAsRow(i))
-    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const query = String(JSON.parse(String(init?.body ?? '{}')).query)
-      if (query.includes('GetErc8004CohortCount')) throw new Error('count query down')
-      if (query.includes('GetCohortClassification')) return { json: async () => ({ data: { triples: [] } }) }
-      return { json: async () => ({ data: { triples: rows } }) }
-    }))
+  it('at the cap with the counts unavailable -> total and truncated are unknown (null), never rows.length', async () => {
+    fakeCohort(Array.from({ length: 700 }, (_, i) => sameAsRow(i)), { countsFail: true })
     const result = await fetchCohortAgents()
     expect(result.agents).toHaveLength(500)
     expect(result.total).toBeNull()
@@ -195,34 +202,30 @@ describe('fetchCohortAgents — truncation is surfaced, never silently dropped (
   })
 
   it('chunks the classification lookup at 200 ids and merges results across chunks', async () => {
-    const rows = Array.from({ length: 450 }, (_, i) => sameAsRow(i))
-    const classificationCalls: string[] = []
-    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body ?? '{}'))
-      const query = String(body.query)
-      if (query.includes('GetErc8004CohortCount')) {
-        return { json: async () => ({ data: { triples_aggregate: { aggregate: { count: 450 } } } }) }
-      }
-      if (query.includes('GetCohortClassification')) {
-        classificationCalls.push(query)
-        // Each chunk contributes one tag for its first subject, to prove all chunks' results merge.
-        const match = query.match(/subject_id:\s*\{\s*_in:\s*\[\s*"([^"]+)"/)
-        const firstIdInChunk = match?.[1]
-        return {
-          json: async () => ({
-            data: { triples: firstIdInChunk ? [{ subject_id: firstIdInChunk, object: { term_id: '0xskill', label: 'defi' } }] : [] },
-          }),
-        }
-      }
-      return { json: async () => ({ data: { triples: rows } }) }
-    }))
-
+    const fake = fakeCohort(Array.from({ length: 450 }, (_, i) => sameAsRow(i)), {
+      // Each chunk contributes one tag for its first subject, to prove all chunks' results merge.
+      classification: (q) => {
+        const first = q.match(/subject_id:\s*\{\s*_in:\s*\[\s*"([^"]+)"/)?.[1]
+        return first ? [{ term_id: `0xedge-${first}`, subject_id: first, object: { term_id: '0xskill', label: 'defi' } }] : []
+      },
+    })
     const result = await fetchCohortAgents()
-    // 450 ids at 200/chunk -> 3 chunks, x2 predicate groups (tags + categories) = 6 classification calls.
-    expect(classificationCalls.length).toBe(6)
+    // 450 ids at 200/chunk -> 3 chunks, x2 predicate groups (tags + categories) = 6 classification row reads.
+    expect(fake.rowCalls('triples').filter((c) => c.query.includes('GetCohortClassification(')).length).toBe(6)
     expect(result.agents).toHaveLength(450)
-    // The synthetic tag landed on subject 0 of some chunk in each predicate group — at least one
-    // agent must have picked it up, proving chunked results were merged, not dropped.
     expect(result.agents.some(a => a.declaredSkills.includes('defi'))).toBe(true)
+  })
+
+  it('a classification chunk with more than 250 edges is read to the end (live: 449 `has tag` edges in chunk 1)', async () => {
+    const rows = Array.from({ length: 200 }, (_, i) => sameAsRow(i))
+    fakeCohort(rows, {
+      classification: () => rows.flatMap((r, i) => [
+        { term_id: `0xa${String(i).padStart(5, '0')}`, subject_id: r.subject.term_id, object: { term_id: '0xs1', label: 'defi' } },
+        { term_id: `0xb${String(i).padStart(5, '0')}`, subject_id: r.subject.term_id, object: { term_id: '0xs2', label: 'trading' } },
+      ]),
+    })
+    const result = await fetchCohortAgents()
+    // 400 edges per predicate group: a single capped request would have left the last agents without chips.
+    expect(result.agents.every(a => a.declaredSkills.join(',') === 'defi,trading')).toBe(true)
   })
 })

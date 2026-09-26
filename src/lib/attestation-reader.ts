@@ -17,6 +17,8 @@
  */
 
 import { APP_CONFIG } from './app-config'
+import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
+import { fetchVaultPositions } from './vault-positions'
 import {
   CANONICAL_DOMAINS_REGISTRY,
   IS_SKILLED_IN,
@@ -222,11 +224,17 @@ export interface FetchAttestationsOptions {
   subjectId?: string
 }
 
+// Ceiling for the paged triple read below (our cap, reported by the pager — the endpoint's own
+// 250-triple cap never truncates silently). Live 2026-09-26: 3 triples, 2 positions.
+const ATTESTATION_TRIPLES_MAX = 5_000
+
 /**
  * Fetch attestations from the app's GraphQL endpoint and aggregate them —
  * corpus-wide by default, or for one subject atom via `options.subjectId`.
+ * Triples and positions are paged to their aggregate counts (lib/gql-pager.ts).
  * Graceful degradation: returns [] on any transport/GraphQL error (the
  * Attested tier renders its empty states; it must never crash the page).
+ * A read that didn't reach the end counts as failed — never a partial count.
  */
 export async function fetchAttestations(options: FetchAttestationsOptions = {}): Promise<AttestedEntry[]> {
   const url = APP_CONFIG.GRAPHQL_URL
@@ -235,36 +243,36 @@ export async function fetchAttestations(options: FetchAttestationsOptions = {}):
     const bucketIds = CANONICAL_DOMAINS_REGISTRY.map((d) => d.termId)
     const subjectFilter = options.subjectId ? ', subject_id: { _eq: $subject }' : ''
     const subjectVar = options.subjectId ? ', $subject: String!' : ''
-    const tripleRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetAttestationTriples($pred: String!, $buckets: [String!]!${subjectVar}) {
-            triples(
-              where: { predicate_id: { _eq: $pred }, object_id: { _in: $buckets }${subjectFilter} }
-              limit: 500
-            ) {
-              term_id
-              counter_term_id
-              subject { term_id label }
-              object { term_id }
-            }
-          }
-        `,
-        variables: {
-          pred: IS_SKILLED_IN.termId,
-          buckets: bucketIds,
-          ...(options.subjectId ? { subject: options.subjectId } : {}),
-        },
-      }),
-    })
-    const tripleData = await tripleRes.json()
-    if (tripleData.errors) {
-      console.warn('[fetchAttestations] GraphQL error:', tripleData.errors[0]?.message)
-      return []
+    const tripleWhere = `{ predicate_id: { _eq: $pred }, object_id: { _in: $buckets }${subjectFilter} }`
+    const tripleVars = {
+      pred: IS_SKILLED_IN.termId,
+      buckets: bucketIds,
+      ...(options.subjectId ? { subject: options.subjectId } : {}),
     }
-    const triples: TripleRow[] = tripleData?.data?.triples ?? []
+    const triplePage = await fetchAllRows<TripleRow>({
+      query: `
+        query GetAttestationTriples($pred: String!, $buckets: [String!]!${subjectVar}, $limit: Int!, $offset: Int!) {
+          triples(where: ${tripleWhere}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
+            term_id
+            counter_term_id
+            subject { term_id label }
+            object { term_id }
+          }
+        }
+      `,
+      field: 'triples',
+      countQuery: `
+        query GetAttestationTripleCount($pred: String!, $buckets: [String!]!${subjectVar}) {
+          triples_aggregate(where: ${tripleWhere}) { aggregate { count } }
+        }
+      `,
+      countField: 'triples_aggregate',
+      variables: tripleVars,
+      pageSize: SERVER_ROW_CAP.triples,
+      maxRows: ATTESTATION_TRIPLES_MAX,
+    })
+    if (triplePage.truncated !== false) throw new Error('attestation triples not read to the end')
+    const triples = triplePage.rows
     if (triples.length === 0) return []
 
     const vaultIds: string[] = []
@@ -273,28 +281,7 @@ export async function fetchAttestations(options: FetchAttestationsOptions = {}):
       if (t.counter_term_id) vaultIds.push(t.counter_term_id)
     }
 
-    const posRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetAttestationPositions($vaultIds: [String!]!) {
-            positions(where: { term_id: { _in: $vaultIds } }) {
-              term_id
-              shares
-              account_id
-            }
-          }
-        `,
-        variables: { vaultIds },
-      }),
-    })
-    const posData = await posRes.json()
-    if (posData.errors) {
-      console.warn('[fetchAttestations] GraphQL error (positions):', posData.errors[0]?.message)
-      return []
-    }
-    const positions: PositionRow[] = posData?.data?.positions ?? []
+    const positions: PositionRow[] = await fetchVaultPositions(vaultIds)
 
     const byVault = new Map<string, AttesterPosition[]>()
     for (const p of positions) {

@@ -32,6 +32,8 @@ import { calculateEvaluatorScore, EVALUATOR_TIER_CONFIG, type EvaluatorTier } fr
 import { getAttestationCount, getAttestationConfig } from './attestation-gate'
 import { calculateTier, calculateTierProgress, getAgentAgeDays } from './trust-tiers'
 import { filterAgents, type AgentJunkReason } from './agent-junk-filter'
+import { fetchAllRows, gqlRequest, SERVER_ROW_CAP, type GqlRequest, type PagedRows } from './gql-pager'
+import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const TRUST_PREDICATE_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
@@ -47,17 +49,15 @@ const serverPublicClient = createPublicClient({
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  const res = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    cache: 'no-store',
-  })
-  const json = await res.json()
-  if (json.errors) throw new Error(json.errors[0]?.message || 'GraphQL error')
-  return json.data as T
+// One transport (lib/gql-pager.ts): throws on HTTP errors (the endpoint rate-limits with a bare
+// HTTP 429 — no `errors`, no `data`), GraphQL errors and a body without data. It used to return
+// `undefined` for a 429, which `data?.atoms || []` turned into "Agent not found" on REST/MCP.
+function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+  return gqlRequest<T>(query, variables, { cache: 'no-store', url: GRAPHQL_URL })
 }
+
+/** Paged reads (REPO_MAP §7 rule 1) go through the same transport. */
+const pagedRequest: GqlRequest = (query, variables) => gql(query, variables)
 
 function parseBigInt(val?: string | null): bigint {
   try { return BigInt(val || '0') } catch { return 0n }
@@ -160,13 +160,20 @@ export type AgentApiItem = {
   createdAt: string
 }
 
-async function fetchAgentRows(limit = 200): Promise<AgentRow[]> {
-  const data = await gql<{ atoms: AgentRow[] }>(`
-    query ApiAgents {
+/**
+ * AgentScore corpus rows, paged past the endpoint's 250-row cap up to `limit`
+ * (our cap), with the aggregate on the SAME filter for total/truncation.
+ */
+async function fetchAgentRows(limit: number): Promise<PagedRows<AgentRow>> {
+  return fetchAllRows<AgentRow>({
+    // created_at ties are common — term_id makes the order unique so offset pages can't overlap.
+    query: `
+    query ApiAgents($limit: Int!, $offset: Int!) {
       atoms(
         where: ${AGENT_WHERE_STR}
-        limit: ${limit}
-        order_by: { created_at: desc }
+        limit: $limit
+        offset: $offset
+        order_by: [{ created_at: desc }, { term_id: asc }]
       ) {
         term_id
         label
@@ -188,8 +195,14 @@ async function fetchAgentRows(limit = 200): Promise<AgentRow[]> {
         ) { counter_term_id }
       }
     }
-  `)
-  return data?.atoms || []
+  `,
+    field: 'atoms',
+    countQuery: `query ApiAgentsCount { atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } } }`,
+    countField: 'atoms_aggregate',
+    pageSize: SERVER_ROW_CAP.atoms,
+    maxRows: limit,
+    request: pagedRequest,
+  })
 }
 
 async function batchFetchOpposeShares(rows: AgentRow[]): Promise<Map<string, bigint>> {
@@ -197,17 +210,9 @@ async function batchFetchOpposeShares(rows: AgentRow[]): Promise<Map<string, big
     .map(a => a.as_subject_triples?.[0]?.counter_term_id)
     .filter((id): id is string => !!id)
 
-  const opposeMap = new Map<string, bigint>()
-  if (counterTermIds.length === 0) return opposeMap
-
-  const data = await gql<{ positions: Array<{ term_id: string; shares: string }> }>(
-    `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
-  )
-  for (const pos of data?.positions ?? []) {
-    const prev = opposeMap.get(pos.term_id) || 0n
-    try { opposeMap.set(pos.term_id, prev + parseBigInt(pos.shares)) } catch { /* skip */ }
-  }
-  return opposeMap
+  if (counterTermIds.length === 0) return new Map<string, bigint>()
+  // Paged: one request used to return at most 100 positions across ALL counter-vaults.
+  return sumSharesByVault(await fetchVaultPositions(counterTermIds, { request: pagedRequest }))
 }
 
 /**
@@ -216,21 +221,6 @@ async function batchFetchOpposeShares(rows: AgentRow[]): Promise<Map<string, big
  * 200 and 500 and could disagree once the corpus grew.
  */
 const AGENT_CORPUS_LIMIT = 500
-
-/** True size of the AgentScore corpus (pre-junk), from an aggregate on the SAME filter. */
-async function fetchAgentCorpusCount(): Promise<number | null> {
-  try {
-    const data = await gql<{ atoms_aggregate: { aggregate: { count: number } } }>(`
-      query ApiAgentsCount {
-        atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } }
-      }
-    `)
-    const n = data?.atoms_aggregate?.aggregate?.count
-    return typeof n === 'number' ? n : null
-  } catch {
-    return null
-  }
-}
 
 interface AgentCorpus {
   /** Post-junk items, in GraphQL order (created_at desc). */
@@ -248,7 +238,8 @@ interface AgentCorpus {
  * Every path passes the RAW label to the junk filter (REPO_MAP §7 rule 4).
  */
 async function loadAgentCorpus(): Promise<AgentCorpus> {
-  const [rows, rawTotal] = await Promise.all([fetchAgentRows(AGENT_CORPUS_LIMIT), fetchAgentCorpusCount()])
+  const corpus = await fetchAgentRows(AGENT_CORPUS_LIMIT)
+  const rows = corpus.rows
   const opposeMap = await batchFetchOpposeShares(rows)
 
   const allItems = rows.map(row => {
@@ -273,10 +264,9 @@ async function loadAgentCorpus(): Promise<AgentCorpus> {
   }))
   const { kept, junk } = filterAgents(candidates)
 
-  // A fetch that returned fewer rows than its cap is complete, count or no count.
-  const truncated = rows.length < AGENT_CORPUS_LIMIT
-    ? false
-    : rawTotal == null ? null : rawTotal > rows.length
+  // From the pager: read to the end → false; stopped at our cap → the aggregate decides
+  // (null if it failed). "Fewer rows than the cap" is not proof — the endpoint caps at 250.
+  const truncated = corpus.truncated
 
   return {
     kept,
@@ -389,7 +379,7 @@ export type AgentDetailApiItem = AgentApiItem & {
 }
 
 export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem | null> {
-  const rows = await fetchAgentRows(AGENT_CORPUS_LIMIT)
+  const { rows } = await fetchAgentRows(AGENT_CORPUS_LIMIT)
   const row = rows.find(r => r.term_id === termId)
   if (!row) return null
 
@@ -509,9 +499,8 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const termIds = ctid ? [termId, ctid] : [termId]
   const [opposeMap, positionsData, sharePriceWei] = await Promise.all([
     batchFetchOpposeShares([row]),
-    gql<{ positions: Array<{ term_id: string; account_id: string; shares: string; created_at: string }> }>(
-      `{ positions(where: { term_id: { _in: ${JSON.stringify(termIds)} } } order_by: { shares: desc }) { term_id account_id shares created_at } }`
-    ),
+    fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true, request: pagedRequest })
+      .then(positions => ({ positions })),
     getOnChainSharePrice(serverPublicClient, termId as `0x${string}`).catch(() => null),
   ])
 

@@ -14,6 +14,8 @@ import { calculateBuy } from './bonding-curve'
 import { type PublicClient, type WalletClient, parseEther, stringToHex, type Hex } from 'viem'
 import { intuitionTestnet, MultiVaultAbi } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
+import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
+import { fetchVaultPositions } from './vault-positions'
 import { saveRegistration } from './registrant-store'
 import {
   TRIPLE_SUBJECT_OR_STR,
@@ -337,6 +339,9 @@ async function createAtomViaProxy(
 
 const INTUITION_GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
+// Our ceiling on one agent's subject triples (reported by the pager, never a silent first 100).
+const AGENT_SUBJECT_TRIPLES_MAX = 5_000
+
 // ============================================================================
 // Public read-only GraphQL helpers
 // ============================================================================
@@ -393,33 +398,41 @@ export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array
   try {
     // Step 1: Fetch ALL subject triples — filter by predicate done in JS
     // (avoids assuming predicate label casing/spelling on-chain)
-    const res = await fetch(INTUITION_GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetAgentAllTriples($agentId: String!) {
-            triples(
-              where: { subject_id: { _eq: $agentId } }
-              limit: 100
-            ) {
-              term_id
-              counter_term_id
-              predicate { term_id label }
-              object { term_id label }
-            }
-          }
-        `,
-        variables: { agentId: agentTermId },
-      }),
-    })
-    const data = await res.json()
-    const triples: Array<{
+    // Paged to the aggregate count (was `limit: 100`, no count — a silent first 100).
+    const triplePage = await fetchAllRows<{
       term_id: string
       counter_term_id: string
       predicate: { term_id: string; label: string }
       object: { term_id: string; label: string }
-    }> = data?.data?.triples || []
+    }>({
+      query: `
+        query GetAgentAllTriples($agentId: String!, $limit: Int!, $offset: Int!) {
+          triples(
+            where: { subject_id: { _eq: $agentId } }
+            order_by: { term_id: asc }
+            limit: $limit
+            offset: $offset
+          ) {
+            term_id
+            counter_term_id
+            predicate { term_id label }
+            object { term_id label }
+          }
+        }
+      `,
+      field: 'triples',
+      countQuery: `
+        query GetAgentAllTriplesCount($agentId: String!) {
+          triples_aggregate(where: { subject_id: { _eq: $agentId } }) { aggregate { count } }
+        }
+      `,
+      countField: 'triples_aggregate',
+      variables: { agentId: agentTermId },
+      pageSize: SERVER_ROW_CAP.triples,
+      maxRows: AGENT_SUBJECT_TRIPLES_MAX,
+    })
+    if (triplePage.truncated !== false) throw new Error('agent triples not read to the end')
+    const triples = triplePage.rows
 
     // DEBUG: log all predicate labels so we can see what's on-chain
     debugLog(`[fetchAgentSkillTriples] agent=${agentTermId} — ${triples.length} triples total:`)
@@ -436,24 +449,8 @@ export async function fetchAgentSkillTriples(agentTermId: string): Promise<Array
       if (t.counter_term_id) vaultIds.push(t.counter_term_id)
     }
 
-    // Step 3: Batch-fetch positions for all vaults
-    const posRes = await fetch(INTUITION_GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetSkillVaultPositions($vaultIds: [String!]!) {
-            positions(where: { term_id: { _in: $vaultIds } }) {
-              term_id
-              shares
-            }
-          }
-        `,
-        variables: { vaultIds },
-      }),
-    })
-    const posData = await posRes.json()
-    const positions: Array<{ term_id: string; shares: string }> = posData?.data?.positions || []
+    // Step 3: Batch-fetch positions for all vaults (paged — one request stopped at 100)
+    const positions = await fetchVaultPositions(vaultIds)
 
     // Step 4: Aggregate shares + count per vault
     const vaultMap = new Map<string, { totalShares: bigint; count: number }>()
