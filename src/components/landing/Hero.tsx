@@ -198,7 +198,7 @@ export function Hero() {
                 'hover:bg-white/10 hover:border-white/20 transition-all duration-300'
               )}
             >
-              <div className="text-2xl sm:text-3xl font-bold text-white">
+              <div className="text-2xl sm:text-3xl font-bold text-white" data-testid="landing-stat" data-state={statsState.status}>
                 {stat.value != null ? (
                   <AnimatedNumber
                     value={stat.value}

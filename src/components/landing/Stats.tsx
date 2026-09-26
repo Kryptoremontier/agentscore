@@ -115,7 +115,7 @@ export function Stats() {
                     <stat.icon className="w-6 h-6" style={{ color: stat.iconColor, filter: `drop-shadow(0 0 4px ${stat.glowColor})` }} />
                   </div>
                 </div>
-                <div className="mb-2">
+                <div className="mb-2" data-testid="landing-stat" data-state={statsState.status}>
                   {stat.value != null ? (
                     <AnimatedCounter value={stat.value} suffix={stat.suffix} decimals={stat.decimals} />
                   ) : (
