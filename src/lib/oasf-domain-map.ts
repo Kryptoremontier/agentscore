@@ -147,3 +147,17 @@ export function mapOasfToBucket(raw: string): OasfBucketMapping {
   const domain = BUCKET_BY_LABEL[bucket]
   return { input: raw, bucket, status: domain.status, termId: domain.termId }
 }
+
+/**
+ * What the DECLARED DOMAINS section shows (components/profile/DeclaredDomains):
+ * 'unread' when the cohort classification read failed (null — REPO_MAP §7 rule 5:
+ * failed ≠ "declares nothing"), 'hidden' when nothing is declared or the agent isn't in
+ * the cohort, otherwise the distinct buckets the declarations map to.
+ */
+export type DeclaredDomainsView = { kind: 'unread' } | { kind: 'hidden' } | { kind: 'buckets'; buckets: string[] }
+
+export function declaredDomainsView(declared: readonly string[] | null | undefined): DeclaredDomainsView {
+  if (declared === null) return { kind: 'unread' }
+  if (!declared || declared.length === 0) return { kind: 'hidden' }
+  return { kind: 'buckets', buckets: [...new Set(declared.map((slug) => mapOasfToBucket(slug).bucket))] }
+}

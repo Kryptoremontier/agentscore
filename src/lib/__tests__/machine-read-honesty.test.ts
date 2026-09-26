@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { installFakeHasura } from './fake-hasura'
 import {
   publishedAgentScore, hasMeasuredScore, noScoreTooltip, supportPercent, OPPOSE_UNREAD_TOOLTIP, NO_STAKE_TOOLTIP,
@@ -220,8 +222,14 @@ describe('agents list: a failed positions read leaves oppose unknown', () => {
     const [a, b] = rows
     expect(a.__opposeWei).toBeNull()
     expect(a.liveStakerCount).toBeNull()
-    expect(hasMeasuredScore({ supportWei: 10n ** 15n, opposeWei: a.__opposeWei === null ? null : (a.__opposeWei ?? 0n) })).toBe(false)
+    // The page and the landing Featured cards read rows through stakeReadingOf — the same call here.
+    const { stakeReadingOf } = await import('../score-basis')
+    expect(stakeReadingOf(a)).toEqual({ supportWei: 10n ** 15n, opposeWei: null })
+    expect(hasMeasuredScore(stakeReadingOf(a))).toBe(false)
+    expect(noScoreTooltip(stakeReadingOf(a))).toBe(OPPOSE_UNREAD_TOOLTIP)
     expect(b.__opposeWei).toBeUndefined()
+    expect(stakeReadingOf(b)).toEqual({ supportWei: 10n ** 15n, opposeWei: 0n })
+    expect(hasMeasuredScore(stakeReadingOf(b))).toBe(true)
   })
   it('REST/MCP (getAgentsWithScores): a failed positions read rejects — never a list scored on 0 oppose', async () => {
     const actual = await vi.importActual<typeof import('../api-data')>('../api-data')
@@ -466,5 +474,91 @@ describe('MCP compare_agents with `skill` — a zero-stake skill triple never ou
     const out = await mcpCall('compare_agents', { agentIds: ['0xnone', '0xhas'], skill: 'crypto' })
     expect(out.comparison.map((c: { name: string; comparedBasis: string; domainScore: number | null }) => [c.name, c.comparedBasis, c.domainScore]))
       .toEqual([['Has', 'measured', 10], ['None', 'missing', null]])
+  })
+})
+
+// ─── The page-level decisions, in lib (no DOM in this test env) ─────────────
+
+describe('annotateVaultReads — the one annotation /agents and the landing Featured cards share', () => {
+  const rows = () => [
+    { term_id: '0xa', as_subject_triples: [{ counter_term_id: '0xca' }] },
+    { term_id: '0xb', as_subject_triples: [] },
+  ] as Array<{ term_id: string; as_subject_triples: Array<{ counter_term_id: string }>; liveStakerCount?: number | null; __opposeWei?: bigint | null }>
+  it('a failed read (null) → oppose null on rows with a counter-vault, stakers null; never 0', async () => {
+    const { annotateVaultReads } = await import('../agent-list')
+    const r = rows()
+    annotateVaultReads(r, null, { stakers: true })
+    expect(r.map((x) => [x.__opposeWei, x.liveStakerCount])).toEqual([[null, null], [undefined, null]])
+  })
+  it('skills tab (stakers: false) leaves the staker count alone', async () => {
+    const { annotateVaultReads } = await import('../agent-list')
+    const r = rows()
+    annotateVaultReads(r, null, { stakers: false })
+    expect(r.map((x) => x.liveStakerCount)).toEqual([undefined, undefined])
+  })
+  it('a read → oppose = counter-vault shares, live stakers only', async () => {
+    const { annotateVaultReads } = await import('../agent-list')
+    const r = rows()
+    annotateVaultReads(r, [
+      { id: '1', term_id: '0xa', account_id: '0x01', shares: '5' },
+      { id: '2', term_id: '0xca', account_id: '0x02', shares: '3' },
+      { id: '3', term_id: '0xb', account_id: '0x03', shares: '0' },
+    ], { stakers: true })
+    expect(r.map((x) => [x.__opposeWei, x.liveStakerCount])).toEqual([[3n, 2], [undefined, 0]])
+  })
+})
+
+describe('cardViewFor — the page\'s bulk-read state → one card', () => {
+  it('in flight → undefined ("— attesters"); failed → null (CTA only); an id missing from a completed read → null, not an endless loading line', async () => {
+    const { cardViewFor, cardAttesterLine, cardAttestationView } = await import('../agent-list')
+    expect(cardViewFor(undefined, '0xa')).toBeUndefined()
+    expect(cardAttesterLine(cardViewFor(null, '0xa'))).toEqual({ kind: 'unread', claim: null, cta: true })
+    expect(cardAttesterLine(cardViewFor(new Map(), '0xa')).kind).toBe('unread')
+    expect(cardAttesterLine(cardViewFor(new Map([['0xa', cardAttestationView([])]]), '0xa')).kind).toBe('none')
+  })
+})
+
+describe('attestScrollStep — "Attest" opens the modal scrolled to ATTESTED, after the profile loads', () => {
+  it('waits while the profile loads, scrolls once it has, and drops the request when the modal closes', async () => {
+    const { attestScrollStep } = await import('../agent-list')
+    expect(attestScrollStep({ modalOpen: true, requested: true, profileLoaded: false })).toBe('wait')
+    expect(attestScrollStep({ modalOpen: true, requested: true, profileLoaded: true })).toBe('scroll')
+    expect(attestScrollStep({ modalOpen: false, requested: true, profileLoaded: true })).toBe('idle')
+    expect(attestScrollStep({ modalOpen: true, requested: false, profileLoaded: true })).toBe('idle')
+  })
+})
+
+describe('declaredDomainsView — a failed classification read is an error state', () => {
+  it('null → "unread"; [] or not a cohort agent → hidden; declarations → their buckets', async () => {
+    const { declaredDomainsView } = await import('../oasf-domain-map')
+    expect(declaredDomainsView(null)).toEqual({ kind: 'unread' })
+    expect(declaredDomainsView([])).toEqual({ kind: 'hidden' })
+    expect(declaredDomainsView(undefined)).toEqual({ kind: 'hidden' })
+    expect(declaredDomainsView(['finance', 'finance']).kind).toBe('buckets')
+  })
+})
+
+describe('the components use those lib decisions (source guards — no DOM in this env)', () => {
+  const src = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8')
+  it('Hero, Stats and CTA read only /api/v1/stats (fetchLandingStats), never their own GraphQL counts', () => {
+    for (const f of ['Hero', 'Stats', 'CTA']) {
+      const s = src(`src/components/landing/${f}.tsx`)
+      expect(s, f).toContain('fetchLandingStats(')
+      expect(s, f).not.toMatch(/GRAPHQL_URL|AGENT_WHERE_STR|triples_aggregate|positions_aggregate|'Attestations'/)
+    }
+    for (const f of ['Hero', 'Stats']) expect(src(`src/components/landing/${f}.tsx`), f).toContain('landingStatItems(')
+  })
+  it('/agents and Featured read oppose through stakeReadingOf; the card uses cardViewFor / attestScrollStep; DeclaredDomains uses declaredDomainsView', () => {
+    const page = src('src/app/agents/page.tsx')
+    expect(page).toContain('stakeReadingOf(')
+    expect(page).toContain('cardViewFor(attestationViewBySubject')
+    expect(page).toContain('attestScrollStep(')
+    expect(page).not.toMatch(/__opposeWei \?\? 0n/)
+    const featured = src('src/components/landing/FeaturedAgents.tsx')
+    expect(featured).toContain('annotateVaultReads(')
+    expect(featured).toContain('stakeReadingOf(')
+    expect(featured).not.toMatch(/__opposeWei \?\? 0n/)
+    expect(src('src/components/agents/CardAttesterLine.tsx')).toMatch(/stopPropagation\(\)/)
+    expect(src('src/components/profile/DeclaredDomains.tsx')).toContain('declaredDomainsView(')
   })
 })

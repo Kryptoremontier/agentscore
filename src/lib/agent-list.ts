@@ -16,7 +16,7 @@
 
 import { AGENT_WHERE_STR } from './gql-filters'
 import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
-import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
+import { fetchVaultPositions, sumSharesByVault, type VaultPosition } from './vault-positions'
 import { countLiveStakers } from './live-position'
 import { summarizeAttesters } from './agent-profile'
 import { calculateAgentTier, type AgentTierResult } from './agent-tier'
@@ -113,25 +113,43 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
     .map(a => a.as_subject_triples?.[0]?.counter_term_id)
     .filter((id): id is string => !!id)
   if (rows.length > 0) {
-    try {
-      const positions = await fetchVaultPositions([...rows.map(a => a.term_id), ...counterTermIds])
-      const shareSums = sumSharesByVault(positions)
-      for (const atom of rows) {
-        const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-        if (ctid && shareSums.has(ctid)) atom.__opposeWei = shareSums.get(ctid) || 0n
-        atom.liveStakerCount = countLiveStakers(positions, { atomId: atom.term_id, counterId: ctid })
-      }
-    } catch {
-      // Stakers and oppose unknown ("—"), never 0: a row with a counter-vault gets
-      // __opposeWei null, so it has no measured score (lib/score-basis.ts).
-      for (const atom of rows) {
-        atom.liveStakerCount = null
-        if (atom.as_subject_triples?.[0]?.counter_term_id) atom.__opposeWei = null
-      }
-    }
+    const positions = await fetchVaultPositions([...rows.map(a => a.term_id), ...counterTermIds]).catch(() => null)
+    annotateVaultReads(rows, positions, { stakers: true })
   }
 
   return { rows, total: page.total, truncated: page.truncated }
+}
+
+/** The fields annotateVaultReads reads and writes on a list row. */
+export interface VaultAnnotatedRow {
+  term_id: string
+  as_subject_triples?: Array<{ counter_term_id: string | null }> | null
+  liveStakerCount?: number | null
+  __opposeWei?: bigint | null
+}
+
+/**
+ * Annotate list rows from ONE positions read of their atom vaults + trust counter-vaults
+ * (/agents and the landing Featured cards share it):
+ * - `__opposeWei`: the counter-vault's shares (unset when there's no counter-vault or no
+ *   oppose position — a real 0).
+ * - `liveStakerCount` (opts.stakers): distinct live wallets (lib/live-position.ts).
+ * `positions` null = the read FAILED: stakers null and, for every row with a counter-vault,
+ * `__opposeWei` null — unknown, never 0 (a failed read taken as 0 oppose inflates the score;
+ * lib/score-basis.ts stakeReadingOf keeps it null and hasMeasuredScore says "not measured").
+ */
+export function annotateVaultReads(rows: VaultAnnotatedRow[], positions: VaultPosition[] | null, opts: { stakers: boolean }): void {
+  const sums = positions ? sumSharesByVault(positions) : null
+  for (const row of rows) {
+    const ctid = row.as_subject_triples?.[0]?.counter_term_id ?? null
+    if (!sums) {
+      if (ctid) row.__opposeWei = null
+      if (opts.stakers) row.liveStakerCount = null
+      continue
+    }
+    if (ctid && sums.has(ctid)) row.__opposeWei = sums.get(ctid) || 0n
+    if (opts.stakers) row.liveStakerCount = countLiveStakers(positions!, { atomId: row.term_id, counterId: ctid })
+  }
 }
 
 // ─── Numbers the page prints ────────────────────────────────────────────────
@@ -249,6 +267,20 @@ export type CardAttesterLine =
 
 export const CARD_NO_ATTESTATIONS = 'No attestations yet'
 
+/**
+ * One card's view out of the page's bulk-read state: undefined = the read is in flight,
+ * null = it failed. A completed read with no entry for this id makes no claim either
+ * (null → CTA only) — never an endless "— attesters", never "No attestations yet".
+ */
+export function cardViewFor(
+  views: ReadonlyMap<string, CardAttestationView> | null | undefined,
+  termId: string,
+): CardAttestationView | null | undefined {
+  if (views === undefined) return undefined
+  if (views === null) return null
+  return views.get(termId) ?? null
+}
+
 /** `view`: undefined = not read yet, null = the read failed. */
 export function cardAttesterLine(view: CardAttestationView | null | undefined): CardAttesterLine {
   if (view === undefined) return { kind: 'loading', claim: '— attesters', cta: false }
@@ -274,5 +306,15 @@ export function cardAttesterLine(view: CardAttestationView | null | undefined): 
  */
 export function isCompactCard(input: { vaultRead: boolean; line: CardAttesterLine }): boolean {
   return !input.vaultRead && input.line.kind !== 'some'
+}
+
+/**
+ * The card's "Attest" CTA opens the modal scrolled to ATTESTED — but only once the
+ * profile has loaded (the section's height depends on it). 'idle' = nothing pending
+ * (or the modal closed: drop the request), 'wait' = pending, 'scroll' = do it now.
+ */
+export function attestScrollStep(s: { modalOpen: boolean; requested: boolean; profileLoaded: boolean }): 'idle' | 'wait' | 'scroll' {
+  if (!s.modalOpen || !s.requested) return 'idle'
+  return s.profileLoaded ? 'scroll' : 'wait'
 }
 

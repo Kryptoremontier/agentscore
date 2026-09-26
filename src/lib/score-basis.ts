@@ -57,6 +57,22 @@ export function readSharesWei(
   }
 }
 
+/**
+ * The stake reading of one list row, as /agents and the landing Featured cards hold it:
+ * support from the row's `positions_aggregate` (null = never read), oppose from the
+ * `__opposeWei` annotation (lib/agent-list.ts annotateVaultReads): undefined = no counter
+ * vault / no oppose position (0n), null = the positions read failed (unknown — stays null).
+ */
+export function stakeReadingOf(row: {
+  positions_aggregate?: Parameters<typeof readSharesWei>[0]
+  __opposeWei?: bigint | null
+}): { supportWei: bigint | null; opposeWei: bigint | null } {
+  return {
+    supportWei: readSharesWei(row.positions_aggregate),
+    opposeWei: row.__opposeWei === null ? null : (row.__opposeWei ?? 0n),
+  }
+}
+
 /** Total stake on the atom (support + oppose shares) > 0, with both sides actually read. */
 export function hasMeasuredScore(reading: StakeReading | null | undefined): boolean {
   if (!reading || reading.supportWei == null || reading.opposeWei === null) return false

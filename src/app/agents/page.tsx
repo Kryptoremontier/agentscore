@@ -54,11 +54,12 @@ import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import {
   fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus,
-  cardAttestationView, cardAttesterLine, isCompactCard, type CardAttestationView,
+  cardAttestationView, cardAttesterLine, cardViewFor, isCompactCard, attestScrollStep, type CardAttestationView,
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import {
   readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP, noScoreTooltip,
+  stakeReadingOf,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { filterAgents } from '@/lib/agent-junk-filter'
@@ -1215,7 +1216,7 @@ function AgentsPageContent() {
   // settles then). Cards are only clickable with the modal closed, when profileLoaded is false.
   useEffect(() => {
     if (!selectedAgent) { setFocusAttested(false); return }
-    if (!focusAttested || !profileLoaded) return
+    if (attestScrollStep({ modalOpen: true, requested: focusAttested, profileLoaded }) !== 'scroll') return
     let cancelled = false
     const frame = requestAnimationFrame(() => {
       if (cancelled) return
@@ -1797,12 +1798,10 @@ function AgentsPageContent() {
               : sourceAgents
 
             const enriched = searchedAgents.map(agent => {
-              // null = the vault was never read (cohort rows) — not zero (lib/score-basis.ts).
-              const supportWei = readSharesWei(agent.positions_aggregate)
-              // null = the oppose read failed (lib/agent-list.ts): unknown, not 0 — no measured score.
-              const rawOppose: bigint | null | undefined = (agent as any).__opposeWei
-              const opposeWei = rawOppose === null ? null : (rawOppose ?? 0n)
-              const reading = { supportWei, opposeWei }
+              // supportWei null = the vault was never read (cohort rows); opposeWei null = the
+              // oppose read failed — both unknown, never 0 (lib/score-basis.ts stakeReadingOf).
+              const reading = stakeReadingOf(agent as any)
+              const { supportWei, opposeWei } = reading
               const measured = hasMeasuredScore(reading)
               // Computed for every row (sort/filter plumbing), displayed only when measured.
               const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei ?? 0n)
@@ -1915,9 +1914,7 @@ function AgentsPageContent() {
                   const vaultRead = readSharesWei(agent.positions_aggregate) != null
                   // Attestations — the same read and derivation as the modal (lib/agent-list.ts).
                   // undefined = still reading, null = the read failed (no claim, CTA only).
-                  const cardView = attestationViewBySubject === undefined ? undefined
-                    : attestationViewBySubject === null ? null
-                    : attestationViewBySubject.get(agent.term_id)
+                  const cardView = cardViewFor(attestationViewBySubject, agent.term_id)
                   const attesterLine = cardAttesterLine(cardView)
                   // The agent tier — attestations only (thesis §6). The card shows only Trusted /
                   // Verified; Unverified is the default state, carried by the attester line.

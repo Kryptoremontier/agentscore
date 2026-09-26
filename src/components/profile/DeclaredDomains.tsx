@@ -10,7 +10,7 @@
  * classification read (null) says so — it is not "declares nothing" (REPO_MAP §7 rule 5).
  */
 
-import { mapOasfToBucket } from '@/lib/oasf-domain-map'
+import { declaredDomainsView } from '@/lib/oasf-domain-map'
 
 interface DeclaredDomainsProps {
   /** null = the classification read failed; undefined = not a cohort agent. */
@@ -19,7 +19,8 @@ interface DeclaredDomainsProps {
 }
 
 export function DeclaredDomains({ declaredDomains, className }: DeclaredDomainsProps) {
-  if (declaredDomains === null) {
+  const view = declaredDomainsView(declaredDomains)
+  if (view.kind === 'unread') {
     return (
       <div className={`bg-[#171A1D] border border-dashed border-[#8B5CF6]/25 rounded-xl p-4 ${className ?? ''}`}>
         <p className="text-[#8B5CF6] text-xs font-semibold uppercase tracking-wider mb-1">Declared Domains</p>
@@ -27,8 +28,8 @@ export function DeclaredDomains({ declaredDomains, className }: DeclaredDomainsP
       </div>
     )
   }
-  if (!declaredDomains || declaredDomains.length === 0) return null
-  const buckets = [...new Set(declaredDomains.map((slug) => mapOasfToBucket(slug).bucket))]
+  if (view.kind === 'hidden') return null
+  const { buckets } = view
   return (
     <div className={`bg-[#171A1D] border border-dashed border-[#8B5CF6]/25 rounded-xl p-4 ${className ?? ''}`}>
       <div className="flex items-center gap-2 mb-3">

@@ -7,7 +7,7 @@ import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
-import { readSharesWei, hasMeasuredScore, measuredScore, noScoreTooltip } from '@/lib/score-basis'
+import { readSharesWei, hasMeasuredScore, measuredScore, noScoreTooltip, stakeReadingOf } from '@/lib/score-basis'
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
@@ -15,8 +15,8 @@ import { cleanAtomName } from '@/types/claim'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import { effectiveLabel } from '@/lib/api-data'
 import { filterAgents } from '@/lib/agent-junk-filter'
-import { fetchVaultPositions, sumSharesByVault } from '@/lib/vault-positions'
-import { countLiveStakers } from '@/lib/live-position'
+import { fetchVaultPositions } from '@/lib/vault-positions'
+import { annotateVaultReads } from '@/lib/agent-list'
 import { fetchFeaturedTotal, featuredBadgeText, type FeaturedTotal } from '@/lib/featured-counts'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -36,6 +36,8 @@ interface FeaturedItem {
   as_subject_triples?: Array<{ counter_term_id: string }> | null
   /** Agents tab: live stakers (lib/live-position.ts); null = the positions read failed. */
   liveStakerCount?: number | null
+  /** Counter-vault shares (lib/agent-list.ts annotateVaultReads); null = the read failed. */
+  __opposeWei?: bigint | null
 }
 
 
@@ -138,24 +140,10 @@ export function FeaturedAgents() {
           .map(a => a.as_subject_triples?.[0]?.counter_term_id)
           .filter(Boolean) as string[]
         if (atoms.length > 0) {
-          try {
-            const positions = await fetchVaultPositions([...atoms.map(a => a.term_id), ...counterTermIds])
-            const shareSums = sumSharesByVault(positions)
-            for (const atom of atoms) {
-              const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-              if (ctid && shareSums.has(ctid)) {
-                ;(atom as any).__opposeWei = shareSums.get(ctid) || 0n
-              }
-              if (tab === 'agents') atom.liveStakerCount = countLiveStakers(positions, { atomId: atom.term_id, counterId: ctid })
-            }
-          } catch {
-            // Oppose and stakers unknown, never 0: a row with a counter-vault gets
-            // __opposeWei null → no measured score (lib/score-basis.ts).
-            for (const atom of atoms) {
-              if (atom.as_subject_triples?.[0]?.counter_term_id) (atom as any).__opposeWei = null
-              if (tab === 'agents') atom.liveStakerCount = null
-            }
-          }
+          // The same annotation as /agents (lib/agent-list.ts): a failed read leaves oppose and
+          // stakers unknown (null) — never 0, never a score computed on 0 oppose.
+          const positions = await fetchVaultPositions([...atoms.map(a => a.term_id), ...counterTermIds]).catch(() => null)
+          annotateVaultReads(atoms, positions, { stakers: tab === 'agents' })
         }
         if (isCancelled()) return
         // Agents: the same junk filter as /agents and /api/v1/agents, fed the RAW label
@@ -392,9 +380,8 @@ export function FeaturedAgents() {
                         const sharesWei = readSharesWei(item.positions_aggregate)
                         const totalStaked = Number(sharesWei ?? 0n) / 1e18
                         // null = the oppose read failed: unknown, never 0 (which would inflate the score).
-                        const rawOppose: bigint | null | undefined = (item as any).__opposeWei
-                        const opposeWei = rawOppose === null ? null : (rawOppose ?? 0n)
-                        const reading = { supportWei: sharesWei, opposeWei }
+                        const reading = stakeReadingOf(item)
+                        const { opposeWei } = reading
                         // Only a measured score is printed: at zero stake the formula returns
                         // its 50 prior, which is not a measurement (lib/score-basis.ts).
                         const measured = hasMeasuredScore(reading)
