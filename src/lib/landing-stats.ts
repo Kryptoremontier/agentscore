@@ -17,7 +17,7 @@
 export interface LandingStats {
   /** Post-junk AgentScore agents (= /api/v1/agents meta.total). */
   agents: number
-  /** The corpus read hit our cap: `agents` is a lower bound. null = unknown. */
+  /** The corpus read hit our cap: `agents` is a lower bound. null = unknown (also shown as a lower bound). */
   agentsTruncated: boolean | null
   /** Distinct live attester wallets; null = that read failed. */
   attesters: number | null
@@ -69,15 +69,26 @@ export interface LandingStatItem {
   value: number | null
   decimals: number
   suffix: string
+  /** Why the tile shows "—" when it isn't just loading (the read failed), for its title. */
+  unavailable: string | null
 }
+
+/** "500+" unless the read is known complete: a count whose truncation is unknown is a lower bound. */
+export function agentCountSuffix(stats: Pick<LandingStats, 'agentsTruncated'>): string {
+  return stats.agentsTruncated === false ? '' : '+'
+}
+
+const UNAVAILABLE = 'Couldn’t read platform stats'
 
 /** The four landing tiles, from one state. */
 export function landingStatItems(state: LandingStatsState): LandingStatItem[] {
   const s = state.status === 'ok' ? state.stats : null
+  const failed = state.status === 'error' ? UNAVAILABLE : null
   return [
-    { key: 'agents', label: 'Registered Agents', value: s?.agents ?? null, decimals: 0, suffix: s?.agentsTruncated ? '+' : '' },
-    { key: 'attesters', label: 'Attesters', value: s?.attesters ?? null, decimals: 0, suffix: '' },
-    { key: 'totalStaked', label: 'Total Staked', value: s?.totalStaked ?? null, decimals: 4, suffix: ' tTRUST' },
-    { key: 'activeStakers', label: 'Active Stakers', value: s?.activeStakers ?? null, decimals: 0, suffix: '' },
+    { key: 'agents', label: 'Registered Agents', value: s?.agents ?? null, decimals: 0, suffix: s ? agentCountSuffix(s) : '', unavailable: failed },
+    // The stats answered but the attestation read inside it failed: say so, not a silent "—".
+    { key: 'attesters', label: 'Attesters', value: s?.attesters ?? null, decimals: 0, suffix: '', unavailable: failed ?? (s && s.attesters == null ? 'Couldn’t read attestations' : null) },
+    { key: 'totalStaked', label: 'Total Staked', value: s?.totalStaked ?? null, decimals: 4, suffix: ' tTRUST', unavailable: failed },
+    { key: 'activeStakers', label: 'Active Stakers', value: s?.activeStakers ?? null, decimals: 0, suffix: '', unavailable: failed },
   ]
 }

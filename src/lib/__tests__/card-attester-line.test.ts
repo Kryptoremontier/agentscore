@@ -21,7 +21,8 @@ import {
 
 const DACKIE = '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb'
 const LUDA = '0x82d87d9517b68e653418c0e49805b36aca3e33a00536af25fc319f5c24802c5a'
-const OPEN_CLAW = '0xf9508a1016e22fb67a540fefed118b3128dc1c6a56efe8e1f3f409a666f426ec'
+// OPEN CLAW from Kryptoremontier — AgentScore row, vault read (measured 98), no attestation triple.
+const OPEN_CLAW = '0x0d579846f21a66f35efafb2339d182e27560ec9f9d8ea64f7f1d9929d20a2d7d'
 const CRYPTO = '0xecc2b1dce5f8269777d9001faa532642691d7038eed3c639f04895ac5b312d42'
 const KNOWLEDGE = '0x8a0e3710014141458ee303a6cc504704ee3da370450d7f5cd5a898186a2f66e4'
 const DACKIE_TRIPLE = '0xe8565630aee28d221ca6e33461ca76faaa2e20e8865b0e9be2fbd8875186f906'
@@ -103,10 +104,17 @@ describe('Captain Dackie — the first cohort attestation', () => {
     expect(cardAttesterLine(view)).toEqual({ kind: 'unread', claim: null, cta: true })
   })
 
-  it('keeps the full card (it has an attester); OPEN CLAW-like cohort rows go compact', () => {
+  it('keeps the full card (it has an attester); a cohort row with no attestation goes compact', () => {
     const dackie = cardAttesterLine({ attesters: 1, domains: 1, tier: calculateAgentTier([]) })
     expect(isCompactCard({ vaultRead: false, line: dackie })).toBe(false)
     expect(isCompactCard({ vaultRead: false, line: cardAttesterLine(cardAttestationView([])) })).toBe(true)
+  })
+
+  it('OPEN CLAW (AgentScore row, vault read, 0 attesters) keeps the full card with "No attestations yet · Attest"', async () => {
+    fake()
+    const line = cardAttesterLine(cardAttestationView((await fetchAttestationsForSubjects([OPEN_CLAW])).get(OPEN_CLAW)!))
+    expect(line).toEqual({ kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true })
+    expect(isCompactCard({ vaultRead: true, line })).toBe(false)
   })
 })
 

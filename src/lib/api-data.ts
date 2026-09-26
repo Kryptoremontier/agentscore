@@ -457,8 +457,11 @@ export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem
     level: s.level,
   }))
 
-  // When skills exist, overallScore replaces qualityScore in the envelope.
-  const detailScore = skillBreakdownResult.hasSkills
+  // When skills exist, overallScore replaces qualityScore in the envelope — but only when some
+  // skill triple holds stake. At zero stake every skill scores the engine's 50 prior, and 40% of
+  // a prior would be published as part of a 'measured' AGENTSCORE (lib/score-basis.ts).
+  const skillsMeasured = skillBreakdownResult.skills.some(s => s.supportShares + s.opposeShares > 0n)
+  const detailScore = skillBreakdownResult.hasSkills && skillsMeasured
     ? computeScoreEnvelope({
         objectType: 'agent',
         trustScore: base.score.trustScore,
@@ -1143,7 +1146,10 @@ export async function trustQuery(params: {
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export async function getPlatformStats() {
-  const [corpus, skillData, evaluatorProfiles, { triples: domainTriples }, attesters, claimCount] = await Promise.all([
+  // The corpus is the one read the route can't answer without (agents, stake, stakers).
+  // Every other count settles on its own: a failed read is null for that field, never 0,
+  // and never takes the corpus numbers (the landing's tiles) down with it.
+  const [corpus, skills, evaluators, domainTriples, attesters, claimCount] = await Promise.all([
     // Same post-junk corpus as /api/v1/agents — `agents` here must equal its meta.total.
     loadAgentCorpus(),
     // An aggregate, not rows: `atoms(limit: 500)` came back capped at 250 by the endpoint.
@@ -1151,9 +1157,10 @@ export async function getPlatformStats() {
       query ApiSkillCount {
         atoms_aggregate(where: ${SKILL_WHERE_STR}) { aggregate { count } }
       }
-    `),
-    fetchEvaluatorLeaderboard(),
-    fetchDomainTriplesInternal(),
+    `).then(d => (typeof d?.atoms_aggregate?.aggregate?.count === 'number' ? d.atoms_aggregate.aggregate.count : null))
+      .catch(() => null),
+    fetchEvaluatorLeaderboard().then(profiles => profiles.length).catch(() => null),
+    fetchDomainTriplesInternal().then(r => r.triples).catch(() => null),
     // Distinct wallets with a live position on any attestation triple (is skilled in → canonical
     // domain), deduped across agents and domains — commit 1's rule (summarizeAttesters). The
     // landing's "Attesters". null = the read failed, never 0.
@@ -1183,8 +1190,8 @@ export async function getPlatformStats() {
     }
   }
 
-  const domains = aggregateDomains(domainTriples)
-  const topDomain = domains[0] || null
+  const domains = domainTriples ? aggregateDomains(domainTriples) : null
+  const topDomain = domains?.[0] ?? null
 
   // Distinct wallets holding a live position on any kept agent's atom vault or trust
   // counter-vault — the same live rule as every per-agent staker count (lib/live-position.ts),
@@ -1200,11 +1207,12 @@ export async function getPlatformStats() {
     // Post-junk corpus total — identical to /api/v1/agents meta.total (same loadAgentCorpus).
     agents: corpus.kept.length,
     agentsTruncated: corpus.truncated,
-    skills: skillData.atoms_aggregate.aggregate.count,
-    domains: domains.length,
+    // null = that read failed (REPO_MAP §7 rule 5).
+    skills,
+    domains: domains ? domains.length : null,
     claims: claimCount,
     attesters,
-    evaluators: evaluatorProfiles.length,
+    evaluators,
     totalStaked: weiToFloat(totalStakedWei),
     activeStakers,
     topDomain: topDomain

@@ -25,6 +25,8 @@ export type QualityBucket = TrustLevel | 'unrated'
 export const NO_STAKE_TOOLTIP = 'No stake yet — nothing to measure.'
 /** The oppose side couldn't be read: no score is printed rather than one computed from a 0. */
 export const OPPOSE_UNREAD_TOOLTIP = 'Couldn’t read the oppose stake — no score until it can be read.'
+/** The stake was never read on this surface (ERC-8004 cohort rows on /agents): no claim about it. */
+export const STAKE_UNREAD_TOOLTIP = 'Stake isn’t read on this list — no score shown here.'
 
 /** Raw stake read for one atom. `supportWei: null` = never fetched (or unparseable), not zero. */
 export interface StakeReading {
@@ -65,9 +67,13 @@ export function scoreBasisOf(reading: StakeReading | null | undefined): ScoreBas
   return hasMeasuredScore(reading) ? 'measured' : 'prior'
 }
 
-/** Why a row prints "—": its oppose side couldn't be read, or there is no stake to measure. */
+/**
+ * Why a row prints "—": its stake was never read here (never fetched ≠ 0, REPO_MAP §7 rule 5),
+ * its oppose side couldn't be read, or there is no stake to measure.
+ */
 export function noScoreTooltip(reading: StakeReading | null | undefined): string {
-  return reading?.opposeWei === null ? OPPOSE_UNREAD_TOOLTIP : NO_STAKE_TOOLTIP
+  if (!reading || reading.supportWei == null) return STAKE_UNREAD_TOOLTIP
+  return reading.opposeWei === null ? OPPOSE_UNREAD_TOOLTIP : NO_STAKE_TOOLTIP
 }
 
 /**

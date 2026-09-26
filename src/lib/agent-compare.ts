@@ -39,12 +39,19 @@ export function comparedOverall(agent: { agentScore: number; scoreBasis: ScoreBa
     : { score: null, basis: 'prior' }
 }
 
-/** By skill: the first skill whose name contains `skill` (case-insensitive), measured only when it holds stake. */
+const staked = (s: CompareSkillRow) => s.supportStake + s.opposeStake > 0
+
+/**
+ * By skill: a skill whose name contains `skill` (case-insensitive), measured only when it
+ * holds stake. A staked match wins over an unstaked one — the breakdown is sorted by score,
+ * and a zero-stake triple's 50 prior must not hide a measured match for the same query.
+ */
 export function comparedBySkill(skills: readonly CompareSkillRow[] | null | undefined, skill: string): ComparedScore & { skillName: string | null } {
   const q = skill.toLowerCase()
-  const hit = (skills ?? []).find((s) => s.skillName.toLowerCase().includes(q))
+  const matches = (skills ?? []).filter((s) => s.skillName.toLowerCase().includes(q))
+  const hit = matches.find(staked) ?? matches[0]
   if (!hit) return { score: null, basis: 'missing', skillName: null }
-  return hit.supportStake + hit.opposeStake > 0
+  return staked(hit)
     ? { score: hit.score, basis: 'measured', skillName: hit.skillName }
     : { score: null, basis: 'prior', skillName: hit.skillName }
 }

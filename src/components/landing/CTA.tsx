@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
-import { fetchLandingStats, type LandingStats } from '@/lib/landing-stats'
+import { fetchLandingStats, agentCountSuffix, type LandingStats } from '@/lib/landing-stats'
 
 export function CTA() {
   // Same source as the Hero and Stats (lib/landing-stats.ts → /api/v1/stats): post-junk
@@ -80,7 +80,7 @@ export function CTA() {
               <>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>{stats.agents}{stats.agentsTruncated ? '+' : ''} {stats.agents === 1 ? 'Agent' : 'Agents'} Registered</span>
+                  <span>{stats.agents}{agentCountSuffix(stats)} {stats.agents === 1 ? 'Agent' : 'Agents'} Registered</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-[#C8963C]" />

@@ -10,8 +10,10 @@
 import type { MouseEvent } from 'react'
 import type { CardAttesterLine as Line } from '@/lib/agent-list'
 
-export function CardAttesterLine({ line, onAttest, className = '' }: {
+export function CardAttesterLine({ line, agentName, onAttest, className = '' }: {
   line: Line
+  /** Names the button for screen readers — ~270 cards each carry an "Attest". */
+  agentName: string
   onAttest: () => void
   className?: string
 }) {
@@ -26,7 +28,7 @@ export function CardAttesterLine({ line, onAttest, className = '' }: {
       )}
       {line.claim && line.cta && <span className="text-[#7A838D]"> · </span>}
       {line.cta && (
-        <button type="button" onClick={attest} className="text-[#C8963C] font-medium hover:underline">
+        <button type="button" onClick={attest} aria-label={`Attest ${agentName}`} aria-haspopup="dialog" className="text-[#C8963C] font-medium hover:underline">
           Attest
         </button>
       )}

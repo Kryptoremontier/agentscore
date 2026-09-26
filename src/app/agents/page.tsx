@@ -385,6 +385,8 @@ function AgentsPageContent() {
   const [focusAttested, setFocusAttested] = useState(false)
   const attestedSectionRef = useRef<HTMLDivElement>(null)
   const openAgentAtAttested = (agent: GraphQLAgent) => {
+    // A keyboard user can still reach cards under the open modal: never switch it silently.
+    if (selectedAgent) return
     setFocusAttested(true)
     setSelectedAgent(agent)
   }
@@ -1192,6 +1194,23 @@ function AgentsPageContent() {
     return () => { cancelled = true }
   }, [selectedAgent?.term_id])
 
+  // The modal's read is the newest read of the same rows the card counted: when it differs
+  // (an attestation landed since the list read), the card follows it, so list and modal agree.
+  useEffect(() => {
+    if (!selectedAgent || !profileLoaded || profileVector.attested == null) return
+    const id = selectedAgent.term_id
+    const fresh = profileVector.attested
+    const next = cardAttestationView(fresh)
+    setAttestedBySubject(prev => {
+      const old = prev?.get(id)
+      if (!prev || !old) return prev
+      const cur = cardAttestationView(old)
+      const same = cur.attesters === next.attesters && cur.domains === next.domains
+        && cur.tier.tier === next.tier.tier && cur.tier.attestedWei === next.tier.attestedWei
+      return same ? prev : new Map(prev).set(id, fresh)
+    })
+  }, [selectedAgent, profileLoaded, profileVector.attested])
+
   // Card "Attest" CTA: scroll the modal to ATTESTED once the profile is in (its height
   // settles then). Cards are only clickable with the modal closed, when profileLoaded is false.
   useEffect(() => {
@@ -1200,7 +1219,10 @@ function AgentsPageContent() {
     let cancelled = false
     const frame = requestAnimationFrame(() => {
       if (cancelled) return
-      attestedSectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      const section = attestedSectionRef.current
+      section?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      // Focus follows: a keyboard user lands on the section the CTA promised, not behind the modal.
+      section?.focus({ preventScroll: true })
       setFocusAttested(false)
     })
     return () => { cancelled = true; cancelAnimationFrame(frame) }
@@ -1932,7 +1954,7 @@ function AgentsPageContent() {
                           {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
                           {originChip}
                         </div>
-                        <CardAttesterLine line={attesterLine} onAttest={() => openAgentAtAttested(agent)} />
+                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} />
                       </motion.div>
                     )
                   }
@@ -1982,7 +2004,7 @@ function AgentsPageContent() {
                         </div>
                       </div>
                       {/* The canonical unit first, above the vault line (4b-modal's order). */}
-                      <CardAttesterLine line={attesterLine} onAttest={() => openAgentAtAttested(agent)} className="mb-3" />
+                      <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="mb-3" />
                       {vaultRead && (
                         <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
                           <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
@@ -2209,7 +2231,7 @@ function AgentsPageContent() {
                   tabs: ATTESTED (headline, canonical unit) > DECLARED (2c, cohort
                   only) > REPORTS (collapsed). Zero attestations renders the
                   AttestEmptyState "be the first" CTA (thesis §6). */}
-              <div ref={attestedSectionRef} className="scroll-mt-4">
+              <div ref={attestedSectionRef} tabIndex={-1} className="scroll-mt-4 outline-none">
                 <AttestedDomains
                   entries={profileVector.attested}
                   loading={!profileLoaded}

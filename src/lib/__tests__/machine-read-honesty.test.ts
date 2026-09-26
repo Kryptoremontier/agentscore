@@ -337,3 +337,100 @@ describe('fetchCohortAgents — a failed classification chunk is unknown, not "d
     expect(result.agents.every((a) => a.declaredSkills !== null)).toBe(true)
   })
 })
+
+// ─── Review follow-ups ──────────────────────────────────────────────────────
+
+describe('noScoreTooltip — a stake never read is not "no stake"', () => {
+  it('support never read (cohort row) → "not read on this list", not "No stake yet"', async () => {
+    const { STAKE_UNREAD_TOOLTIP } = await import('../score-basis')
+    expect(noScoreTooltip({ supportWei: null })).toBe(STAKE_UNREAD_TOOLTIP)
+    expect(noScoreTooltip({ supportWei: undefined, opposeWei: null })).toBe(STAKE_UNREAD_TOOLTIP)
+  })
+})
+
+describe('comparedBySkill — a staked match beats an unstaked one', () => {
+  it("'Code Review' (zero stake, 50 prior) must not hide 'Coding' (staked, 40) for skill 'cod'", () => {
+    const skills = [
+      { skillName: 'Code Review', score: 50, supportStake: 0, opposeStake: 0 },
+      { skillName: 'Coding', score: 40, supportStake: 0.02, opposeStake: 0 },
+    ]
+    expect(comparedBySkill(skills, 'cod')).toEqual({ score: 40, basis: 'measured', skillName: 'Coding' })
+  })
+})
+
+describe('landing: unknown truncation is a lower bound; a failed attesters read says so', () => {
+  const base = { agents: 500, attesters: null, totalStaked: 1, activeStakers: 2 }
+  it('agentsTruncated false → exact; true or null (unknown) → "500+"', async () => {
+    const { agentCountSuffix } = await import('../landing-stats')
+    expect(agentCountSuffix({ agentsTruncated: false })).toBe('')
+    expect(agentCountSuffix({ agentsTruncated: true })).toBe('+')
+    expect(agentCountSuffix({ agentsTruncated: null })).toBe('+')
+    const [agents, attesters] = landingStatItems({ status: 'ok', stats: { ...base, agentsTruncated: null } })
+    expect(agents.suffix).toBe('+')
+    expect(attesters).toMatchObject({ value: null, unavailable: expect.stringMatching(/couldn.t read/i) })
+  })
+  it('loading carries no failure reason; a failed read does', () => {
+    expect(landingStatItems({ status: 'loading' }).map((i) => i.unavailable)).toEqual([null, null, null, null])
+    expect(landingStatItems({ status: 'error' }).every((i) => i.unavailable)).toBe(true)
+  })
+})
+
+describe('getPlatformStats — one failed side read never blanks the corpus numbers', () => {
+  it('skills, domains and evaluators failing → those fields null; agents / stake / stakers still answered', async () => {
+    const evaluators = await import('../evaluator-data')
+    vi.mocked(evaluators.fetchEvaluatorLeaderboard).mockRejectedValueOnce(new Error('evaluators down'))
+    installFakeHasura({
+      tables: [
+        { match: (q) => q.includes('ApiAgent'), field: 'atoms', rows: [] },
+        { match: (q) => q.includes('GetAttestationTriple'), field: 'triples', rows: [] },
+      ],
+      other: (q) => (!q.includes('query') && q.includes('triples_aggregate') ? { triples_aggregate: { aggregate: { count: 3 } } } : undefined),
+      fail: (q) => (q.includes('ApiSkillCount') || q.includes('GetAllDomainTriples') ? 'throw' : undefined),
+    })
+    const stats = await (await vi.importActual<typeof import('../api-data')>('../api-data')).getPlatformStats()
+    expect(stats).toMatchObject({ agents: 0, activeStakers: 0, skills: null, domains: null, evaluators: null, topDomain: null, claims: 3, attesters: 0 })
+  })
+})
+
+describe('getAgentDetail — zero-stake skill triples never feed a "measured" AGENTSCORE', () => {
+  const AGENT = '0xa9e0000000000000000000000000000000000000000000000000000000000001'
+  const SKILL_TRIPLE = '0xskill'
+  const agentRow = {
+    term_id: AGENT, label: 'Agent: Staked One', data: null, type: 'Thing', emoji: null, created_at: '2026-01-01T00:00:00+00:00',
+    creator: { label: 'x', id: '0x0' },
+    positions_aggregate: { aggregate: { sum: { shares: '500000000000000000' }, max: { created_at: '2026-01-01T00:00:00+00:00' } } },
+    as_subject_triples: [],
+  }
+  const fake = (skillShares: string) => installFakeHasura({
+    tables: [
+      { match: (q) => q.includes('ApiAgent'), field: 'atoms', rows: [agentRow] },
+      {
+        match: (q) => q.includes('GetAgentAllTriples'), field: 'triples',
+        rows: [{ term_id: SKILL_TRIPLE, counter_term_id: null, predicate: { term_id: '0xp', label: 'hasAgentSkill' }, object: { term_id: '0xo', label: 'Coding' } }],
+      },
+      {
+        match: (q) => q.includes('VaultPositions'), field: 'positions',
+        rows: (_q, v) => [
+          { id: `${AGENT}-1-w`, term_id: AGENT, account_id: '0x0000000000000000000000000000000000000001', shares: '500000000000000000' },
+          { id: `${SKILL_TRIPLE}-1-w`, term_id: SKILL_TRIPLE, account_id: '0x0000000000000000000000000000000000000001', shares: skillShares },
+        ].filter((p) => (v.vaultIds as string[]).includes(p.term_id)),
+      },
+      { match: (q) => q.includes('GetAttestationTriple'), field: 'triples', rows: [] },
+    ],
+    other: (q) => (q.includes('signals') ? { signals: [] } : undefined),
+  })
+  const detailOf = async () => (await vi.importActual<typeof import('../api-data')>('../api-data')).getAgentDetail(AGENT)
+
+  it('the only skill triple was fully redeemed (0 shares) → qualityScore null, agentScore = trustScore', async () => {
+    fake('0')
+    const d = await detailOf()
+    expect(d?.scoreBasis).toBe('measured')
+    expect(d?.score.qualityScore).toBeNull()
+    expect(d?.agentScore).toBe(d?.score.trustScore)
+  })
+  it('a staked skill triple still feeds the quality score (control)', async () => {
+    fake('20000000000000000')
+    const d = await detailOf()
+    expect(d?.score.qualityScore).not.toBeNull()
+  })
+})

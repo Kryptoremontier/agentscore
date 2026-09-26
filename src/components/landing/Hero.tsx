@@ -206,7 +206,7 @@ export function Hero() {
                     decimals={stat.decimals}
                   />
                 ) : (
-                  <span className="font-mono text-slate-500" title={statsState.status === 'error' ? 'Couldn’t read platform stats' : undefined}>—</span>
+                  <span className="font-mono text-slate-500" title={stat.unavailable ?? undefined}>—</span>
                 )}
               </div>
               <div className="mt-1 text-sm text-slate-400">{stat.label}</div>

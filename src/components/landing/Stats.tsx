@@ -119,7 +119,7 @@ export function Stats() {
                   {stat.value != null ? (
                     <AnimatedCounter value={stat.value} suffix={stat.suffix} decimals={stat.decimals} />
                   ) : (
-                    <span className="font-mono text-4xl font-bold text-text-muted" title={statsState.status === 'error' ? 'Couldn’t read platform stats' : undefined}>—</span>
+                    <span className="font-mono text-4xl font-bold text-text-muted" title={stat.unavailable ?? undefined}>—</span>
                   )}
                 </div>
                 <p className="text-text-secondary text-sm">{stat.label}</p>
