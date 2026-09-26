@@ -2141,7 +2141,8 @@ function SkillsPageContent() {
               {(() => {
                 if (skillOpposeUnread) return <OpposeUnreadNotice className="mb-3" />
                 const t = skillTrust
-                const score = hybridScore ?? t?.score ?? 50
+                // Loading (no trust read yet) → "—", never the engine's 50 (Etap 4b-cache).
+                const score = hybridScore ?? t?.score ?? null
                 const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
                 const confidence = t?.confidence ?? 0
                 const momentum = t?.momentum ?? 0
@@ -2163,9 +2164,10 @@ function SkillsPageContent() {
                   : momDir === 'down'
                     ? `${momentum.toFixed(1)} pts`
                     : 'Stable'
-                const rawScore = t?.score ?? 50
+                const rawScore = t?.score ?? null
                 const rawLevel = t?.level ?? 'moderate'
-                const rawScoreColor = rawLevel === 'excellent' ? '#2ECC71'
+                const rawScoreColor = rawScore == null ? '#7A838D'
+                  : rawLevel === 'excellent' ? '#2ECC71'
                   : rawLevel === 'good' ? '#22C55E'
                   : rawLevel === 'moderate' ? '#EAB308'
                   : rawLevel === 'low' ? '#F97316'
@@ -2184,14 +2186,14 @@ function SkillsPageContent() {
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="text-xs font-semibold uppercase tracking-wider text-[#7A838D]">Skill Score</h3>
-                          <span className="text-2xl font-bold tabular-nums" style={{ color: rawScoreColor }}>{rawScore}</span>
+                          <span className="text-2xl font-bold tabular-nums" style={{ color: rawScoreColor }}>{rawScore ?? '—'}</span>
                         </div>
                         <div className="h-[2px] mb-3 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }} />
                         <div className="space-y-2.5 mb-3">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-[#7A838D]">Trust Score</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-white tabular-nums">{rawScore}</span>
+                              <span className="text-sm font-bold text-white tabular-nums">{rawScore ?? '—'}</span>
                               <span className="text-xs text-[#4A5260]">(60%)</span>
                             </div>
                           </div>
@@ -2294,7 +2296,7 @@ function SkillsPageContent() {
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (() => {
                   if (skillOpposeUnread) return <div className="p-5"><OpposeUnreadNotice /></div>
-                  const rawScore = skillTrust?.score ?? 50
+                  const rawScore = skillTrust?.score ?? null // loading → "—"
                   const score = hybridScore ?? rawScore
                   const level = hybridScore != null ? getHybridLevel(hybridScore) : (skillTrust?.level ?? 'moderate')
                   const confidence = skillTrust?.confidence ?? 0
@@ -2324,7 +2326,7 @@ function SkillsPageContent() {
                     <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
                       {(() => {
                         const rawLevel = skillTrust?.level ?? 'moderate'
-                        const scoreColor = rawLevel === 'excellent' ? '#2ECC71' : rawLevel === 'good' ? '#22C55E' : rawLevel === 'moderate' ? '#EAB308' : rawLevel === 'low' ? '#F97316' : '#EF4444'
+                        const scoreColor = rawScore == null ? '#7A838D' : rawLevel === 'excellent' ? '#2ECC71' : rawLevel === 'good' ? '#22C55E' : rawLevel === 'moderate' ? '#EAB308' : rawLevel === 'low' ? '#F97316' : '#EF4444'
                         const hybridColor = hybridScore == null ? '#7A838D'
                           : getHybridLevel(hybridScore) === 'excellent' ? '#2ECC71'
                           : getHybridLevel(hybridScore) === 'good' ? '#22C55E'
@@ -2335,14 +2337,14 @@ function SkillsPageContent() {
                           <>
                             <div className="flex items-center justify-between mb-3">
                               <h3 className="text-xs font-semibold uppercase tracking-wider text-[#7A838D]">Skill Score</h3>
-                              <span className="text-2xl font-bold tabular-nums" style={{ color: scoreColor }}>{rawScore}</span>
+                              <span className="text-2xl font-bold tabular-nums" style={{ color: scoreColor }}>{rawScore ?? '—'}</span>
                             </div>
                             <div className="h-[2px] mb-3 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }} />
                             <div className="space-y-2.5 mb-3">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs text-[#7A838D]">Trust Score</span>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-white tabular-nums">{rawScore}</span>
+                                  <span className="text-sm font-bold text-white tabular-nums">{rawScore ?? '—'}</span>
                                   <span className="text-xs text-[#4A5260]">(60%)</span>
                                 </div>
                               </div>
@@ -3150,7 +3152,7 @@ function SkillsPageContent() {
                     agentId={selectedSkill.term_id}
                     agentName={getSkillName(selectedSkill.label)}
                     createdAt={selectedSkill.created_at}
-                    currentScore={skillOpposeUnread ? null : (hybridScore ?? skillTrust?.score ?? 50)}
+                    currentScore={skillOpposeUnread ? null : (hybridScore ?? skillTrust?.score ?? null)}
                     currentTier="unverified"
                     agentSignals={skillSignals}
                     counterTermId={skillTriple.counterTermId}

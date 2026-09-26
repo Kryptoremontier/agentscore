@@ -16,6 +16,7 @@ import { ForgeCategory, ProjectStage, FORGE_CATEGORY_LABELS } from '@/lib/forge/
 import type { ForgeProject, ForgeProjectRegistrationInput } from '@/lib/forge/types'
 import { filterForgeProjects } from '@/lib/agent-junk-filter'
 import { fetchVaultPositions, sumSharesByVault } from '@/lib/vault-positions'
+import { gqlRequest } from '@/lib/gql-pager'
 import { stakeReadingOf } from '@/lib/score-basis'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -128,6 +129,16 @@ interface RawForgeAtom {
   metadata_triple: Array<{
     object: { term_id: string; data: string }
   }>
+}
+
+/**
+ * The atoms reads (the project list, one project): throw on a failed read (lib/gql-pager.ts
+ * transport) — a failure is not "no projects" / "not indexed yet" (REPO_MAP §7 rule 5). The lenient
+ * `gql` below returned null, which the list rendered as "No projects listed yet" and the project
+ * page as "syncing with indexer".
+ */
+function gqlStrict<T>(query: string): Promise<T> {
+  return gqlRequest<T>(query, undefined, { cache: 'no-store' })
 }
 
 async function gql<T>(query: string): Promise<T | null> {
@@ -380,7 +391,7 @@ const FORGE_ATOM_QUERY_FIELDS = `
  * (deduped + the folded duplicates, for audit/UI count surfaces).
  */
 async function fetchAllForgeProjects(limit: number): Promise<ForgeProject[]> {
-  const data = await gql<{ atoms: RawForgeAtom[] }>(`
+  const data = await gqlStrict<{ atoms: RawForgeAtom[] }>(`
     {
       atoms(
         where: {
@@ -428,8 +439,8 @@ function toForgeCandidates(projects: readonly ForgeProject[]) {
 /**
  * Fetch all IntuForge projects registered on-chain, deduped: repeated
  * re-registrations of the same project (e.g. "Agent Score" x6) are folded
- * to one representative — see agent-junk-filter.ts. Returns empty array
- * if GraphQL is unavailable — callers should fall back to MOCK_PROJECTS.
+ * to one representative — see agent-junk-filter.ts. Throws when the read fails (never an
+ * empty list for a failure).
  */
 export async function fetchForgeProjectsFromChain(limit = 100): Promise<ForgeProject[]> {
   const all = await fetchAllForgeProjects(limit)
@@ -446,12 +457,12 @@ export async function fetchForgeProjectsWithJunkInfo(limit = 100): Promise<{ kep
 /**
  * Fetch a single IntuForge project by its atom term_id.
  * Includes individual positions for staker list + diversity weight.
- * Returns null if not found or not a forge project atom.
+ * Returns null if not found or not a forge project atom; throws when the read fails.
  */
 export async function fetchForgeProjectById(id: string): Promise<ForgeProject | null> {
   if (!id || !id.startsWith('0x')) return null
 
-  const data = await gql<{ atoms: RawForgeAtom[] }>(`
+  const data = await gqlStrict<{ atoms: RawForgeAtom[] }>(`
     {
       atoms(
         where: { term_id: { _eq: "${id}" } }

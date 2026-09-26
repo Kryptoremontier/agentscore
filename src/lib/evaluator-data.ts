@@ -22,7 +22,7 @@ import { completeReadCache, SERVER_CACHE_TTL, type CompleteRead } from './server
 import { calculateEvaluatorScore, type StakerPosition, type EvaluatorProfile } from './evaluator-score'
 import { batchGetAttestationCounts, getAttestationConfig } from './attestation-gate'
 import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
-import { stakeReadingOf } from './score-basis'
+import { hasMeasuredScore, stakeReadingOf } from './score-basis'
 
 /** Oppose shares per counter-vault, from one paged read. null = the read failed. */
 async function readOpposeSums(counterIds: readonly string[]): Promise<Map<string, bigint> | null> {
@@ -32,8 +32,11 @@ async function readOpposeSums(counterIds: readonly string[]): Promise<Map<string
 
 /**
  * An agent's support ratio 0–100 (Math.round) for the evaluator track record, read through
- * the shared stakeReadingOf. null = its oppose read failed — unknown, never computed on 0
- * oppose (which would count every such pick as the agent being fully supported).
+ * the shared stakeReadingOf. null = no measurement: its oppose read failed (unknown, never
+ * computed on 0 oppose — which would count every such pick as the agent being fully supported),
+ * or the agent holds no stake at all — the same rule as `scoreBasis` (lib/score-basis.ts
+ * hasMeasuredScore): the old `: 50` was a prior judged as if it were a verdict. A null pick is
+ * left out of the track record (calculateEvaluatorScore).
  */
 export function trustRatioOf(
   atom: { positions_aggregate?: { aggregate?: { sum?: { shares?: string | null } | null } | null } | null; as_subject_triples?: Array<{ counter_term_id: string | null }> | null },
@@ -44,10 +47,10 @@ export function trustRatioOf(
     positions_aggregate: atom.positions_aggregate as never,
     __opposeWei: !ctid ? undefined : opposeSums ? (opposeSums.get(ctid) ?? 0n) : null,
   })
-  if (reading.opposeWei === null) return null
+  if (!hasMeasuredScore(reading)) return null
   const supportWei = reading.supportWei ?? 0n
-  const totalWei = supportWei + reading.opposeWei
-  return totalWei > 0n ? Math.round(Number(supportWei * 100n / totalWei)) : 50
+  const totalWei = supportWei + (reading.opposeWei ?? 0n)
+  return Math.round(Number(supportWei * 100n / totalWei))
 }
 import { fetchPositionPNL, computePositionPNL, type PositionPNL } from './pnl-engine'
 
