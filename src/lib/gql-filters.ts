@@ -30,7 +30,7 @@ import { APP_CONFIG } from './app-config'
  * "is trustworthy" predicate on Intuition Testnet.
  * Used in trust triples: [Agent] [is trustworthy] [AI Agent]
  */
-const TRUST_PREDICATE_TERM_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
+export const TRUST_PREDICATE_TERM_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
 
 /**
  * "AI Agent" atom on Intuition Testnet (object in both trust triples and type triples).

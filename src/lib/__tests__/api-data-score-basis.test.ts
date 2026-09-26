@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { getAgentsWithScores } from '../api-data'
 import { qualityCacheClear } from '../scoring/quality-cache'
+import { installFakeHasura } from './fake-hasura'
 
 /**
  * /api/v1/agents (and MCP search_agents / trust_query, which read the same
@@ -27,14 +28,22 @@ const ROWS = [
   row(AVATAR_CODER, 'Agent: Agent Avatar Coder - Agent Avatar Coder from Kryptoremontier', '0', 1, '2026-02-23T20:51:17+00:00'),
 ]
 
+// Live shape 2026-09-24/26: OPEN CLAW and Luda each hold one live position; Agent Avatar
+// Coder's only position was fully redeemed (shares "0").
+const POSITIONS = [
+  { term_id: OPEN_CLAW, account_id: '0x1392aBcDeF00112233445566778899aabb000006', shares: '335061000000000000' },
+  { term_id: LUDA, account_id: '0x1392aBcDeF00112233445566778899aabb000006', shares: '980000000000000' },
+  { term_id: AVATAR_CODER, account_id: '0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41', shares: '0' },
+]
+
 beforeEach(() => {
   qualityCacheClear()
-  vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body ?? '{}'))
-    const q = String(body.query)
-    const data = q.includes('ApiAgents') ? { atoms: ROWS } : { positions: [] }
-    return { json: async () => ({ data }) }
-  }))
+  installFakeHasura({
+    tables: [
+      { match: (q) => q.includes('ApiAgents'), field: 'atoms', rows: ROWS },
+      { match: (q) => q.includes('VaultPositions'), field: 'positions', rows: POSITIONS },
+    ],
+  })
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -47,7 +56,8 @@ describe('getAgentsWithScores — scoreBasis', () => {
     expect(coder.scoreBasis).toBe('prior')
     // Contract kept for existing REST/MCP consumers: trustScore is still a number (the prior).
     expect(coder.score.trustScore).toBe(50)
-    expect(coder.stakerCount).toBe(1) // one zero-share position — a "staker", not a measurement
+    // One zero-share position is not a staker (lib/live-position.ts) — the raw row count said 1.
+    expect(coder.stakerCount).toBe(0)
   })
 
   it('Luda and OPEN CLAW are still present and still measured', async () => {
@@ -57,5 +67,7 @@ describe('getAgentsWithScores — scoreBasis', () => {
     expect(byId.get(LUDA)?.score.trustScore).toBe(50) // measured, but 99% prior-weighted at 0.00098 tTRUST
     expect(byId.get(OPEN_CLAW)?.scoreBasis).toBe('measured')
     expect(byId.get(OPEN_CLAW)?.score.trustScore).toBe(98)
+    expect(byId.get(OPEN_CLAW)?.stakerCount).toBe(1)
+    expect(byId.get(LUDA)?.stakerCount).toBe(1)
   })
 })

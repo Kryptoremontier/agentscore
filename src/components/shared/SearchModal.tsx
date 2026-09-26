@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn'
 import { APP_CONFIG } from '@/lib/app-config'
 import { AGENT_WHERE_STR, TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
 import { formatPredicateLabel } from '@/lib/predicate-display'
+import { fetchLiveStakerCounts } from '@/lib/vault-positions'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -17,6 +18,8 @@ interface AgentResult {
   label: string
   creator?: { label: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+  /** Agents only: live stakers (lib/live-position.ts); null = not read / read failed. */
+  liveStakers?: number | null
 }
 
 async function fetchFromIntuition(search: string): Promise<AgentResult[]> {
@@ -51,7 +54,10 @@ async function fetchFromIntuition(search: string): Promise<AgentResult[]> {
     console.error('[SearchModal] GraphQL errors (agents):', data.errors)
     return []
   }
-  return data.data?.atoms ?? []
+  const atoms: AgentResult[] = data.data?.atoms ?? []
+  // Stakers through the one live rule — positions_aggregate.count counts 0-share rows.
+  const stakers = await fetchLiveStakerCounts(atoms.map(a => ({ atomId: a.term_id }))).catch(() => null)
+  return atoms.map(a => ({ ...a, liveStakers: stakers?.get(a.term_id) ?? null }))
 }
 
 interface ClaimResult {
@@ -350,7 +356,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                       const name    = agentName(agent.label)
                       const creator = agent.creator?.label?.replace('.eth', '') || null
                       const score   = itemScore(agent)
-                      const stakers = agent.positions_aggregate?.aggregate?.count ?? 0
+                      const stakers = agent.liveStakers ?? 0
 
                       return (
                         <button

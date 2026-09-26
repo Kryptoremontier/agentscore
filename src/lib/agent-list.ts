@@ -5,7 +5,8 @@
  * - The header prints CORPUS totals: fetched once, never search-dependent.
  * - The results line prints the FILTERED count (search + origin + quality).
  * - A capped fetch reports its own truncation (REPO_MAP §7 rule 1): the rows
- *   and an aggregate count on the SAME `where` come back in one request.
+ *   are paged to an aggregate count on the SAME `where` (lib/gql-pager.ts),
+ *   so neither our cap nor the endpoint's 250-row cap truncates silently.
  *
  * Search is applied client-side to both corpora with one rule
  * (matchesAgentSearch), so the AgentScore and ERC-8004 segments can't drift
@@ -13,8 +14,13 @@
  * label-only, blind to JSON-labelled atoms) did.
  */
 
-import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR } from './gql-filters'
+import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
+import { fetchVaultPositions, sumSharesByVault, type VaultPosition } from './vault-positions'
+import { countLiveStakers } from './live-position'
+import { summarizeAttesters } from './agent-profile'
+import { calculateAgentTier, type AgentTierResult } from './agent-tier'
+import type { AttestedEntry } from './attestation-reader'
 
 /** Cap on the /agents AgentScore fetch. Truncation past it is reported, never silent. */
 export const AGENT_LIST_LIMIT = 50
@@ -30,43 +36,48 @@ export interface AgentListAtom {
   created_at: string
   emoji?: string
   creator?: { label: string; id?: string } | null
-  positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+  /** Atom-vault support stake. The row count is deliberately not read: it counts 0-share rows. */
+  positions_aggregate?: { aggregate: { sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /**
+   * Stakers: distinct wallets with a live position on the atom vault or its trust
+   * counter-vault (lib/live-position.ts countLiveStakers). undefined = never read
+   * (cohort rows), null = the positions read failed — never a 0 that wasn't measured.
+   */
+  liveStakerCount?: number | null
+  /**
+   * Oppose shares on the trust counter-vault. undefined = no counter vault or no
+   * oppose position (0); null = the positions read failed — unknown, so the row
+   * has no measured score (lib/score-basis.ts), never a score computed from 0 oppose.
+   */
+  __opposeWei?: bigint | null
 }
 
 export interface AgentListFetch<T extends AgentListAtom = AgentListAtom> {
   /** Raw rows (pre-junk-filter), created_at desc, at most AGENT_LIST_LIMIT. */
   rows: T[]
-  /** Size of the whole corpus (pre-junk), from the aggregate; null if the count failed. */
+  /** Size of the whole corpus (pre-junk): the aggregate, or read to the end; null if unknown. */
   total: number | null
   /** true = rows is a prefix of the corpus; null = unknown (count failed at the cap). */
   truncated: boolean | null
 }
 
-async function gql<T>(query: string): Promise<T> {
-  const res = await fetch(APP_CONFIG.GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-  })
-  const json = await res.json()
-  if (json.errors) throw new Error(json.errors[0]?.message || 'GraphQL error')
-  return json.data as T
-}
-
 /**
- * Fetch the AgentScore corpus for /agents: rows (capped) + a same-filter
+ * Fetch the AgentScore corpus for /agents: rows (paged, capped) + a same-filter
  * aggregate count, then oppose shares for the trust triples (annotated as
- * `__opposeWei`, as the cards expect). Throws on a failed corpus read — the
+ * `__opposeWei`, as the cards expect; null when that read failed). Throws on a failed corpus read — the
  * page shows its error state; it never renders an empty list for a failure.
  */
 export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAtom>(): Promise<AgentListFetch<T>> {
-  const data = await gql<{ atoms: T[]; atoms_aggregate: { aggregate: { count: number } } | null }>(`
-    query AgentListCorpus {
+  const page = await fetchAllRows<T>({
+    // created_at ties are common (218 of the newest 250 atoms, live) — term_id makes the order unique.
+    query: `
+    query AgentListCorpus($limit: Int!, $offset: Int!) {
       atoms(
         where: ${AGENT_WHERE_STR}
-        limit: ${AGENT_LIST_LIMIT}
-        order_by: { created_at: desc }
+        limit: $limit
+        offset: $offset
+        order_by: [{ created_at: desc }, { term_id: asc }]
       ) {
         term_id
         label
@@ -77,7 +88,6 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
         creator { label id }
         positions_aggregate {
           aggregate {
-            count
             sum { shares }
           }
         }
@@ -86,46 +96,60 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
           limit: 1
         ) { counter_term_id }
       }
-      atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } }
     }
-  `)
-  const rows = data?.atoms ?? []
-  const count = data?.atoms_aggregate?.aggregate?.count
-  const total = typeof count === 'number' ? count : null
+  `,
+    field: 'atoms',
+    countQuery: `query AgentListCorpusCount { atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } } }`,
+    countField: 'atoms_aggregate',
+    pageSize: SERVER_ROW_CAP.atoms,
+    maxRows: AGENT_LIST_LIMIT,
+  })
+  const rows = page.rows
 
-  // Oppose vault shares for every trust triple — one batched read.
+  // One paged read of every position on the atom vaults + trust counter-vaults: oppose shares
+  // per counter-vault, and stakers per agent counted with the one live rule (0-share rows are
+  // not stakers — they are what `positions_aggregate.count` used to count).
   const counterTermIds = rows
     .map(a => a.as_subject_triples?.[0]?.counter_term_id)
     .filter((id): id is string => !!id)
-  if (counterTermIds.length > 0) {
-    try {
-      const opposeData = await gql<{ positions: Array<{ term_id: string; shares: string }> }>(
-        `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`,
-      )
-      const opposeMap = new Map<string, bigint>()
-      for (const pos of opposeData?.positions ?? []) {
-        const prev = opposeMap.get(pos.term_id) || 0n
-        try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
-      }
-      for (const atom of rows) {
-        const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-        if (ctid && opposeMap.has(ctid)) (atom as any).__opposeWei = opposeMap.get(ctid) || 0n
-      }
-    } catch { /* non-critical: cards fall back to opposeWei = 0 (see audit — known gap) */ }
+  if (rows.length > 0) {
+    const positions = await fetchVaultPositions([...rows.map(a => a.term_id), ...counterTermIds]).catch(() => null)
+    annotateVaultReads(rows, positions, { stakers: true })
   }
 
-  return { rows, total, truncated: listTruncation(rows.length, total, AGENT_LIST_LIMIT) }
+  return { rows, total: page.total, truncated: page.truncated }
+}
+
+/** The fields annotateVaultReads reads and writes on a list row. */
+export interface VaultAnnotatedRow {
+  term_id: string
+  as_subject_triples?: Array<{ counter_term_id: string | null }> | null
+  liveStakerCount?: number | null
+  __opposeWei?: bigint | null
 }
 
 /**
- * Was a capped fetch truncated? A fetch that returned fewer rows than its cap
- * is complete whatever the count says; at the cap, only the aggregate can tell
- * (null when it is unknown — never guessed).
+ * Annotate list rows from ONE positions read of their atom vaults + trust counter-vaults
+ * (/agents and the landing Featured cards share it):
+ * - `__opposeWei`: the counter-vault's shares (unset when there's no counter-vault or no
+ *   oppose position — a real 0).
+ * - `liveStakerCount` (opts.stakers): distinct live wallets (lib/live-position.ts).
+ * `positions` null = the read FAILED: stakers null and, for every row with a counter-vault,
+ * `__opposeWei` null — unknown, never 0 (a failed read taken as 0 oppose inflates the score;
+ * lib/score-basis.ts stakeReadingOf keeps it null and hasMeasuredScore says "not measured").
  */
-export function listTruncation(fetched: number, total: number | null, limit: number): boolean | null {
-  if (fetched < limit) return false
-  if (total == null) return null
-  return total > fetched
+export function annotateVaultReads(rows: VaultAnnotatedRow[], positions: VaultPosition[] | null, opts: { stakers: boolean }): void {
+  const sums = positions ? sumSharesByVault(positions) : null
+  for (const row of rows) {
+    const ctid = row.as_subject_triples?.[0]?.counter_term_id ?? null
+    if (!sums) {
+      if (ctid) row.__opposeWei = null
+      if (opts.stakers) row.liveStakerCount = null
+      continue
+    }
+    if (ctid && sums.has(ctid)) row.__opposeWei = sums.get(ctid) || 0n
+    if (opts.stakers) row.liveStakerCount = countLiveStakers(positions!, { atomId: row.term_id, counterId: ctid })
+  }
 }
 
 // ─── Numbers the page prints ────────────────────────────────────────────────
@@ -205,3 +229,92 @@ export function agentResultsLine(shown: number, of: number): { shown: number; of
   const narrowed = shown !== of
   return { shown, of: narrowed ? of : null, noun: (narrowed ? of : shown) === 1 ? 'agent' : 'agents' }
 }
+
+// ─── Attestations on the card ───────────────────────────────────────────────
+
+/**
+ * One agent's attestations as a card shows them. Same derivation as the modal
+ * (computeModalStatSummary + calculateAgentTier): attesters =
+ * summarizeAttesters(entries).length (distinct live wallets across all
+ * domains), domains = entries.length (one entry per attested domain; a
+ * domain with no live attester has no entry). The list and the modal read
+ * the same rows (attestation-reader), so they print the same numbers.
+ */
+export interface CardAttestationView {
+  attesters: number
+  domains: number
+  tier: AgentTierResult
+}
+
+export function cardAttestationView(entries: readonly AttestedEntry[]): CardAttestationView {
+  const summary = summarizeAttesters(entries)
+  return { attesters: summary.length, domains: entries.length, tier: calculateAgentTier(summary) }
+}
+
+/**
+ * The card's attester line (REPO_MAP §7 rule 5: failed ≠ empty). `claim` is the
+ * text the card prints (null = none), `cta` whether the Attest button follows it.
+ * - `loading`: the bulk read is in flight → "— attesters".
+ * - `unread`: the read failed → no claim at all, the Attest CTA only.
+ * - `none`: the read succeeded and found no live attester → "No attestations yet · Attest".
+ * - `some`: "{n} attester(s) · {k} domain(s)".
+ */
+export type CardAttesterLine =
+  | { kind: 'loading'; claim: string; cta: false }
+  | { kind: 'unread'; claim: null; cta: true }
+  | { kind: 'none'; claim: string; cta: true }
+  | { kind: 'some'; claim: string; cta: false; attesters: number; domains: number }
+
+export const CARD_NO_ATTESTATIONS = 'No attestations yet'
+
+/**
+ * One card's view out of the page's bulk-read state: undefined = the read is in flight,
+ * null = it failed. A completed read with no entry for this id makes no claim either
+ * (null → CTA only) — never an endless "— attesters", never "No attestations yet".
+ */
+export function cardViewFor(
+  views: ReadonlyMap<string, CardAttestationView> | null | undefined,
+  termId: string,
+): CardAttestationView | null | undefined {
+  if (views === undefined) return undefined
+  if (views === null) return null
+  return views.get(termId) ?? null
+}
+
+/** `view`: undefined = not read yet, null = the read failed. */
+export function cardAttesterLine(view: CardAttestationView | null | undefined): CardAttesterLine {
+  if (view === undefined) return { kind: 'loading', claim: '— attesters', cta: false }
+  if (view === null) return { kind: 'unread', claim: null, cta: true }
+  if (view.attesters === 0) return { kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true }
+  return {
+    kind: 'some',
+    claim: `${pluralize(view.attesters, 'attester')} · ${pluralize(view.domains, 'domain')}`,
+    cta: false,
+    attesters: view.attesters,
+    domains: view.domains,
+  }
+}
+
+/**
+ * Compact card: name, origin, tier chip (Trusted/Verified only) and the attester
+ * line — no score slot, caption, stake line, bar or shield. Only for a row whose
+ * atom vault the list never read (ERC-8004 cohort rows) and that is not known to
+ * have an attester. For those rows the dropped elements are the same on every
+ * card ("—", no stake read, an empty bar): they carry nothing about the row
+ * (docs/audit/4b-list-findings.md §2). A row with attesters (Captain Dackie)
+ * keeps the full card.
+ */
+export function isCompactCard(input: { vaultRead: boolean; line: CardAttesterLine }): boolean {
+  return !input.vaultRead && input.line.kind !== 'some'
+}
+
+/**
+ * The card's "Attest" CTA opens the modal scrolled to ATTESTED — but only once the
+ * profile has loaded (the section's height depends on it). 'idle' = nothing pending
+ * (or the modal closed: drop the request), 'wait' = pending, 'scroll' = do it now.
+ */
+export function attestScrollStep(s: { modalOpen: boolean; requested: boolean; profileLoaded: boolean }): 'idle' | 'wait' | 'scroll' {
+  if (!s.modalOpen || !s.requested) return 'idle'
+  return s.profileLoaded ? 'scroll' : 'wait'
+}
+

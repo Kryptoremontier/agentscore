@@ -42,6 +42,8 @@ import {
   type ProfileAtom,
 } from '@/lib/agent-profile'
 import type { CohortAgent } from '@/lib/cohort-reader'
+import { calculateAgentTier } from '@/lib/agent-tier'
+import { AgentTierChip } from '@/components/agents/AgentTierChip'
 import type { Agent } from '@/types/agent'
 import type { AgentDetailApiItem } from '@/lib/api-data'
 
@@ -66,8 +68,9 @@ function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
     trustScore: Math.round(apiAgent.score.objectScore ?? apiAgent.score.trustScore),
     positiveStake: BigInt(Math.round(apiAgent.supportStake * 1e18)),
     negativeStake: BigInt(Math.round(apiAgent.opposeStake * 1e18)),
-    attestationCount: 0,
-    reportCount: 0,
+    // Filled from the profile vector once it loads; "—" until then (never an unread 0).
+    attestationCount: null,
+    reportCount: null,
     stakerCount: apiAgent.stakerCount,
   }
 }
@@ -85,7 +88,7 @@ export default function AgentDetailPage() {
   const [error, setError] = useState<string | null>(null)
   // ETAP 3 canonical profile vector — shared by every tier.
   const [vector, setVector] = useState<AgentProfileVector>(EMPTY_VECTOR)
-  const [backers, setBackers] = useState<Backer[]>([])
+  const [backers, setBackers] = useState<Backer[] | null>([])
   const [profileLoading, setProfileLoading] = useState(true)
 
   useEffect(() => {
@@ -141,7 +144,7 @@ export default function AgentDetailPage() {
       setVector(v)
       setBackers(b)
       setProfileLoading(false)
-      setAgent(prev => prev ? { ...prev, attestationCount: v.attested.length, reportCount: v.reports.length } : prev)
+      setAgent(prev => prev ? { ...prev, attestationCount: v.attested?.length ?? null, reportCount: v.reports?.length ?? null } : prev)
     }
 
     load()
@@ -169,7 +172,10 @@ export default function AgentDetailPage() {
     )
   }
 
-  const attesters = summarizeAttesters(vector.attested)
+  // null = the attestation read failed: the Attesters list says so instead of "no one".
+  const attesters = vector.attested ? summarizeAttesters(vector.attested) : null
+  // The agent tier — attestations only (thesis §6). null while loading or if the read failed.
+  const agentTier = attesters ? calculateAgentTier(attesters) : null
 
   // ── Non-scored tier: cohort agent, attested human, any real atom outside the scored corpus ──
   if (!agent && minimalAtom) {
@@ -187,6 +193,7 @@ export default function AgentDetailPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <h1 className="text-2xl font-bold">{name}</h1>
                   {cohortMatch && <span className="text-xs text-[#8B5CF6] bg-[#8B5CF6]/10 px-2 py-0.5 rounded-full">ERC-8004</span>}
+                  <AgentTierChip tier={agentTier} loading={profileLoading} />
                 </div>
                 <p className="text-text-muted text-sm">
                   {cohortMatch
@@ -205,7 +212,7 @@ export default function AgentDetailPage() {
 
               <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
 
-              {vector.attested.length > 0 && (
+              {(vector.attested?.length ?? 0) > 0 && (
                 <AttestButton agentId={agentId} agentName={name} variant="hero" />
               )}
             </motion.div>
@@ -287,6 +294,8 @@ export default function AgentDetailPage() {
           {/* Header — Attest is THE primary action, mounted next to the name */}
           <AgentHeader
             agent={agent}
+            tier={agentTier}
+            tierLoading={profileLoading}
             action={<AttestButton agentId={agent.id} agentName={agent.name} variant="hero" />}
           />
 

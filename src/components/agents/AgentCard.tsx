@@ -83,7 +83,7 @@ export function AgentCard({ agent, index = 0, onClick }: AgentCardProps) {
           <div className="flex items-center gap-2 text-sm">
             <Users className="w-4 h-4 text-slate-400" />
             <span className="text-slate-400">Attestations:</span>
-            <span className="font-mono text-white">{agent.attestationCount}</span>
+            <span className="font-mono text-white">{agent.attestationCount ?? '—'}</span>
           </div>
         </div>
 

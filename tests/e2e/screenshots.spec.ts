@@ -39,7 +39,7 @@ interface Shot {
 }
 
 const SHOTS: Shot[] = [
-  { name: 'landing', url: ROUTES.landing },
+  { name: 'landing', url: ROUTES.landing, prepare: landingStatsReady },
   { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady },
   {
     name: 'agents-list-erc8004',
@@ -124,7 +124,11 @@ async function settle(page: Page) {
   }, null, { timeout: WAIT_CAP, polling: 250 })
 }
 
-/** /agents renders its grid only after BOTH corpora (AgentScore + ERC-8004 cohort) resolved. */
+/**
+ * /agents renders its grid only after BOTH corpora (AgentScore + ERC-8004 cohort) resolved;
+ * then the cards' attester lines leave "— attesters" once the bulk attestation read answers
+ * (data-state "some" / "none", or "unread" when it failed — lib/agent-list.ts cardAttesterLine).
+ */
 async function agentsListReady(page: Page) {
   await page
     .getByText(/^\d+( of \d+)? agents?/)
@@ -132,6 +136,12 @@ async function agentsListReady(page: Page) {
     .or(page.getByText(/^Error:/))
     .first()
     .waitFor({ timeout: WAIT_CAP })
+  await expect(page.locator('[data-testid="card-attester-line"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
+}
+
+/** Landing Hero/Stats tiles print "—" while /api/v1/stats loads (lib/landing-stats.ts); wait for the answer. */
+async function landingStatsReady(page: Page) {
+  await expect(page.locator('[data-testid="landing-stat"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
 }
 
 /**
@@ -145,7 +155,9 @@ async function modalReady(page: Page) {
   const modal = modalLocator(page)
   await modal.waitFor({ timeout: WAIT_CAP })
   await expect(modal.getByText(/^Backers: \d/)).toBeVisible({ timeout: WAIT_CAP })
-  await expect(modal.getByText(/\d+\/\d+ attesters/)).toBeVisible({ timeout: WAIT_CAP })
+  // The agent tier chip resolved: "Unverified · 1/3 attesters", "Trusted · 2/3 attesters" or
+  // "Verified" (lib/agent-tier.ts). "—/3 attesters" (loading) and "Tier unavailable" don't match.
+  await expect(modal.getByTestId('agent-tier-chip').getByText(/\d+\/\d+ attesters|Verified/).first()).toBeVisible({ timeout: WAIT_CAP })
   // The four primary stat boxes print "—" only while their data loads.
   await expect(modal.locator('p.text-lg.font-bold.text-white', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
   await expect(

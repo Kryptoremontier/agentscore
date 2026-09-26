@@ -7,7 +7,7 @@ import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
-import { readSharesWei, hasMeasuredScore, measuredScore, NO_STAKE_TOOLTIP } from '@/lib/score-basis'
+import { readSharesWei, hasMeasuredScore, measuredScore, noScoreTooltip, stakeReadingOf } from '@/lib/score-basis'
 
 import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
@@ -15,6 +15,8 @@ import { cleanAtomName } from '@/types/claim'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import { effectiveLabel } from '@/lib/api-data'
 import { filterAgents } from '@/lib/agent-junk-filter'
+import { fetchVaultPositions } from '@/lib/vault-positions'
+import { annotateVaultReads } from '@/lib/agent-list'
 import { fetchFeaturedTotal, featuredBadgeText, type FeaturedTotal } from '@/lib/featured-counts'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -32,6 +34,10 @@ interface FeaturedItem {
   creator?: { label: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /** Agents tab: live stakers (lib/live-position.ts); null = the positions read failed. */
+  liveStakerCount?: number | null
+  /** Counter-vault shares (lib/agent-list.ts annotateVaultReads); null = the read failed. */
+  __opposeWei?: bigint | null
 }
 
 
@@ -128,32 +134,16 @@ export function FeaturedAgents() {
         if (d.errors || !d.data) throw new Error('atoms read failed')
         const atoms: FeaturedItem[] = d.data.atoms || []
 
-        // Batch-fetch oppose vault shares for accurate card Trust Score
+        // One paged read of the atom vaults + trust counter-vaults: oppose shares for the card
+        // Trust Score, and (agents) stakers through the one live rule — a 0-share row isn't one.
         const counterTermIds = atoms
           .map(a => a.as_subject_triples?.[0]?.counter_term_id)
           .filter(Boolean) as string[]
-        if (counterTermIds.length > 0) {
-          try {
-            const opposeRes = await fetch(GRAPHQL_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                query: `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
-              })
-            })
-            const opposeData = await opposeRes.json()
-            const opposeMap = new Map<string, bigint>()
-            for (const pos of opposeData.data?.positions ?? []) {
-              const prev = opposeMap.get(pos.term_id) || 0n
-              try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
-            }
-            for (const atom of atoms) {
-              const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-              if (ctid && opposeMap.has(ctid)) {
-                ;(atom as any).__opposeWei = opposeMap.get(ctid) || 0n
-              }
-            }
-          } catch { /* non-critical, falls back to opposeWei=0 */ }
+        if (atoms.length > 0) {
+          // The same annotation as /agents (lib/agent-list.ts): a failed read leaves oppose and
+          // stakers unknown (null) — never 0, never a score computed on 0 oppose.
+          const positions = await fetchVaultPositions([...atoms.map(a => a.term_id), ...counterTermIds]).catch(() => null)
+          annotateVaultReads(atoms, positions, { stakers: tab === 'agents' })
         }
         if (isCancelled()) return
         // Agents: the same junk filter as /agents and /api/v1/agents, fed the RAW label
@@ -162,7 +152,7 @@ export function FeaturedAgents() {
           ? filterAgents(atoms.map(a => ({
               termId: a.term_id,
               label: effectiveLabel(a),
-              stakerCount: a.positions_aggregate?.aggregate?.count || 0,
+              stakerCount: a.liveStakerCount ?? 0,
               totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
               createdAt: a.created_at,
               original: a,
@@ -385,14 +375,17 @@ export function FeaturedAgents() {
                         const effLabel = effectiveLabel(item)
                         const name = cleanAtomName(effLabel)
                         const description = getDescription(effLabel, cfg.prefix)
-                        const stakers = item.positions_aggregate?.aggregate?.count || 0
+                        // Agents: live stakers only (null = unread → not printed). Skills keep their own count.
+                        const stakers = activeTab === 'agents' ? item.liveStakerCount : (item.positions_aggregate?.aggregate?.count || 0)
                         const sharesWei = readSharesWei(item.positions_aggregate)
                         const totalStaked = Number(sharesWei ?? 0n) / 1e18
-                        const opposeWei: bigint = (item as any).__opposeWei ?? 0n
+                        // null = the oppose read failed: unknown, never 0 (which would inflate the score).
+                        const reading = stakeReadingOf(item)
+                        const { opposeWei } = reading
                         // Only a measured score is printed: at zero stake the formula returns
                         // its 50 prior, which is not a measurement (lib/score-basis.ts).
-                        const measured = hasMeasuredScore({ supportWei: sharesWei, opposeWei })
-                        const score = measuredScore(calculateTrustScoreFromStakes(sharesWei ?? 0n, opposeWei), measured)
+                        const measured = hasMeasuredScore(reading)
+                        const score = measuredScore(calculateTrustScoreFromStakes(sharesWei ?? 0n, opposeWei ?? 0n), measured)
                         const scoreColor = score == null ? '#7A838D' : score >= 70 ? '#2ECC71' : score >= 50 ? '#EAB308' : '#EF4444'
                         const IconComp = cfg.icon
                         return (
@@ -416,7 +409,7 @@ export function FeaturedAgents() {
                                   {score != null ? (
                                     <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }}>{score}</span>
                                   ) : (
-                                    <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }} title={NO_STAKE_TOOLTIP}>—</span>
+                                    <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }} title={noScoreTooltip(reading)}>—</span>
                                   )}
                                   <span className="block text-[10px] text-[#4A5260]">Score</span>
                                 </div>
@@ -438,7 +431,7 @@ export function FeaturedAgents() {
                                 }
 
                                 <div className="flex items-center gap-3 text-xs text-[#7A838D] mb-2.5">
-                                  <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {stakers} staker{stakers !== 1 ? 's' : ''}</span>
+                                  {stakers != null && <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {stakers} staker{stakers !== 1 ? 's' : ''}</span>}
                                   <span>{totalStaked > 0 ? `${totalStaked.toFixed(4)} tTRUST` : 'No stakes'}</span>
                                 </div>
 

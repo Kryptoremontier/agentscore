@@ -19,7 +19,9 @@
 import { APP_CONFIG } from './app-config'
 import { AGENT_WHERE_STR } from './gql-filters'
 import { TRUST_PREDICATE_TERM_ID } from './intuition'
-import { fetchAttestations, type AttestedEntry } from './attestation-reader'
+import { fetchAttestations, isLivePosition, type AttestedEntry } from './attestation-reader'
+import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
+import { fetchVaultPositions } from './vault-positions'
 
 // `reported for` — the canonical (mainnet-minted, cross-network) report
 // predicate. Same term_id the modal's report query and predicates.ts use.
@@ -53,9 +55,10 @@ export interface AttesterSummary {
   totalStake: bigint
 }
 
+/** null = that read failed — "couldn't read", never "none" (REPO_MAP §7 rule 5). */
 export interface AgentProfileVector {
-  attested: AttestedEntry[]
-  reports: AgentReport[]
+  attested: AttestedEntry[] | null
+  reports: AgentReport[] | null
 }
 
 export interface RawReportRow {
@@ -147,7 +150,7 @@ export function aggregateBackers(
   for (const p of positions) {
     if (!p?.account_id) continue
     const shares = parseShares(p.shares)
-    if (shares <= 0n) continue
+    if (!isLivePosition({ shares })) continue // a wallet that sold out is not a backer
     const vault = p.term_id.toLowerCase()
     const isSupport = vault === agentId
     const isOppose = counterId !== null && vault === counterId
@@ -168,11 +171,20 @@ export function aggregateBackers(
  * Attesters across all of an agent's attested domains: one row per wallet
  * listing which canonical domains it attested and its total support stake.
  * Dedup by wallet across domains (case-insensitive). Sorted by stake desc.
+ *
+ * An agent's distinct-attester count (thesis §4, the sybil-safe measure) is
+ * this function's `.length`, across all of its domains. The modal stat row
+ * (computeModalStatSummary) and the AttestedDomains header read it. Per-domain
+ * rows print `entry.distinctAttesters`, which aggregateAttestations computes.
+ * Both counts use the same predicate, isLivePosition: a wallet that sold out is
+ * not an attester. aggregateAttestations already drops 0-share rows. The check
+ * runs here too, so a count can't disagree with the rule whatever built the entries.
  */
 export function summarizeAttesters(entries: readonly AttestedEntry[]): AttesterSummary[] {
   const acc = new Map<string, AttesterSummary>()
   for (const e of entries ?? []) {
     for (const { wallet, shares } of e.attesterStakes ?? []) {
+      if (!wallet || !isLivePosition({ shares })) continue
       const key = wallet.toLowerCase()
       const s = acc.get(key) ?? { wallet, domains: [], totalStake: 0n }
       if (!s.domains.includes(e.domain.label)) s.domains.push(e.domain.label)
@@ -193,7 +205,8 @@ export interface ModalStatSummary {
   /** Sum of support stake across every attestation triple (the canonical unit, thesis §4) — wei. */
   tTrustAttestedWei: bigint
   reports: number
-  /** Distinct wallets with a position on the agent's OWN atom vault (Backers, not attesters). */
+  /** Stakers: distinct wallets with a LIVE position on the agent's atom vault or its trust
+   *  counter-vault (lib/live-position.ts countLiveStakers) — Backers, not attesters. */
   backerCount: number
   /** Total stake on the agent's own atom vault — wei. */
   backerVaultWei: bigint
@@ -256,18 +269,14 @@ export function profileSections(input: { attestedCount: number; declaredCount: n
 
 // ─── I/O ─────────────────────────────────────────────────────────────────────
 
+// Shared transport: throws on HTTP errors (incl. 429), GraphQL errors and a body without data.
 async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T | null> {
-  const url = APP_CONFIG.GRAPHQL_URL
-  if (!url) return null
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  })
-  const json = await res.json()
-  if (json.errors) throw new Error(json.errors[0]?.message || 'GraphQL error')
-  return json.data as T
+  if (!APP_CONFIG.GRAPHQL_URL) return null
+  return gqlRequest<T>(query, variables)
 }
+
+// Our ceiling on report triples per agent (the pager reports hitting it — never a silent first 50).
+const REPORTS_MAX = 1_000
 
 /** Attestations where this agent is the SUBJECT of the canonical unit. */
 export function fetchAgentAttestations(agentId: string): Promise<AttestedEntry[]> {
@@ -277,41 +286,46 @@ export function fetchAgentAttestations(agentId: string): Promise<AttestedEntry[]
 /** Reports filed against this agent (canonical `reported for` + testnet-era `reported_for_*`), with stake. */
 export async function fetchAgentReports(agentId: string): Promise<AgentReport[]> {
   try {
-    const data = await gql<{ triples: RawReportRow[] }>(
-      `query GetAgentReports($id: String!, $pred: String!) {
-        triples(
-          where: {
-            subject_id: { _eq: $id }
-            _or: [
-              { predicate_id: { _eq: $pred } }
-              { predicate: { label: { _ilike: "reported_for_%" } } }
-            ]
-          }
-          order_by: { created_at: desc }
-          limit: 50
-        ) { term_id created_at creator_id predicate { term_id label } object { term_id label } }
-      }`,
-      { id: agentId, pred: REPORTED_FOR_TERM_ID },
-    )
-    const rows = data?.triples ?? []
-    if (rows.length === 0) return []
-    const pos = await gql<{ positions: PositionRow[] }>(
-      `query GetReportPositions($ids: [String!]!) {
-        positions(where: { term_id: { _in: $ids } }, order_by: { created_at: asc }) {
-          term_id account_id shares created_at account { label }
+    if (!APP_CONFIG.GRAPHQL_URL) return []
+    const where = `{
+      subject_id: { _eq: $id }
+      _or: [
+        { predicate_id: { _eq: $pred } }
+        { predicate: { label: { _ilike: "reported_for_%" } } }
+      ]
+    }`
+    const page = await fetchAllRows<RawReportRow>({
+      query: `query GetAgentReports($id: String!, $pred: String!, $limit: Int!, $offset: Int!) {
+        triples(where: ${where}, order_by: [{ created_at: desc }, { term_id: asc }], limit: $limit, offset: $offset) {
+          term_id created_at creator_id predicate { term_id label } object { term_id label }
         }
       }`,
-      { ids: rows.map((r) => r.term_id) },
-    )
-    return aggregateReports(rows, pos?.positions ?? [])
+      field: 'triples',
+      countQuery: `query GetAgentReportCount($id: String!, $pred: String!) {
+        triples_aggregate(where: ${where}) { aggregate { count } }
+      }`,
+      countField: 'triples_aggregate',
+      variables: { id: agentId, pred: REPORTED_FOR_TERM_ID },
+      pageSize: SERVER_ROW_CAP.triples,
+      maxRows: REPORTS_MAX,
+    })
+    if (page.truncated !== false) throw new Error('report triples not read to the end')
+    const rows = page.rows
+    if (rows.length === 0) return []
+    // created_at ascending: aggregateReports takes the earliest live position as the reporter.
+    const positions = await fetchVaultPositions(rows.map((r) => r.term_id), { order: 'created-asc', withMeta: true })
+    return aggregateReports(rows, positions)
   } catch (err) {
     console.warn('[fetchAgentReports] error:', err)
-    return []
+    throw err
   }
 }
 
-/** Positions on the agent's own vault + its trust counter-vault, aggregated per wallet. */
-export async function fetchAgentBackers(agentId: string): Promise<Backer[]> {
+/**
+ * Positions on the agent's own vault + its trust counter-vault, aggregated per wallet.
+ * null = the read failed (never an empty list for a failure).
+ */
+export async function fetchAgentBackers(agentId: string): Promise<Backer[] | null> {
   try {
     const t = await gql<{ triples: Array<{ counter_term_id: string | null }> }>(
       `query GetTrustCounter($id: String!, $pred: String!) {
@@ -321,26 +335,24 @@ export async function fetchAgentBackers(agentId: string): Promise<Backer[]> {
     )
     const counter = t?.triples?.[0]?.counter_term_id ?? null
     const ids = counter ? [agentId, counter] : [agentId]
-    const pos = await gql<{ positions: PositionRow[] }>(
-      `query GetBackerPositions($ids: [String!]!) {
-        positions(where: { term_id: { _in: $ids } }, order_by: { shares: desc }, limit: 200) {
-          term_id account_id shares account { label }
-        }
-      }`,
-      { ids },
-    )
-    return aggregateBackers(pos?.positions ?? [], agentId, counter)
+    // Paged: `limit: 200` here used to get at most 100 positions back, silently.
+    const positions = await fetchVaultPositions(ids, { order: 'shares-desc', withMeta: true })
+    return aggregateBackers(positions, agentId, counter)
   } catch (err) {
     console.warn('[fetchAgentBackers] error:', err)
-    return []
+    return null
   }
 }
 
-/** Everything the profile's canonical sections need, in parallel. Never throws. */
+/**
+ * Everything the profile's canonical sections need, in parallel. Never throws:
+ * a part whose read failed is null, so the page can say "couldn't read" instead
+ * of printing an empty record as a fact.
+ */
 export async function fetchAgentProfileVector(agentId: string): Promise<AgentProfileVector> {
   const [attested, reports] = await Promise.all([
-    fetchAgentAttestations(agentId),
-    fetchAgentReports(agentId),
+    fetchAgentAttestations(agentId).catch((err) => { console.warn('[fetchAgentAttestations] error:', err); return null }),
+    fetchAgentReports(agentId).catch(() => null),
   ])
   return { attested, reports }
 }

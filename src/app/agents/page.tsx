@@ -18,7 +18,9 @@ import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
 import { useAgentStakerWeights } from '@/hooks/useEvaluatorScore'
-import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
+import { calculateAgentTier } from '@/lib/agent-tier'
+import { AgentTierChip } from '@/components/agents/AgentTierChip'
+import { fetchAttestationsForSubjects, type AttestedEntry } from '@/lib/attestation-reader'
 import { calculateWeightedTrust } from '@/lib/reputation-decay'
 import {
   calculateCompositeTrust, calculateStableDays, findPeakPrice,
@@ -26,7 +28,7 @@ import {
   COMPOSITE_WEIGHTS, type CompositeResult,
 } from '@/lib/composite-trust'
 import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
-import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
+import { TrustTierBadge } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 import { parseAgentCard, calculateProfileCompleteness, AGENT_CATEGORIES } from '@/lib/agent-card'
 
@@ -46,11 +48,18 @@ import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchVaultPositions } from '@/lib/vault-positions'
+import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
-import { fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus } from '@/lib/agent-list'
 import {
-  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, measuredTier, NO_STAKE_TOOLTIP,
+  fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus,
+  cardAttestationView, cardAttesterLine, cardViewFor, isCompactCard, attestScrollStep, type CardAttestationView,
+} from '@/lib/agent-list'
+import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
+import {
+  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP, noScoreTooltip,
+  stakeReadingOf,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { filterAgents } from '@/lib/agent-junk-filter'
@@ -59,12 +68,6 @@ const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
   if (process.env.NODE_ENV === 'development') console.log(...args)
 }
-
-// Etap 4b modal — display-only progress fraction next to the tier chip.
-// Does NOT feed calculateTier() (vault-based, untouched) — a separate,
-// honest readout of the canonical attestation unit's own threshold.
-const VERIFIED_MIN_ATTESTERS = 3
-const VERIFIED_MIN_TTRUST = '0.1'
 
 // Neutral colour for rows without a measured score — never the yellow "moderate"
 // the 50 prior would otherwise paint them (lib/score-basis.ts).
@@ -78,13 +81,16 @@ interface GraphQLAgent {
   created_at: string
   emoji?: string
   creator?: { label: string; id?: string } | null
-  positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
+  positions_aggregate?: { aggregate: { sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /** Live stakers (lib/live-position.ts); undefined = never read (cohort), null = read failed. */
+  liveStakerCount?: number | null
   /** Etap 2c: which corpus this atom came from. Absent = AgentScore (legacy fetch paths). */
   origin?: 'agentscore' | 'erc8004'
   /** ERC-8004 cohort only — declared OASF domains/skills (`has category`/`has tag`), self-declared not attested. */
-  declaredDomains?: string[]
-  declaredSkills?: string[]
+  /** null = the cohort classification read failed for this agent (unknown, not none). */
+  declaredDomains?: string[] | null
+  declaredSkills?: string[] | null
   caipIdentity?: string
 }
 
@@ -149,6 +155,9 @@ function AgentsPageContent() {
   const [cohortLoading, setCohortLoading] = useState(true)
   // 'error' ≠ empty: a failed cohort read must never look like "0 ERC-8004".
   const [cohortStatus, setCohortStatus] = useState<FeedStatus>('loading')
+  // Attestations for every listed agent (both corpora) — one bulk read, 2 paged requests per
+  // 200 ids (lib/attestation-reader.ts). undefined = not read yet, null = the read failed.
+  const [attestedBySubject, setAttestedBySubject] = useState<Map<string, AttestedEntry[]> | null | undefined>(undefined)
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
@@ -300,7 +309,7 @@ function AgentsPageContent() {
       const candidates = atoms.map(a => ({
         termId: a.term_id,
         label: effectiveLabel(a),
-        stakerCount: a.positions_aggregate?.aggregate?.count || 0,
+        stakerCount: a.liveStakerCount ?? 0,
         totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
         createdAt: a.created_at,
         original: a,
@@ -349,6 +358,39 @@ function AgentsPageContent() {
     })
     return () => { cancelled = true }
   }, [])
+
+  // Attestations for the listed agents — the card's tier (and attester line) come only from
+  // these (thesis §6). Waits for both corpora; a failed read is null (no claim), never 0.
+  useEffect(() => {
+    if (loading || cohortLoading) return
+    const ids = [...agents.map(a => a.term_id), ...cohortAgents.map(a => a.term_id)]
+    let cancelled = false
+    setAttestedBySubject(undefined)
+    fetchAttestationsForSubjects(ids)
+      .then(map => { if (!cancelled) setAttestedBySubject(map) })
+      .catch(() => { if (!cancelled) setAttestedBySubject(null) })
+    return () => { cancelled = true }
+  }, [loading, cohortLoading, agents, cohortAgents])
+
+  // Per agent: attesters, domains and the tier — the same derivation as the modal
+  // (lib/agent-list.ts cardAttestationView), computed once per read, not per render.
+  const attestationViewBySubject = useMemo(() => {
+    if (!attestedBySubject) return attestedBySubject
+    const out = new Map<string, CardAttestationView>()
+    for (const [id, entries] of attestedBySubject) out.set(id, cardAttestationView(entries))
+    return out
+  }, [attestedBySubject])
+
+  // A card's "Attest" CTA opens the modal scrolled to its ATTESTED section, once the
+  // profile has loaded (the section's height depends on it).
+  const [focusAttested, setFocusAttested] = useState(false)
+  const attestedSectionRef = useRef<HTMLDivElement>(null)
+  const openAgentAtAttested = (agent: GraphQLAgent) => {
+    // A keyboard user can still reach cards under the open modal: never switch it silently.
+    if (selectedAgent) return
+    setFocusAttested(true)
+    setSelectedAgent(agent)
+  }
 
   // Auto-open agent modal when ?open=TERM_ID is in URL (checks both corpora)
   useEffect(() => {
@@ -461,28 +503,28 @@ function AgentsPageContent() {
 
   const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
     try {
-      const normalizedAddress = userAddress.toLowerCase()
+      // Only this wallet's rows on this vault, in one request. Reading the whole vault stopped at
+      // 100 rows (redeem could read 0 shares on a larger vault); paging it would put a vault-sized
+      // read inside the transaction flow. account_id is stored checksummed: `_ilike` matches any casing.
       const res = await fetch(GRAPHQL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: `
-            query GetVaultPositions($termId: String!) {
-              positions(
-                where: { term_id: { _eq: $termId } }
-              ) {
+            query GetUserVaultPosition($termId: String!, $account: String!) {
+              positions(where: { term_id: { _eq: $termId }, account_id: { _ilike: $account } }, order_by: { id: asc }) {
                 account_id
                 shares
               }
             }
           `,
-          variables: { termId },
+          variables: { termId, account: userAddress },
         }),
       })
+      if (!res.ok) throw new Error(`GraphQL HTTP ${res.status}`)
       const data = await res.json()
-      const pos = data?.data?.positions?.find(
-        (p: any) => p.account_id?.toLowerCase() === normalizedAddress
-      )
+      if (data.errors || !data.data) throw new Error(data.errors?.[0]?.message ?? 'no data')
+      const pos = data.data.positions?.[0]
       let sharesBigInt = 0n
       try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
       return sharesBigInt
@@ -501,36 +543,14 @@ function AgentsPageContent() {
       const termIds = [termId]
       if (counterTermId) termIds.push(counterTermId)
 
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetAllPositions($termIds: [String!]!) {
-              positions(
-                where: { term_id: { _in: $termIds } }
-                order_by: { shares: desc }
-                limit: 100
-              ) {
-                account_id
-                account { label }
-                shares
-                term_id
-                updated_at
-              }
-            }
-          `,
-          variables: { termIds }
-        })
-      })
-      const data = await response.json()
-      if (data.errors || !data.data) throw new Error(data.errors?.[0]?.message ?? 'no data')
-      const raw = data.data.positions || []
-      // Only active holders (shares > 0)
-      const active = raw.filter((p: any) => p.shares && BigInt(p.shares) > 0n)
-      // Unique wallets
-      const wallets = new Set(active.map((p: any) => p.account_id))
-      return { positions: active, uniqueCount: wallets.size }
+      // Every position on both vaults, paged past the endpoint's 100-row cap (was `limit: 100`,
+      // so backers past the first 100 were dropped silently). Throws on a failed page.
+      const raw: any[] = await fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true })
+      // Rows and count through the one live rule (lib/live-position.ts) — no local filter.
+      return {
+        positions: livePositions(raw),
+        uniqueCount: countLiveStakers(raw, { atomId: termId, counterId: counterTermId }),
+      }
     } catch (e) {
       // A failed read is not "no positions" — null, and callers keep showing "—".
       console.error('fetchAllPositions error:', e)
@@ -1169,11 +1189,45 @@ function AgentsPageContent() {
     fetchAgentProfileVector(selectedAgent.term_id).then(v => {
       if (cancelled) return
       setProfileVector(v)
-      setReportCount(v.reports.length)
+      setReportCount(v.reports?.length ?? 0) // null reports render "—" below, never this 0
       setProfileLoaded(true)
     })
     return () => { cancelled = true }
   }, [selectedAgent?.term_id])
+
+  // The modal's read is the newest read of the same rows the card counted: when it differs
+  // (an attestation landed since the list read), the card follows it, so list and modal agree.
+  useEffect(() => {
+    if (!selectedAgent || !profileLoaded || profileVector.attested == null) return
+    const id = selectedAgent.term_id
+    const fresh = profileVector.attested
+    const next = cardAttestationView(fresh)
+    setAttestedBySubject(prev => {
+      const old = prev?.get(id)
+      if (!prev || !old) return prev
+      const cur = cardAttestationView(old)
+      const same = cur.attesters === next.attesters && cur.domains === next.domains
+        && cur.tier.tier === next.tier.tier && cur.tier.attestedWei === next.tier.attestedWei
+      return same ? prev : new Map(prev).set(id, fresh)
+    })
+  }, [selectedAgent, profileLoaded, profileVector.attested])
+
+  // Card "Attest" CTA: scroll the modal to ATTESTED once the profile is in (its height
+  // settles then). Cards are only clickable with the modal closed, when profileLoaded is false.
+  useEffect(() => {
+    if (!selectedAgent) { setFocusAttested(false); return }
+    if (attestScrollStep({ modalOpen: true, requested: focusAttested, profileLoaded }) !== 'scroll') return
+    let cancelled = false
+    const frame = requestAnimationFrame(() => {
+      if (cancelled) return
+      const section = attestedSectionRef.current
+      section?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      // Focus follows: a keyboard user lands on the section the CTA promised, not behind the modal.
+      section?.focus({ preventScroll: true })
+      setFocusAttested(false)
+    })
+    return () => { cancelled = true; cancelAnimationFrame(frame) }
+  }, [selectedAgent, focusAttested, profileLoaded])
 
   // Submit a report on-chain
   const handleSubmitReport = async () => {
@@ -1392,28 +1446,6 @@ function AgentsPageContent() {
     }
   }, [skillTriples])
 
-  // ─── Trust Tier dla wybranego agenta ───
-  const agentTrustTier = useMemo(() => {
-    try {
-      // No vault tier without its inputs: the staker count must be loaded for THIS
-      // agent, and a trust ratio exists only with stake behind it. calculateTier has
-      // no "unmeasured ratio" input, so an unmeasured agent gets no vault-tier chip
-      // (the ATTESTED fraction next to it still renders) rather than an invented ratio.
-      if (!selectedAgent || !agentTrust || !modalMeasured) return null
-      if (positionsLoadedFor !== selectedAgent.term_id) return null
-      const stakers = combinedStakerCount
-      const totalStake = Number(agentTrust.totalStake) / 1e18
-      const trustRatio = hybridScore ?? compositeTrust?.score ?? supportPercent(modalStakeReading)
-      if (trustRatio == null) return null
-      const ageDays = selectedAgent.created_at ? getAgentAgeDays(selectedAgent.created_at) : 0
-      const tier = calculateTier(stakers, totalStake, trustRatio, ageDays)
-      const progress = calculateTierProgress(stakers, totalStake, trustRatio, ageDays)
-      return { tier, progress }
-    } catch (e) {
-      console.error('[agentTrustTier]', e)
-      return null
-    }
-  }, [selectedAgent, combinedStakerCount, positionsLoadedFor, agentTrust, modalMeasured, compositeTrust, hybridScore])
 
   // Etap 4b — modal stat rows: primary (attestation unit, canonical) + secondary
   // (Backers, atom vault). No new fetch — derived from profileVector +
@@ -1431,15 +1463,27 @@ function AgentsPageContent() {
       .filter((p: any) => p.term_id === selectedAgent.term_id)
       .reduce((sum: bigint, p: any) => { try { return sum + BigInt(p.shares) } catch { return sum } }, 0n)
   }, [selectedAgent, positionsKnown, allPositions])
+  // A part whose read failed is null (fetchAgentProfileVector): its numbers render "—",
+  // never the zeros computeModalStatSummary would derive from nothing.
+  const attestedRead = profileLoaded && profileVector.attested != null
+  const reportsRead = profileLoaded && profileVector.reports != null
   const modalStats = useMemo(() => {
     return computeModalStatSummary({
-      attested: profileVector.attested,
+      attested: profileVector.attested ?? [],
       reportCount,
       backerCount: combinedStakerCount,
       backerVaultWei: backerVaultWei ?? 0n, // rendered only when backerVaultWei != null
       signals: agentSignalsCount,
     })
   }, [profileVector.attested, reportCount, combinedStakerCount, backerVaultWei, agentSignalsCount])
+
+  // The agent tier — attestations only (thesis §6 "Agent tiers", lib/agent-tier.ts). Backing on
+  // the atom vault never changes it. null while the profile loads or when the attestation read
+  // failed: the chip then says so, never a default "Unverified".
+  const agentTier = useMemo(
+    () => (attestedRead && profileVector.attested ? calculateAgentTier(summarizeAttesters(profileVector.attested)) : null),
+    [attestedRead, profileVector.attested],
+  )
 
   // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
   const agentAvatar = useMemo(() => {
@@ -1476,7 +1520,7 @@ function AgentsPageContent() {
       if (!selectedAgent) return []
       const score = hybridScore ?? measuredScore(agentTrust, modalMeasured)
       if (score == null) return []  // nothing measured → no trajectory point
-      const tier = agentTrustTier?.tier?.tier ?? 'unverified'
+      const tier = agentTier?.tier ?? null
       const stakingEvts = agentSignals.map((s: any) => ({
         id: s.id as string,
         accountId: s.account_id as string,
@@ -1493,12 +1537,13 @@ function AgentsPageContent() {
         createdAt: selectedAgent.created_at,
         currentScore: score,
         currentTier: tier,
+        tierMilestones: 'none', // agent tiers come from attestations, not supporter counts
         stakingEvents: stakingEvts,
         skillEvents: [],
       })
       return tl.scoreHistory
     } catch { return [] }
-  }, [selectedAgent, agentSignals, agentTriple.counterTermId, hybridScore, agentTrust, modalMeasured, agentTrustTier])
+  }, [selectedAgent, agentSignals, agentTriple.counterTermId, hybridScore, agentTrust, modalMeasured, agentTier])
 
   return (
     <PageBackground image="hero" opacity={0.4}>
@@ -1753,13 +1798,14 @@ function AgentsPageContent() {
               : sourceAgents
 
             const enriched = searchedAgents.map(agent => {
-              // null = the vault was never read (cohort rows) — not zero (lib/score-basis.ts).
-              const supportWei = readSharesWei(agent.positions_aggregate)
-              const opposeWei: bigint = (agent as any).__opposeWei ?? 0n
-              const measured = hasMeasuredScore({ supportWei, opposeWei })
+              // supportWei null = the vault was never read (cohort rows); opposeWei null = the
+              // oppose read failed — both unknown, never 0 (lib/score-basis.ts stakeReadingOf).
+              const reading = stakeReadingOf(agent as any)
+              const { supportWei, opposeWei } = reading
+              const measured = hasMeasuredScore(reading)
               // Computed for every row (sort/filter plumbing), displayed only when measured.
-              const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei)
-              return { agent, trust: cardTrust, measured }
+              const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei ?? 0n)
+              return { agent, trust: cardTrust, measured, noScoreTip: noScoreTooltip(reading) }
             })
 
             const filtered = selectedCategory === 'all'
@@ -1845,14 +1891,15 @@ function AgentsPageContent() {
               ) : viewMode === 'grid' ? (
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {sorted.map(({ agent, trust: cardTrust, measured }) => {
+                {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }) => {
                   // objectScore populated after modal opens (client) or from quality cache (server).
                   // Falls back to trustScore on first paint. Only a MEASURED score is displayed:
                   // at zero stake cardTrust.score is the formula's 50 prior (lib/score-basis.ts).
                   const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
                   const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
                   const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
-                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
+                  // Live stakers only (lib/live-position.ts) — a 0-share row is not a staker.
+                  const stakers = agent.liveStakerCount
                   const color = displayScore == null ? UNRATED_COLOR
                     : effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -1865,12 +1912,49 @@ function AgentsPageContent() {
                   // Cohort rows never fetch the atom vault: their stake/stakers were never
                   // measured, so they are not printed (thesis §6: null ≠ 0.0).
                   const vaultRead = readSharesWei(agent.positions_aggregate) != null
-                  const cardTier = measuredTier({
-                    stakers,
-                    supportWei: readSharesWei(agent.positions_aggregate),
-                    opposeWei: (agent as any).__opposeWei ?? 0n,
-                    ageDays: agent.created_at ? getAgentAgeDays(agent.created_at) : 0,
-                  })
+                  // Attestations — the same read and derivation as the modal (lib/agent-list.ts).
+                  // undefined = still reading, null = the read failed (no claim, CTA only).
+                  const cardView = cardViewFor(attestationViewBySubject, agent.term_id)
+                  const attesterLine = cardAttesterLine(cardView)
+                  // The agent tier — attestations only (thesis §6). The card shows only Trusted /
+                  // Verified; Unverified is the default state, carried by the attester line.
+                  const cardAgentTier = cardView?.tier ?? null
+                  const cardTierChip = cardAgentTier && cardAgentTier.tier !== 'unverified' ? cardAgentTier.display : null
+                  const originChip = (
+                    <span className={`text-xs px-2 py-0.5 rounded inline-block ${
+                      agent.origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
+                    }`}>
+                      {agent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
+                    </span>
+                  )
+                  const cardClass = `bg-[#111318] border border-[#1e2028] rounded-2xl
+                                 cursor-pointer transition-all duration-300 ease-out
+                                 hover:-translate-y-1 hover:border-[#C8963C]/15
+                                 hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]`
+
+                  // Compact: a cohort row (vault never read on the list) not known to have an
+                  // attester. Its score slot, caption, stake line and bar would be the same on
+                  // every such card, so they are not drawn (lib/agent-list.ts isCompactCard).
+                  if (isCompactCard({ vaultRead, line: attesterLine })) {
+                    return (
+                      <motion.div
+                        key={agent.term_id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.05 }}
+                        onClick={() => setSelectedAgent(agent)}
+                        className={`${cardClass} p-4`}
+                        data-card="compact"
+                      >
+                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                          <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
+                          {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
+                          {originChip}
+                        </div>
+                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} />
+                      </motion.div>
+                    )
+                  }
 
                   return (
                     <motion.div
@@ -1879,10 +1963,8 @@ function AgentsPageContent() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.05 }}
                       onClick={() => setSelectedAgent(agent)}
-                      className="bg-[#111318] border border-[#1e2028] rounded-2xl p-5
-                                 cursor-pointer transition-all duration-300 ease-out
-                                 hover:-translate-y-1 hover:border-[#C8963C]/15
-                                 hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]"
+                      className={`${cardClass} p-5`}
+                      data-card="full"
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
@@ -1895,17 +1977,11 @@ function AgentsPageContent() {
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                              <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
-                              {/* Vault tier from the real support ratio (lib/score-basis.ts measuredTier) —
-                                  was a hardcoded 50, which capped every card at Sandbox. No chip when
-                                  there is no stake to take a ratio of. */}
-                              {cardTier && <TrustTierBadge tier={cardTier} size="sm" />}
+                              <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
+                              {/* Agent tier chip — Trusted / Verified only (attestations, thesis §6). */}
+                              {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
                             </div>
-                            <span className={`text-xs px-2 py-0.5 rounded inline-block ${
-                              agent.origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
-                            }`}>
-                              {agent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
-                            </span>
+                            {originChip}
                           </div>
                         </div>
                         <div className="text-right">
@@ -1917,15 +1993,19 @@ function AgentsPageContent() {
                           ) : (
                             // Native title, not TooltipWrapper: one Radix tooltip per card × 266
                             // unmeasured cards doubled the list's render cost (measured).
-                            <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help" title={NO_STAKE_TOOLTIP}>—</p>
+                            <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help" title={noScoreTip}>—</p>
                           )}
-                          <p className="text-[10px] text-[#7A838D]">{displayScore != null ? 'AGENTSCORE' : 'UNVERIFIED'}</p>
+                          {/* "No score", not "Unverified": the tier is its own chip and comes only
+                              from attestations (thesis §6) — a Trusted agent can have no stake. */}
+                          <p className="text-[10px] text-[#7A838D]">{displayScore != null ? 'AGENTSCORE' : 'NO SCORE'}</p>
                         </div>
                       </div>
+                      {/* The canonical unit first, above the vault line (4b-modal's order). */}
+                      <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="mb-3" />
                       {vaultRead && (
                         <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
                           <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
-                          <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
+                          <span>Stakers: <span className="text-white font-medium">{stakers ?? '—'}</span></span>
                         </div>
                       )}
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
@@ -1945,11 +2025,11 @@ function AgentsPageContent() {
                   <span className="text-right w-16">Stakers</span>
                   <span className="text-right w-12">Score</span>
                 </div>
-                {sorted.map(({ agent, trust: cardTrust, measured }, i) => {
+                {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }, i) => {
                   const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
                   const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
                   const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
-                  const stakers = agent.positions_aggregate?.aggregate?.count || 0
+                  const stakers = agent.liveStakerCount
                   const color = displayScore == null ? UNRATED_COLOR
                     : effectiveLevel === 'excellent' ? '#34d399'
                     : effectiveLevel === 'good' ? '#C8963C'
@@ -1996,7 +2076,7 @@ function AgentsPageContent() {
                       {/* Stakes */}
                       <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{listVaultRead ? stakes : '—'}</span>
                       {/* Stakers */}
-                      <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{listVaultRead ? stakers : '—'}</span>
+                      <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{listVaultRead && stakers != null ? stakers : '—'}</span>
                       {/* Score + momentum */}
                       <div className="flex items-center justify-end gap-1 w-12">
                         {displayScore != null ? (
@@ -2005,7 +2085,7 @@ function AgentsPageContent() {
                             <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
                           </>
                         ) : (
-                          <span className="text-xs font-mono text-[#7A838D] cursor-help" title={NO_STAKE_TOOLTIP}>—</span>
+                          <span className="text-xs font-mono text-[#7A838D] cursor-help" title={noScoreTip}>—</span>
                         )}
                       </div>
                     </motion.div>
@@ -2046,19 +2126,10 @@ function AgentsPageContent() {
                         {getAgentNameFromAtom(selectedAgent)}
                       </h2>
                       <div className="flex items-center gap-1.5">
-                        {/* Vault tier chip only when its inputs are measured (see agentTrustTier);
-                            the attestation fraction always renders — it is the canonical unit. */}
-                        {agentTrustTier && (
-                          <TrustTierBadgeWithProgress
-                            tier={agentTrustTier.tier}
-                            progress={agentTrustTier.progress}
-                          />
-                        )}
-                        <TooltipWrapper content={`Verified requires ≥${VERIFIED_MIN_ATTESTERS} distinct attesters and ≥${VERIFIED_MIN_TTRUST} tTRUST attested.`}>
-                          <span className="text-[10px] text-[#7A838D] cursor-help">
-                            {agentTrustTier ? '· ' : ''}{profileLoaded ? modalStats.attesters : '—'}/{VERIFIED_MIN_ATTESTERS} attesters
-                          </span>
-                        </TooltipWrapper>
+                        {/* The agent tier — attestations only (thesis §6), always shown:
+                            "Unverified · 1/3 attesters", "Trusted · 2/3 attesters", "Verified".
+                            "—" while loading; unavailable if the attestation read failed. */}
+                        <AgentTierChip tier={agentTier} loading={!profileLoaded} />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
@@ -2124,10 +2195,10 @@ function AgentsPageContent() {
                     2x2 on mobile, 1x4 on desktop. Loading shows "—", never "0". */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {[
-                    { value: profileLoaded ? modalStats.attesters : '—', label: profileLoaded && modalStats.attesters === 1 ? 'Attester' : 'Attesters' },
-                    { value: profileLoaded ? modalStats.domains : '—', label: profileLoaded && modalStats.domains === 1 ? 'Domain attested' : 'Domains attested' },
-                    { value: profileLoaded ? formatTTrust(modalStats.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
-                    { value: profileLoaded ? modalStats.reports : '—', label: 'Reports' },
+                    { value: attestedRead ? modalStats.attesters : '—', label: attestedRead && modalStats.attesters === 1 ? 'Attester' : 'Attesters' },
+                    { value: attestedRead ? modalStats.domains : '—', label: attestedRead && modalStats.domains === 1 ? 'Domain attested' : 'Domains attested' },
+                    { value: attestedRead ? formatTTrust(modalStats.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
+                    { value: reportsRead ? modalStats.reports : '—', label: 'Reports' },
                   ].map((s, i) => (
                     <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-white">{s.value}</p>
@@ -2157,13 +2228,15 @@ function AgentsPageContent() {
                   tabs: ATTESTED (headline, canonical unit) > DECLARED (2c, cohort
                   only) > REPORTS (collapsed). Zero attestations renders the
                   AttestEmptyState "be the first" CTA (thesis §6). */}
-              <AttestedDomains
-                entries={profileVector.attested}
-                loading={!profileLoaded}
-                agentId={selectedAgent.term_id}
-                agentName={getAgentNameFromAtom(selectedAgent)}
-                className="mb-3"
-              />
+              <div ref={attestedSectionRef} tabIndex={-1} className="scroll-mt-4 outline-none">
+                <AttestedDomains
+                  entries={profileVector.attested}
+                  loading={!profileLoaded}
+                  agentId={selectedAgent.term_id}
+                  agentName={getAgentNameFromAtom(selectedAgent)}
+                  className="mb-3"
+                />
+              </div>
               {selectedAgent.origin === 'erc8004' && (
                 <DeclaredDomains declaredDomains={selectedAgent.declaredDomains} className="mb-3" />
               )}
@@ -3534,17 +3607,23 @@ function AgentsPageContent() {
                     }
                   }
 
+                  // Backers are wallets holding a live position now (lib/live-position.ts): a wallet
+                  // that sold out stays in the Activity history, not in this list or its count.
+                  const liveWallets = positionsKnown
+                    ? liveStakerWallets(allPositions, [selectedAgent.term_id, agentTriple.counterTermId])
+                    : null
                   const profiles = Array.from(profileMap.values())
+                    .filter(p => liveWallets == null || liveWallets.has(p.accountId.toLowerCase()))
                     .sort((a, b) => b.totalSignals - a.totalSignals)
 
-                  const uniqueStakers = profiles.length
+                  const uniqueStakers = liveWallets == null ? null : profiles.length
 
                   return (
                   <div className="p-5">
                     {/* ETAP 3: attesters from the canonical unit FIRST; the signal-based
                         list below is BACKERS (positions on this agent) — a different claim. */}
                     <AttestersList
-                      attesters={summarizeAttesters(profileVector.attested)}
+                      attesters={profileVector.attested ? summarizeAttesters(profileVector.attested) : null}
                       loading={!profileLoaded}
                       className="mb-6"
                     />
@@ -3558,7 +3637,7 @@ function AgentsPageContent() {
                         </div>
                       </div>
                       <span className="text-xs text-[#B5BDC6] bg-[#1E2229] px-2 py-1 rounded-full">
-                        {uniqueStakers} profile{uniqueStakers !== 1 ? 's' : ''} · {agentSignalsCount} signal{agentSignalsCount !== 1 ? 's' : ''}
+                        {uniqueStakers ?? '—'} profile{uniqueStakers !== 1 ? 's' : ''} · {agentSignalsCount} signal{agentSignalsCount !== 1 ? 's' : ''}
                       </span>
                     </div>
 
@@ -3763,9 +3842,10 @@ function AgentsPageContent() {
                   const agentCard = parseAgentCard(effectiveLabel(selectedAgent))
                   const completeness = calculateProfileCompleteness({ name: agentCard.name ?? '', ...agentCard })
                   const score = hybridScore ?? measuredScore(agentTrust, modalMeasured)
-                  const tier = agentTrustTier?.tier?.tier ?? 'unverified'
+                  const tier = agentTier?.tier ?? null
                   return (
                     <TrustTimeline
+                      tierMilestones="none"
                       agentId={selectedAgent.term_id}
                       agentName={agentCard.name ?? getAgentNameFromAtom(selectedAgent)}
                       createdAt={selectedAgent.created_at}

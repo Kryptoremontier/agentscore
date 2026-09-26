@@ -24,7 +24,8 @@ function name(wallet: string, label: string | null | undefined) {
   return label && label.includes('.eth') ? label : truncateWallet(wallet)
 }
 
-export function AttestersList({ attesters, loading, className }: { attesters: AttesterSummary[]; loading: boolean; className?: string }) {
+/** `attesters` null = the read failed — shown as unavailable, never as "no one has attested". */
+export function AttestersList({ attesters, loading, className }: { attesters: AttesterSummary[] | null; loading: boolean; className?: string }) {
   return (
     <section className={className}>
       <div className="flex items-center justify-between mb-2">
@@ -33,6 +34,8 @@ export function AttestersList({ attesters, loading, className }: { attesters: At
       </div>
       {loading ? (
         <div className="h-14 rounded-xl bg-white/[0.03] animate-pulse" />
+      ) : attesters == null ? (
+        <p className="text-xs text-[#7A838D] py-3" data-testid="attesters-failed">Couldn&apos;t read attesters right now — this is not an empty record.</p>
       ) : attesters.length === 0 ? (
         <p className="text-xs text-[#7A838D] py-3" data-testid="attesters-empty">No one has attested this agent&apos;s competence in any domain yet.</p>
       ) : (
@@ -56,7 +59,8 @@ export function AttestersList({ attesters, loading, className }: { attesters: At
   )
 }
 
-export function BackersList({ backers, loading, className }: { backers: Backer[]; loading: boolean; className?: string }) {
+/** `backers` null = the read failed — shown as unavailable, never as "no positions". */
+export function BackersList({ backers, loading, className }: { backers: Backer[] | null; loading: boolean; className?: string }) {
   return (
     <section className={className}>
       <div className="flex items-center justify-between mb-2">
@@ -65,6 +69,8 @@ export function BackersList({ backers, loading, className }: { backers: Backer[]
       </div>
       {loading ? (
         <div className="h-14 rounded-xl bg-white/[0.03] animate-pulse" />
+      ) : backers == null ? (
+        <p className="text-xs text-[#7A838D] py-3" data-testid="backers-failed">Couldn&apos;t read backers right now — this is not an empty record.</p>
       ) : backers.length === 0 ? (
         <p className="text-xs text-[#7A838D] py-3" data-testid="backers-empty">No positions on this agent&apos;s vault yet.</p>
       ) : (
@@ -88,7 +94,7 @@ export function BackersList({ backers, loading, className }: { backers: Backer[]
   )
 }
 
-export function AttestersAndBackers({ attesters, backers, loading, className }: { attesters: AttesterSummary[]; backers: Backer[]; loading: boolean; className?: string }) {
+export function AttestersAndBackers({ attesters, backers, loading, className }: { attesters: AttesterSummary[] | null; backers: Backer[] | null; loading: boolean; className?: string }) {
   return (
     <div className={`space-y-6 ${className ?? ''}`}>
       <AttestersList attesters={attesters} loading={loading} />

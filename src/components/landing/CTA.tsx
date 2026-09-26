@@ -6,40 +6,17 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
-import { APP_CONFIG } from '@/lib/app-config'
-import { AGENT_WHERE_STR } from '@/lib/gql-filters'
-
-const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
+import { fetchLandingStats, agentCountSuffix, type LandingStats } from '@/lib/landing-stats'
 
 export function CTA() {
-  const [agentCount, setAgentCount] = useState(0)
-  const [stakerCount, setStakerCount] = useState(0)
+  // Same source as the Hero and Stats (lib/landing-stats.ts → /api/v1/stats): post-junk
+  // agents and distinct live stakers. Unknown (loading or failed) → no number printed, never 0.
+  const [stats, setStats] = useState<LandingStats | null>(null)
 
   useEffect(() => {
-    fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `{
-          agents: atoms(where: ${AGENT_WHERE_STR}) {
-            positions_aggregate {
-              aggregate { count }
-            }
-          }
-        }`
-      })
-    })
-      .then(r => r.json())
-      .then(d => {
-        const agents = d.data?.agents || []
-        setAgentCount(agents.length)
-        let stakers = 0
-        for (const a of agents) {
-          stakers += a.positions_aggregate?.aggregate?.count || 0
-        }
-        setStakerCount(stakers)
-      })
-      .catch(() => {})
+    let cancelled = false
+    fetchLandingStats().then(s => { if (!cancelled) setStats(s) })
+    return () => { cancelled = true }
   }, [])
 
   return (
@@ -99,14 +76,18 @@ export function CTA() {
 
           {/* Real indicators */}
           <div className="mt-12 flex items-center justify-center gap-8 text-sm text-slate-400">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>{agentCount} Agents Registered</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#C8963C]" />
-              <span>{stakerCount} Active Stakers</span>
-            </div>
+            {stats && (
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>{stats.agents}{agentCountSuffix(stats)} {stats.agents === 1 ? 'Agent' : 'Agents'} Registered</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[#C8963C]" />
+                  <span>{stats.activeStakers} Active {stats.activeStakers === 1 ? 'Staker' : 'Stakers'}</span>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-[#2EE6D6]" />
               <span>Powered by Intuition</span>

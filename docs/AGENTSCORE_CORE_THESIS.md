@@ -89,6 +89,8 @@ Statistical discipline (adopted from the technocore audit, matching this
 section's spirit): null ≠ 0.0; every ratio ships with its window size;
 shrinkage for small samples.
 
+Agent tiers. An agent's tier is derived only from attestations: distinct live attesters (wallets with shares > 0 on attestation triples) and tTRUST attested on those triples. Backing on the agent's atom vault never changes its tier. Verified: ≥ 3 attesters and ≥ 0.1 tTRUST. Trusted: ≥ 2 attesters and ≥ 0.05 tTRUST. Otherwise Unverified. A single wallet can never lift an agent above Unverified.
+
 ## 7. THE ERC-8004 LAYER (v1.1 — what changed 2026-07-21)
 
 Intuition shipped the official ERC-8004 reputation layer: ~100-agent cohort as

@@ -2,22 +2,25 @@
 
 import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, ExternalLink, Copy, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Shield, ExternalLink, Copy, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { formatDate, formatTTrust } from '@/lib/format'
 import type { Agent } from '@/types/agent'
+import type { AgentTierResult } from '@/lib/agent-tier'
+import { AgentTierChip } from '@/components/agents/AgentTierChip'
 
 interface AgentHeaderProps {
   agent: Agent
+  /** The agent tier (attestations only, lib/agent-tier.ts); null = loading or unknown. */
+  tier: AgentTierResult | null
+  tierLoading: boolean
   /** Primary action slot rendered directly under the agent name — the hero CTA. */
   action?: ReactNode
 }
 
-export function AgentHeader({ agent, action }: AgentHeaderProps) {
-  const isVerified = agent.verificationLevel !== 'none'
-
+export function AgentHeader({ agent, action, tier, tierLoading }: AgentHeaderProps) {
   const handleCopyAddress = () => {
     if (agent.walletAddress) {
       navigator.clipboard.writeText(agent.walletAddress)
@@ -49,12 +52,9 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold">{agent.name}</h1>
-                {isVerified && (
-                  <Badge variant="success" size="lg">
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Verified
-                  </Badge>
-                )}
+                {/* Was a "Verified" badge on every scored agent (verificationLevel is hardcoded
+                    'wallet'). The tier comes only from attestations (thesis §6). */}
+                <AgentTierChip tier={tier} loading={tierLoading} size="lg" />
               </div>
 
               <div className="flex items-center gap-3 text-text-secondary">
@@ -128,7 +128,7 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
           <div className="grid grid-cols-2 gap-4">
             {/* Attestations */}
             <div className="glass rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold font-mono">{agent.attestationCount}</p>
+              <p className="text-2xl font-bold font-mono">{agent.attestationCount ?? '—'}</p>
               <p className="text-sm text-text-muted">Attestations</p>
             </div>
 
@@ -149,15 +149,15 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
             {/* Reports */}
             <div className={cn(
               "glass rounded-lg p-4 text-center",
-              agent.reportCount > 0 && "border-trust-low"
+              (agent.reportCount ?? 0) > 0 && "border-trust-low"
             )}>
-              <p className="text-2xl font-bold font-mono">{agent.reportCount}</p>
+              <p className="text-2xl font-bold font-mono">{agent.reportCount ?? '—'}</p>
               <p className="text-sm text-text-muted">Reports</p>
             </div>
           </div>
 
           {/* Warning if high report count */}
-          {agent.reportCount > 10 && (
+          {(agent.reportCount ?? 0) > 10 && (
             <div className="mt-4 p-3 rounded-lg bg-trust-low/10 border border-trust-low/20 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-trust-low flex-shrink-0 mt-0.5" />
               <p className="text-sm text-trust-low">

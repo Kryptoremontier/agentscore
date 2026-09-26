@@ -5,10 +5,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Users, Shield, DollarSign, Activity } from 'lucide-react'
 import { GlassCard } from '@/components/shared/GlassCard'
 
-import { APP_CONFIG } from '@/lib/app-config'
-import { AGENT_WHERE_STR } from '@/lib/gql-filters'
-
-const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
+import { fetchLandingStats, landingStatItems, type LandingStatsState, type LandingStatItem } from '@/lib/landing-stats'
 
 interface AnimatedCounterProps {
   value: number
@@ -50,69 +47,26 @@ function AnimatedCounter({ value, suffix = '', decimals = 0 }: AnimatedCounterPr
   )
 }
 
+const TILE_STYLE: Record<LandingStatItem['key'], { icon: typeof Users; iconColor: string; glowColor: string }> = {
+  agents: { icon: Users, iconColor: '#38B6FF', glowColor: 'rgba(56,182,255,0.25)' },
+  attesters: { icon: Shield, iconColor: '#2ECC71', glowColor: 'rgba(46,204,113,0.25)' },
+  totalStaked: { icon: DollarSign, iconColor: '#C8963C', glowColor: 'rgba(200,150,60,0.25)' },
+  activeStakers: { icon: Activity, iconColor: '#2EE6D6', glowColor: 'rgba(46,230,214,0.25)' },
+}
+
 export function Stats() {
-  const [stats, setStats] = useState([
-    { icon: Users, label: 'Registered Agents', value: 0, suffix: '', iconColor: '#38B6FF', glowColor: 'rgba(56,182,255,0.25)', decimals: 0 },
-    { icon: Shield, label: 'Attestations', value: 0, suffix: '', iconColor: '#2ECC71', glowColor: 'rgba(46,204,113,0.25)', decimals: 0 },
-    { icon: DollarSign, label: 'Total Staked', value: 0, suffix: ' tTRUST', iconColor: '#C8963C', glowColor: 'rgba(200,150,60,0.25)', decimals: 4 },
-    { icon: Activity, label: 'Active Stakers', value: 0, suffix: '', iconColor: '#2EE6D6', glowColor: 'rgba(46,230,214,0.25)', decimals: 0 },
-  ])
+  // Same source as the Hero (lib/landing-stats.ts → /api/v1/stats). Unknown prints "—", never 0.
+  const [statsState, setStatsState] = useState<LandingStatsState>({ status: 'loading' })
 
   useEffect(() => {
-    (async () => {
-      try {
-        const agentsRes = await fetch(GRAPHQL_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `{
-              agents: atoms(where: ${AGENT_WHERE_STR}) {
-                term_id
-                positions_aggregate {
-                  aggregate { count sum { shares } }
-                }
-              }
-            }`
-          })
-        })
-        const agentsData = await agentsRes.json()
-        const agents = agentsData.data?.agents || []
-        let stakers = 0
-        let totalWei = 0n
-        const termIds: string[] = []
-        for (const a of agents) {
-          stakers += a.positions_aggregate?.aggregate?.count || 0
-          totalWei += BigInt(a.positions_aggregate?.aggregate?.sum?.shares || '0')
-          termIds.push(a.term_id)
-        }
-
-        let tripleCount = 0
-        if (termIds.length > 0) {
-          const triplesRes = await fetch(GRAPHQL_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `query($ids: [String!]!) {
-                triples_aggregate(where: { subject_id: { _in: $ids } }) {
-                  aggregate { count }
-                }
-              }`,
-              variables: { ids: termIds }
-            })
-          })
-          const triplesData = await triplesRes.json()
-          tripleCount = triplesData.data?.triples_aggregate?.aggregate?.count || 0
-        }
-
-        setStats(prev => [
-          { ...prev[0], value: agents.length },
-          { ...prev[1], value: stakers + tripleCount },
-          { ...prev[2], value: Number(totalWei) / 1e18 },
-          { ...prev[3], value: stakers },
-        ])
-      } catch {}
-    })()
+    let cancelled = false
+    fetchLandingStats().then(stats => {
+      if (!cancelled) setStatsState(stats ? { status: 'ok', stats } : { status: 'error' })
+    })
+    return () => { cancelled = true }
   }, [])
+
+  const stats = landingStatItems(statsState).map(item => ({ ...item, ...TILE_STYLE[item.key] }))
 
   return (
     <section className="py-24 relative">
@@ -142,7 +96,7 @@ export function Stats() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat, index) => (
             <motion.div
-              key={index}
+              key={stat.key}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -161,8 +115,12 @@ export function Stats() {
                     <stat.icon className="w-6 h-6" style={{ color: stat.iconColor, filter: `drop-shadow(0 0 4px ${stat.glowColor})` }} />
                   </div>
                 </div>
-                <div className="mb-2">
-                  <AnimatedCounter value={stat.value} suffix={stat.suffix} decimals={stat.decimals} />
+                <div className="mb-2" data-testid="landing-stat" data-state={statsState.status}>
+                  {stat.value != null ? (
+                    <AnimatedCounter value={stat.value} suffix={stat.suffix} decimals={stat.decimals} />
+                  ) : (
+                    <span className="font-mono text-4xl font-bold text-text-muted" title={stat.unavailable ?? undefined}>—</span>
+                  )}
                 </div>
                 <p className="text-text-secondary text-sm">{stat.label}</p>
               </GlassCard>

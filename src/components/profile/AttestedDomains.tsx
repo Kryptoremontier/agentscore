@@ -16,11 +16,13 @@ import Link from 'next/link'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
+import { summarizeAttesters } from '@/lib/agent-profile'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestButton } from '@/components/attest/AttestButton'
 
 interface AttestedDomainsProps {
-  entries: AttestedEntry[]
+  /** null = the read failed — shown as unavailable, never as "no attestations yet". */
+  entries: AttestedEntry[] | null
   loading: boolean
   agentId: string
   agentName: string
@@ -62,9 +64,21 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
     )
   }
 
+  if (entries == null) {
+    return (
+      <div className={`rounded-2xl px-5 py-4 ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.03)', border: '1px solid rgba(46,204,113,0.15)' }} data-testid="attested-failed">
+        <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#2ECC71' }}>Attested Domains</p>
+        <p className="text-xs text-[#7A838D]">Couldn&apos;t read attestations right now — this is not an empty record.</p>
+      </div>
+    )
+  }
+
   if (entries.length === 0) {
     return <AttestEmptyState agentId={agentId} agentName={agentName} className={className} />
   }
+
+  // The same distinct-attester count as the modal's stat row: one derivation, never a local Set.
+  const attesterCount = summarizeAttesters(entries).length
 
   return (
     <div className={`rounded-2xl p-5 ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.3)' }}>
@@ -80,8 +94,7 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
       </div>
       <p className="text-[11px] text-[#7A838D] mb-3">
         {entries.length} domain{entries.length !== 1 ? 's' : ''} · attested by{' '}
-        {new Set(entries.flatMap((e) => e.attesters.map((a) => a.toLowerCase()))).size} distinct wallet
-        {new Set(entries.flatMap((e) => e.attesters.map((a) => a.toLowerCase()))).size !== 1 ? 's' : ''}
+        {attesterCount} distinct wallet{attesterCount !== 1 ? 's' : ''}
       </p>
       <div className="space-y-2">
         {entries.map((e) => (

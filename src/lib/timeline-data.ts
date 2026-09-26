@@ -13,6 +13,12 @@ import { APP_CONFIG } from './app-config'
 import { cleanAtomName } from '@/types/claim'
 import { type StakingEvent, type SkillEvent } from './trust-timeline'
 import { IS_SKILLED_IN } from './canonical-domains'
+import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
+
+// Our ceilings (reported by the pager, never a silent first N). The signals read kept only the
+// OLDEST 200 events; the skill-triple reads the first 50 of each kind.
+const TIMELINE_SIGNALS_MAX = 5_000
+const TIMELINE_TRIPLES_MAX = 1_000
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -29,37 +35,36 @@ export interface TimelineRawData {
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
+/**
+ * null = no such atom (a 404). A failed read THROWS — the routes answer it as an
+ * error, never as "Agent not found" or as an empty history (REPO_MAP §7 rule 5).
+ */
 export async function fetchTimelineData(agentTermId: string): Promise<TimelineRawData | null> {
-  if (!GRAPHQL_URL) return null
+  if (!GRAPHQL_URL) throw new Error('GraphQL endpoint not configured')
 
   try {
     // ── Step 1: Agent atom + find trust triple (counterTermId) ──────────────
-    const atomRes = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetAgentAtom($termId: String!) {
-            atom: atoms(where: { term_id: { _eq: $termId } }, limit: 1) {
-              term_id
-              label
-              created_at
-              as_subject_triples(
-                where: {
-                  predicate: { label: { _in: ["isTrustedFor", "is", "trustsAs"] } }
-                }
-                limit: 1
-              ) {
-                counter_term_id
+    const atomData = await gqlRequest<{ atom: Array<{ term_id: string; label: string | null; created_at?: string; as_subject_triples?: Array<{ counter_term_id: string | null }> }> }>(
+      `
+        query GetAgentAtom($termId: String!) {
+          atom: atoms(where: { term_id: { _eq: $termId } }, limit: 1) {
+            term_id
+            label
+            created_at
+            as_subject_triples(
+              where: {
+                predicate: { label: { _in: ["isTrustedFor", "is", "trustsAs"] } }
               }
+              limit: 1
+            ) {
+              counter_term_id
             }
           }
-        `,
-        variables: { termId: agentTermId },
-      }),
-    })
-    const atomData = await atomRes.json()
-    const atom = atomData?.data?.atom?.[0]
+        }
+      `,
+      { termId: agentTermId },
+    )
+    const atom = atomData.atom?.[0]
     if (!atom) return null
 
     const agentName = cleanAtomName(atom.label || '')
@@ -70,32 +75,7 @@ export async function fetchTimelineData(agentTermId: string): Promise<TimelineRa
     const vaultIds = [agentTermId]
     if (counterTermId) vaultIds.push(counterTermId)
 
-    const sigRes = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetAgentSignals($vaultIds: [String!]!) {
-            signals(
-              where: { term_id: { _in: $vaultIds } }
-              order_by: { created_at: asc }
-              limit: 200
-            ) {
-              id
-              delta
-              account_id
-              term_id
-              created_at
-              deposit_id
-              redemption_id
-            }
-          }
-        `,
-        variables: { vaultIds },
-      }),
-    })
-    const sigData = await sigRes.json()
-    const rawSignals: Array<{
+    const sigPage = await fetchAllRows<{
       id: string
       delta: string
       account_id: string
@@ -103,7 +83,38 @@ export async function fetchTimelineData(agentTermId: string): Promise<TimelineRa
       created_at: string
       deposit_id: string | null
       redemption_id: string | null
-    }> = sigData?.data?.signals ?? []
+    }>({
+      query: `
+        query GetAgentSignals($vaultIds: [String!]!, $limit: Int!, $offset: Int!) {
+          signals(
+            where: { term_id: { _in: $vaultIds } }
+            order_by: [{ created_at: asc }, { id: asc }]
+            limit: $limit
+            offset: $offset
+          ) {
+            id
+            delta
+            account_id
+            term_id
+            created_at
+            deposit_id
+            redemption_id
+          }
+        }
+      `,
+      field: 'signals',
+      countQuery: `
+        query GetAgentSignalsCount($vaultIds: [String!]!) {
+          signals_aggregate(where: { term_id: { _in: $vaultIds } }) { aggregate { count } }
+        }
+      `,
+      countField: 'signals_aggregate',
+      variables: { vaultIds },
+      pageSize: SERVER_ROW_CAP.signals,
+      maxRows: TIMELINE_SIGNALS_MAX,
+    })
+    if (sigPage.truncated !== false) throw new Error('signals not read to the end')
+    const rawSignals = sigPage.rows
 
     const stakingEvents: StakingEvent[] = rawSignals.map(s => {
       const deltaNum = Number(s.delta || 0)
@@ -121,43 +132,42 @@ export async function fetchTimelineData(agentTermId: string): Promise<TimelineRa
     // Legacy predicate (pre-canonical) and the canonical `is skilled in` +
     // stake unit (thesis §4) are queried separately and tagged, so the
     // timeline can label them as different claims — never conflated.
-    const tripleRes = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    type RawTriple = { term_id: string; created_at: string; object: { term_id: string; label: string } }
+    const readTriples = async (name: string, where: string, variables: Record<string, unknown>, vars: string) => {
+      const page = await fetchAllRows<RawTriple>({
         query: `
-          query GetAgentSkillTriples($agentId: String!, $canonicalPred: String!) {
-            legacy: triples(
-              where: {
-                subject_id: { _eq: $agentId }
-                predicate: { label: { _in: ["hasAgentSkill", "has-agent-skill"] } }
-              }
-              limit: 50
-            ) {
-              term_id
-              created_at
-              object { term_id label }
-            }
-            canonical: triples(
-              where: {
-                subject_id: { _eq: $agentId }
-                predicate_id: { _eq: $canonicalPred }
-              }
-              limit: 50
-            ) {
+          query ${name}(${vars}, $limit: Int!, $offset: Int!) {
+            triples(where: ${where}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
               term_id
               created_at
               object { term_id label }
             }
           }
         `,
-        variables: { agentId: agentTermId, canonicalPred: IS_SKILLED_IN.termId },
-      }),
-    })
-    const tripleData = await tripleRes.json()
-    type RawTriple = { term_id: string; created_at: string; object: { term_id: string; label: string } }
-    const rawLegacy: RawTriple[] = tripleData?.data?.legacy ?? []
-    const rawCanonical: RawTriple[] = tripleData?.data?.canonical ?? []
+        field: 'triples',
+        countQuery: `query ${name}Count(${vars}) { triples_aggregate(where: ${where}) { aggregate { count } } }`,
+        countField: 'triples_aggregate',
+        variables,
+        pageSize: SERVER_ROW_CAP.triples,
+        maxRows: TIMELINE_TRIPLES_MAX,
+      })
+      if (page.truncated !== false) throw new Error(`${name} not read to the end`)
+      return page.rows
+    }
+    const [rawLegacy, rawCanonical] = await Promise.all([
+      readTriples(
+        'GetAgentLegacySkillTriples',
+        '{ subject_id: { _eq: $agentId }, predicate: { label: { _in: ["hasAgentSkill", "has-agent-skill"] } } }',
+        { agentId: agentTermId },
+        '$agentId: String!',
+      ),
+      readTriples(
+        'GetAgentCanonicalSkillTriples',
+        '{ subject_id: { _eq: $agentId }, predicate_id: { _eq: $canonicalPred } }',
+        { agentId: agentTermId, canonicalPred: IS_SKILLED_IN.termId },
+        '$agentId: String!, $canonicalPred: String!',
+      ),
+    ])
 
     const skillEvents: SkillEvent[] = [
       ...rawLegacy.map((t): SkillEvent => ({
@@ -185,6 +195,6 @@ export async function fetchTimelineData(agentTermId: string): Promise<TimelineRa
     }
   } catch (err) {
     console.warn('[fetchTimelineData] Failed:', err)
-    return null
+    throw err
   }
 }

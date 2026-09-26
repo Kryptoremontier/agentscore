@@ -24,6 +24,7 @@
 
 import { APP_CONFIG } from './app-config'
 import { foldDuplicateAtoms } from './atom-fold'
+import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
 
 // `same as` predicate atom actually used for identity links on testnet
 // (2 sibling duplicate "same as" atoms exist, 0-1 unrelated triples each).
@@ -55,10 +56,12 @@ export interface CohortAgent {
   label: string
   /** The CAIP identity string this agent resolved `same as`, e.g. eip155:8453/erc721:0x8004.../16850 */
   caipIdentity: string
-  /** OASF skill tags this agent declares (`has tag`), duplicate atoms folded to one representative label. */
-  declaredSkills: string[]
-  /** OASF domain categories this agent declares (`has category`), duplicate atoms folded to one representative label. */
-  declaredDomains: string[]
+  /** OASF skill tags this agent declares (`has tag`), duplicate atoms folded to one representative label.
+   *  null = the classification read failed for this agent — unknown, never "declares nothing". */
+  declaredSkills: string[] | null
+  /** OASF domain categories this agent declares (`has category`), duplicate atoms folded to one representative label.
+   *  null = the classification read failed for this agent — unknown, never "declares nothing". */
+  declaredDomains: string[] | null
   createdAt: string
 }
 
@@ -82,8 +85,9 @@ export interface CohortFetchResult {
   status: 'ok' | 'error'
 }
 
-// Hard cap on the identity query below. Testnet is at 264 live (2026-09-15) — dormant until the
-// cohort grows past it. Recon 2026-09-15 found Deep3 Labs published ~28.7k ERC-8004 identity
+// Our cap on the identity query below (same-as triples). Testnet is at 264 live (2026-09-26).
+// The endpoint itself returns at most 250 triples per request, so the query is paged
+// (lib/gql-pager.ts); this cap is the pager's ceiling and stays reported as truncation. Recon 2026-09-15 found Deep3 Labs published ~28.7k ERC-8004 identity
 // links to Intuition MAINNET (a separate, much larger dataset this app doesn't read — see
 // project memory). Raising this cap is a deliberate decision, not a casual bump: the batched
 // classification lookup below is chunked specifically so it survives a higher cap, but the
@@ -96,7 +100,13 @@ const COHORT_FETCH_LIMIT = 500
 // how large COHORT_FETCH_LIMIT ever becomes.
 const CLASSIFICATION_CHUNK_SIZE = 200
 
+// Ceiling on classification edges per chunk. A chunk that would exceed it is treated as a failed
+// read, never as a complete one. Live 2026-09-26 the first chunk of 200 subjects holds 449 `has tag`
+// edges: a single request got 250 of them and silently dropped the rest.
+const CLASSIFICATION_MAX_ROWS_PER_CHUNK = 20_000
+
 interface SameAsRow {
+  term_id: string
   created_at: string
   subject: { term_id: string; label: string | null } | null
   object: { label: string | null } | null
@@ -107,16 +117,9 @@ export interface ClassificationRow {
   object: { term_id: string; label: string }
 }
 
-async function gql<T>(query: string): Promise<T> {
-  const res = await fetch(APP_CONFIG.GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-  })
-  const json = await res.json()
-  if (json.errors) throw new Error(json.errors[0]?.message || 'GraphQL error')
-  return json.data as T
-}
+// One transport: throws on HTTP errors (incl. 429 rate limits), GraphQL errors and a body
+// without data — a failed read is never an empty one.
+const gql = gqlRequest
 
 /**
  * Fold classification edges (skills or domains) for one subject group: dedup
@@ -151,30 +154,49 @@ function chunkIds(ids: readonly string[], size: number): string[][] {
  * Batched classification lookup (`has tag` / `has category`), chunked at
  * CLASSIFICATION_CHUNK_SIZE subject ids per request so the query body stays
  * bounded regardless of cohort size — see COHORT_FETCH_LIMIT's file-header
- * note. Chunks fetch in parallel and merge; one chunk's failure degrades to
- * [] for that chunk only (graceful degradation, same convention as the rest
- * of this file), it doesn't drop the others.
+ * note. Each chunk is paged to its aggregate count (lib/gql-pager.ts), so no
+ * edge is lost to the endpoint's 250-row cap. Chunks fetch in parallel and
+ * merge. A chunk that fails (or can't be read to the end) is reported in
+ * `unread` — its agents' declarations are unknown, not empty (REPO_MAP §7
+ * rule 5) — and doesn't drop the other chunks. A chunk is never returned half-read.
  */
-async function fetchClassification(predicateIds: readonly string[], termIds: readonly string[]): Promise<ClassificationRow[]> {
-  if (termIds.length === 0) return []
+async function fetchClassification(
+  predicateIds: readonly string[],
+  termIds: readonly string[],
+): Promise<{ rows: ClassificationRow[]; unread: Set<string> }> {
+  const unread = new Set<string>()
+  if (termIds.length === 0) return { rows: [], unread }
   const predicateList = predicateIds.map((p) => `"${p}"`).join(', ')
   const results = await Promise.all(
     chunkIds(termIds, CLASSIFICATION_CHUNK_SIZE).map((idsChunk) => {
       const idList = idsChunk.map((id) => JSON.stringify(id)).join(', ')
-      return gql<{ triples: ClassificationRow[] }>(`
-        query GetCohortClassification {
-          triples(
-            where: {
-              predicate_id: { _in: [${predicateList}] }
-              subject_id: { _in: [${idList}] }
+      const where = `{ predicate_id: { _in: [${predicateList}] }, subject_id: { _in: [${idList}] } }`
+      return fetchAllRows<ClassificationRow>({
+        query: `
+          query GetCohortClassification($limit: Int!, $offset: Int!) {
+            triples(where: ${where}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
+              term_id subject_id object { term_id label }
             }
-            limit: 2000
-          ) { subject_id object { term_id label } }
-        }
-      `).catch(() => ({ triples: [] }))
+          }
+        `,
+        field: 'triples',
+        countQuery: `query GetCohortClassificationCount { triples_aggregate(where: ${where}) { aggregate { count } } }`,
+        countField: 'triples_aggregate',
+        pageSize: SERVER_ROW_CAP.triples,
+        maxRows: CLASSIFICATION_MAX_ROWS_PER_CHUNK,
+        request: gql,
+      })
+        .then((page) => {
+          if (page.truncated !== false) throw new Error('classification chunk not read to the end')
+          return page.rows
+        })
+        .catch(() => {
+          for (const id of idsChunk) unread.add(id)
+          return [] as ClassificationRow[]
+        })
     })
   )
-  return results.flatMap((r) => r?.triples ?? [])
+  return { rows: results.flat(), unread }
 }
 
 /**
@@ -183,10 +205,13 @@ async function fetchClassification(predicateIds: readonly string[], termIds: rea
  * Dedups agents with >1 same-as CAIP triple (rare, seen live: 1/168).
  * Attaches declared OASF skills/domains via chunked batched queries.
  *
- * `total` counts distinct cohort agents — the unit `agents` is in. When the
- * fetch hit its cap, it comes from a distinct-subject aggregate on the
- * identical filter (cheap, no row fetch), so `truncated` reflects the real
- * underlying count rather than "did we get exactly COHORT_FETCH_LIMIT rows back".
+ * `total` counts distinct cohort agents — the unit `agents` is in. The rows
+ * are paged to the end (lib/gql-pager.ts) up to COHORT_FETCH_LIMIT triples;
+ * read completely, the deduped agent count IS the total. Only when our cap
+ * stops the read does the distinct-subject aggregate on the identical filter
+ * decide total/truncated (null when it failed — never a substituted count).
+ * Any page failing makes the whole read `status: 'error'`, never a partial
+ * cohort presented as complete.
  */
 export async function fetchCohortAgents(): Promise<CohortFetchResult> {
   // Failure is its own state — `total: 0` would read as "the registry is empty".
@@ -202,16 +227,26 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
       object: { label: { _ilike: "%erc721:0x8004a169%" } }
       subject_id: { _is_null: false }
     `
-    const [sameAsData, countData] = await Promise.all([
-      gql<{ triples: SameAsRow[] }>(`
-        query GetErc8004Cohort {
-          triples(where: { ${sameAsFilter} } limit: ${COHORT_FETCH_LIMIT}) {
-            created_at
-            subject { term_id label }
-            object { label }
+    const [paged, countData] = await Promise.all([
+      fetchAllRows<SameAsRow>({
+        query: `
+          query GetErc8004Cohort($limit: Int!, $offset: Int!) {
+            triples(where: { ${sameAsFilter} }, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
+              term_id
+              created_at
+              subject { term_id label }
+              object { label }
+            }
           }
-        }
-      `),
+        `,
+        field: 'triples',
+        // Rows (same-as triples) — the pager's unit. The display total below is in agents.
+        countQuery: `query GetErc8004CohortRows { triples_aggregate(where: { ${sameAsFilter} }) { aggregate { count } } }`,
+        countField: 'triples_aggregate',
+        pageSize: SERVER_ROW_CAP.triples,
+        maxRows: COHORT_FETCH_LIMIT,
+        request: gql,
+      }),
       // Distinct SUBJECTS, not triples: an agent with 2 same-as triples is one agent
       // (the list dedups it), so the total must count it once too.
       gql<{ triples_aggregate: { aggregate: { count: number } } }>(`
@@ -223,14 +258,13 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
       `).catch(() => null),
     ])
 
-    const rawRows = sameAsData?.triples ?? []
-    const rows = rawRows.filter(
+    const rows = paged.rows.filter(
       (r) => r.subject?.term_id && r.object?.label && ERC8004_CAIP_PATTERN.test(r.object.label)
     )
-    // A fetch that returned fewer rows than its cap is complete: the deduped agent count
-    // below IS the total. Only at the cap does the aggregate decide — and if it failed
-    // there, total/truncated are unknown (null), never a substituted rows.length.
-    const complete = rawRows.length < COHORT_FETCH_LIMIT
+    // Read to the end (not "fewer rows than asked for" — the endpoint's own cap returns short
+    // pages): the deduped agent count below IS the total. Only when our cap stopped the read
+    // does the aggregate decide — and if it failed there, total/truncated are unknown (null).
+    const complete = paged.truncated === false
     const distinctTotal = countData?.triples_aggregate?.aggregate?.count
     const countedTotal = typeof distinctTotal === 'number' ? distinctTotal : null
 
@@ -250,13 +284,13 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
 
     const termIds = [...bySubject.keys()]
 
-    const [tagRows, categoryRows] = await Promise.all([
+    const [tags, categories] = await Promise.all([
       fetchClassification(HAS_TAG_PREDICATE_IDS, termIds),
       fetchClassification(HAS_CATEGORY_PREDICATE_IDS, termIds),
     ])
 
-    const skillsBySubject = foldClassificationBySubject(tagRows)
-    const domainsBySubject = foldClassificationBySubject(categoryRows)
+    const skillsBySubject = foldClassificationBySubject(tags.rows)
+    const domainsBySubject = foldClassificationBySubject(categories.rows)
 
     const agents = termIds
       .map((termId) => {
@@ -265,8 +299,9 @@ export async function fetchCohortAgents(): Promise<CohortFetchResult> {
           termId,
           label: row.subject?.label ?? 'Unknown',
           caipIdentity: row.object?.label ?? '',
-          declaredSkills: skillsBySubject.get(termId) ?? [],
-          declaredDomains: domainsBySubject.get(termId) ?? [],
+          // A failed chunk → null (unknown), never [] (declares nothing).
+          declaredSkills: tags.unread.has(termId) ? null : (skillsBySubject.get(termId) ?? []),
+          declaredDomains: categories.unread.has(termId) ? null : (domainsBySubject.get(termId) ?? []),
           createdAt: row.created_at,
         }
       })

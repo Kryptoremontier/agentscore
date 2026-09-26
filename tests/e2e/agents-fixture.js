@@ -17,8 +17,8 @@
  * then:
  *   node tests/e2e/agents-fixture.js measure [rows=264] [cpuThrottle=1] [runs=5] [baseUrl]
  *   node tests/e2e/agents-fixture.js shots   [rows=264] [label=synthetic] [baseUrl]
- *   FIXTURE_FAIL=cohort|agents|both node tests/e2e/agents-fixture.js shots 264 <label>
- *     (forces those reads to fail — captures the error states of the header)
+ *   FIXTURE_FAIL=cohort|agents|both|attestations node tests/e2e/agents-fixture.js shots 264 <label>
+ *     (forces those reads to fail — captures the header / card error states)
  * Shots go to screenshots/<date>/<label>/<viewport>/ (gitignored) — they are
  * FIXTURE renders, never evidence of live data.
  */
@@ -37,8 +37,8 @@ const LABEL = (MODE === 'shots' ? rest[1] : null) ?? 'synthetic'
 // The three reference agents keep their REAL term ids so shots and assertions
 // name real rows. Values are live where recorded: AgentScore stake/staker counts
 // from /api/v1/agents (2026-09-24); Dackie 1 attester / 0.0099 tTRUST on
-// Crypto (commit 5e898f4, live 2026-09-15). Luda's attestation stake (1e15) is
-// the unit-test fixture value, not a recorded live number.
+// Crypto (commit 5e898f4, live 2026-09-15); Luda 1 attester / 0.02079 tTRUST on
+// Knowledge / Productivity (live 2026-09-26, src/lib/__tests__/card-attester-line.test.ts).
 const REF = {
   dackie: '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb',
   luda: '0x82d87d9517b68e653418c0e49805b36aca3e33a00536af25fc319f5c24802c5a',
@@ -89,34 +89,61 @@ const ATTESTATIONS = [
     positions: [{ account_id: W1, shares: '9900000000000000' }] },
   { term_id: '0xa77e57000000000000000000000000000000000000000000000000000000d4c2', counter_term_id: null,
     subject: { term_id: REF.luda, label: 'Luda' }, object: { term_id: BUCKET.knowledge },
-    positions: [{ account_id: W1, shares: '1000000000000000' }] },
+    positions: [{ account_id: W1, shares: '20790000000000000' }] },
 ]
 
-// FIXTURE_FAIL=cohort|agents|both makes those reads fail (HTTP 500), to capture error states.
+// Positions on the AgentScore atom vaults: `count` wallets splitting the row's stake, so the
+// live-staker count (lib/live-position.ts) matches the recorded one. Agent Avatar Coder and
+// On-Chain Data Analyzer hold one 0-share row each, as live.
+const AS_POSITIONS = AS_ROWS.flatMap((a) => {
+  const n = a.positions_aggregate.aggregate.count
+  const each = BigInt(a.positions_aggregate.aggregate.sum.shares) / BigInt(n)
+  return Array.from({ length: n }, (_, k) => ({
+    id: `${a.term_id}-1-${k}`, term_id: a.term_id, account_id: '0x' + (k + 1).toString(16).padStart(40, '0'), shares: String(each),
+  }))
+})
+const ATTESTATION_POSITIONS = ATTESTATIONS.flatMap((a) => a.positions.map((p) => ({ id: `${a.term_id}-1-${p.account_id}`, term_id: a.term_id, ...p })))
+
+// FIXTURE_FAIL=cohort|agents|both|attestations makes those reads fail (HTTP 500), to capture
+// error states.
 const FAIL = process.env.FIXTURE_FAIL ?? ''
+
+// Answers like the endpoint where the app depends on it (lib/gql-pager.ts): $limit/$offset are
+// honoured and `<table>_aggregate { aggregate { count } }` counts the same rows. Serves both the
+// pre-pager queries (main before etap4b-tier: one request, no $limit) and the paged ones.
+const pageOf = (rows, v) => (typeof v.limit === 'number' ? rows.slice(v.offset ?? 0, (v.offset ?? 0) + v.limit) : rows)
+const counted = (table, rows) => ({ [`${table}_aggregate`]: { aggregate: { count: rows.length } } })
 
 function answer(query, variables = {}) {
   const failCohort = FAIL === 'cohort' || FAIL === 'both'
   const failAgents = FAIL === 'agents' || FAIL === 'both'
+  const failAttestations = FAIL === 'attestations'
+  const isCount = (table) => query.includes(`${table}_aggregate`) && !query.includes(`${table}(`)
   if (query.includes('GetErc8004Cohort')) {
     if (failCohort) return null
-    return query.includes('GetErc8004CohortCount')
-      ? { triples_aggregate: { aggregate: { count: N } } }
-      : { triples: COHORT }
+    return isCount('triples') ? counted('triples', COHORT) : { triples: pageOf(COHORT, variables) }
   }
-  if (query.includes('GetCohortClassification')) return { triples: CLASSIFICATION }
-  if (query.includes('GetAttestationTriples')) {
-    const rows = ATTESTATIONS.filter((a) => !variables.subject || a.subject.term_id === variables.subject)
-    return { triples: rows.map(({ positions, ...t }) => t) }
+  if (query.includes('GetCohortClassification')) {
+    // The chunk's subject ids are literals in the query string (lib/cohort-reader.ts).
+    const rows = CLASSIFICATION.filter((c) => query.includes(c.subject_id))
+    return isCount('triples') ? counted('triples', rows) : { triples: pageOf(rows, variables) }
   }
-  if (query.includes('GetAttestationPositions')) {
+  if (query.includes('GetAttestationTriple')) {
+    if (failAttestations) return null
+    const subjects = variables.subjects ?? (variables.subject ? [variables.subject] : null)
+    const rows = ATTESTATIONS.filter((a) => !subjects || subjects.includes(a.subject.term_id)).map(({ positions, ...t }) => t)
+    return isCount('triples') ? counted('triples', rows) : { triples: pageOf(rows, variables) }
+  }
+  if (query.includes('GetAttestationPositions') || query.includes('VaultPositions')) {
+    if (failAttestations && query.includes('GetAttestationPositions')) return null
     const ids = new Set(variables.vaultIds ?? [])
-    return { positions: ATTESTATIONS.filter((a) => ids.has(a.term_id)).flatMap((a) => a.positions.map((p) => ({ term_id: a.term_id, ...p }))) }
+    const rows = [...ATTESTATION_POSITIONS, ...AS_POSITIONS].filter((p) => ids.has(p.term_id))
+    return isCount('positions') ? counted('positions', rows) : { positions: pageOf(rows, variables) }
   }
-  // /agents asks for rows and their same-filter count in ONE request (lib/agent-list.ts).
+  // AgentScore corpus: main asks for rows + count in one request; the pager asks separately.
   if (query.includes('atoms(') || query.includes('atoms_aggregate')) {
     if (failAgents) return null
-    return { atoms: AS_ROWS, atoms_aggregate: { aggregate: { count: AS_ROWS.length } } }
+    return { atoms: pageOf(AS_ROWS, variables), ...counted('atoms', AS_ROWS) }
   }
   if (query.includes('positions_aggregate')) return { positions_aggregate: { aggregate: { count: 0, sum: { shares: null } } } }
   if (query.includes('positions(')) return { positions: [] }
@@ -152,7 +179,8 @@ async function newFixturePage(browser, contextOptions) {
   return { ctx, page: await ctx.newPage() }
 }
 
-const CARD = 'div.rounded-2xl.p-5.cursor-pointer'
+// One per grid card, full or compact, on main and on this branch.
+const CARD = 'h3.font-bold.text-white.text-base'
 
 // ── measure ──────────────────────────────────────────────────────────────────
 async function measureOnce() {
@@ -172,7 +200,7 @@ async function measureOnce() {
   await page.goto(BASE + '/agents', { waitUntil: 'commit' })
   // listMs: navigation start → all `total` cards in the DOM.
   const listMs = await page.waitForFunction((total) => {
-    const cards = document.querySelectorAll('div.rounded-2xl.p-5.cursor-pointer').length
+    const cards = document.querySelectorAll('h3.font-bold.text-white.text-base').length
     return cards >= total ? performance.now() : false
   }, total, { timeout: 120000, polling: 16 }).then((h) => h.jsonValue())
   await page.waitForTimeout(6000) // quiet window for the TTI heuristic

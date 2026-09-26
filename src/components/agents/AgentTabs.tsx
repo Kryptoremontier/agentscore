@@ -22,8 +22,9 @@ import type { AttesterSummary, Backer } from '@/lib/agent-profile'
 
 interface AgentTabsProps {
   agent: Agent
-  attesters: AttesterSummary[]
-  backers: Backer[]
+  /** null = that read failed (shown as unavailable, never as empty). */
+  attesters: AttesterSummary[] | null
+  backers: Backer[] | null
   profileLoading: boolean
   /** Count of pre-canonical skill claims (hasAgentSkill / isTrustedFor) — surfaced, not hidden. */
   legacySkillClaimCount?: number

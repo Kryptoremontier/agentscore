@@ -78,10 +78,14 @@ Use score.objectScore ?? score.trustScore as the display/ranking value — it is
 never null.
 
 Note: the response carries two distinct tier concepts — score.tier (the band
-derived from the score, e.g. "good") and tier.current (verification/
-progression tier with requirements, e.g. "unverified"). Consumers ranking
-agents should use the score fields; tier.requirements shows the path to
-promotion, not a ranking signal.
+derived from the score, e.g. "good") and tier.current (the agent's attestation
+tier: "unverified" | "trusted" | "verified", tier.basis "attestations"). The
+attestation tier comes only from distinct live attesters and tTRUST attested on
+"is skilled in" claims — Verified >= 3 attesters and >= 0.1 tTRUST, Trusted >= 2
+and >= 0.05, otherwise Unverified; backing never changes it. null = the
+attestation read failed (unknown). Consumers ranking agents should use the
+score fields; tier.requirements shows what the next rung needs, not a ranking
+signal.
 
 ## Limits & caching
 

@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { compareAgentEntries, hasStake, type SortableAgentEntry } from '../agent-list-sort'
 
-const entry = (count: number, shares: string, score: number): SortableAgentEntry => ({
-  agent: { positions_aggregate: { aggregate: { count, sum: { shares } } } },
+// `stakers` = live stakers (lib/live-position.ts countLiveStakers) — never a raw row count.
+const entry = (stakers: number, shares: string, score: number): SortableAgentEntry => ({
+  agent: { positions_aggregate: { aggregate: { sum: { shares } } }, liveStakerCount: stakers },
   trust: { score },
 })
 
@@ -82,7 +83,14 @@ describe('measured flag — a zero-share "staker" does not rank by its prior', (
     expect([...rows].sort((x, y) => compareAgentEntries(x, y, 'score_desc'))).toEqual([MEASURED_HIGH, MEASURED_LOW, ZERO_SHARE])
     expect([...rows].sort((x, y) => compareAgentEntries(x, y, 'score_asc'))).toEqual([MEASURED_LOW, MEASURED_HIGH, ZERO_SHARE])
   })
-  it('without the flag the original count gate still applies (other callers unchanged)', () => {
-    expect(hasStake(entry(1, '0', 50))).toBe(true)
+  it('without the flag the gate reads LIVE stakers: a lone 0-share row is 0 stakers, so not staked', () => {
+    // countLiveStakers gives 0 for On-Chain Data Analyzer's single 0-share row — the raw row
+    // count (1) used to call it staked.
+    expect(hasStake(entry(0, '0', 50))).toBe(false)
+    expect(hasStake(entry(1, '980000000000000', 50))).toBe(true)
+  })
+  it('unknown stakers (a failed read, null) sort as 0, never as a measured count', () => {
+    const unknown: SortableAgentEntry = { agent: { liveStakerCount: null }, trust: { score: 90 } }
+    expect(compareAgentEntries(entry(1, '1', 10), unknown, 'stakers')).toBeLessThan(0)
   })
 })

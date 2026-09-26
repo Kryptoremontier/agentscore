@@ -5,7 +5,10 @@ import { useState } from 'react';
 
 // ─── Simple Badge (do użycia w kartach, listach) ───
 
-export function TrustTierBadge({ tier, size = 'md' }: { tier: TierConfig; size?: 'sm' | 'md' | 'lg' }) {
+/** The badge reads only these fields — a vault TierConfig or an agent tier's display (lib/agent-tier.ts). */
+export type TierBadgeVisual = Pick<TierConfig, 'label' | 'color' | 'bgColor' | 'borderColor' | 'icon'>
+
+export function TrustTierBadge({ tier, size = 'md' }: { tier: TierBadgeVisual; size?: 'sm' | 'md' | 'lg' }) {
   const sizes = {
     sm: { fontSize: '10px', padding: '1px 6px', iconSize: '10px' },
     md: { fontSize: '11px', padding: '2px 8px', iconSize: '12px' },

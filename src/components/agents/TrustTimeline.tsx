@@ -42,7 +42,10 @@ interface TrustTimelineProps {
   createdAt: string
   /** null = no measured score (the modal shows "—"). */
   currentScore: number | null
-  currentTier: string
+  /** null = unknown. */
+  currentTier: string | null
+  /** 'none' for agents: their tier comes only from attestations, so supporter counts emit no tier events. */
+  tierMilestones?: 'stakers' | 'none'
   agentSignals: AgentSignal[]
   counterTermId?: string | null
   skillTriples: SkillTriple[]
@@ -269,6 +272,7 @@ export function TrustTimeline({
   createdAt,
   currentScore,
   currentTier,
+  tierMilestones,
   agentSignals,
   counterTermId,
   skillTriples,
@@ -312,12 +316,13 @@ export function TrustTimeline({
       createdAt,
       currentScore,
       currentTier,
+      tierMilestones,
       stakingEvents,
       skillEvents: skillEventsInput,
       evaluatorWeights,
       profileCompleteness: isA2AReady !== undefined ? { isA2AReady } : undefined,
     })
-  }, [agentId, agentName, createdAt, currentScore, currentTier, stakingEvents, skillEventsInput, evaluatorWeights, isA2AReady])
+  }, [agentId, agentName, createdAt, currentScore, currentTier, tierMilestones, stakingEvents, skillEventsInput, evaluatorWeights, isA2AReady])
 
   const activeFilter = FILTER_OPTIONS.find(f => f.id === filter)!
   const visibleEvents = activeFilter.types
