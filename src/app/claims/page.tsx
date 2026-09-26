@@ -1,11 +1,13 @@
 'use client'
 
 import { startVisiblePoll } from '@/lib/visible-poll'
+import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
+import { fetchVaultBackers } from '@/lib/vault-positions'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
-import { parseEther, getAddress } from 'viem'
+import { parseEther } from 'viem'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts'
 import Link from 'next/link'
 import { PageBackground } from '@/components/shared/PageBackground'
@@ -312,109 +314,28 @@ function ClaimsPageContent() {
   }, [searchParams])
 
   // ── Positions helpers ──
-  // Matches agents/page.tsx fetchUserPosition exactly — same variable names, same format
-  const fetchUserPosition = async (termId: string, userAddr: string, counterTermId?: string | null) => {
-    try {
-      const checksummedAddress = userAddr ? getAddress(userAddr) : ''
-      const queryAddress = checksummedAddress.toLowerCase()
+  // The connected wallet's own FOR/AGAINST shares, its shares on one vault (the redeem amount), and
+  // the modal's backers table — the shared helpers (lib/wallet-positions.ts, lib/vault-positions.ts).
+  // This page had its own copies: a lowercase `_eq` on account_id that never matched (it is stored
+  // checksummed), a whole-vault read for one wallet's shares and a `limit: 100` backers read.
+  // null = the read failed: callers keep what they had — a failure is not "no position".
+  const fetchUserPosition = (termId: string, userAddress: string, counterTermId?: string | null) =>
+    fetchUserVaultPosition(termId, counterTermId, userAddress).catch((e) => {
+      console.error('fetchUserPosition error:', e)
+      return null
+    })
 
-      const forRes = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetForPositions($termId: String!, $address: String!) {
-              forPositions: positions(
-                where: { term_id: { _eq: $termId }, account_id: { _eq: $address } }
-                limit: 5
-              ) { shares curve_id updated_at }
-            }
-          `,
-          variables: { termId, address: queryAddress },
-        }),
-      })
-      const forData = await forRes.json()
-      const forPos = forData.data?.forPositions || []
-      const forSharesRaw = forPos[0]?.shares
-      let forBigInt = 0n
-      try { forBigInt = BigInt(forSharesRaw ?? '0') } catch { forBigInt = 0n }
-      const forShares = (forSharesRaw && forBigInt > 0n) ? forSharesRaw : null
-
-      let againstShares: string | null = null
-      let againstRawPositions: any[] = []
-      if (counterTermId) {
-        const agRes = await fetch(GRAPHQL_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `
-              query GetAgainstPositions($termId: String!, $address: String!) {
-                againstPositions: positions(
-                  where: { term_id: { _eq: $termId }, account_id: { _eq: $address } }
-                  limit: 5
-                ) { shares curve_id updated_at }
-              }
-            `,
-            variables: { termId: counterTermId, address: queryAddress },
-          }),
-        })
-        const agData = await agRes.json()
-        againstRawPositions = agData.data?.againstPositions || []
-        const agSharesRaw = againstRawPositions[0]?.shares
-        let agBigInt = 0n
-        try { agBigInt = BigInt(agSharesRaw ?? '0') } catch { agBigInt = 0n }
-        againstShares = (agSharesRaw && agBigInt > 0n) ? agSharesRaw : null
-      }
-
-      return { forShares, againstShares, rawPositions: forPos, againstRawPositions }
-    } catch { return { forShares: null, againstShares: null, rawPositions: [], againstRawPositions: [] } }
-  }
-
-  // Fetches shares for a specific user in a vault.
-  // Does NOT filter by account_id in GraphQL (DB may store checksummed address,
-  // causing _eq to return 0 on lowercase input). Filters in JS instead.
-  const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
-    try {
-      const normalizedAddress = userAddress.toLowerCase()
-      const res = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `query GetVaultPositions($termId: String!) { positions(where: { term_id: { _eq: $termId } }) { account_id shares } }`,
-          variables: { termId },
-        }),
-      })
-      const data = await res.json()
-      const pos = data?.data?.positions?.find(
-        (p: any) => p.account_id?.toLowerCase() === normalizedAddress
-      )
-      let sharesBigInt = 0n
-      try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
-      return sharesBigInt
-    } catch (err) {
+  const fetchVaultSharesForUser = (termId: string, userAddress: string): Promise<bigint> =>
+    fetchWalletShares(termId, userAddress).catch((err) => {
       console.warn('fetchVaultSharesForUser failed:', err)
       return 0n
-    }
-  }
+    })
 
-  const fetchAllPositions = async (termId: string, counterTermId?: string | null) => {
-    try {
-      const termIds = [termId]; if (counterTermId) termIds.push(counterTermId)
-      const res = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `query GetAll($ids: [String!]!) { positions(where: { term_id: { _in: $ids } } order_by: { shares: desc } limit: 100) { account_id account { label } shares term_id updated_at } }`,
-          variables: { ids: termIds },
-        }),
-      })
-      const data = await res.json()
-      const raw = data.data?.positions || []
-      const active = raw.filter((p: any) => p.shares && BigInt(p.shares) > 0n)
-      const wallets = new Set(active.map((p: any) => p.account_id))
-      return { positions: active, uniqueCount: wallets.size }
-    } catch { return { positions: [], uniqueCount: 0 } }
-  }
+  const fetchAllPositions = (termId: string, counterTermId?: string | null) =>
+    fetchVaultBackers(termId, counterTermId).catch((e) => {
+      console.error('fetchAllPositions error:', e)
+      return null
+    })
 
   const fetchSignals = async (termId: string, counterTermId?: string | null) => {
     try {
@@ -460,7 +381,9 @@ function ClaimsPageContent() {
           setClaimSupplyUnread(true)
         }
       }
-      const { positions, uniqueCount } = await posPromise
+      const read = await posPromise
+      if (!read) return // a failed read keeps the table it had (never an empty one)
+      const { positions, uniqueCount } = read
       setAllPositions(positions); setCombinedStakerCount(uniqueCount)
     } finally { if (showLoading) setPositionsLoading(false) }
   }
@@ -548,7 +471,7 @@ function ClaimsPageContent() {
     if (!selectedClaim || !address) return
     fetchUserPosition(selectedClaim.term_id, address, claimTriple.counterTermId).then(pos => {
       // Only update if we got real data (prefer allPositions-derived when both exist)
-      if (pos.forShares || pos.againstShares) setUserPosition(pos)
+      if (pos && (pos.forShares || pos.againstShares)) setUserPosition(pos)
     })
   }, [selectedClaim?.term_id, address, claimTriple.counterTermId])
 
@@ -800,7 +723,7 @@ function ClaimsPageContent() {
         refreshPositionsAndSupply(selectedClaim.term_id, resolvedCounterTermId, false)
         if (address) {
           fetchUserPosition(selectedClaim.term_id, address, resolvedCounterTermId).then(pos => {
-            if (pos.forShares || pos.againstShares) setUserPosition(pos)
+            if (pos && (pos.forShares || pos.againstShares)) setUserPosition(pos)
           })
         }
       }

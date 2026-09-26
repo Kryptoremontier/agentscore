@@ -8,7 +8,7 @@
 
 import { fetchAllRows, SERVER_ROW_CAP, type GqlRequest } from './gql-pager'
 import { TRUST_PREDICATE_TERM_ID } from './gql-filters'
-import { countLiveStakers, liveStakerWallets } from './live-position'
+import { countLiveStakers, livePositions, liveStakerWallets } from './live-position'
 
 export interface VaultPosition {
   /** `${term_id}-${curve_id}-${account}` — unique and immutable, the paging key. */
@@ -107,6 +107,28 @@ export async function fetchVaultPositions(
 /** Positions already read, in one of the read's orders (a copy). */
 export function sortPositions<T extends VaultPosition>(rows: readonly T[], order: PositionOrder): T[] {
   return [...rows].sort(COMPARE[order])
+}
+
+/**
+ * A vault's backers for a modal's table — every position on the vault and its counter-vault
+ * (paged: the pages' own copies read `limit: 100` and dropped the rest), live ones only
+ * (lib/live-position.ts), largest first, and the distinct live staker count. Throws on a failed
+ * read (never an empty table for a failure).
+ */
+export async function fetchVaultBackers(
+  termId: string,
+  counterTermId?: string | null,
+  options: { request?: GqlRequest } = {},
+): Promise<{ positions: VaultPositionWithMeta[]; uniqueCount: number }> {
+  const raw = await fetchVaultPositions(counterTermId ? [termId, counterTermId] : [termId], {
+    order: 'shares-desc',
+    withMeta: true,
+    request: options.request,
+  })
+  return {
+    positions: livePositions(raw),
+    uniqueCount: countLiveStakers(raw, { atomId: termId, counterId: counterTermId }),
+  }
 }
 
 /**

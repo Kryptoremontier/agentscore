@@ -48,9 +48,9 @@ import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, fetchAgentReports, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
-import { fetchVaultPositions, sortPositions, type VaultPositionWithMeta } from '@/lib/vault-positions'
+import { fetchVaultBackers, sortPositions, type VaultPositionWithMeta } from '@/lib/vault-positions'
 import { startVisiblePoll, firstDelayFor } from '@/lib/visible-poll'
-import { fetchWalletPositions, positionOn } from '@/lib/wallet-positions'
+import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
@@ -446,69 +446,27 @@ function AgentsPageContent() {
       .finally(() => setSignalsLoading(false))
   }, [selectedAgent?.term_id, agentTriple.counterTermId])
 
-  // The connected wallet's own shares on the atom vault (FOR) and trust counter-vault (AGAINST).
-  // One read through lib/wallet-positions.ts (`_ilike` — account_id is stored checksummed; the old
-  // lowercase `_eq` never matched). null = the read failed: callers keep what they had, a failure
-  // is not "no position".
-  const fetchUserPosition = async (
-    agentTermId: string,
-    userAddress: string,
-    counterTermId?: string | null
-  ): Promise<{ forShares: string | null; againstShares: string | null; rawPositions: any[]; againstRawPositions: any[] } | null> => {
-    try {
-      const rows = await fetchWalletPositions(counterTermId ? [agentTermId, counterTermId] : [agentTermId], userAddress)
-      const forPos = rows.filter(r => r.term_id.toLowerCase() === agentTermId.toLowerCase())
-      const againstRawPositions = counterTermId ? rows.filter(r => r.term_id.toLowerCase() === counterTermId.toLowerCase()) : []
-      const live = (raw: string | undefined) => {
-        try { return raw && BigInt(raw) > 0n ? raw : null } catch { return null }
-      }
-      const forShares = live(forPos[0]?.shares)
-      const againstShares = live(againstRawPositions[0]?.shares)
-      debugLog('fetchUserPosition:', { termId: agentTermId, counterTermId, forShares, againstShares })
-      return { forShares, againstShares, rawPositions: forPos, againstRawPositions }
-    } catch (e) {
+  // The connected wallet's own shares on the atom vault (FOR) and trust counter-vault (AGAINST),
+  // and its shares on one vault (the redeem amount); the modal's backers table. One module for
+  // /agents, /skills and /claims (lib/wallet-positions.ts, lib/vault-positions.ts). null = the read
+  // failed: callers keep what they had — a failure is not "no position".
+  const fetchUserPosition = (termId: string, userAddress: string, counterTermId?: string | null) =>
+    fetchUserVaultPosition(termId, counterTermId, userAddress).catch((e) => {
       console.error('fetchUserPosition error:', e)
       return null
-    }
-  }
+    })
 
-  const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
-    try {
-      // Only this wallet's rows on this vault, in one request (lib/wallet-positions.ts). Reading the
-      // whole vault stopped at 100 rows (redeem could read 0 shares on a larger vault).
-      const pos = positionOn(await fetchWalletPositions([termId], userAddress), termId)
-      let sharesBigInt = 0n
-      try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
-      return sharesBigInt
-    } catch (err) {
+  const fetchVaultSharesForUser = (termId: string, userAddress: string): Promise<bigint> =>
+    fetchWalletShares(termId, userAddress).catch((err) => {
       console.warn('fetchVaultSharesForUser failed:', err)
       return 0n
-    }
-  }
+    })
 
-  // Fetch ALL positions from both Support + Oppose vaults
-  const fetchAllPositions = async (
-    termId: string,
-    counterTermId?: string | null
-  ): Promise<{ positions: any[]; uniqueCount: number } | null> => {
-    try {
-      const termIds = [termId]
-      if (counterTermId) termIds.push(counterTermId)
-
-      // Every position on both vaults, paged past the endpoint's 100-row cap (was `limit: 100`,
-      // so backers past the first 100 were dropped silently). Throws on a failed page.
-      const raw: any[] = await fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true })
-      // Rows and count through the one live rule (lib/live-position.ts) — no local filter.
-      return {
-        positions: livePositions(raw),
-        uniqueCount: countLiveStakers(raw, { atomId: termId, counterId: counterTermId }),
-      }
-    } catch (e) {
-      // A failed read is not "no positions" — null, and callers keep showing "—".
+  const fetchAllPositions = (termId: string, counterTermId?: string | null) =>
+    fetchVaultBackers(termId, counterTermId).catch((e) => {
       console.error('fetchAllPositions error:', e)
       return null
-    }
-  }
+    })
 
   // Fetch trust triple for selected agent (read-only, no wallet needed)
   // Lock body scroll when agent modal is open

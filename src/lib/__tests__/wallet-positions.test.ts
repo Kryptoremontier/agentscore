@@ -72,13 +72,61 @@ describe('fetchWalletPositions — the user finds their own position whatever th
   })
 })
 
-describe('/agents uses it at both call sites', () => {
-  it('fetchUserPosition and fetchVaultSharesForUser read through fetchWalletPositions; no lowercased _eq on account_id', async () => {
+describe('/agents, /skills and /claims all use the shared helpers (no page-local copies)', () => {
+  it.each(['agents', 'skills', 'claims'])('/%s: user position, redeem shares and backers go through lib/wallet-positions.ts + lib/vault-positions.ts', async (page) => {
     const { readFileSync } = await import('node:fs')
-    const page = readFileSync('src/app/agents/page.tsx', 'utf8')
-    const body = (name: string) => page.slice(page.indexOf(`const ${name} = async`), page.indexOf('\n  }\n', page.indexOf(`const ${name} = async`)))
-    expect(body('fetchUserPosition')).toContain('fetchWalletPositions(')
-    expect(body('fetchVaultSharesForUser')).toContain('fetchWalletPositions(')
-    expect(page).not.toMatch(/account_id: \{ _eq: \$address \}/)
+    const src = readFileSync(`src/app/${page}/page.tsx`, 'utf8')
+    const body = (name: string) => src.slice(src.indexOf(`const ${name} =`), src.indexOf('\n\n', src.indexOf(`const ${name} =`)))
+    expect(body('fetchUserPosition')).toContain('fetchUserVaultPosition(')
+    expect(body('fetchVaultSharesForUser')).toContain('fetchWalletShares(')
+    expect(body('fetchAllPositions')).toContain('fetchVaultBackers(')
+    // The copies: a lowercased `_eq` on account_id, a whole-vault read for one wallet, `limit: 100`.
+    expect(src).not.toMatch(/account_id: \{ _eq: \$address \}/)
+    expect(src).not.toMatch(/query GetVaultPositions\(\$termId/)
+    expect(src).not.toMatch(/query GetAll(Positions)?\(/)
+  })
+})
+
+describe('fetchUserVaultPosition / fetchWalletShares — lowercase input finds the checksummed row', () => {
+  it('FOR and AGAINST in one request; lowercase wallet → found', async () => {
+    const f = fake()
+    const { fetchUserVaultPosition } = await import('../wallet-positions')
+    const pos = await fetchUserVaultPosition(LUDA, LUDA_TRIPLE, HOLDER.toLowerCase())
+    expect(pos.forShares).toBe('980000000000000')
+    expect(pos.againstShares).toBeNull() // the holder has nothing on the other vault
+    expect(f.calls).toHaveLength(1)
+  })
+  it('the redeem amount: lowercase wallet → its shares (was 0n past the first 100 rows of the vault)', async () => {
+    fake()
+    const { fetchWalletShares } = await import('../wallet-positions')
+    expect(await fetchWalletShares(LUDA_TRIPLE, ATTESTER.toLowerCase())).toBe(20790000000000000n)
+    expect(await fetchWalletShares(LUDA_TRIPLE, HOLDER.toLowerCase())).toBe(0n)
+  })
+  it('a failed read rejects (the page keeps what it showed), never "no position" / 0 shares', async () => {
+    installFakeHasura({ tables: [], fail: () => 'throw' })
+    const { fetchUserVaultPosition, fetchWalletShares } = await import('../wallet-positions')
+    await expect(fetchUserVaultPosition(LUDA, null, HOLDER)).rejects.toThrow()
+    await expect(fetchWalletShares(LUDA, HOLDER)).rejects.toThrow()
+  })
+})
+
+describe('fetchVaultBackers — a vault with more than 100 positions', () => {
+  it('pages past the 100-row cap: all 130 live backers, largest first (was `limit: 100`)', async () => {
+    const VAULT = '0xvault'
+    const rows = Array.from({ length: 130 }, (_, i) => ({
+      id: `${VAULT}-1-${String(i).padStart(4, '0')}`, term_id: VAULT, account_id: `0x${String(i).padStart(40, '0')}`,
+      shares: String(1000 + i), created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', account: { label: null },
+    }))
+    installFakeHasura({ tables: [{ match: (q) => q.includes('VaultPositions'), field: 'positions', rows }] })
+    const { fetchVaultBackers } = await import('../vault-positions')
+    const { positions, uniqueCount } = await fetchVaultBackers(VAULT, null)
+    expect(positions).toHaveLength(130)
+    expect(uniqueCount).toBe(130)
+    expect(positions[0].shares).toBe('1129')
+  })
+  it('a failed read rejects — never an empty backers table', async () => {
+    installFakeHasura({ tables: [], fail: () => 'throw' })
+    const { fetchVaultBackers } = await import('../vault-positions')
+    await expect(fetchVaultBackers('0xvault', null)).rejects.toThrow()
   })
 })
