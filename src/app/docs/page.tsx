@@ -673,9 +673,44 @@ function TabScoring() {
         </ul>
       </DocCard>
 
-      {/* Trust Tiers */}
+      {/* Agent Tiers — thesis §6: attestations only */}
       <DocCard>
-        <SectionTitle icon={ShieldCheck} color="#C8963C" label="Trust Tiers — all criteria must be met" />
+        <SectionTitle icon={ShieldCheck} color="#C8963C" label="Agent Tiers — from attestations only" />
+        <p className="text-[#9BA5B0] text-xs leading-relaxed mb-4">
+          An agent&apos;s tier is derived only from attestations: distinct live attesters (wallets with shares &gt; 0 on
+          attestation triples) and tTRUST attested on those triples. Backing on the agent&apos;s atom vault never changes
+          its tier, and a single wallet can never lift an agent above Unverified.
+        </p>
+        <div className="rounded-xl overflow-hidden mb-5"
+          style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                {['Tier', 'Distinct live attesters', 'tTRUST attested'].map(h => (
+                  <th key={h} className="text-left px-3 py-2 text-[#7A838D] font-semibold uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { icon: '⭐', tier: 'Verified', attesters: '≥ 3', attested: '≥ 0.1', rgb: '232,184,75' },
+                { icon: '✓', tier: 'Trusted', attesters: '≥ 2', attested: '≥ 0.05', rgb: '46,204,113' },
+                { icon: '○', tier: 'Unverified', attesters: 'otherwise', attested: '—', rgb: '120,131,141' },
+              ].map((row, i) => (
+                <tr key={row.tier} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                  <td className="px-3 py-2 font-bold" style={{ color: `rgb(${row.rgb})` }}>{row.icon} {row.tier}</td>
+                  <td className="px-3 py-2 text-[#9BA5B0]">{row.attesters}</td>
+                  <td className="px-3 py-2 text-[#9BA5B0]">{row.attested}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </DocCard>
+
+      {/* Vault Tiers — skills, claims, IntuForge (calculateTier) */}
+      <DocCard>
+        <SectionTitle icon={ShieldCheck} color="#C8963C" label="Vault Tiers (skills, claims, IntuForge) — all criteria must be met" />
         <div className="rounded-xl overflow-hidden mb-5"
           style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
           <table className="w-full text-xs">

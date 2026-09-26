@@ -48,7 +48,8 @@ A2A-compatible agent card: identity, capabilities, endpoints, and the same trust
 
 GET ${API_V1_ENDPOINTS.agent_timeline}
 Real dated on-chain events for one agent (stakes, skill/domain attestation
-claims, tier upgrades) plus the current score. Historical score snapshots are
+claims) plus the current score. Agents emit no staker-count "tier upgrade"
+events: an agent's tier comes only from attestations. Historical score snapshots are
 not persisted: scoreHistory carries only the current score and
 meta.history is "not_recorded" — there is no historical score curve.
 

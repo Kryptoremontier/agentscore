@@ -204,9 +204,25 @@ an agent's current momentum vs its historical average.
 
 ---
 
-## Trust Tiers
+## Agent Tiers
 
-Multi-dimensional thresholds — ALL criteria must be met to reach a tier.
+An agent's tier is derived **only from attestations** (thesis §6 "Agent tiers",
+`src/lib/agent-tier.ts` `calculateAgentTier`): distinct live attesters (wallets with
+shares > 0 on attestation triples) and tTRUST attested on those triples. Backing on the
+agent's atom vault never changes its tier. A single wallet can never lift an agent above
+Unverified. No age, support ratio or vault staker count enters it.
+
+| Tier | Distinct live attesters | tTRUST attested |
+|------|-------------------------|-----------------|
+| ⭐ Verified | ≥ 3 | ≥ 0.1 |
+| ✓ Trusted | ≥ 2 | ≥ 0.05 |
+| ○ Unverified | otherwise | — |
+
+## Vault Tiers (skills, claims, IntuForge projects)
+
+Skills, claims and IntuForge projects keep the stake-based ladder (`calculateTier`,
+`src/lib/trust-tiers.ts`). Multi-dimensional thresholds — ALL criteria must be met to reach
+a tier. This is not an agent tier.
 
 | Tier | Min Stakers | Min Stake | Min Ratio | Min Days |
 |------|------------|-----------|-----------|----------|
