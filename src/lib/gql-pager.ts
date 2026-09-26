@@ -102,28 +102,72 @@ export interface PageSpec {
 }
 
 /**
+ * The first page and its count as ONE GraphQL document — a document may select several root
+ * fields, so a read that fits in one page (every modal poll tick, most vault reads) costs one
+ * request instead of two. null when they can't be merged: the count declares a variable the
+ * rows query doesn't.
+ */
+export function mergeCountIntoQuery(query: string, countQuery: string): string | null {
+  const header = (q: string) => q.slice(0, Math.max(0, q.indexOf('{')))
+  const declared = (q: string) => new Set([...header(q).matchAll(/\$(\w+)\s*:/g)].map((m) => m[1]))
+  const rowVars = declared(query)
+  for (const v of declared(countQuery)) if (!rowVars.has(v)) return null
+  const open = countQuery.indexOf('{')
+  const close = countQuery.lastIndexOf('}')
+  const end = query.lastIndexOf('}')
+  if (open < 0 || close <= open || end < 0) return null
+  return `${query.slice(0, end)}  ${countQuery.slice(open + 1, close).trim()}\n}`
+}
+
+const countOf = (d: unknown, field: string): number | null => {
+  const n = (d as Record<string, { aggregate?: { count?: unknown } }> | null)?.[field]?.aggregate?.count
+  return typeof n === 'number' ? n : null
+}
+
+/**
  * Read every row of a query, page by page. Throws if any page (or the
  * transport) fails — callers map that to their error state.
  */
 export async function fetchAllRows<T>(spec: PageSpec): Promise<PagedRows<T>> {
   const request: GqlRequest = spec.request ?? gqlRequest
   const pageSize = Math.max(1, Math.floor(spec.pageSize))
+  const rows: T[] = []
+  let reachedEnd = false
+
+  // First page + count in one request. A GraphQL-level failure of the merged document (say the
+  // count alone is rejected) falls back to the two requests below; an HTTP failure (a 429) does
+  // not — retrying it as two requests would only spend more of the rate limit.
+  let countPromise: Promise<number | null> | null = null
+  const merged = spec.countQuery && spec.countField ? mergeCountIntoQuery(spec.query, spec.countQuery) : null
+  if (merged && spec.maxRows > 0) {
+    const limit = Math.min(pageSize, spec.maxRows)
+    try {
+      const data = await request<Record<string, unknown>>(merged, { ...spec.variables, limit, offset: 0 })
+      const batch = data?.[spec.field]
+      if (!Array.isArray(batch)) throw new Error(`GraphQL response without ${spec.field}`)
+      rows.push(...(batch as T[]))
+      const count = countOf(data, spec.countField!)
+      countPromise = Promise.resolve(count)
+      if (batch.length === 0 || (count != null && rows.length >= count)) reachedEnd = true
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('GraphQL HTTP')) throw e
+      rows.length = 0
+      countPromise = null
+    }
+  }
 
   // The count runs alongside the first page. A failed count is "unknown", not 0:
   // paging then continues until an empty page proves the end.
-  const countPromise: Promise<number | null> = spec.countQuery && spec.countField
-    ? request<Record<string, { aggregate?: { count?: unknown } }>>(spec.countQuery, spec.variables)
-        .then((d) => {
-          const n = d?.[spec.countField!]?.aggregate?.count
-          return typeof n === 'number' ? n : null
-        })
-        .catch(() => null)
-    : Promise.resolve(null)
+  if (!countPromise) {
+    countPromise = spec.countQuery && spec.countField
+      ? request<Record<string, { aggregate?: { count?: unknown } }>>(spec.countQuery, spec.variables)
+          .then((d) => countOf(d, spec.countField!))
+          .catch(() => null)
+      : Promise.resolve(null)
+  }
 
-  const rows: T[] = []
-  let reachedEnd = false
   // Bounded by maxRows: every page either adds at least one row or ends the read.
-  while (rows.length < spec.maxRows) {
+  while (!reachedEnd && rows.length < spec.maxRows) {
     const limit = Math.min(pageSize, spec.maxRows - rows.length)
     const data = await request<Record<string, T[]>>(spec.query, { ...spec.variables, limit, offset: rows.length })
     const batch = data?.[spec.field]

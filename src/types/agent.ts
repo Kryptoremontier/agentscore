@@ -16,8 +16,8 @@ export interface Agent {
   // Avatar
   avatar?: string               // IPFS hash lub URL
 
-  // Owner info
-  owner: {
+  // Owner info — absent when the read doesn't have it (never a placeholder address).
+  owner?: {
     address: `0x${string}`
     name?: string
     avatar?: string

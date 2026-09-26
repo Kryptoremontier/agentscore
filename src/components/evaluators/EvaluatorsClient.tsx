@@ -142,7 +142,9 @@ function getAccuracyColor(accuracy: number): string {
   return '#EF4444'
 }
 
-export function EvaluatorsClient({ initialData }: { initialData: EvaluatorProfile[] }) {
+/** initialData null = the leaderboard read failed (not "no evaluators"). */
+export function EvaluatorsClient({ initialData: data }: { initialData: EvaluatorProfile[] | null }) {
+  const initialData = data ?? []
   const { address } = useAccount()
 
   const myEntry = address
@@ -233,7 +235,12 @@ export function EvaluatorsClient({ initialData }: { initialData: EvaluatorProfil
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right">Picks</span>
             </div>
 
-            {initialData.length === 0 ? (
+            {data === null ? (
+              <div className="py-20 text-center text-[#7A838D]">
+                <Target className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                <p className="text-sm">Couldn’t read the evaluator leaderboard — try again in a minute</p>
+              </div>
+            ) : initialData.length === 0 ? (
               <div className="py-20 text-center text-[#7A838D]">
                 <Target className="w-8 h-8 mx-auto mb-3 opacity-20" />
                 <p className="text-sm">No evaluator data found on testnet yet</p>

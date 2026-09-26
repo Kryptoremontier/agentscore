@@ -43,7 +43,8 @@ function stubGraphql(extra: (q: string) => unknown = () => undefined) {
     const q = String(JSON.parse(String(init?.body ?? '{}')).query)
     const data = extra(q)
       ?? (q.includes('ApiAgentsCount') ? { atoms_aggregate: { aggregate: { count: RAW_ROWS.length } } }
-        : q.includes('ApiAgents') ? { atoms: RAW_ROWS }
+        // The first page carries its count in the same document (lib/gql-pager.ts).
+        : q.includes('ApiAgents') ? { atoms: RAW_ROWS, atoms_aggregate: { aggregate: { count: RAW_ROWS.length } } }
         : q.includes('ApiSkillCount') ? { atoms_aggregate: { aggregate: { count: 0 } } }
         : q.includes('GetAllDomainTriples') ? { triples: [] }
         : q.includes('triples_aggregate') ? { triples_aggregate: { aggregate: { count: 0 } } }
@@ -159,10 +160,13 @@ describe('truncation fires at limit + 1, never at the limit (paged — lib/gql-p
     expect(r.rows).toHaveLength(AGENT_LIST_LIMIT)
     expect(r.total).toBe(AGENT_LIST_LIMIT + 1)
     expect(r.truncated).toBe(true)
-    const rowQ = fake.calls.find(c => c.query.includes('AgentListCorpus('))!.query
-    const countQ = fake.calls.find(c => c.query.includes('AgentListCorpusCount'))!.query
-    const where = (q: string) => q.match(/where: (\{[\s\S]*?\})\s*(limit|\))/)?.[1]?.replace(/\s+/g, ' ')
-    expect(where(rowQ)).toBe(where(countQ))
+    // The first page and the count are one document (lib/gql-pager.ts mergeCountIntoQuery):
+    // its rows `where` and its aggregate `where` must be the same.
+    const doc = fake.calls.find(c => c.query.includes('AgentListCorpus(') && c.query.includes('atoms_aggregate'))!.query
+    const wheres = [...doc.matchAll(/where: (\{[\s\S]*?\})\s*(limit|\))/g)].map(m => m[1].replace(/\s+/g, ' '))
+    // The rows' own `where` comes first (nested selections have theirs), the aggregate's last.
+    expect(wheres.length).toBeGreaterThanOrEqual(2)
+    expect(wheres[0]).toBe(wheres[wheres.length - 1])
   })
 
   it('/agents corpus fetch: exactly 50 atoms → not truncated', async () => {

@@ -3,6 +3,16 @@
 > Recon only: no code changed in this commit. Branch `feat/etap4b-close` @ `9b3040c` (commits 1–4 of Etap 4b-close).
 > Written 2026-09-26. Line references are to that commit.
 
+## Status — implemented in Etap 4b-cache (measured 2026-09-26, production builds)
+
+| | before (`main` @ `3d034d2`) | after (`feat/etap4b-cache`) |
+|---|---|---|
+| Server, synthetic load of 30 REST/MCP calls/min | 344 · 344 · 346 GraphQL req/min, 19–28 HTTP 429 from minute 2, 3 failed answers | 54 · 35 · **23** req/min, 0 × 429, 0 failed; every answer carries `meta.dataAgeSeconds` |
+| Browser, cold `/agents` + 3 modals within one minute | 69 (list 23, modals 15 / 17 / 14) | **32** (list 13, modals 5 / 7 / 7) |
+| Browser, a modal left open in a hidden tab | 8 req/min | 0 (one refresh when shown again) |
+
+What was built is §4.1 (shared server cache, complete reads only, with the age reported) plus two things this recon didn't list: the pager's first page and count in one request, and the modal reusing the list's reads. §4.2's optional step — serving the `/agents` list from the server cache — was not needed for one user (32 of 75); a shared IP with three heavy users in the same minute would still exceed the limit. See REPO_MAP §3 "Shared server cache" and §7 rule 6.
+
 ## TL;DR
 
 1. **The Intuition Hasura endpoint allows 75 requests per minute per caller IP** (Kong: `ratelimit-limit: 75`, `x-ratelimit-limit-minute: 75`, fixed one-minute window). A read over the limit gets a 429. `gqlRequest` throws on it, and the UI shows its honest "couldn't read" state (REPO_MAP §7 rule 5).

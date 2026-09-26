@@ -56,14 +56,21 @@ export function installFakeHasura(opts: FakeHasuraOptions): FakeHasura {
     for (const t of opts.tables) {
       if (!t.match(query, variables)) continue
       const all = typeof t.rows === 'function' ? t.rows(query, variables) : t.rows
+      // Like the real endpoint, one document may select the rows AND the aggregate (the pager's
+      // first page); a count that throws fails the whole document.
+      const wantsRows = new RegExp(`\\b${t.field}\\s*\\(`).test(query)
+      const data: Record<string, unknown> = {}
       if (query.includes(`${t.field}_aggregate`)) {
         const count = typeof t.count === 'function' ? t.count(query, variables) : t.count ?? all.length
-        return ok({ [`${t.field}_aggregate`]: { aggregate: { count } } })
+        data[`${t.field}_aggregate`] = { aggregate: { count } }
       }
-      const offset = typeof variables.offset === 'number' ? variables.offset : 0
-      const limit = typeof variables.limit === 'number' ? variables.limit : Infinity
-      const n = Math.min(limit, SERVER_ROW_CAP[t.field])
-      return ok({ [t.field]: all.slice(offset, offset + n) })
+      if (wantsRows) {
+        const offset = typeof variables.offset === 'number' ? variables.offset : 0
+        const limit = typeof variables.limit === 'number' ? variables.limit : Infinity
+        const n = Math.min(limit, SERVER_ROW_CAP[t.field])
+        data[t.field] = all.slice(offset, offset + n)
+      }
+      return ok(data)
     }
     const data = opts.other?.(query, variables)
     if (data === undefined) throw new Error(`fake-hasura: unmatched query ${query.slice(0, 120)}`)
@@ -71,6 +78,7 @@ export function installFakeHasura(opts: FakeHasuraOptions): FakeHasura {
   }))
   return {
     calls,
-    rowCalls: (field) => calls.filter((c) => new RegExp(`\\b${field}\\s*\\(`).test(c.query) && !c.query.includes(`${field}_aggregate`)),
+    // Requests that read rows of a table (a merged first page counts: it reads rows too).
+    rowCalls: (field) => calls.filter((c) => new RegExp(`\\b${field}\\s*\\(`).test(c.query)),
   }
 }

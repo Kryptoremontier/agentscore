@@ -14,14 +14,15 @@
  * Oppose position tracking is a future enhancement.
  */
 
-import { unstable_cache, revalidateTag } from 'next/cache'
-import { APP_CONFIG } from './app-config'
+import { revalidateTag } from 'next/cache'
 import { AGENT_WHERE_STR } from './gql-filters'
+import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
+import { completeReadCache, SERVER_CACHE_TTL, type CompleteRead } from './server-cache'
 
 import { calculateEvaluatorScore, type StakerPosition, type EvaluatorProfile } from './evaluator-score'
 import { batchGetAttestationCounts, getAttestationConfig } from './attestation-gate'
 import { fetchVaultPositions, sumSharesByVault } from './vault-positions'
-import { stakeReadingOf } from './score-basis'
+import { hasMeasuredScore, stakeReadingOf } from './score-basis'
 
 /** Oppose shares per counter-vault, from one paged read. null = the read failed. */
 async function readOpposeSums(counterIds: readonly string[]): Promise<Map<string, bigint> | null> {
@@ -31,8 +32,11 @@ async function readOpposeSums(counterIds: readonly string[]): Promise<Map<string
 
 /**
  * An agent's support ratio 0–100 (Math.round) for the evaluator track record, read through
- * the shared stakeReadingOf. null = its oppose read failed — unknown, never computed on 0
- * oppose (which would count every such pick as the agent being fully supported).
+ * the shared stakeReadingOf. null = no measurement: its oppose read failed (unknown, never
+ * computed on 0 oppose — which would count every such pick as the agent being fully supported),
+ * or the agent holds no stake at all — the same rule as `scoreBasis` (lib/score-basis.ts
+ * hasMeasuredScore): the old `: 50` was a prior judged as if it were a verdict. A null pick is
+ * left out of the track record (calculateEvaluatorScore).
  */
 export function trustRatioOf(
   atom: { positions_aggregate?: { aggregate?: { sum?: { shares?: string | null } | null } | null } | null; as_subject_triples?: Array<{ counter_term_id: string | null }> | null },
@@ -43,27 +47,20 @@ export function trustRatioOf(
     positions_aggregate: atom.positions_aggregate as never,
     __opposeWei: !ctid ? undefined : opposeSums ? (opposeSums.get(ctid) ?? 0n) : null,
   })
-  if (reading.opposeWei === null) return null
+  if (!hasMeasuredScore(reading)) return null
   const supportWei = reading.supportWei ?? 0n
-  const totalWei = supportWei + reading.opposeWei
-  return totalWei > 0n ? Math.round(Number(supportWei * 100n / totalWei)) : 50
+  const totalWei = supportWei + (reading.opposeWei ?? 0n)
+  return Math.round(Number(supportWei * 100n / totalWei))
 }
 import { fetchPositionPNL, computePositionPNL, type PositionPNL } from './pnl-engine'
 
-const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const TRUST_PREDICATE_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
 const FEE_PROXY_LC = '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41'
 
-async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-  const res = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  })
-  const json = await res.json()
-  if (json.errors) throw new Error(json.errors[0]?.message || 'GraphQL error')
-  return json.data as T
-}
+// The shared transport: throws on a non-2xx (a 429 used to parse as "no data" → an empty
+// leaderboard, cached for 5 minutes), on GraphQL errors and on a body without data.
+const gql = <T>(query: string, variables?: Record<string, unknown>) =>
+  gqlRequest<T>(query, variables, { cache: 'no-store' })
 
 function cleanName(label: string | null | undefined): string {
   if (!label || typeof label !== 'string') return 'Unnamed'
@@ -168,23 +165,26 @@ export async function fetchStakerPositions(
   }
 }
 
-// Cached separately from the leaderboard (900s > leaderboard 300s TTL) so it
-// is always warm when the leaderboard cache expires. Agent registrations are
-// rare — a 15-minute staleness window is fine.
-const fetchAgentTermIds = unstable_cache(
-  async (): Promise<string[]> => {
-    const data = await gql<{ atoms: { term_id: string }[] }>(`
-      {
-        atoms(where: ${AGENT_WHERE_STR} limit: 500) {
-          term_id
-        }
-      }
-    `)
-    return data?.atoms?.map(a => a.term_id) ?? []
-  },
-  ['agent-term-ids'],
-  { revalidate: 900, tags: ['agent-term-ids'] },
-)
+/**
+ * Every AgentScore agent's term_id, paged past the endpoint's 250-row cap (`limit: 500` got at
+ * most 250 back, silently). Was its own 900 s cache — which Next bypasses when called inside the
+ * leaderboard's cached read, so it never saved a request there.
+ */
+async function fetchAgentTermIds(): Promise<string[]> {
+  const page = await fetchAllRows<{ term_id: string }>({
+    query: `query EvaluatorAgentIds($limit: Int!, $offset: Int!) {
+      atoms(where: ${AGENT_WHERE_STR}, order_by: { term_id: asc }, limit: $limit, offset: $offset) { term_id }
+    }`,
+    field: 'atoms',
+    countQuery: `query EvaluatorAgentIdsCount { atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } } }`,
+    countField: 'atoms_aggregate',
+    pageSize: SERVER_ROW_CAP.atoms,
+    maxRows: 5_000,
+    request: gql,
+  })
+  if (page.truncated !== false) throw new Error('agent term ids not read to the end')
+  return page.rows.map(a => a.term_id)
+}
 
 /**
  * Fetch all evaluator profiles for the leaderboard.
@@ -196,163 +196,169 @@ const fetchAgentTermIds = unstable_cache(
  *
  * Returns sorted by adjustedAccuracy desc, limited to top 50.
  */
-async function fetchEvaluatorLeaderboardImpl(): Promise<EvaluatorProfile[]> {
-  try {
-    type PosRow = {
-      account_id: string
-      shares: string
-      term_id: string
-      total_deposit_assets_after_total_fees: string
-      total_redeem_assets_for_receiver: string
-      vault: {
-        current_share_price: string
-        term: {
-          atom: {
-            term_id: string
-            label: string
-            creator: { id: string } | null
-            positions_aggregate: { aggregate: { sum: { shares: string | null } | null } }
-            as_subject_triples: Array<{ counter_term_id: string }>
-          } | null
+async function readEvaluatorLeaderboard(): Promise<CompleteRead<EvaluatorProfile[]>> {
+  type PosRow = {
+    account_id: string
+    shares: string
+    term_id: string
+    total_deposit_assets_after_total_fees: string
+    total_redeem_assets_for_receiver: string
+    vault: {
+      current_share_price: string
+      term: {
+        atom: {
+          term_id: string
+          label: string
+          creator: { id: string } | null
+          positions_aggregate: { aggregate: { sum: { shares: string | null } | null } }
+          as_subject_triples: Array<{ counter_term_id: string }>
         } | null
       } | null
-    }
+    } | null
+  }
 
-    // Step 1: fetch agent term_ids (cached 900s — longer than leaderboard 300s,
-    // so it is always warm when the leaderboard cache expires every 5 min).
-    const agentTermIds = await fetchAgentTermIds()
-    if (agentTermIds.length === 0) return []
+  // Step 1: every agent term_id (paged).
+  const agentTermIds = await fetchAgentTermIds()
+  if (agentTermIds.length === 0) return { value: [], complete: true }
 
-    // Step 2: fetch positions for those vaults (1-level join, no timeout).
-    // limit: 800 covers all active positions on testnet with headroom.
-    // Replace with cursor pagination on mainnet.
-    const data = await gql<{ positions: PosRow[] }>(`
-      {
-        positions(
-          where: {
-            shares: { _gt: "0" }
-            vault: { term_id: { _in: ${JSON.stringify(agentTermIds)} } }
-          }
-          limit: 800
-        ) {
-          account_id
-          shares
-          term_id
-          total_deposit_assets_after_total_fees
-          total_redeem_assets_for_receiver
-          vault {
-            current_share_price
-            term {
-              atom {
-                term_id
-                label
-                creator { id }
-                positions_aggregate {
-                  aggregate { sum { shares } }
-                }
-                as_subject_triples(
-                  where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
-                  limit: 1
-                ) { counter_term_id }
+  // Step 2: positions on those vaults (1-level join, no timeout), paged to the aggregate count —
+  // `limit: 800` got at most 100 back from the endpoint, silently.
+  const where = `{ shares: { _gt: "0" }, vault: { term_id: { _in: $ids } } }`
+  const page = await fetchAllRows<PosRow>({
+    query: `query EvaluatorPositions($ids: [String!]!, $limit: Int!, $offset: Int!) {
+      positions(where: ${where}, order_by: { id: asc }, limit: $limit, offset: $offset) {
+        account_id
+        shares
+        term_id
+        total_deposit_assets_after_total_fees
+        total_redeem_assets_for_receiver
+        vault {
+          current_share_price
+          term {
+            atom {
+              term_id
+              label
+              creator { id }
+              positions_aggregate {
+                aggregate { sum { shares } }
               }
+              as_subject_triples(
+                where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
+                limit: 1
+              ) { counter_term_id }
             }
           }
         }
       }
-    `)
+    }`,
+    field: 'positions',
+    countQuery: `query EvaluatorPositionsCount($ids: [String!]!) {
+      positions_aggregate(where: ${where}) { aggregate { count } }
+    }`,
+    countField: 'positions_aggregate',
+    variables: { ids: agentTermIds },
+    pageSize: SERVER_ROW_CAP.positions,
+    maxRows: 50_000,
+    request: gql,
+  })
+  if (page.truncated !== false) throw new Error('evaluator positions not read to the end')
+  const positions = page.rows
 
-    const positions = data?.positions || []
-
-    // Collect all counter_term_ids to batch-fetch oppose shares
-    const counterTermIdSet = new Set<string>()
-    for (const p of positions) {
-      const ctid = p.vault?.term?.atom?.as_subject_triples?.[0]?.counter_term_id
-      if (ctid) counterTermIdSet.add(ctid)
-    }
-
-    // Oppose vault shares — paged; null = the read failed (trust unknown, never 0 oppose).
-    const opposeSums = await readOpposeSums(Array.from(counterTermIdSet))
-
-    // Group positions by account_id, build StakerPosition[] per account
-    const accountPositions = new Map<string, StakerPosition[]>()
-
-    for (const p of positions) {
-      const acct = p.account_id?.toLowerCase()
-      if (!acct || acct === FEE_PROXY_LC) continue
-      if (!p.shares || BigInt(p.shares || '0') <= 0n) continue
-
-      const atom = p.vault?.term?.atom
-      if (!atom) continue
-
-      const trustScore = trustRatioOf(atom, opposeSums)
-
-      const isCreator =
-        !!atom.creator?.id &&
-        atom.creator.id.toLowerCase() === acct &&
-        atom.creator.id.toLowerCase() !== FEE_PROXY_LC
-
-      // Compute on-chain PNL from the already-fetched position fields
-      const pnl = computePositionPNL({
-        termId: atom.term_id,
-        sharesStr: p.shares,
-        costBasisStr: p.total_deposit_assets_after_total_fees ?? '0',
-        realizedValueStr: p.total_redeem_assets_for_receiver ?? '0',
-        sharePriceStr: p.vault?.current_share_price ?? '0',
-      })
-
-      const stakerPos: StakerPosition = {
-        agentAtomId: atom.term_id,
-        agentName: cleanName(atom.label || 'Unknown'),
-        side: 'support',
-        currentTrustScore: trustScore,
-        isCreator,
-        pnl,
-      }
-
-      if (!accountPositions.has(acct)) accountPositions.set(acct, [])
-      // Deduplicate by atom (keep only one position per agent per account)
-      const existing = accountPositions.get(acct)!
-      if (!existing.find(ep => ep.agentAtomId === stakerPos.agentAtomId)) {
-        existing.push(stakerPos)
-      }
-    }
-
-    // Batch-fetch attestation counts for all evaluator wallets (Layer 7)
-    const allAddresses = Array.from(accountPositions.keys())
-    const attestationMap = await batchGetAttestationCounts(allAddresses, getAttestationConfig())
-
-    // Calculate evaluator score for each account
-    const profiles: EvaluatorProfile[] = []
-    for (const [address, stakerPositions] of accountPositions) {
-      const attestation = attestationMap.get(address)
-      const profile = calculateEvaluatorScore(address, stakerPositions, {
-        meetsAttestationThreshold: attestation?.meetsThreshold,
-        attestationCount: attestation?.attestationCount ?? 0,
-      })
-      if (profile.totalPositions > 0) {
-        profiles.push(profile)
-      }
-    }
-
-    // Sort by adjusted accuracy desc, then by totalPositions desc (tiebreak)
-    return profiles
-      .sort((a, b) =>
-        b.adjustedAccuracy !== a.adjustedAccuracy
-          ? b.adjustedAccuracy - a.adjustedAccuracy
-          : b.totalPositions - a.totalPositions
-      )
-      .slice(0, 50)
-  } catch (error) {
-    console.warn('[fetchEvaluatorLeaderboard] Failed:', error)
-    return []
+  // Collect all counter_term_ids to batch-fetch oppose shares
+  const counterTermIdSet = new Set<string>()
+  for (const p of positions) {
+    const ctid = p.vault?.term?.atom?.as_subject_triples?.[0]?.counter_term_id
+    if (ctid) counterTermIdSet.add(ctid)
   }
+
+  // Oppose vault shares — paged; null = the read failed (trust unknown, never 0 oppose).
+  const opposeSums = await readOpposeSums(Array.from(counterTermIdSet))
+
+  // Group positions by account_id, build StakerPosition[] per account
+  const accountPositions = new Map<string, StakerPosition[]>()
+
+  for (const p of positions) {
+    const acct = p.account_id?.toLowerCase()
+    if (!acct || acct === FEE_PROXY_LC) continue
+    if (!p.shares || BigInt(p.shares || '0') <= 0n) continue
+
+    const atom = p.vault?.term?.atom
+    if (!atom) continue
+
+    const trustScore = trustRatioOf(atom, opposeSums)
+
+    const isCreator =
+      !!atom.creator?.id &&
+      atom.creator.id.toLowerCase() === acct &&
+      atom.creator.id.toLowerCase() !== FEE_PROXY_LC
+
+    // Compute on-chain PNL from the already-fetched position fields
+    const pnl = computePositionPNL({
+      termId: atom.term_id,
+      sharesStr: p.shares,
+      costBasisStr: p.total_deposit_assets_after_total_fees ?? '0',
+      realizedValueStr: p.total_redeem_assets_for_receiver ?? '0',
+      sharePriceStr: p.vault?.current_share_price ?? '0',
+    })
+
+    const stakerPos: StakerPosition = {
+      agentAtomId: atom.term_id,
+      agentName: cleanName(atom.label || 'Unknown'),
+      side: 'support',
+      currentTrustScore: trustScore,
+      isCreator,
+      pnl,
+    }
+
+    if (!accountPositions.has(acct)) accountPositions.set(acct, [])
+    // Deduplicate by atom (keep only one position per agent per account)
+    const existing = accountPositions.get(acct)!
+    if (!existing.find(ep => ep.agentAtomId === stakerPos.agentAtomId)) {
+      existing.push(stakerPos)
+    }
+  }
+
+  // Batch-fetch attestation counts for all evaluator wallets (Layer 7)
+  const allAddresses = Array.from(accountPositions.keys())
+  const attestationMap = await batchGetAttestationCounts(allAddresses, getAttestationConfig())
+
+  // Calculate evaluator score for each account
+  const profiles: EvaluatorProfile[] = []
+  for (const [address, stakerPositions] of accountPositions) {
+    const attestation = attestationMap.get(address)
+    const profile = calculateEvaluatorScore(address, stakerPositions, {
+      meetsAttestationThreshold: attestation?.meetsThreshold,
+      attestationCount: attestation?.attestationCount ?? 0,
+    })
+    if (profile.totalPositions > 0) {
+      profiles.push(profile)
+    }
+  }
+
+  // Sort by adjusted accuracy desc, then by totalPositions desc (tiebreak)
+  const ranked = profiles
+    .sort((a, b) =>
+      b.adjustedAccuracy !== a.adjustedAccuracy
+        ? b.adjustedAccuracy - a.adjustedAccuracy
+        : b.totalPositions - a.totalPositions
+    )
+    .slice(0, 50)
+
+  // Complete = every oppose sum and every attestation count was read. Otherwise the profiles
+  // are still returned (unknown trust is left out of each track record) but never stored.
+  const attestationsRead = [...attestationMap.values()].every(a => !a.incomplete)
+  return { value: ranked, complete: opposeSums !== null && attestationsRead }
 }
 
-export const fetchEvaluatorLeaderboard = unstable_cache(
-  fetchEvaluatorLeaderboardImpl,
-  ['evaluator-leaderboard'],
-  { revalidate: 300, tags: ['evaluator-leaderboard'] },
-)
+/**
+ * The evaluator leaderboard — shared server cache, SERVER_CACHE_TTL.evaluatorLeaderboard seconds,
+ * complete reads only (lib/server-cache.ts). A failed read throws: it used to return `[]`, which
+ * the old `unstable_cache` stored and served as "no evaluators" for five minutes.
+ */
+export const fetchEvaluatorLeaderboard = completeReadCache('evaluator-leaderboard', readEvaluatorLeaderboard, {
+  revalidate: SERVER_CACHE_TTL.evaluatorLeaderboard,
+  tags: () => [],
+})
 
 export function revalidateEvaluatorLeaderboard() {
   revalidateTag('evaluator-leaderboard')

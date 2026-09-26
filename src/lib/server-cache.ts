@@ -1,0 +1,280 @@
+/**
+ * Shared server cache for COMPLETE reads (Etap 4b-cache).
+ *
+ * The indexer allows 75 requests per minute per IP, and every server-side read (REST, MCP,
+ * the landing's API calls) shares Vercel's egress (docs/audit/rate-limit.md). This wraps a
+ * read in `unstable_cache` (the Vercel Data Cache, shared across function instances) so that
+ * repeated calls within a TTL cost nothing — under three rules:
+ *
+ * 1. **Only complete reads are stored.** A read reports `{ value, complete }`. A read that
+ *    threw, stopped at a row cap, or settled a sub-read as unknown (`null`) is returned to its
+ *    caller as-is and never stored: the next caller reads again (REPO_MAP §7 rule 5 — a
+ *    failure pinned for a whole TTL would be served as if it were the data).
+ * 2. **Every cached answer says how old it is.** Each read records when it hit the indexer
+ *    into the request's read ledger (`runWithReadLedger`); `currentFreshness()` gives the
+ *    answer's `dataAgeSeconds` (oldest read behind it; 0 when everything was read live) and
+ *    `complete` (false → the response must not be cached downstream either).
+ * 3. **Past twice its TTL a cached value is not served.** `unstable_cache` serves a stale
+ *    entry while it revalidates in the background; after a quiet hour that entry is an hour
+ *    old. Past `maxStaleSeconds` (default 2 × TTL) the read runs live instead.
+ *
+ * Don't nest: Next bypasses `unstable_cache` for a cached function called inside another's
+ * callback (it re-reads live). Compose cached reads outside — `getPlatformStats` and the agent
+ * detail do — so each keeps its own entry and age.
+ *
+ * Wallet-specific reads (the user's own position, an evaluator's positions) are never wrapped.
+ */
+
+import { unstable_cache } from 'next/cache'
+
+// ─── Read ledger (per request) ────────────────────────────────────────────────
+
+export interface ReadRecord {
+  key: string
+  /** Epoch ms at which the data hit the indexer. */
+  readAt: number
+  /** Served from the cache (true) or read live for this request (false). */
+  cached: boolean
+  complete: boolean
+}
+
+interface Ledger {
+  reads: ReadRecord[]
+  parent: Ledger | null
+}
+
+interface LedgerStore {
+  run<R>(store: Ledger, fn: () => R): R
+  getStore(): Ledger | undefined
+}
+
+/**
+ * AsyncLocalStorage without a static `node:async_hooks` import: client pages import api-data (for
+ * shared helpers and types), and webpack can't bundle a `node:` URI for the browser — the build
+ * failed on it. The Next server sets `globalThis.AsyncLocalStorage`; plain Node (tests, scripts)
+ * has `process.getBuiltinModule`; in a browser bundle nothing is ledgered (a no-op store).
+ */
+function createLedgerStore(): LedgerStore {
+  type Ctor = new () => LedgerStore
+  const fromGlobal = (globalThis as { AsyncLocalStorage?: Ctor }).AsyncLocalStorage
+  const fromNode = typeof process !== 'undefined'
+    ? (process as { getBuiltinModule?: (id: string) => { AsyncLocalStorage?: Ctor } | undefined }).getBuiltinModule?.('node:async_hooks')?.AsyncLocalStorage
+    : undefined
+  const Als = fromGlobal ?? fromNode
+  if (Als) return new Als()
+  return { run: (_store, fn) => fn(), getStore: () => undefined }
+}
+
+let ledgerStoreInstance: LedgerStore | null = null
+const ledgerStore: LedgerStore = {
+  run: (store, fn) => (ledgerStoreInstance ??= createLedgerStore()).run(store, fn),
+  getStore: () => (ledgerStoreInstance ??= createLedgerStore()).getStore(),
+}
+
+/** Run `fn` with a fresh read ledger (one per REST request / MCP tool call). */
+export function runWithReadLedger<T>(fn: () => T): T {
+  return ledgerStore.run({ reads: [], parent: null }, fn)
+}
+
+function record(entry: ReadRecord): void {
+  for (let l = ledgerStore.getStore() ?? null; l; l = l.parent) l.reads.push(entry)
+}
+
+/** Run `fn` in a child ledger that still reports to its parent; returns what `fn` read. */
+async function collect<T>(fn: () => Promise<T>): Promise<{ value: T; reads: ReadRecord[] }> {
+  const child: Ledger = { reads: [], parent: ledgerStore.getStore() ?? null }
+  const value = await ledgerStore.run(child, fn)
+  return { value, reads: child.reads }
+}
+
+export interface Freshness {
+  /** Whole seconds since the oldest read behind this answer hit the indexer. 0 = read live. */
+  dataAgeSeconds: number
+  /** ISO-8601 time of that oldest read — absolute, so a CDN hop can't hide it. */
+  dataReadAt: string
+  /** false = some read behind this answer was incomplete: it must not be cached anywhere. */
+  complete: boolean
+}
+
+export function freshnessOf(reads: readonly ReadRecord[], now: number = Date.now()): Freshness {
+  const oldest = reads.reduce((min, r) => Math.min(min, r.readAt), now)
+  return {
+    dataAgeSeconds: Math.max(0, Math.floor((now - oldest) / 1000)),
+    dataReadAt: new Date(oldest).toISOString(),
+    complete: reads.every((r) => r.complete),
+  }
+}
+
+/**
+ * Record an uncached read that shapes this answer — e.g. an on-chain price that fell back, or a
+ * cached sub-read that failed and was settled to `null` — so the answer is marked incomplete.
+ */
+export function recordLiveRead(key: string, complete: boolean, readAt: number = Date.now()): void {
+  record({ key, readAt, cached: false, complete })
+}
+
+/** A read whose failure the caller settles to `null` (unknown, never 0): recorded as incomplete. */
+export function unknownOnFailure<T>(key: string, read: Promise<T>): Promise<T | null> {
+  return read.catch((err) => {
+    console.warn(`[server-cache] ${key} unread:`, err instanceof Error ? err.message : err)
+    recordLiveRead(key, false)
+    return null
+  })
+}
+
+/** Freshness of everything read so far in this request (live answer outside a ledger). */
+export function currentFreshness(now: number = Date.now()): Freshness {
+  return freshnessOf(ledgerStore.getStore()?.reads ?? [], now)
+}
+
+// ─── JSON codec (unstable_cache stores JSON) ─────────────────────────────────
+
+/** bigint and Map survive the Data Cache's JSON round trip (JSON.stringify(bigint) throws). */
+export function encodeForCache(value: unknown): unknown {
+  if (typeof value === 'bigint') return { $bigint: value.toString() }
+  if (value instanceof Map) return { $map: [...value.entries()].map(([k, v]) => [encodeForCache(k), encodeForCache(v)]) }
+  if (Array.isArray(value)) return value.map(encodeForCache)
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value)) if (v !== undefined) out[k] = encodeForCache(v)
+    return out
+  }
+  return value
+}
+
+export function decodeFromCache<T>(value: unknown): T {
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(walk)
+    if (v && typeof v === 'object') {
+      const o = v as Record<string, unknown>
+      if (typeof o.$bigint === 'string' && Object.keys(o).length === 1) return BigInt(o.$bigint)
+      if (Array.isArray(o.$map) && Object.keys(o).length === 1) {
+        return new Map((o.$map as Array<[unknown, unknown]>).map(([k, val]) => [walk(k), walk(val)]))
+      }
+      const out: Record<string, unknown> = {}
+      for (const [k, val] of Object.entries(o)) out[k] = walk(val)
+      return out
+    }
+    return v
+  }
+  return walk(value) as T
+}
+
+// ─── The cache ────────────────────────────────────────────────────────────────
+
+/** What a wrapped read returns: its value and whether that value is complete. */
+export interface CompleteRead<T> {
+  value: T
+  complete: boolean
+}
+
+type Stamped = { v: unknown; readAt: number }
+
+/** The subset of `unstable_cache` this module uses — injectable for tests. */
+export type CacheImpl = <A extends unknown[]>(
+  cb: (...args: A) => Promise<Stamped>,
+  keyParts: string[],
+  options: { revalidate: number; tags: string[] },
+) => (...args: A) => Promise<Stamped>
+
+/**
+ * `unstable_cache`, or — outside a Next server (scripts, unit tests), where it has no
+ * incremental cache and throws before running the read — the read itself, uncached.
+ */
+const nextCache: CacheImpl = (cb, keyParts, options) => {
+  const cached = unstable_cache(cb, keyParts, options)
+  return async (...args) => {
+    try {
+      return await cached(...args)
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('Invariant: incrementalCache missing')) return cb(...args)
+      throw e
+    }
+  }
+}
+
+let defaultCache: CacheImpl = nextCache
+
+/** Tests only: swap the cache behind every completeReadCache that didn't pass its own. */
+export function setDefaultCacheImplForTests(impl: CacheImpl | null): void {
+  defaultCache = impl ?? nextCache
+}
+
+const INCOMPLETE = Symbol.for('agentscore.server-cache.incomplete')
+
+/** Thrown inside the cache callback so `unstable_cache` stores nothing; caught outside. */
+class IncompleteRead extends Error {
+  readonly [INCOMPLETE] = true
+  constructor(readonly stamped: Stamped, key: string) {
+    super(`incomplete read not cached: ${key}`)
+  }
+}
+const isIncomplete = (e: unknown): e is IncompleteRead =>
+  !!e && typeof e === 'object' && (e as Record<symbol, unknown>)[INCOMPLETE] === true
+
+export interface CompleteReadCacheOptions<A extends unknown[]> {
+  /** Seconds a complete read is served from the cache. */
+  revalidate: number
+  /** Tags for `revalidateTag` (per call, e.g. `agent:<termId>`). */
+  tags: (...args: A) => string[]
+  /** Past this age a cached value is not served; the read runs live. Default 2 × revalidate. */
+  maxStaleSeconds?: number
+  cache?: CacheImpl
+  now?: () => number
+}
+
+export function completeReadCache<A extends unknown[], T>(
+  key: string,
+  read: (...args: A) => Promise<CompleteRead<T>>,
+  options: CompleteReadCacheOptions<A>,
+): (...args: A) => Promise<T> {
+  const now = options.now ?? Date.now
+  const maxStaleMs = (options.maxStaleSeconds ?? options.revalidate * 2) * 1000
+
+  // A read and everything it read in turn: complete only if all of it was; as old as its oldest part.
+  const readOnce = async (...args: A): Promise<{ stamped: Stamped; complete: boolean }> => {
+    const { value: r, reads } = await collect(() => read(...args))
+    // As of when the read answered (a live answer is age 0, however long its pages took).
+    const readAt = reads.reduce((min, x) => Math.min(min, x.readAt), now())
+    return { stamped: { v: encodeForCache(r.value), readAt }, complete: r.complete && reads.every((x) => x.complete) }
+  }
+
+  return async (...args: A): Promise<T> => {
+    const cached = (options.cache ?? defaultCache)(
+      async (...a: A) => {
+        const { stamped, complete } = await readOnce(...a)
+        if (!complete) throw new IncompleteRead(stamped, key)
+        return stamped
+      },
+      [`agentscore:${key}`],
+      { revalidate: options.revalidate, tags: [key, ...options.tags(...args)] },
+    )
+    let stamped: Stamped
+    try {
+      stamped = await cached(...args)
+    } catch (e) {
+      if (!isIncomplete(e)) throw e
+      record({ key, readAt: e.stamped.readAt, cached: false, complete: false })
+      return decodeFromCache<T>(e.stamped.v)
+    }
+    const t = now()
+    if (t - stamped.readAt > maxStaleMs) {
+      // Too old to serve (a quiet spell): read live, returned as-is. The cache refreshes itself.
+      const live = await readOnce(...args)
+      record({ key, readAt: live.stamped.readAt, cached: false, complete: live.complete })
+      return decodeFromCache<T>(live.stamped.v)
+    }
+    // A value this request stored itself was read live (age ≈ 0); one read earlier is cached.
+    record({ key, readAt: stamped.readAt, cached: t - stamped.readAt >= 1000, complete: true })
+    return decodeFromCache<T>(stamped.v)
+  }
+}
+
+/** The TTLs (seconds) — one place, quoted by REPO_MAP §3 and llms.txt. */
+export const SERVER_CACHE_TTL = {
+  agentCorpus: 60,
+  platformStats: 300,
+  domains: 60,
+  agentDetail: 30,
+  evaluatorLeaderboard: 300,
+} as const

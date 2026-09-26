@@ -1,8 +1,8 @@
 import { type NextRequest } from 'next/server'
-import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
+import { apiSuccess, apiError, corsOptions, withReadLedger } from '@/lib/api-helpers'
 import { getSkills } from '@/lib/api-data'
 
-export async function GET(_request: NextRequest) {
+async function handleGET(_request: NextRequest) {
   try {
     const skills = await getSkills()
     return apiSuccess(skills, { total: skills.length })
@@ -15,3 +15,6 @@ export async function GET(_request: NextRequest) {
 export async function OPTIONS() {
   return corsOptions()
 }
+
+// One read ledger per request: meta.dataAgeSeconds (lib/server-cache.ts).
+export const GET = withReadLedger(handleGET)

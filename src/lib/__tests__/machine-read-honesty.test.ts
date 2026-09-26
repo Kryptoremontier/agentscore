@@ -41,7 +41,11 @@ describe('publishedAgentScore — the one rule for a machine-read score', () => 
 const getAgentDetail = vi.fn()
 const fetchTimelineData = vi.fn()
 vi.mock('@/lib/api-data', async (orig) => ({ ...(await orig<object>()), getAgentDetail: (id: string) => getAgentDetail(id) }))
-vi.mock('@/lib/timeline-data', () => ({ fetchTimelineData: (id: string) => fetchTimelineData(id) }))
+// REST and MCP read the cached variant (lib/server-cache.ts): same data, same double.
+vi.mock('@/lib/timeline-data', () => ({
+  fetchTimelineData: (id: string) => fetchTimelineData(id),
+  fetchTimelineDataCached: (id: string) => fetchTimelineData(id),
+}))
 
 const RAW = { agentId: '0xa', agentName: 'A', createdAt: '2026-01-01T00:00:00Z', counterTermId: null, stakingEvents: [], skillEvents: [] }
 const detail = (agentScore: number, scoreBasis: 'measured' | 'prior') => ({

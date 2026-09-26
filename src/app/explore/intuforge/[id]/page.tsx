@@ -22,9 +22,13 @@ import { TrustTierBadge } from '@/components/agents/TrustTierBadge'
 import { formatDate } from '@/lib/format'
 import { OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
 
-async function getProject(id: string): Promise<ForgeProject | null> {
+/** null = no such project (or not indexed yet); 'error' = the read failed — never shown as either. */
+async function getProject(id: string): Promise<ForgeProject | null | 'error'> {
   if (!id.startsWith('0x')) return null
-  return fetchForgeProjectById(id)
+  return fetchForgeProjectById(id).catch((err) => {
+    console.error('[intuforge] project read failed:', err)
+    return 'error' as const
+  })
 }
 
 // null = the score is unknown (oppose read failed): neutral grey, never a level.
@@ -58,7 +62,7 @@ const EVALUATOR_TIER_EMOJI: Record<string, string> = {
 
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const project = await getProject(params.id)
-  if (!project) return {}
+  if (!project || project === 'error') return {}
   return {
     title: `${project.name} | IntuForge`,
     description: project.tagline,
@@ -71,6 +75,18 @@ export default async function ProjectProfilePage({ params, searchParams: _search
     getProject(params.id),
     fetchTimelineData(params.id).catch(() => null),
   ])
+
+  if (project === 'error') {
+    return (
+      <div className="max-w-5xl mx-auto px-4 pt-24 pb-8 text-center space-y-4">
+        <p className="text-white/50 text-base font-medium">Couldn’t read this project</p>
+        <p className="text-xs text-white/25">The indexer didn’t answer. Try again in a minute.</p>
+        <Link href="/explore/intuforge" className="text-xs text-white/40 hover:text-white/60 transition-colors">
+          ← Back to IntuForge
+        </Link>
+      </div>
+    )
+  }
 
   // Newly registered project — indexer may not have caught up yet
   if (!project && params.id.startsWith('0x')) {

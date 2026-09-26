@@ -16,7 +16,7 @@
 
 import { AGENT_WHERE_STR } from './gql-filters'
 import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
-import { fetchVaultPositions, sumSharesByVault, type VaultPosition } from './vault-positions'
+import { fetchVaultPositions, sumSharesByVault, type VaultPosition, type VaultPositionWithMeta } from './vault-positions'
 import { countLiveStakers } from './live-position'
 import { summarizeAttesters } from './agent-profile'
 import { calculateAgentTier, type AgentTierResult } from './agent-tier'
@@ -38,7 +38,8 @@ export interface AgentListAtom {
   creator?: { label: string; id?: string } | null
   /** Atom-vault support stake. The row count is deliberately not read: it counts 0-share rows. */
   positions_aggregate?: { aggregate: { sum: { shares: string } | null } }
-  as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /** The trust triple (its own vault `term_id`, and its counter-vault). Read by the list with the row. */
+  as_subject_triples?: Array<{ counter_term_id: string; term_id?: string }> | null
   /**
    * Stakers: distinct wallets with a live position on the atom vault or its trust
    * counter-vault (lib/live-position.ts countLiveStakers). undefined = never read
@@ -51,6 +52,13 @@ export interface AgentListAtom {
    * has no measured score (lib/score-basis.ts), never a score computed from 0 oppose.
    */
   __opposeWei?: bigint | null
+  /**
+   * Every position on the atom vault + trust counter-vault, as the list read them (with meta), and
+   * when (epoch ms). The modal opens on these instead of re-reading them (listVaultSnapshot).
+   * null = the list's positions read failed; undefined = never read (cohort rows).
+   */
+  __vaultPositions?: VaultPositionWithMeta[] | null
+  __vaultReadAt?: number
 }
 
 export interface AgentListFetch<T extends AgentListAtom = AgentListAtom> {
@@ -94,7 +102,7 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
         as_subject_triples(
           where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
           limit: 1
-        ) { counter_term_id }
+        ) { term_id counter_term_id }
       }
     }
   `,
@@ -113,8 +121,15 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
     .map(a => a.as_subject_triples?.[0]?.counter_term_id)
     .filter((id): id is string => !!id)
   if (rows.length > 0) {
-    const positions = await fetchVaultPositions([...rows.map(a => a.term_id), ...counterTermIds]).catch(() => null)
+    // withMeta: the same request, and the modal's backers table can open on these rows.
+    const positions = await fetchVaultPositions([...rows.map(a => a.term_id), ...counterTermIds], { withMeta: true }).catch(() => null)
     annotateVaultReads(rows, positions, { stakers: true })
+    const readAt = Date.now()
+    for (const row of rows) {
+      const ctid = row.as_subject_triples?.[0]?.counter_term_id ?? null
+      row.__vaultPositions = positions ? positions.filter(p => p.term_id === row.term_id || (!!ctid && p.term_id === ctid)) : null
+      row.__vaultReadAt = readAt
+    }
   }
 
   return { rows, total: page.total, truncated: page.truncated }
@@ -159,6 +174,39 @@ export function annotateVaultReads<T extends VaultAnnotatedRow>(
     if (ctid && sums.has(ctid)) row.__opposeWei = sums.get(ctid) || 0n
     if (opts.stakers) row.liveStakerCount = countLiveStakers(positions!, { atomId: row.term_id, counterId: ctid })
   }
+}
+
+// ─── What the modal reuses from the list (Etap 4b-cache) ─────────────────────
+
+/**
+ * The trust triple of a list row, as the list read it — so the modal needn't look it up
+ * (FindTrustTriple). undefined = the list didn't read it (cohort rows, older shapes): look it up.
+ * `{ termId: null, counterTermId: null }` = read, and the agent has no trust triple.
+ */
+export function listTrustTriple(row: Pick<AgentListAtom, 'as_subject_triples'>): { termId: string | null; counterTermId: string | null } | undefined {
+  const t = row.as_subject_triples
+  if (!Array.isArray(t)) return undefined
+  if (t.length === 0) return { termId: null, counterTermId: null }
+  if (!t[0]?.term_id) return undefined
+  return { termId: t[0].term_id, counterTermId: t[0].counter_term_id ?? null }
+}
+
+/**
+ * The positions the list read for this row (atom + counter-vault) and when; null when the list
+ * didn't read them or the read failed — the modal then reads them itself.
+ */
+export function listVaultSnapshot(row: Pick<AgentListAtom, '__vaultPositions' | '__vaultReadAt'>): { positions: VaultPositionWithMeta[]; readAt: number } | null {
+  if (!row.__vaultPositions || row.__vaultReadAt == null) return null
+  return { positions: row.__vaultPositions, readAt: row.__vaultReadAt }
+}
+
+/**
+ * Oppose shares for the modal's score, from the list's read: the counter-vault's sum (0n when it
+ * holds no position). undefined = the list didn't read the vaults (or failed): read them.
+ */
+export function listOpposeWei(row: Pick<AgentListAtom, '__vaultPositions' | '__opposeWei'>): bigint | undefined {
+  if (!row.__vaultPositions) return undefined
+  return row.__opposeWei ?? 0n
 }
 
 // ─── Numbers the page prints ────────────────────────────────────────────────

@@ -2,10 +2,17 @@ import { getEvaluators } from '@/lib/api-data'
 import type { EvaluatorProfile } from '@/lib/evaluator-score'
 import { EvaluatorsClient } from '@/components/evaluators/EvaluatorsClient'
 
-export const revalidate = 300
+// Dynamic, over the shared evaluator-leaderboard cache (lib/server-cache.ts: complete reads only,
+// 300 s). Page-level ISR would store a failed read's page for five minutes.
+export const dynamic = 'force-dynamic'
 
 export default async function EvaluatorsPage() {
-  const rows = await getEvaluators({ limit: 50 })
+  // A failed read is its own state, never an empty leaderboard (REPO_MAP §7 rule 5).
+  const rows = await getEvaluators({ limit: 50 }).catch((err) => {
+    console.error('[evaluators] leaderboard read failed:', err)
+    return null
+  })
+  if (!rows) return <EvaluatorsClient initialData={null} />
 
   const profiles: EvaluatorProfile[] = rows.map(r => ({
     address: r.address,

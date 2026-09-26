@@ -8,7 +8,9 @@ import type { ForgeStats, ForgeProject } from '@/lib/forge/types'
 import { ForgeCategory } from '@/lib/forge/types'
 import { compareForgeScoreDesc, meanKnownForgeScore } from '@/lib/forge/scoring'
 
-export const revalidate = 60
+// Dynamic. A `revalidate = 60` here was inert — the forge reads are `no-store`, so every request
+// rendered live anyway (docs/audit/rate-limit.md) — while it looked like a one-minute cache.
+export const dynamic = 'force-dynamic'
 
 function deriveStats(projects: ForgeProject[]): ForgeStats {
   const totalStaked     = projects.reduce((s, p) => s + p.totalStaked, 0)
@@ -32,7 +34,13 @@ function deriveStats(projects: ForgeProject[]): ForgeStats {
 }
 
 export default async function IntuforgePage() {
-  const { kept: projects, junkFiltered } = await fetchForgeProjectsWithJunkInfo(100)
+  // A failed read is its own state — never "No projects listed yet" (REPO_MAP §7 rule 5).
+  const read = await fetchForgeProjectsWithJunkInfo(100).catch((err) => {
+    console.error('[intuforge] projects read failed:', err)
+    return null
+  })
+  const readFailed = read === null
+  const { kept: projects, junkFiltered } = read ?? { kept: [] as ForgeProject[], junkFiltered: 0 }
   const stats = deriveStats(projects)
 
   return (
@@ -85,7 +93,12 @@ export default async function IntuforgePage() {
         </Link>
       </div>
 
-      {projects.length === 0 ? (
+      {readFailed ? (
+        <div className="py-24 text-center space-y-2">
+          <p className="text-white/50 text-base font-medium">Couldn’t read IntuForge projects</p>
+          <p className="text-white/25 text-sm">The indexer didn’t answer. Try again in a minute.</p>
+        </div>
+      ) : projects.length === 0 ? (
         /* Empty state — no projects on-chain yet */
         <div className="py-24 text-center space-y-4">
           <div

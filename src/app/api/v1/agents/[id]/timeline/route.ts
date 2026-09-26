@@ -1,11 +1,11 @@
 import { type NextRequest } from 'next/server'
-import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
+import { apiSuccess, apiError, corsOptions, withReadLedger } from '@/lib/api-helpers'
 import { getAgentDetail } from '@/lib/api-data'
-import { fetchTimelineData } from '@/lib/timeline-data'
+import { fetchTimelineDataCached as fetchTimelineData } from '@/lib/timeline-data'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
 import { publishedAgentScore } from '@/lib/score-basis'
 
-export async function GET(
+async function handleGET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -66,3 +66,6 @@ export async function GET(
 export async function OPTIONS() {
   return corsOptions()
 }
+
+// One read ledger per request: meta.dataAgeSeconds (lib/server-cache.ts).
+export const GET = withReadLedger(handleGET)

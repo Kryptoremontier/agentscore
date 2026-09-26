@@ -31,7 +31,7 @@ import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersAndBackers } from '@/components/profile/AttestersAndBackers'
 import { Button } from '@/components/ui/button'
 import { PageHeaderSkeleton, LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
-import { parseAgentCard } from '@/lib/agent-card'
+import { apiToAgent } from '@/lib/profile-agent'
 import {
   resolveProfileAtom,
   fetchAgentProfileVector,
@@ -46,34 +46,6 @@ import { calculateAgentTier } from '@/lib/agent-tier'
 import { AgentTierChip } from '@/components/agents/AgentTierChip'
 import type { Agent } from '@/types/agent'
 import type { AgentDetailApiItem } from '@/lib/api-data'
-
-// Convert API response to Agent type. attestationCount/reportCount are
-// overwritten from the canonical profile vector once it resolves.
-function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
-  const card = parseAgentCard(apiAgent.rawLabel)
-  return {
-    id: apiAgent.id,
-    atomId: BigInt(apiAgent.id),
-    name: apiAgent.name,
-    description: card.description || '',
-    platform: 'intuition',
-    walletAddress: '0x0000000000000000000000000000000000000000',
-    createdAt: new Date(apiAgent.createdAt),
-    verificationLevel: 'wallet',
-    owner: {
-      address: '0x0000000000000000000000000000000000000000',
-      name: 'Agent Owner',
-      expertLevel: 'contributor' as const,
-    },
-    trustScore: Math.round(apiAgent.score.objectScore ?? apiAgent.score.trustScore),
-    positiveStake: BigInt(Math.round(apiAgent.supportStake * 1e18)),
-    negativeStake: BigInt(Math.round(apiAgent.opposeStake * 1e18)),
-    // Filled from the profile vector once it loads; "—" until then (never an unread 0).
-    attestationCount: null,
-    reportCount: null,
-    stakerCount: apiAgent.stakerCount,
-  }
-}
 
 const EMPTY_VECTOR: AgentProfileVector = { attested: [], reports: [] }
 

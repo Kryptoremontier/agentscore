@@ -22,6 +22,7 @@
  */
 
 import { APP_CONFIG } from './app-config'
+import { SERVER_ROW_CAP } from './gql-pager'
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -83,6 +84,11 @@ export interface AttestationResult {
   attestors: string[]         // list of attestor wallet addresses (lowercase)
   meetsThreshold: boolean     // attestationCount >= config.minAttestations
   config: AttestationConfig
+  /**
+   * The read failed or stopped at the endpoint's row cap: the count is not known to be complete.
+   * Such a result is never cached (here or in the evaluator leaderboard — lib/server-cache.ts).
+   */
+  incomplete?: true
 }
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
@@ -167,9 +173,9 @@ export async function getAttestationCount(
     const json = await res.json()
 
     if (json.errors || !json.data?.triples) {
+      // Not cached: a failure (a 429 included) must not stand in for the count for 5 minutes.
       console.warn('[attestation-gate] GraphQL error for', wallet, json.errors)
-      setCache(wallet, empty)
-      return empty
+      return { ...empty, incomplete: true }
     }
 
     const triples: Array<{ subject: { creator: { id: string } | null } | null }> =
@@ -197,6 +203,8 @@ export async function getAttestationCount(
       attestors: validAttestors,
       meetsThreshold: validAttestors.length >= cfg.minAttestations,
       config: cfg,
+      // `limit: 500` returns at most 250 rows (the endpoint's cap): a full page may be a first page.
+      ...(triples.length >= SERVER_ROW_CAP.triples ? { incomplete: true as const } : {}),
     }
 
     if (process.env.NODE_ENV === 'development') {
@@ -207,13 +215,12 @@ export async function getAttestationCount(
       )
     }
 
-    setCache(wallet, result)
+    if (!result.incomplete) setCache(wallet, result)
     return result
 
   } catch (error) {
     console.error('[attestation-gate] Error fetching for', wallet, error)
-    setCache(wallet, empty)
-    return empty
+    return { ...empty, incomplete: true }
   }
 }
 

@@ -52,7 +52,8 @@ describe('fetchAllRows — pages past the endpoint cap to the aggregate total', 
     const r = await fetchAllRows(spec())
     expect(r.rows).toHaveLength(260)
     expect(r).toMatchObject({ total: 260, truncated: false })
-    expect(fake.rowCalls('triples').map((c) => c.variables.offset)).toEqual([0, 250, 260])
+    // The merged first page (rows + count) fails with the count → one retry as rows alone.
+    expect(fake.rowCalls('triples').map((c) => c.variables.offset)).toEqual([0, 0, 250, 260])
   })
 
   it('our ceiling reached with rows left → truncated true with the real total', async () => {
@@ -117,5 +118,39 @@ describe('gqlRequest — failure is failure', () => {
   it('a body without data throws', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ message: 'weird' }) })))
     await expect(gqlRequest('{ atoms { term_id } }')).rejects.toThrow(/without data/)
+  })
+})
+
+describe('first page + count in ONE request (Etap 4b-cache: a modal poll tick cost 2)', () => {
+  it('a read that fits one page costs one request, with the count in it', async () => {
+    const fake = installFakeHasura({ tables: [{ match: () => true, field: 'triples', rows: triples(40) }] })
+    const r = await fetchAllRows(spec())
+    expect(r).toMatchObject({ total: 40, truncated: false })
+    expect(r.rows).toHaveLength(40)
+    expect(fake.calls).toHaveLength(1)
+    expect(fake.calls[0].query).toContain('triples_aggregate')
+  })
+
+  it('more pages → merged first page, then rows-only pages (no second count)', async () => {
+    const fake = installFakeHasura({ tables: [{ match: () => true, field: 'triples', rows: triples(264) }] })
+    await fetchAllRows(spec())
+    expect(fake.calls.map((c) => c.query.includes('triples_aggregate'))).toEqual([true, false])
+  })
+
+  it('an HTTP 429 on the merged request fails the read — no fallback that spends more of the limit', async () => {
+    const fake = installFakeHasura({ tables: [{ match: () => true, field: 'triples', rows: triples(40) }], fail: () => 'rate-limit' })
+    vi.useFakeTimers()
+    const p = fetchAllRows(spec())
+    const assertion = expect(p).rejects.toThrow('GraphQL HTTP 429')
+    await vi.runAllTimersAsync()
+    await assertion
+    expect(fake.calls).toHaveLength(3) // the merged request + the transport's two 429 retries, nothing more
+  })
+
+  it('a count that declares a variable the rows query lacks is not merged', async () => {
+    const { mergeCountIntoQuery } = await import('../gql-pager')
+    expect(mergeCountIntoQuery('query T($limit: Int!, $offset: Int!) { triples(limit: $limit, offset: $offset) { term_id } }', 'query C($ids: [String!]!) { triples_aggregate(where: { term_id: { _in: $ids } }) { aggregate { count } } }')).toBeNull()
+    expect(mergeCountIntoQuery('query T($ids: [String!]!, $limit: Int!, $offset: Int!) { triples(limit: $limit) { term_id } }', 'query C($ids: [String!]!) { triples_aggregate(where: {}) { aggregate { count } } }'))
+      .toMatch(/triples\(limit: \$limit\) \{ term_id \}\s+triples_aggregate\(where: \{\}\) \{ aggregate \{ count \} \}\s*\}$/)
   })
 })

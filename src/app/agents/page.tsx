@@ -47,15 +47,17 @@ import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
-import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
-import { fetchVaultPositions } from '@/lib/vault-positions'
-import { fetchWalletPositions, positionOn } from '@/lib/wallet-positions'
+import { fetchAgentProfileVector, fetchAgentReports, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchVaultBackers, sortPositions, type VaultPositionWithMeta } from '@/lib/vault-positions'
+import { startVisiblePoll, firstDelayFor } from '@/lib/visible-poll'
+import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import {
   fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus,
   cardAttestationView, cardAttesterLine, cardViewFor, isCompactCard, attestScrollStep, type CardAttestationView,
+  listTrustTriple, listVaultSnapshot, listOpposeWei,
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import {
@@ -74,6 +76,9 @@ const debugLog = (...args: unknown[]) => {
 // the 50 prior would otherwise paint them (lib/score-basis.ts).
 const UNRATED_COLOR = '#7A838D'
 
+/** Modal positions poll — catches other wallets' trades; paused while the tab is hidden. */
+const MODAL_POLL_MS = 15_000
+
 interface GraphQLAgent {
   term_id: string
   label: string
@@ -83,9 +88,13 @@ interface GraphQLAgent {
   emoji?: string
   creator?: { label: string; id?: string } | null
   positions_aggregate?: { aggregate: { sum: { shares: string } | null } }
-  as_subject_triples?: Array<{ counter_term_id: string }> | null
+  as_subject_triples?: Array<{ counter_term_id: string; term_id?: string }> | null
   /** Live stakers (lib/live-position.ts); undefined = never read (cohort), null = read failed. */
   liveStakerCount?: number | null
+  /** The list's vault reads (lib/agent-list.ts) — the modal opens on them instead of re-reading. */
+  __opposeWei?: bigint | null
+  __vaultPositions?: VaultPositionWithMeta[] | null
+  __vaultReadAt?: number
   /** Etap 2c: which corpus this atom came from. Absent = AgentScore (legacy fetch paths). */
   origin?: 'agentscore' | 'erc8004'
   /** ERC-8004 cohort only — declared OASF domains/skills (`has category`/`has tag`), self-declared not attested. */
@@ -159,6 +168,9 @@ function AgentsPageContent() {
   // Attestations for every listed agent (both corpora) — one bulk read, 2 paged requests per
   // 200 ids (lib/attestation-reader.ts). undefined = not read yet, null = the read failed.
   const [attestedBySubject, setAttestedBySubject] = useState<Map<string, AttestedEntry[]> | null | undefined>(undefined)
+  // The latest list read, for the modal to reuse at open without re-running on every list update.
+  const attestedBySubjectRef = useRef(attestedBySubject)
+  attestedBySubjectRef.current = attestedBySubject
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
@@ -434,69 +446,27 @@ function AgentsPageContent() {
       .finally(() => setSignalsLoading(false))
   }, [selectedAgent?.term_id, agentTriple.counterTermId])
 
-  // The connected wallet's own shares on the atom vault (FOR) and trust counter-vault (AGAINST).
-  // One read through lib/wallet-positions.ts (`_ilike` — account_id is stored checksummed; the old
-  // lowercase `_eq` never matched). null = the read failed: callers keep what they had, a failure
-  // is not "no position".
-  const fetchUserPosition = async (
-    agentTermId: string,
-    userAddress: string,
-    counterTermId?: string | null
-  ): Promise<{ forShares: string | null; againstShares: string | null; rawPositions: any[]; againstRawPositions: any[] } | null> => {
-    try {
-      const rows = await fetchWalletPositions(counterTermId ? [agentTermId, counterTermId] : [agentTermId], userAddress)
-      const forPos = rows.filter(r => r.term_id.toLowerCase() === agentTermId.toLowerCase())
-      const againstRawPositions = counterTermId ? rows.filter(r => r.term_id.toLowerCase() === counterTermId.toLowerCase()) : []
-      const live = (raw: string | undefined) => {
-        try { return raw && BigInt(raw) > 0n ? raw : null } catch { return null }
-      }
-      const forShares = live(forPos[0]?.shares)
-      const againstShares = live(againstRawPositions[0]?.shares)
-      debugLog('fetchUserPosition:', { termId: agentTermId, counterTermId, forShares, againstShares })
-      return { forShares, againstShares, rawPositions: forPos, againstRawPositions }
-    } catch (e) {
+  // The connected wallet's own shares on the atom vault (FOR) and trust counter-vault (AGAINST),
+  // and its shares on one vault (the redeem amount); the modal's backers table. One module for
+  // /agents, /skills and /claims (lib/wallet-positions.ts, lib/vault-positions.ts). null = the read
+  // failed: callers keep what they had — a failure is not "no position".
+  const fetchUserPosition = (termId: string, userAddress: string, counterTermId?: string | null) =>
+    fetchUserVaultPosition(termId, counterTermId, userAddress).catch((e) => {
       console.error('fetchUserPosition error:', e)
       return null
-    }
-  }
+    })
 
-  const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
-    try {
-      // Only this wallet's rows on this vault, in one request (lib/wallet-positions.ts). Reading the
-      // whole vault stopped at 100 rows (redeem could read 0 shares on a larger vault).
-      const pos = positionOn(await fetchWalletPositions([termId], userAddress), termId)
-      let sharesBigInt = 0n
-      try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
-      return sharesBigInt
-    } catch (err) {
+  const fetchVaultSharesForUser = (termId: string, userAddress: string): Promise<bigint> =>
+    fetchWalletShares(termId, userAddress).catch((err) => {
       console.warn('fetchVaultSharesForUser failed:', err)
       return 0n
-    }
-  }
+    })
 
-  // Fetch ALL positions from both Support + Oppose vaults
-  const fetchAllPositions = async (
-    termId: string,
-    counterTermId?: string | null
-  ): Promise<{ positions: any[]; uniqueCount: number } | null> => {
-    try {
-      const termIds = [termId]
-      if (counterTermId) termIds.push(counterTermId)
-
-      // Every position on both vaults, paged past the endpoint's 100-row cap (was `limit: 100`,
-      // so backers past the first 100 were dropped silently). Throws on a failed page.
-      const raw: any[] = await fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true })
-      // Rows and count through the one live rule (lib/live-position.ts) — no local filter.
-      return {
-        positions: livePositions(raw),
-        uniqueCount: countLiveStakers(raw, { atomId: termId, counterId: counterTermId }),
-      }
-    } catch (e) {
-      // A failed read is not "no positions" — null, and callers keep showing "—".
+  const fetchAllPositions = (termId: string, counterTermId?: string | null) =>
+    fetchVaultBackers(termId, counterTermId).catch((e) => {
       console.error('fetchAllPositions error:', e)
       return null
-    }
-  }
+    })
 
   // Fetch trust triple for selected agent (read-only, no wallet needed)
   // Lock body scroll when agent modal is open
@@ -508,6 +478,12 @@ function AgentsPageContent() {
   useEffect(() => {
     if (!selectedAgent) {
       setAgentTriple({ termId: null, counterTermId: null, loading: false })
+      return
+    }
+    // The list already read the trust triple with the row: no lookup (Etap 4b-cache).
+    const known = listTrustTriple(selectedAgent)
+    if (known) {
+      setAgentTriple({ ...known, loading: false })
       return
     }
     setAgentTriple({ termId: null, counterTermId: null, loading: true })
@@ -590,12 +566,19 @@ function AgentsPageContent() {
   const refreshPositionsAndSupply = async (
     termId: string,
     counterTermId?: string | null,
-    showLoading = false
+    showLoading = false,
+    /** Positions the list already read for this agent: used instead of re-reading them. */
+    seed?: VaultPositionWithMeta[] | null,
   ) => {
     if (showLoading) setPositionsLoading(true)
     try {
       // Fetch positions for the leaderboard table (runs in parallel with supply read)
-      const positionsPromise = fetchAllPositions(termId, counterTermId)
+      const positionsPromise = seed
+        ? Promise.resolve({
+            positions: livePositions(sortPositions(seed, 'shares-desc')),
+            uniqueCount: countLiveStakers(seed, { atomId: termId, counterId: counterTermId }),
+          })
+        : fetchAllPositions(termId, counterTermId)
 
       // PRIMARY: Read supply directly from contract — always up-to-date,
       // bypasses indexer lag that causes stale price/value after other wallets trade.
@@ -662,24 +645,32 @@ function AgentsPageContent() {
       return
     }
 
-    // Immediate fetch
+    // The counter-vault must be known first: reading without it and again with it cost two reads.
+    if (agentTriple.loading) return
+
+    // Open on the positions the list already read (no request); on-chain supply is read now.
+    // Without them (cohort rows, a failed list read) read at once.
+    const snapshot = listVaultSnapshot(selectedAgent)
     refreshPositionsAndSupply(
       selectedAgent.term_id,
       agentTriple.counterTermId,
-      true // show loading spinner on first load
+      true, // show loading spinner on first load
+      snapshot?.positions,
     )
 
-    // Poll every 15s to catch other users' transactions
-    const interval = setInterval(() => {
-      refreshPositionsAndSupply(
+    // Poll every 15s to catch other users' transactions — only while the tab is visible (a
+    // background tab spent 8 requests a minute); back in view it refreshes at once. The first tick
+    // comes when the list's snapshot is one interval old.
+    return startVisiblePoll({
+      intervalMs: MODAL_POLL_MS,
+      firstDelayMs: snapshot ? firstDelayFor(snapshot.readAt, MODAL_POLL_MS) : MODAL_POLL_MS,
+      tick: () => refreshPositionsAndSupply(
         selectedAgent.term_id,
         agentTriple.counterTermId,
         false // silent refresh, no loading spinner
-      )
-    }, 15000)
-
-    return () => clearInterval(interval)
-  }, [selectedAgent?.term_id, agentTriple.counterTermId])
+      ),
+    })
+  }, [selectedAgent?.term_id, agentTriple.counterTermId, agentTriple.loading])
 
   // Compute trust score from real on-chain data whenever agent or triple changes.
   // null (rendered "—") while loading, when the atom vault was never read (cohort
@@ -695,6 +686,13 @@ function AgentsPageContent() {
     if (!agentTriple.counterTermId) {
       // Lookup succeeded and there is no trust triple → no oppose vault → oppose is 0.
       setAgentTrust(calculateTrustScoreFromStakes(supportWei, 0n))
+      return
+    }
+
+    // The list read the counter-vault with the row: its oppose sum, no request.
+    const listed = listOpposeWei(selectedAgent)
+    if (listed !== undefined) {
+      setAgentTrust(calculateTrustScoreFromStakes(supportWei, listed))
       return
     }
 
@@ -1126,7 +1124,14 @@ function AgentsPageContent() {
       setReportCount(0)
       return
     }
-    fetchAgentProfileVector(selectedAgent.term_id).then(v => {
+    // The list's attestation read covers this agent: reuse it, read only the reports (the list
+    // never reads those). Still loading or failed on the list → the modal reads both.
+    const listed = attestedBySubjectRef.current
+    const read = listed instanceof Map
+      ? fetchAgentReports(selectedAgent.term_id).catch(() => null)
+          .then((reports): AgentProfileVector => ({ attested: listed.get(selectedAgent.term_id) ?? [], reports }))
+      : fetchAgentProfileVector(selectedAgent.term_id)
+    read.then(v => {
       if (cancelled) return
       setProfileVector(v)
       setReportCount(v.reports?.length ?? 0) // null reports render "—" below, never this 0

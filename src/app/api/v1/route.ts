@@ -1,8 +1,8 @@
 import { type NextRequest } from 'next/server'
-import { apiSuccess, corsOptions } from '@/lib/api-helpers'
+import { apiSuccess, corsOptions, withReadLedger } from '@/lib/api-helpers'
 import { API_V1_ENDPOINTS } from '@/lib/api-endpoints'
 
-export async function GET(_request: NextRequest) {
+async function handleGET(_request: NextRequest) {
   return apiSuccess({
     name: 'AgentScore Trust API',
     version: 'v1',
@@ -15,3 +15,6 @@ export async function GET(_request: NextRequest) {
 export async function OPTIONS() {
   return corsOptions()
 }
+
+// One read ledger per request: meta.dataAgeSeconds (lib/server-cache.ts).
+export const GET = withReadLedger(handleGET)

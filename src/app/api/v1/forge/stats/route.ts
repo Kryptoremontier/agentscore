@@ -1,10 +1,10 @@
 import { type NextRequest } from 'next/server'
-import { apiSuccess, apiError, corsOptions } from '@/lib/api-helpers'
+import { apiSuccess, apiError, corsOptions, withReadLedger } from '@/lib/api-helpers'
 import { fetchForgeProjectsFromChain } from '@/lib/forge/data'
 import { ForgeCategory } from '@/lib/forge/types'
 import { meanKnownForgeScore } from '@/lib/forge/scoring'
 
-export async function GET(_request: NextRequest) {
+async function handleGET(_request: NextRequest) {
   try {
     const projects = await fetchForgeProjectsFromChain(200)
 
@@ -39,3 +39,6 @@ export async function GET(_request: NextRequest) {
 export async function OPTIONS() {
   return corsOptions()
 }
+
+// One read ledger per request: meta.dataAgeSeconds (lib/server-cache.ts).
+export const GET = withReadLedger(handleGET)
