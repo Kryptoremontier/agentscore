@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Layers, Globe, LayoutGrid, List, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
-import { parseEther, getAddress } from 'viem'
+import { parseEther } from 'viem'
 import Link from 'next/link'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts'
 import { PageBackground } from '@/components/shared/PageBackground'
@@ -49,6 +49,7 @@ import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentProfileVector, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
 import { fetchVaultPositions } from '@/lib/vault-positions'
+import { fetchWalletPositions, positionOn } from '@/lib/wallet-positions'
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
@@ -433,98 +434,37 @@ function AgentsPageContent() {
       .finally(() => setSignalsLoading(false))
   }, [selectedAgent?.term_id, agentTriple.counterTermId])
 
+  // The connected wallet's own shares on the atom vault (FOR) and trust counter-vault (AGAINST).
+  // One read through lib/wallet-positions.ts (`_ilike` — account_id is stored checksummed; the old
+  // lowercase `_eq` never matched). null = the read failed: callers keep what they had, a failure
+  // is not "no position".
   const fetchUserPosition = async (
     agentTermId: string,
     userAddress: string,
     counterTermId?: string | null
-  ) => {
+  ): Promise<{ forShares: string | null; againstShares: string | null; rawPositions: any[]; againstRawPositions: any[] } | null> => {
     try {
-      const checksummedAddress = userAddress ? getAddress(userAddress) : ''
-      // Intuition indexer stores addresses lowercase — use lowercase for GraphQL queries
-      const queryAddress = checksummedAddress.toLowerCase()
-
-      // Query FOR position (atom's own vault)
-      const forRes = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetForPositions($termId: String!, $address: String!) {
-              forPositions: positions(
-                where: { term_id: { _eq: $termId }, account_id: { _eq: $address } }
-                limit: 5
-              ) { shares curve_id updated_at }
-            }
-          `,
-          variables: { termId: agentTermId, address: queryAddress },
-        }),
-      })
-      const forData = await forRes.json()
-      const forPos = forData.data?.forPositions || []
-      const forSharesRaw = forPos[0]?.shares
-      let forBigInt = 0n
-      try { forBigInt = BigInt(forSharesRaw ?? '0') } catch { forBigInt = 0n }
-      const forShares = (forSharesRaw && forBigInt > 0n) ? forSharesRaw : null
-
-      // Query AGAINST position (triple counter vault) if counterTermId is known
-      let againstShares: string | null = null
-      let againstRawPositions: any[] = []
-      if (counterTermId) {
-        const agRes = await fetch(GRAPHQL_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `
-              query GetAgainstPositions($termId: String!, $address: String!) {
-                againstPositions: positions(
-                  where: { term_id: { _eq: $termId }, account_id: { _eq: $address } }
-                  limit: 5
-                ) { shares curve_id updated_at }
-              }
-            `,
-            variables: { termId: counterTermId, address: queryAddress },
-          }),
-        })
-        const agData = await agRes.json()
-        againstRawPositions = agData.data?.againstPositions || []
-        const agSharesRaw = againstRawPositions[0]?.shares
-        let agBigInt = 0n
-        try { agBigInt = BigInt(agSharesRaw ?? '0') } catch { agBigInt = 0n }
-        againstShares = (agSharesRaw && agBigInt > 0n) ? agSharesRaw : null
+      const rows = await fetchWalletPositions(counterTermId ? [agentTermId, counterTermId] : [agentTermId], userAddress)
+      const forPos = rows.filter(r => r.term_id.toLowerCase() === agentTermId.toLowerCase())
+      const againstRawPositions = counterTermId ? rows.filter(r => r.term_id.toLowerCase() === counterTermId.toLowerCase()) : []
+      const live = (raw: string | undefined) => {
+        try { return raw && BigInt(raw) > 0n ? raw : null } catch { return null }
       }
-
+      const forShares = live(forPos[0]?.shares)
+      const againstShares = live(againstRawPositions[0]?.shares)
       debugLog('fetchUserPosition:', { termId: agentTermId, counterTermId, forShares, againstShares })
       return { forShares, againstShares, rawPositions: forPos, againstRawPositions }
     } catch (e) {
       console.error('fetchUserPosition error:', e)
-      return { forShares: null, againstShares: null, rawPositions: [], againstRawPositions: [] }
+      return null
     }
   }
 
   const fetchVaultSharesForUser = async (termId: string, userAddress: string): Promise<bigint> => {
     try {
-      // Only this wallet's rows on this vault, in one request. Reading the whole vault stopped at
-      // 100 rows (redeem could read 0 shares on a larger vault); paging it would put a vault-sized
-      // read inside the transaction flow. account_id is stored checksummed: `_ilike` matches any casing.
-      const res = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetUserVaultPosition($termId: String!, $account: String!) {
-              positions(where: { term_id: { _eq: $termId }, account_id: { _ilike: $account } }, order_by: { id: asc }) {
-                account_id
-                shares
-              }
-            }
-          `,
-          variables: { termId, account: userAddress },
-        }),
-      })
-      if (!res.ok) throw new Error(`GraphQL HTTP ${res.status}`)
-      const data = await res.json()
-      if (data.errors || !data.data) throw new Error(data.errors?.[0]?.message ?? 'no data')
-      const pos = data.data.positions?.[0]
+      // Only this wallet's rows on this vault, in one request (lib/wallet-positions.ts). Reading the
+      // whole vault stopped at 100 rows (redeem could read 0 shares on a larger vault).
+      const pos = positionOn(await fetchWalletPositions([termId], userAddress), termId)
       let sharesBigInt = 0n
       try { sharesBigInt = pos?.shares ? BigInt(pos.shares) : 0n } catch { sharesBigInt = 0n }
       return sharesBigInt
@@ -642,7 +582,7 @@ function AgentsPageContent() {
   useEffect(() => {
     if (!selectedAgent || !address) return
     fetchUserPosition(selectedAgent.term_id, address, agentTriple.counterTermId).then(pos => {
-      if (pos.forShares || pos.againstShares) setUserPosition(pos)
+      if (pos && (pos.forShares || pos.againstShares)) setUserPosition(pos)
     })
   }, [selectedAgent?.term_id, address, agentTriple.counterTermId])
 
@@ -896,7 +836,7 @@ function AgentsPageContent() {
         debugLog('✅ Redeem TX:', tx)
 
         const updated = await fetchUserPosition(agent.term_id, address!, pendingVote.counterTermId)
-        setUserPosition(updated)
+        if (updated) setUserPosition(updated)
 
         setToast(`Redeemed ${(Number(sharesToRedeem) / 1e18).toFixed(4)} shares!`)
         setTimeout(() => setToast(null), 4000)
@@ -979,7 +919,7 @@ function AgentsPageContent() {
             setAgentSignalsCount(totalCount)
           })
         if (address) {
-          fetchUserPosition(agent.term_id, address, pendingVote.counterTermId).then(setUserPosition)
+          fetchUserPosition(agent.term_id, address, pendingVote.counterTermId).then(pos => { if (pos) setUserPosition(pos) })
         }
         refreshPositionsAndSupply(agent.term_id, pendingVote.counterTermId)
       }

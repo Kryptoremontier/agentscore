@@ -111,7 +111,25 @@ All pricing data read directly from MultiVault contract — no local approximati
 Available on detail (`/api/v1/agents/:id/trust`) and card (`/api/v1/agents/:id/card`)
 endpoints. Null on list endpoints (signal history not fetched in bulk).
 
-### Trust Tiers
+### Agent Tiers
+
+An agent's tier is derived **only from attestations**: distinct live attesters (wallets with
+shares > 0 on `is skilled in` → canonical-domain triples) and tTRUST attested on those triples.
+Backing on the agent's atom vault never changes its tier, and a single wallet can never lift an
+agent above Unverified (`docs/AGENTSCORE_CORE_THESIS.md` §6, `src/lib/agent-tier.ts`).
+
+| Tier | Distinct live attesters | tTRUST attested |
+|------|-------------------------|-----------------|
+| ⭐ **Verified** | ≥ 3 | ≥ 0.1 |
+| ✓ **Trusted** | ≥ 2 | ≥ 0.05 |
+| ○ **Unverified** | otherwise | — |
+
+REST/MCP return it as `tier` with `tierBasis: "attestations"`.
+
+### Vault Tiers (skills, claims, IntuForge projects)
+
+Skills, claims and IntuForge projects keep the stake-based ladder (`calculateTier` in
+`src/lib/trust-tiers.ts`). It is not an agent tier.
 
 | Tier | Threshold | Description |
 |------|-----------|-------------|
@@ -231,7 +249,7 @@ Unlike applications using local bonding curve approximations, AgentScore reads a
 | Hybrid Trust Score (AGENTSCORE) | ✅ Live |
 | Composite Trust Score (4 pillars) | ✅ Live |
 | Time-weighted reputation decay (90-day half-life) | ✅ Live |
-| Trust Tiers (Unverified → Verified) | ✅ Live |
+| Agent Tiers from attestations (Unverified → Trusted → Verified) | ✅ Live |
 | Bonding curve charts with on-chain price marker | ✅ Live |
 | Trust History chart | ✅ Live |
 | Community Sentiment visualization | ✅ Live |
@@ -399,7 +417,7 @@ npm start            # Run production server
 * Momentum indicators + Trust Sparkline (trend visibility on agent cards and detail panels)
 * findOrCreateAtom(): mainnet-ready atom reuse (links to existing atoms instead of creating duplicates)
 * 90-day reputation half-life (time-weighted signals with freshness bonus)
-* Trust Tiers (Unverified → Sandbox → Trusted → Verified)
+* Trust Tiers (Unverified → Sandbox → Trusted → Verified) — since Etap 4b-tier this vault ladder applies to skills, claims and IntuForge only; agent tiers come from attestations
 * User profiles, badges, leaderboard
 * Slippage protection (2% tolerance from on-chain quotes)
 * Platform documentation, Terms of Service, Privacy Policy

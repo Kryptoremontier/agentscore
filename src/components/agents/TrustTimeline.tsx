@@ -249,13 +249,13 @@ export function ScoreTrajectoryChart({
           {show50 && (
             <span className="flex items-center gap-1">
               <span className="inline-block w-6 border-t border-dashed" style={{ borderColor: 'rgba(255,255,255,0.15)' }} />
-              Sandbox (50)
+              50 · neutral
             </span>
           )}
           {show75 && (
             <span className="flex items-center gap-1">
               <span className="inline-block w-6 border-t border-dashed" style={{ borderColor: 'rgba(200,150,60,0.3)' }} />
-              Verified (75)
+              75
             </span>
           )}
         </div>

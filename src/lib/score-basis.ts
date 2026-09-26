@@ -73,6 +73,15 @@ export function stakeReadingOf(row: {
   }
 }
 
+/**
+ * For lists that print the stake-formula score at any stake (/skills, /claims): the score,
+ * or null when the row's oppose side couldn't be read — a score computed on 0 oppose would
+ * pass a failed read off as a measurement (inflated). Print "—" + OPPOSE_UNREAD_TOOLTIP.
+ */
+export function scoreUnlessOpposeUnread(trust: { score: number }, reading: StakeReading): number | null {
+  return reading.opposeWei === null ? null : trust.score
+}
+
 /** Total stake on the atom (support + oppose shares) > 0, with both sides actually read. */
 export function hasMeasuredScore(reading: StakeReading | null | undefined): boolean {
   if (!reading || reading.supportWei == null || reading.opposeWei === null) return false

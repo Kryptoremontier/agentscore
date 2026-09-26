@@ -86,8 +86,9 @@ interface ForgeTrustTimelineProps {
   projectId: string
   projectName: string
   createdAt: string
-  currentScore: number
-  currentTier: string
+  /** null = unknown (the oppose read failed): no score point, never a 0. */
+  currentScore: number | null
+  currentTier: string | null
   // counterTermId: needed to distinguish oppose signals from support signals
   counterTermId?: string
   agentSignals?: Array<{
@@ -165,7 +166,7 @@ export function ForgeTrustTimeline({
     )
   }
 
-  const hasChart = timeline.scoreHistory.length >= 2
+  const hasChart = timeline.scoreHistory.length >= 2 && currentScore != null
 
   return (
     <div>
@@ -182,7 +183,7 @@ export function ForgeTrustTimeline({
           >
             <ScoreTrajectoryChart
               scoreHistory={timeline.scoreHistory}
-              currentScore={currentScore}
+              currentScore={currentScore!}
             />
           </div>
         ) : (

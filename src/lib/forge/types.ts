@@ -113,12 +113,13 @@ export interface ForgeProject {
   completeness: number
 
   // Trust (calculated by scoring engine, not user-entered)
-  trustScore: number
-  compositeScore: number
-  finalScore: number
+  // null = the project's oppose read failed: unknown, never a score computed on 0 oppose.
+  trustScore: number | null
+  compositeScore: number | null
+  finalScore: number | null
   stakerCount: number
   totalStaked: number
-  opposeStaked: number
+  opposeStaked: number | null
   evaluatorCount: number
   momentum: 'up' | 'down' | 'stable'
   sparklineData: number[]
@@ -166,5 +167,6 @@ export interface ForgeStats {
   totalStakers: number
   totalEvaluators: number
   categoryCounts: Record<ForgeCategory, number>
-  avgTrustScore: number
+  /** Mean over projects whose score is known; null when none is. */
+  avgTrustScore: number | null
 }

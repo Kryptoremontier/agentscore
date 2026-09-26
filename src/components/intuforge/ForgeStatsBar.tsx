@@ -12,7 +12,7 @@ export function ForgeStatsBar({ stats }: ForgeStatsBarProps) {
     { label: 'tTRUST Staked', value: stats.totalStaked.toFixed(2) },
     { label: 'Stakers', value: stats.totalStakers.toString() },
     { label: 'Evaluators', value: stats.totalEvaluators.toString() },
-    { label: 'Avg Score', value: stats.avgTrustScore.toFixed(0) },
+    { label: 'Avg Score', value: stats.avgTrustScore == null ? '—' : stats.avgTrustScore.toFixed(0) },
   ]
 
   return (

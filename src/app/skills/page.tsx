@@ -31,6 +31,11 @@ import { TrustTimeline } from '@/components/agents/TrustTimeline'
 import { APP_CONFIG } from '@/lib/app-config'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { SKILL_WHERE_STR } from '@/lib/gql-filters'
+import { fetchVaultPositions } from '@/lib/vault-positions'
+import { annotateVaultReads } from '@/lib/agent-list'
+import { stakeReadingOf, scoreUnlessOpposeUnread, readSharesWei, OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
+import { gqlRequest } from '@/lib/gql-pager'
+import { OpposeUnreadNotice } from '@/components/shared/OpposeUnreadNotice'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -46,6 +51,8 @@ interface GraphQLSkill {
   creator?: { label: string; id?: string } | null
   positions_aggregate?: { aggregate: { count: number; sum: { shares: string } | null } }
   as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /** Counter-vault shares (lib/agent-list.ts annotateVaultReads); null = that read failed. */
+  __opposeWei?: bigint | null
 }
 
 export default function SkillsPage() {
@@ -123,6 +130,8 @@ function SkillsPageContent() {
   const [creatingTriple, setCreatingTriple] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [skillTrust, setSkillTrust] = useState<TrustScoreResult | null>(null)
+  // The modal's oppose read failed: no trust score (never one computed on 0 oppose).
+  const [skillOpposeUnread, setSkillOpposeUnread] = useState(false)
   const [signalSide, setSignalSide] = useState<'support' | 'oppose'>('support')
   const [tradeAction, setTradeAction] = useState<'buy' | 'sell'>('buy')
   const [voteAmount, setVoteAmount] = useState('0.05')
@@ -231,27 +240,10 @@ function SkillsPageContent() {
         .map(a => a.as_subject_triples?.[0]?.counter_term_id)
         .filter(Boolean) as string[]
       if (counterTermIds.length > 0) {
-        try {
-          const opposeRes = await fetch(GRAPHQL_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `{ positions(where: { term_id: { _in: ${JSON.stringify(counterTermIds)} } }) { term_id shares } }`
-            })
-          })
-          const opposeData = await opposeRes.json()
-          const opposeMap = new Map<string, bigint>()
-          for (const pos of opposeData.data?.positions ?? []) {
-            const prev = opposeMap.get(pos.term_id) || 0n
-            try { opposeMap.set(pos.term_id, prev + BigInt(pos.shares)) } catch { /* skip */ }
-          }
-          for (const atom of atoms) {
-            const ctid = atom.as_subject_triples?.[0]?.counter_term_id
-            if (ctid && opposeMap.has(ctid)) {
-              ;(atom as any).__opposeWei = opposeMap.get(ctid) || 0n
-            }
-          }
-        } catch { /* non-critical, cards fall back to opposeWei=0 */ }
+        // The same paged read + annotation as /agents (lib/agent-list.ts): a failed read leaves
+        // oppose null (unknown) — never 0, which would print an inflated score.
+        const positions = await fetchVaultPositions(counterTermIds).catch(() => null)
+        annotateVaultReads(atoms, positions, { stakers: false })
       }
       setSkills(atoms)
     } catch (e: any) {
@@ -577,6 +569,7 @@ function SkillsPageContent() {
   }, [selectedSkill?.term_id, skillTriple.counterTermId])
 
   useEffect(() => {
+    setSkillOpposeUnread(false)
     if (!selectedSkill) {
       setSkillTrust(null)
       return
@@ -590,11 +583,9 @@ function SkillsPageContent() {
       return
     }
 
-    fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
+    let cancelled = false
+    // Throws on HTTP errors (429), GraphQL errors and a body without data (lib/gql-pager.ts).
+    gqlRequest<{ positions_aggregate: { aggregate: { sum: { shares: string | null } | null } | null } }>(`
           query GetOpposeVault($termId: String!) {
             positions_aggregate(where: { term_id: { _eq: $termId } }) {
               aggregate {
@@ -603,19 +594,20 @@ function SkillsPageContent() {
               }
             }
           }
-        `,
-        variables: { termId: skillTriple.counterTermId },
-      }),
-    })
-      .then(r => r.json())
+        `, { termId: skillTriple.counterTermId })
       .then(data => {
-        let opposeWei = 0n
-        try { opposeWei = BigInt(data?.data?.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { opposeWei = 0n }
+        if (cancelled) return
+        const opposeWei = readSharesWei(data.positions_aggregate)
+        if (opposeWei == null) throw new Error('unparseable oppose shares')
         setSkillTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
       })
       .catch(() => {
-        setSkillTrust(calculateTrustScoreFromStakes(supportWei, 0n))
+        if (cancelled) return
+        // A failed read is unknown, not 0: no score, and the modal says why.
+        setSkillTrust(null)
+        setSkillOpposeUnread(true)
       })
+    return () => { cancelled = true }
   }, [selectedSkill?.term_id, selectedSkill?.positions_aggregate?.aggregate?.sum?.shares, skillTriple.counterTermId])
 
   useEffect(() => {
@@ -1202,6 +1194,8 @@ function SkillsPageContent() {
   const skillTrustTier = useMemo(() => {
     try {
       if (!selectedSkill) return null
+      // The tier reads the same stake: unknown when the oppose read failed, never computed on 0.
+      if (skillOpposeUnread) return null
       const stakers = combinedStakerCount
       const supportWei = skillTrust?.supportStake ?? 0n
       const opposeWei = skillTrust?.opposeStake ?? 0n
@@ -1217,7 +1211,7 @@ function SkillsPageContent() {
       console.error('[skillTrustTier]', e)
       return null
     }
-  }, [selectedSkill, combinedStakerCount, skillTrust, compositeTrust, hybridScore])
+  }, [selectedSkill, combinedStakerCount, skillTrust, compositeTrust, hybridScore, skillOpposeUnread])
 
   const enrichedPositions = useMemo(() => {
     try {
@@ -1429,21 +1423,23 @@ function SkillsPageContent() {
 
           {!loading && skills.length > 0 && (() => {
             const enriched = skills.map(skill => {
-              let supportWei = 0n
-              try { supportWei = BigInt(skill.positions_aggregate?.aggregate?.sum?.shares || '0') } catch { supportWei = 0n }
-              const opposeWei: bigint = (skill as any).__opposeWei ?? 0n
-              const cardTrust = calculateTrustScoreFromStakes(supportWei, opposeWei)
-              return { skill, trust: cardTrust }
+              // opposeWei null = the oppose read failed (lib/score-basis.ts stakeReadingOf).
+              const reading = stakeReadingOf(skill)
+              const cardTrust = calculateTrustScoreFromStakes(reading.supportWei ?? 0n, reading.opposeWei ?? 0n)
+              return { skill, trust: cardTrust, shown: scoreUnlessOpposeUnread(cardTrust, reading) }
             })
 
+            // A row whose oppose read failed has no level to filter on and sorts after the scored ones.
             const filtered = selectedCategory === 'all'
               ? enriched
-              : enriched.filter(e => e.trust.level === selectedCategory)
+              : enriched.filter(e => e.shown != null && e.trust.level === selectedCategory)
 
+            const byScore = (a: typeof enriched[number], b: typeof enriched[number], dir: 1 | -1) =>
+              a.shown == null || b.shown == null ? (a.shown == null ? 1 : 0) - (b.shown == null ? 1 : 0) : dir * (a.shown - b.shown)
             const sorted = [...filtered].sort((a, b) => {
               switch (sortBy) {
-                case 'score_desc': return b.trust.score - a.trust.score
-                case 'score_asc': return a.trust.score - b.trust.score
+                case 'score_desc': return byScore(a, b, -1)
+                case 'score_asc': return byScore(a, b, 1)
                 case 'stakers':
                   return (b.skill.positions_aggregate?.aggregate?.count || 0)
                        - (a.skill.positions_aggregate?.aggregate?.count || 0)
@@ -1520,10 +1516,10 @@ function SkillsPageContent() {
               ) : viewMode === 'grid' ? (
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {sorted.map(({ skill, trust: cardTrust }) => {
-                  const trustScore = cardTrust.score
+                {sorted.map(({ skill, trust: cardTrust, shown: trustScore }) => {
                   const stakers = skill.positions_aggregate?.aggregate?.count || 0
-                  const color = cardTrust.level === 'excellent' ? '#2ECC71'
+                  const color = trustScore == null ? '#7A838D'
+                    : cardTrust.level === 'excellent' ? '#2ECC71'
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
@@ -1563,7 +1559,11 @@ function SkillsPageContent() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl font-bold leading-none" style={{ color: getTrustColor(trustScore) }}>{trustScore}</p>
+                          {trustScore != null ? (
+                            <p className="text-2xl font-bold leading-none" style={{ color: getTrustColor(trustScore) }}>{trustScore}</p>
+                          ) : (
+                            <p className="text-2xl font-bold leading-none text-[#7A838D] cursor-help" title={OPPOSE_UNREAD_TOOLTIP}>—</p>
+                          )}
                           <p className="text-xs text-[#7A838D] mt-0.5">Trust Score</p>
                         </div>
                       </div>
@@ -1572,7 +1572,7 @@ function SkillsPageContent() {
                         <span>Stakers: <span className="text-white font-medium">{stakers}</span></span>
                       </div>
                       <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${trustScore}%`, backgroundColor: color }} />
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${trustScore ?? 0}%`, backgroundColor: color }} />
                       </div>
                     </motion.div>
                   )
@@ -1588,10 +1588,10 @@ function SkillsPageContent() {
                   <span className="text-right w-16">Stakers</span>
                   <span className="text-right w-12">Score</span>
                 </div>
-                {sorted.map(({ skill, trust: cardTrust }, i) => {
-                  const trustScore = cardTrust.score
+                {sorted.map(({ skill, trust: cardTrust, shown: trustScore }, i) => {
                   const stakers = skill.positions_aggregate?.aggregate?.count || 0
-                  const color = cardTrust.level === 'excellent' ? '#2ECC71'
+                  const color = trustScore == null ? '#7A838D'
+                    : cardTrust.level === 'excellent' ? '#2ECC71'
                     : cardTrust.level === 'good' ? '#22C55E'
                     : cardTrust.level === 'moderate' ? '#EAB308'
                     : cardTrust.level === 'low' ? '#F97316' : '#EF4444'
@@ -1630,7 +1630,7 @@ function SkillsPageContent() {
                       </div>
                       <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{stakes}</span>
                       <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{stakers}</span>
-                      <span className="text-sm font-bold font-mono text-right w-12" style={{ color }}>{trustScore}</span>
+                      <span className="text-sm font-bold font-mono text-right w-12" style={{ color }} title={trustScore == null ? OPPOSE_UNREAD_TOOLTIP : undefined}>{trustScore ?? '—'}</span>
                     </motion.div>
                   )
                 })}
@@ -2137,6 +2137,7 @@ function SkillsPageContent() {
 
               {/* === AGENTSCORE + STAKE BREAKDOWN === */}
               {(() => {
+                if (skillOpposeUnread) return <OpposeUnreadNotice className="mb-3" />
                 const t = skillTrust
                 const score = hybridScore ?? t?.score ?? 50
                 const level = hybridScore != null ? getHybridLevel(hybridScore) : (t?.level ?? 'moderate')
@@ -2290,6 +2291,7 @@ function SkillsPageContent() {
 
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (() => {
+                  if (skillOpposeUnread) return <div className="p-5"><OpposeUnreadNotice /></div>
                   const rawScore = skillTrust?.score ?? 50
                   const score = hybridScore ?? rawScore
                   const level = hybridScore != null ? getHybridLevel(hybridScore) : (skillTrust?.level ?? 'moderate')
@@ -3146,7 +3148,7 @@ function SkillsPageContent() {
                     agentId={selectedSkill.term_id}
                     agentName={getSkillName(selectedSkill.label)}
                     createdAt={selectedSkill.created_at}
-                    currentScore={hybridScore ?? skillTrust?.score ?? 50}
+                    currentScore={skillOpposeUnread ? null : (hybridScore ?? skillTrust?.score ?? 50)}
                     currentTier="unverified"
                     agentSignals={skillSignals}
                     counterTermId={skillTriple.counterTermId}

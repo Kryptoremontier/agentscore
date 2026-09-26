@@ -60,7 +60,11 @@ const SHOTS: Shot[] = [
     prepare: modalReady,
     target: unfixModal,
   })),
-  { name: 'agent-profile-dackie', url: ROUTES.agentProfile(AGENTS.dackie), prepare: profileReady },
+  ...(['dackie', 'luda', 'openclaw'] as const).map((key): Shot => ({
+    name: `agent-profile-${key}`,
+    url: ROUTES.agentProfile(AGENTS[key]),
+    prepare: profileReady,
+  })),
   { name: 'domains', url: ROUTES.domains },
   { name: 'evaluators', url: ROUTES.evaluators },
   { name: 'leaderboard', url: ROUTES.leaderboard },
@@ -168,16 +172,19 @@ async function modalReady(page: Page) {
 }
 
 /**
- * /agents/[id] resolved: the ATTESTED section rendered (heading or empty
- * state) or the page's own not-found state.
+ * /agents/[id] resolved: the agent tier chip left its loading state and the
+ * ATTESTED section rendered (heading or empty state). The reference agents all
+ * exist — ERC-8004 ones included — so "Agent Not Found" is a failure here, not
+ * a settled page.
  */
 async function profileReady(page: Page) {
-  await page
-    .getByText('Attested Domains', { exact: true })
-    .or(page.getByText('Unverified — no attestations yet', { exact: true }))
-    .or(page.getByText('Agent Not Found', { exact: true }))
-    .first()
-    .waitFor({ timeout: WAIT_CAP })
+  await expect(page.getByText('Agent Not Found', { exact: true })).toHaveCount(0)
+  await expect(page.getByTestId('agent-tier-chip').getByText(/\d+\/\d+ attesters|Verified/).first()).toBeVisible({ timeout: WAIT_CAP })
+  await expect(
+    page.getByText('Attested Domains', { exact: true })
+      .or(page.getByText('Unverified — no attestations yet', { exact: true }))
+      .first(),
+  ).toBeVisible({ timeout: WAIT_CAP })
 }
 
 function modalLocator(page: Page) {

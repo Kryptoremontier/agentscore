@@ -6,6 +6,7 @@ import { ForgeStatsBar } from '@/components/intuforge/ForgeStatsBar'
 import { fetchForgeProjectsWithJunkInfo } from '@/lib/forge/data'
 import type { ForgeStats, ForgeProject } from '@/lib/forge/types'
 import { ForgeCategory } from '@/lib/forge/types'
+import { compareForgeScoreDesc, meanKnownForgeScore } from '@/lib/forge/scoring'
 
 export const revalidate = 60
 
@@ -13,7 +14,8 @@ function deriveStats(projects: ForgeProject[]): ForgeStats {
   const totalStaked     = projects.reduce((s, p) => s + p.totalStaked, 0)
   const totalStakers    = projects.reduce((s, p) => s + p.stakerCount, 0)
   const totalEvaluators = projects.reduce((s, p) => s + p.evaluatorCount, 0)
-  const avgTrustScore   = projects.reduce((s, p) => s + p.finalScore, 0) / (projects.length || 1)
+  // Over the projects whose score is known (lib/forge/scoring.ts); null when none is.
+  const avgTrustScore   = meanKnownForgeScore(projects)
 
   const categoryCounts = Object.fromEntries(
     Object.values(ForgeCategory).map(c => [c, projects.filter(p => p.category === c).length])
@@ -25,7 +27,7 @@ function deriveStats(projects: ForgeProject[]): ForgeStats {
     totalStakers,
     totalEvaluators,
     categoryCounts,
-    avgTrustScore: Math.round(avgTrustScore),
+    avgTrustScore: avgTrustScore == null ? null : Math.round(avgTrustScore),
   }
 }
 
@@ -113,7 +115,7 @@ export default async function IntuforgePage() {
         <>
           {/* Leaderboard */}
           <section>
-            <ForgeLeaderboard projects={[...projects].sort((a, b) => b.finalScore - a.finalScore)} />
+            <ForgeLeaderboard projects={[...projects].sort(compareForgeScoreDesc)} />
           </section>
 
           {/* Explore */}
@@ -130,7 +132,7 @@ export default async function IntuforgePage() {
             style={{ borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.2)' }}
           >
             <span className="text-xs">
-              {stats.totalProjects} Listed · {stats.totalStakers} Stakers · {stats.totalEvaluators} Evaluators · Avg Score: {stats.avgTrustScore}
+              {stats.totalProjects} Listed · {stats.totalStakers} Stakers · {stats.totalEvaluators} Evaluators · Avg Score: {stats.avgTrustScore ?? '—'}
             </span>
           </div>
         </>
