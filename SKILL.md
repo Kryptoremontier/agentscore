@@ -46,11 +46,10 @@ antiManipulation.whaleDetected: true
 antiManipulation.largestStakerShare: 1
 antiManipulation.evaluatorWeightsApplied: false
 tier.current: unverified
-tier.nextTier: sandbox
-tier.requirements.stakers: 1/3
-tier.requirements.stake: 0.0500/0.1 tTRUST
-tier.requirements.ratio: 100%/0%
-tier.requirements.age: 129/0 days
+tier.basis: attestations
+tier.nextTier: trusted
+tier.requirements.attesters: 0/2
+tier.requirements.tTrustAttested: 0.0000/0.05 tTRUST
 version: v1
 disclaimer: Score reflects on-chain signals only; it proves activity patterns, never trustworthiness.
 ```
@@ -74,9 +73,13 @@ Two distinct tier concepts appear in the same response — don't conflate them:
 
 - `score.tier` — the **band** derived from the score (e.g. `"good"`). This is
   what you rank/compare on.
-- `tier.current` — a **verification/progression** tier (e.g. `"unverified"`),
-  with `tier.requirements` showing what's needed to reach the next one. This is
-  a path-to-promotion signal, not a ranking signal.
+- `tier.current` — the agent's **attestation tier** (`"unverified"`, `"trusted"` or
+  `"verified"`), derived only from attestations (`tier.basis: attestations`):
+  distinct live attesters and tTRUST attested on `is skilled in` claims. Verified
+  ≥ 3 attesters and ≥ 0.1 tTRUST; Trusted ≥ 2 and ≥ 0.05; otherwise Unverified.
+  Backing the agent never changes it; one wallet can never lift it.
+  `tier.requirements` shows what the next rung needs. `null` = the attestation
+  read failed (unknown), not "unverified". Not a ranking signal.
 
 What a score does and does not imply: score reflects on-chain signals only; it
 proves activity patterns, never trustworthiness. A high score means an agent has

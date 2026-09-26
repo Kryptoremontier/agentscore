@@ -2,22 +2,25 @@
 
 import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, ExternalLink, Copy, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Shield, ExternalLink, Copy, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { formatDate, formatTTrust } from '@/lib/format'
 import type { Agent } from '@/types/agent'
+import type { AgentTierResult } from '@/lib/agent-tier'
+import { AgentTierChip } from '@/components/agents/AgentTierChip'
 
 interface AgentHeaderProps {
   agent: Agent
+  /** The agent tier (attestations only, lib/agent-tier.ts); null = loading or unknown. */
+  tier: AgentTierResult | null
+  tierLoading: boolean
   /** Primary action slot rendered directly under the agent name — the hero CTA. */
   action?: ReactNode
 }
 
-export function AgentHeader({ agent, action }: AgentHeaderProps) {
-  const isVerified = agent.verificationLevel !== 'none'
-
+export function AgentHeader({ agent, action, tier, tierLoading }: AgentHeaderProps) {
   const handleCopyAddress = () => {
     if (agent.walletAddress) {
       navigator.clipboard.writeText(agent.walletAddress)
@@ -49,12 +52,9 @@ export function AgentHeader({ agent, action }: AgentHeaderProps) {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold">{agent.name}</h1>
-                {isVerified && (
-                  <Badge variant="success" size="lg">
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Verified
-                  </Badge>
-                )}
+                {/* Was a "Verified" badge on every scored agent (verificationLevel is hardcoded
+                    'wallet'). The tier comes only from attestations (thesis §6). */}
+                <AgentTierChip tier={tier} loading={tierLoading} size="lg" />
               </div>
 
               <div className="flex items-center gap-3 text-text-secondary">

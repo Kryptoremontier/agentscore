@@ -18,7 +18,9 @@ import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
 import { useAgentStakerWeights } from '@/hooks/useEvaluatorScore'
-import { calculateTier, calculateTierProgress, getAgentAgeDays } from '@/lib/trust-tiers'
+import { calculateAgentTier, type AgentTierResult } from '@/lib/agent-tier'
+import { AgentTierChip } from '@/components/agents/AgentTierChip'
+import { fetchAttestationsForSubjects, type AttestedEntry } from '@/lib/attestation-reader'
 import { calculateWeightedTrust } from '@/lib/reputation-decay'
 import {
   calculateCompositeTrust, calculateStableDays, findPeakPrice,
@@ -26,7 +28,7 @@ import {
   COMPOSITE_WEIGHTS, type CompositeResult,
 } from '@/lib/composite-trust'
 import { BONDING_CURVE_CONFIG } from '@/lib/bonding-curve'
-import { TrustTierBadge, TrustTierBadgeWithProgress } from '@/components/agents/TrustTierBadge'
+import { TrustTierBadge } from '@/components/agents/TrustTierBadge'
 import { EarlySupporterBadge } from '@/components/agents/EarlySupporterBadge'
 import { parseAgentCard, calculateProfileCompleteness, AGENT_CATEGORIES } from '@/lib/agent-card'
 
@@ -52,7 +54,7 @@ import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import { fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus } from '@/lib/agent-list'
 import {
-  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, measuredTier, NO_STAKE_TOOLTIP,
+  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { filterAgents } from '@/lib/agent-junk-filter'
@@ -61,12 +63,6 @@ const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
   if (process.env.NODE_ENV === 'development') console.log(...args)
 }
-
-// Etap 4b modal — display-only progress fraction next to the tier chip.
-// Does NOT feed calculateTier() (vault-based, untouched) — a separate,
-// honest readout of the canonical attestation unit's own threshold.
-const VERIFIED_MIN_ATTESTERS = 3
-const VERIFIED_MIN_TTRUST = '0.1'
 
 // Neutral colour for rows without a measured score — never the yellow "moderate"
 // the 50 prior would otherwise paint them (lib/score-basis.ts).
@@ -153,6 +149,9 @@ function AgentsPageContent() {
   const [cohortLoading, setCohortLoading] = useState(true)
   // 'error' ≠ empty: a failed cohort read must never look like "0 ERC-8004".
   const [cohortStatus, setCohortStatus] = useState<FeedStatus>('loading')
+  // Attestations for every listed agent (both corpora) — one bulk read, 2 paged requests per
+  // 200 ids (lib/attestation-reader.ts). undefined = not read yet, null = the read failed.
+  const [attestedBySubject, setAttestedBySubject] = useState<Map<string, AttestedEntry[]> | null | undefined>(undefined)
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
@@ -353,6 +352,31 @@ function AgentsPageContent() {
     })
     return () => { cancelled = true }
   }, [])
+
+  // Attestations for the listed agents — the card's tier (and attester line) come only from
+  // these (thesis §6). Waits for both corpora; a failed read is null (no claim), never 0.
+  useEffect(() => {
+    if (loading || cohortLoading) return
+    const ids = [...agents.map(a => a.term_id), ...cohortAgents.map(a => a.term_id)]
+    let cancelled = false
+    setAttestedBySubject(undefined)
+    fetchAttestationsForSubjects(ids)
+      .then(map => { if (!cancelled) setAttestedBySubject(map) })
+      .catch(() => { if (!cancelled) setAttestedBySubject(null) })
+    return () => { cancelled = true }
+  }, [loading, cohortLoading, agents, cohortAgents])
+
+  // Per agent: attesters, domains and the tier — the same derivation as the modal
+  // (summarizeAttesters → calculateAgentTier), computed once per read, not per render.
+  const attestationViewBySubject = useMemo(() => {
+    if (!attestedBySubject) return attestedBySubject
+    const out = new Map<string, { attesters: number; domains: number; tier: AgentTierResult }>()
+    for (const [id, entries] of attestedBySubject) {
+      const summary = summarizeAttesters(entries)
+      out.set(id, { attesters: summary.length, domains: entries.length, tier: calculateAgentTier(summary) })
+    }
+    return out
+  }, [attestedBySubject])
 
   // Auto-open agent modal when ?open=TERM_ID is in URL (checks both corpora)
   useEffect(() => {
@@ -1374,28 +1398,6 @@ function AgentsPageContent() {
     }
   }, [skillTriples])
 
-  // ─── Trust Tier dla wybranego agenta ───
-  const agentTrustTier = useMemo(() => {
-    try {
-      // No vault tier without its inputs: the staker count must be loaded for THIS
-      // agent, and a trust ratio exists only with stake behind it. calculateTier has
-      // no "unmeasured ratio" input, so an unmeasured agent gets no vault-tier chip
-      // (the ATTESTED fraction next to it still renders) rather than an invented ratio.
-      if (!selectedAgent || !agentTrust || !modalMeasured) return null
-      if (positionsLoadedFor !== selectedAgent.term_id) return null
-      const stakers = combinedStakerCount
-      const totalStake = Number(agentTrust.totalStake) / 1e18
-      const trustRatio = hybridScore ?? compositeTrust?.score ?? supportPercent(modalStakeReading)
-      if (trustRatio == null) return null
-      const ageDays = selectedAgent.created_at ? getAgentAgeDays(selectedAgent.created_at) : 0
-      const tier = calculateTier(stakers, totalStake, trustRatio, ageDays)
-      const progress = calculateTierProgress(stakers, totalStake, trustRatio, ageDays)
-      return { tier, progress }
-    } catch (e) {
-      console.error('[agentTrustTier]', e)
-      return null
-    }
-  }, [selectedAgent, combinedStakerCount, positionsLoadedFor, agentTrust, modalMeasured, compositeTrust, hybridScore])
 
   // Etap 4b — modal stat rows: primary (attestation unit, canonical) + secondary
   // (Backers, atom vault). No new fetch — derived from profileVector +
@@ -1426,6 +1428,14 @@ function AgentsPageContent() {
       signals: agentSignalsCount,
     })
   }, [profileVector.attested, reportCount, combinedStakerCount, backerVaultWei, agentSignalsCount])
+
+  // The agent tier — attestations only (thesis §6 "Agent tiers", lib/agent-tier.ts). Backing on
+  // the atom vault never changes it. null while the profile loads or when the attestation read
+  // failed: the chip then says so, never a default "Unverified".
+  const agentTier = useMemo(
+    () => (attestedRead && profileVector.attested ? calculateAgentTier(summarizeAttesters(profileVector.attested)) : null),
+    [attestedRead, profileVector.attested],
+  )
 
   // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
   const agentAvatar = useMemo(() => {
@@ -1462,7 +1472,7 @@ function AgentsPageContent() {
       if (!selectedAgent) return []
       const score = hybridScore ?? measuredScore(agentTrust, modalMeasured)
       if (score == null) return []  // nothing measured → no trajectory point
-      const tier = agentTrustTier?.tier?.tier ?? 'unverified'
+      const tier = agentTier?.tier ?? null
       const stakingEvts = agentSignals.map((s: any) => ({
         id: s.id as string,
         accountId: s.account_id as string,
@@ -1479,12 +1489,13 @@ function AgentsPageContent() {
         createdAt: selectedAgent.created_at,
         currentScore: score,
         currentTier: tier,
+        tierMilestones: 'none', // agent tiers come from attestations, not supporter counts
         stakingEvents: stakingEvts,
         skillEvents: [],
       })
       return tl.scoreHistory
     } catch { return [] }
-  }, [selectedAgent, agentSignals, agentTriple.counterTermId, hybridScore, agentTrust, modalMeasured, agentTrustTier])
+  }, [selectedAgent, agentSignals, agentTriple.counterTermId, hybridScore, agentTrust, modalMeasured, agentTier])
 
   return (
     <PageBackground image="hero" opacity={0.4}>
@@ -1852,12 +1863,10 @@ function AgentsPageContent() {
                   // Cohort rows never fetch the atom vault: their stake/stakers were never
                   // measured, so they are not printed (thesis §6: null ≠ 0.0).
                   const vaultRead = readSharesWei(agent.positions_aggregate) != null
-                  const cardTier = measuredTier({
-                    stakers: stakers ?? 0,
-                    supportWei: readSharesWei(agent.positions_aggregate),
-                    opposeWei: (agent as any).__opposeWei ?? 0n,
-                    ageDays: agent.created_at ? getAgentAgeDays(agent.created_at) : 0,
-                  })
+                  // The agent tier — attestations only (thesis §6). The card shows only Trusted /
+                  // Verified; Unverified is the default state, carried by the attester line.
+                  const cardAgentTier = attestationViewBySubject?.get(agent.term_id)?.tier ?? null
+                  const cardTierChip = cardAgentTier && cardAgentTier.tier !== 'unverified' ? cardAgentTier.display : null
 
                   return (
                     <motion.div
@@ -1883,10 +1892,8 @@ function AgentsPageContent() {
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
                               <h3 className="font-bold text-white text-base leading-tight">{name}</h3>
-                              {/* Vault tier from the real support ratio (lib/score-basis.ts measuredTier) —
-                                  was a hardcoded 50, which capped every card at Sandbox. No chip when
-                                  there is no stake to take a ratio of. */}
-                              {cardTier && <TrustTierBadge tier={cardTier} size="sm" />}
+                              {/* Agent tier chip — Trusted / Verified only (attestations, thesis §6). */}
+                              {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
                             </div>
                             <span className={`text-xs px-2 py-0.5 rounded inline-block ${
                               agent.origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
@@ -2033,19 +2040,10 @@ function AgentsPageContent() {
                         {getAgentNameFromAtom(selectedAgent)}
                       </h2>
                       <div className="flex items-center gap-1.5">
-                        {/* Vault tier chip only when its inputs are measured (see agentTrustTier);
-                            the attestation fraction always renders — it is the canonical unit. */}
-                        {agentTrustTier && (
-                          <TrustTierBadgeWithProgress
-                            tier={agentTrustTier.tier}
-                            progress={agentTrustTier.progress}
-                          />
-                        )}
-                        <TooltipWrapper content={`Verified requires ≥${VERIFIED_MIN_ATTESTERS} distinct attesters and ≥${VERIFIED_MIN_TTRUST} tTRUST attested.`}>
-                          <span className="text-[10px] text-[#7A838D] cursor-help">
-                            {agentTrustTier ? '· ' : ''}{attestedRead ? modalStats.attesters : '—'}/{VERIFIED_MIN_ATTESTERS} attesters
-                          </span>
-                        </TooltipWrapper>
+                        {/* The agent tier — attestations only (thesis §6), always shown:
+                            "Unverified · 1/3 attesters", "Trusted · 2/3 attesters", "Verified".
+                            "—" while loading; unavailable if the attestation read failed. */}
+                        <AgentTierChip tier={agentTier} loading={!profileLoaded} />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
@@ -3756,9 +3754,10 @@ function AgentsPageContent() {
                   const agentCard = parseAgentCard(effectiveLabel(selectedAgent))
                   const completeness = calculateProfileCompleteness({ name: agentCard.name ?? '', ...agentCard })
                   const score = hybridScore ?? measuredScore(agentTrust, modalMeasured)
-                  const tier = agentTrustTier?.tier?.tier ?? 'unverified'
+                  const tier = agentTier?.tier ?? null
                   return (
                     <TrustTimeline
+                      tierMilestones="none"
                       agentId={selectedAgent.term_id}
                       agentName={agentCard.name ?? getAgentNameFromAtom(selectedAgent)}
                       createdAt={selectedAgent.created_at}

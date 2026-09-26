@@ -53,7 +53,8 @@ const handler = createMcpHandler(
         description:
           'Search and list AI agents registered on AgentScore. ' +
           'Returns agents with a score envelope (trustScore, qualityScore, objectScore) ' +
-          'plus trust tier, momentum direction, staker count, and skill count. ' +
+          'plus the attestation tier (tier + tierBasis: "attestations" — Verified: >= 3 distinct attesters and >= 0.1 tTRUST attested; Trusted: >= 2 and >= 0.05; otherwise Unverified; null = unknown), ' +
+          'momentum direction, live staker count, and skill count. ' +
           'In list context qualityScore is null — use get_agent_trust for the full composite. ' +
           'Sort by score, stakers, or newest. Filter by minimum trust score. ' +
           'Test fixtures and duplicate re-registrations are filtered out by default — ' +
@@ -89,6 +90,7 @@ const handler = createMcpHandler(
                   scoreBasis: a.scoreBasis,
                   agentScore: a.agentScore,
                   tier: a.trustTier,
+                  tierBasis: a.tierBasis,
                   momentum: a.momentumDirection,
                   stakers: a.stakerCount,
                   skills: a.skillCount,
@@ -121,7 +123,7 @@ const handler = createMcpHandler(
           'per-skill breakdown (contextual trust), ' +
           'trust score components (economic confidence, composite quality), ' +
           'anti-manipulation metrics (whale detection, evaluator weights), ' +
-          'and tier progression (what\'s needed for next tier).',
+          'and the attestation tier with what the next rung needs (distinct attesters, tTRUST attested — never backing).',
         inputSchema: {
           agentId: z.string()
             .describe('Agent\'s term ID (get from search_agents)'),
@@ -147,6 +149,7 @@ const handler = createMcpHandler(
                   scoreBasis: detail.scoreBasis,
                   agentScore: detail.agentScore,
                   tier: detail.trustTier,
+                  tierBasis: detail.tierBasis,
                 },
                 skillBreakdown: detail.skillBreakdown,
                 trustAnalysis: trust,
@@ -411,6 +414,7 @@ const handler = createMcpHandler(
                 scoreBasis: detail.scoreBasis,
                 agentScore: detail.agentScore,
                 tier: detail.trustTier,
+                tierBasis: detail.tierBasis,
                 momentum: detail.momentumDirection,
                 domainScore: skillScore?.score ?? null,
                 domainName: skillScore?.skillName ?? null,
@@ -576,7 +580,7 @@ const handler = createMcpHandler(
         description:
           'Get the chronological trust history of an AI agent, from real dated ' +
           'on-chain events: staker joins/leaves, skill/domain attestation claims, ' +
-          'tier upgrades (Sandbox at 3, Trusted at 10, Verified at 25 stakers), ' +
+          '(an agent\'s tier comes only from attestations, so staker counts emit no tier events), ' +
           'high-accuracy evaluator staking, and A2A readiness. ' +
           'Use this to understand WHY an agent has its current score and WHEN ' +
           'specific events occurred. Historical score snapshots are not persisted — ' +
@@ -608,7 +612,8 @@ const handler = createMcpHandler(
             agentName: rawData.agentName,
             createdAt: rawData.createdAt,
             currentScore: agentDetail?.agentScore ?? 50,
-            currentTier: agentDetail?.trustTier ?? 'unverified',
+            currentTier: agentDetail?.trustTier ?? null, // attestation tier; null = unknown
+            tierMilestones: 'none',
             stakingEvents: rawData.stakingEvents,
             skillEvents: rawData.skillEvents,
           })
@@ -624,6 +629,7 @@ const handler = createMcpHandler(
                 agentName: timeline.agentName,
                 currentScore: timeline.currentScore,
                 currentTier: timeline.currentTier,
+                tierBasis: 'attestations',
                 summary: timeline.summary,
                 events: events.map(e => ({
                   date: e.timestamp,

@@ -145,7 +145,9 @@ async function modalReady(page: Page) {
   const modal = modalLocator(page)
   await modal.waitFor({ timeout: WAIT_CAP })
   await expect(modal.getByText(/^Backers: \d/)).toBeVisible({ timeout: WAIT_CAP })
-  await expect(modal.getByText(/\d+\/\d+ attesters/)).toBeVisible({ timeout: WAIT_CAP })
+  // The agent tier chip resolved: "Unverified · 1/3 attesters", "Trusted · 2/3 attesters" or
+  // "Verified" (lib/agent-tier.ts). "—/3 attesters" (loading) and "Tier unavailable" don't match.
+  await expect(modal.getByTestId('agent-tier-chip').getByText(/\d+\/\d+ attesters|Verified/).first()).toBeVisible({ timeout: WAIT_CAP })
   // The four primary stat boxes print "—" only while their data loads.
   await expect(modal.locator('p.text-lg.font-bold.text-white', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
   await expect(

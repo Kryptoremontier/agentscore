@@ -228,6 +228,85 @@ export interface FetchAttestationsOptions {
 // 250-triple cap never truncates silently). Live 2026-09-26: 3 triples, 2 positions.
 const ATTESTATION_TRIPLES_MAX = 5_000
 
+/** Subject ids per request pair (triples, then their positions) in the bulk read. */
+export const ATTESTATION_SUBJECT_CHUNK = 200
+
+/**
+ * The ONE raw attestation read: `is skilled in` × canonical-bucket triples
+ * (optionally for a set of subjects), and every position on their vaults +
+ * counter-vaults — both paged to their aggregate counts (lib/gql-pager.ts).
+ * Rows are RAW (0-share positions included): aggregateAttestations applies
+ * the live rule (REPO_MAP §7 rule 4). Throws on any failure or a read that
+ * didn't reach the end.
+ */
+async function readRawAttestations(subjectIds?: readonly string[]): Promise<RawAttestation[]> {
+  const bucketIds = CANONICAL_DOMAINS_REGISTRY.map((d) => d.termId)
+  const subjectFilter = subjectIds ? ', subject_id: { _in: $subjects }' : ''
+  const subjectVar = subjectIds ? ', $subjects: [String!]!' : ''
+  const tripleWhere = `{ predicate_id: { _eq: $pred }, object_id: { _in: $buckets }${subjectFilter} }`
+  const tripleVars = {
+    pred: IS_SKILLED_IN.termId,
+    buckets: bucketIds,
+    ...(subjectIds ? { subjects: [...subjectIds] } : {}),
+  }
+  const triplePage = await fetchAllRows<TripleRow>({
+    query: `
+      query GetAttestationTriples($pred: String!, $buckets: [String!]!${subjectVar}, $limit: Int!, $offset: Int!) {
+        triples(where: ${tripleWhere}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
+          term_id
+          counter_term_id
+          subject { term_id label }
+          object { term_id }
+        }
+      }
+    `,
+    field: 'triples',
+    countQuery: `
+      query GetAttestationTripleCount($pred: String!, $buckets: [String!]!${subjectVar}) {
+        triples_aggregate(where: ${tripleWhere}) { aggregate { count } }
+      }
+    `,
+    countField: 'triples_aggregate',
+    variables: tripleVars,
+    pageSize: SERVER_ROW_CAP.triples,
+    maxRows: ATTESTATION_TRIPLES_MAX,
+  })
+  if (triplePage.truncated !== false) throw new Error('attestation triples not read to the end')
+  const triples = triplePage.rows
+  if (triples.length === 0) return []
+
+  const vaultIds: string[] = []
+  for (const t of triples) {
+    vaultIds.push(t.term_id)
+    if (t.counter_term_id) vaultIds.push(t.counter_term_id)
+  }
+
+  const positions: PositionRow[] = await fetchVaultPositions(vaultIds)
+
+  const byVault = new Map<string, AttesterPosition[]>()
+  for (const p of positions) {
+    if (!p?.account_id || !p.shares) continue
+    let shares: bigint
+    try {
+      shares = BigInt(p.shares)
+    } catch {
+      continue
+    }
+    const arr = byVault.get(p.term_id) ?? []
+    arr.push({ wallet: p.account_id, shares })
+    byVault.set(p.term_id, arr)
+  }
+
+  return triples.map((t) => ({
+    tripleId: t.term_id,
+    agentId: t.subject?.term_id ?? '',
+    agentName: t.subject?.label ?? 'Unknown',
+    domainTermId: t.object?.term_id ?? '',
+    supportPositions: byVault.get(t.term_id) ?? [],
+    opposePositions: t.counter_term_id ? (byVault.get(t.counter_term_id) ?? []) : [],
+  }))
+}
+
 /**
  * Fetch attestations from the app's GraphQL endpoint and aggregate them —
  * corpus-wide by default, or for one subject atom via `options.subjectId`.
@@ -238,77 +317,30 @@ const ATTESTATION_TRIPLES_MAX = 5_000
  * → null, /domains → Attested tier unavailable).
  */
 export async function fetchAttestations(options: FetchAttestationsOptions = {}): Promise<AttestedEntry[]> {
-  const url = APP_CONFIG.GRAPHQL_URL
-  if (!url) return []
-  {
-    const bucketIds = CANONICAL_DOMAINS_REGISTRY.map((d) => d.termId)
-    const subjectFilter = options.subjectId ? ', subject_id: { _eq: $subject }' : ''
-    const subjectVar = options.subjectId ? ', $subject: String!' : ''
-    const tripleWhere = `{ predicate_id: { _eq: $pred }, object_id: { _in: $buckets }${subjectFilter} }`
-    const tripleVars = {
-      pred: IS_SKILLED_IN.termId,
-      buckets: bucketIds,
-      ...(options.subjectId ? { subject: options.subjectId } : {}),
-    }
-    const triplePage = await fetchAllRows<TripleRow>({
-      query: `
-        query GetAttestationTriples($pred: String!, $buckets: [String!]!${subjectVar}, $limit: Int!, $offset: Int!) {
-          triples(where: ${tripleWhere}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
-            term_id
-            counter_term_id
-            subject { term_id label }
-            object { term_id }
-          }
-        }
-      `,
-      field: 'triples',
-      countQuery: `
-        query GetAttestationTripleCount($pred: String!, $buckets: [String!]!${subjectVar}) {
-          triples_aggregate(where: ${tripleWhere}) { aggregate { count } }
-        }
-      `,
-      countField: 'triples_aggregate',
-      variables: tripleVars,
-      pageSize: SERVER_ROW_CAP.triples,
-      maxRows: ATTESTATION_TRIPLES_MAX,
-    })
-    if (triplePage.truncated !== false) throw new Error('attestation triples not read to the end')
-    const triples = triplePage.rows
-    if (triples.length === 0) return []
+  if (!APP_CONFIG.GRAPHQL_URL) return []
+  return aggregateAttestations(await readRawAttestations(options.subjectId ? [options.subjectId] : undefined))
+}
 
-    const vaultIds: string[] = []
-    for (const t of triples) {
-      vaultIds.push(t.term_id)
-      if (t.counter_term_id) vaultIds.push(t.counter_term_id)
-    }
-
-    const positions: PositionRow[] = await fetchVaultPositions(vaultIds)
-
-    const byVault = new Map<string, AttesterPosition[]>()
-    for (const p of positions) {
-      if (!p?.account_id || !p.shares) continue
-      let shares: bigint
-      try {
-        shares = BigInt(p.shares)
-      } catch {
-        continue
-      }
-      const arr = byVault.get(p.term_id) ?? []
-      arr.push({ wallet: p.account_id, shares })
-      byVault.set(p.term_id, arr)
-    }
-
-    const raw: RawAttestation[] = triples.map((t) => ({
-      tripleId: t.term_id,
-      agentId: t.subject?.term_id ?? '',
-      agentName: t.subject?.label ?? 'Unknown',
-      domainTermId: t.object?.term_id ?? '',
-      supportPositions: byVault.get(t.term_id) ?? [],
-      opposePositions: t.counter_term_id ? (byVault.get(t.counter_term_id) ?? []) : [],
-    }))
-
-    return aggregateAttestations(raw)
+/**
+ * Attestations for many subjects at once (the /agents list, REST/MCP corpus):
+ * two paged reads — triples, then their positions — per ATTESTATION_SUBJECT_CHUNK
+ * ids, never one request per row. Same raw read and the same aggregateAttestations
+ * as fetchAttestations({ subjectId }), so the list and the modal count an agent's
+ * attesters identically. Every requested id is in the map ([] = no attestations).
+ * Throws if any chunk fails: a partial map is never returned as complete.
+ */
+export async function fetchAttestationsForSubjects(subjectIds: readonly string[]): Promise<Map<string, AttestedEntry[]>> {
+  const ids = [...new Set(subjectIds.filter(Boolean))]
+  const out = new Map<string, AttestedEntry[]>(ids.map((id) => [id, []]))
+  if (ids.length === 0 || !APP_CONFIG.GRAPHQL_URL) return out
+  const chunks: string[][] = []
+  for (let i = 0; i < ids.length; i += ATTESTATION_SUBJECT_CHUNK) chunks.push(ids.slice(i, i + ATTESTATION_SUBJECT_CHUNK))
+  const raw = (await Promise.all(chunks.map((c) => readRawAttestations(c)))).flat()
+  for (const entry of aggregateAttestations(raw)) {
+    const list = out.get(entry.agentId)
+    if (list) list.push(entry)
   }
+  return out
 }
 
 /** Truncated wallet form for the "attested by" UI: 0x1392...0006. */

@@ -25,7 +25,7 @@ const MOCK_BREAKDOWN: AgentTrustBreakdown = {
   compositeScore: { total: 50, signalRatio: 100, stakerDiversity: 0, stability: 0, priceRetention: 100 },
   softGate: { supportRatio: 100, scaleFactor: 1, applied: false },
   antiManipulation: { diversityWeightedRatio: 100, whaleDetected: true, largestStakerShare: 1, evaluatorWeightsApplied: false },
-  tier: { current: 'unverified', nextTier: 'sandbox', requirements: { stakers: '1/3', stake: '0.05/0.1 tTRUST', ratio: '100%/0%', age: '10/0 days' } },
+  tier: { current: 'unverified', basis: 'attestations', nextTier: 'trusted', requirements: { attesters: '0/2', tTrustAttested: '0.0000/0.05 tTRUST' } },
 }
 
 async function loadRoute() {

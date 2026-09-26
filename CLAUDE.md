@@ -80,6 +80,10 @@ AGENTSCORE = trustScore × 0.60 + compositeScore × 0.40
 - Composite = 40% signal ratio + 25% staker diversity + 25% stability + 10% price retention
 - Evaluator weight multiplies each staker's effective stake (0.5x newcomer → 1.5x sage)
 - Attestation gate: evaluator weight > 1.0x requires ≥1 inbound attestation (testnet)
+- **Agent tier = attestations only** (thesis §6 "Agent tiers"): `calculateAgentTier(summarizeAttesters(entries))`
+  in `src/lib/agent-tier.ts` — Verified ≥ 3 distinct live attesters and ≥ 0.1 tTRUST attested, Trusted ≥ 2 and
+  ≥ 0.05, otherwise Unverified. Backing on the atom vault never changes it. Every agent surface (card, modal,
+  profile, REST, MCP) uses only this; `calculateTier` (vault ladder) stays for skills, claims, IntuForge, My Agents.
 
 ## GraphQL quirks (Intuition Hasura)
 

@@ -50,7 +50,8 @@ export interface AgentTimeline {
   agentName: string
   /** null = no measured score (zero stake / never read) — never the 50 prior. */
   currentScore: number | null
-  currentTier: string
+  /** null = unknown — never a substituted "unverified". */
+  currentTier: string | null
   events: TimelineEvent[]                          // newest first, real timestamps
   /**
    * Exactly one REAL point: the current score, computed now. Never an
@@ -101,7 +102,14 @@ interface BuildTimelineInput {
   createdAt?: string
   /** null = no measured score: the history then has no point at all. */
   currentScore: number | null
-  currentTier: string
+  /** null = unknown (e.g. the attestation read failed) — never a substituted "unverified". */
+  currentTier: string | null
+  /**
+   * 'stakers' (default: IntuForge, skills, claims) emits "Reached Sandbox/Trusted/Verified Tier"
+   * at 3/10/25 supporters. Agents pass 'none': an agent's tier comes only from attestations
+   * (thesis §6), so a supporter count never "reaches" an agent tier.
+   */
+  tierMilestones?: 'stakers' | 'none'
   stakingEvents: StakingEvent[]
   skillEvents: SkillEvent[]
   /** Map of accountId (lowercase) → evaluator weight (1.0 = neutral) */
@@ -184,7 +192,7 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
 
   // ── 3. Tier Milestones ───────────────────────────────────────────────────
   // Find when each unique supporter joined (by first deposit per account)
-  const sortedDeposits = input.stakingEvents
+  const sortedDeposits = input.tierMilestones === 'none' ? [] : input.stakingEvents
     .filter(e => e.type === 'deposit' && e.side === 'support')
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 

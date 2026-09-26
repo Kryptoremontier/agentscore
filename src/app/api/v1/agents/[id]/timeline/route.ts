@@ -24,7 +24,9 @@ export async function GET(
       agentName: rawData.agentName,
       createdAt: rawData.createdAt,
       currentScore: agentDetail?.score.objectScore ?? agentDetail?.agentScore ?? 50,
-      currentTier: agentDetail?.trustTier ?? 'unverified',
+      // The attestation tier (thesis §6) — null when unknown, never a fallback "unverified".
+      currentTier: agentDetail?.trustTier ?? null,
+      tierMilestones: 'none',
       stakingEvents: rawData.stakingEvents,
       skillEvents: rawData.skillEvents,
     })
@@ -35,6 +37,7 @@ export async function GET(
         agentName: timeline.agentName,
         currentScore: timeline.currentScore,
         currentTier: timeline.currentTier,
+        tierBasis: 'attestations',
         summary: timeline.summary,
         events: timeline.events.slice(0, 50),
         // Exactly one real point (current score, now) — never a fabricated

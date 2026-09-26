@@ -30,7 +30,9 @@ import { refineSkillTriples, mapSkillToBucket } from './skill-domain-map'
 import { fetchEvaluatorLeaderboard, fetchStakerPositions } from './evaluator-data'
 import { calculateEvaluatorScore, EVALUATOR_TIER_CONFIG, type EvaluatorTier } from './evaluator-score'
 import { getAttestationCount, getAttestationConfig } from './attestation-gate'
-import { calculateTier, calculateTierProgress, getAgentAgeDays } from './trust-tiers'
+import { calculateAgentTier, AGENT_TIER_BASIS, type AgentTier, type AgentTierBasis } from './agent-tier'
+import { fetchAttestations, fetchAttestationsForSubjects, type AttestedEntry } from './attestation-reader'
+import { summarizeAttesters } from './agent-profile'
 import { filterAgents, type AgentJunkReason } from './agent-junk-filter'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP, type GqlRequest, type PagedRows } from './gql-pager'
 import { fetchVaultPositions, sumSharesByVault, vaultStakeStats, type VaultPosition } from './vault-positions'
@@ -152,7 +154,14 @@ export type AgentApiItem = {
   scoreBasis: ScoreBasis
   /** @deprecated Use score.objectScore ?? score.trustScore instead. Removed in next major. */
   agentScore: number
-  trustTier: string
+  /**
+   * The agent tier — from attestations only (thesis §6 "Agent tiers";
+   * lib/agent-tier.ts calculateAgentTier). null = the attestation read failed:
+   * unknown, never a substituted "unverified".
+   */
+  trustTier: AgentTier | null
+  /** What `trustTier` is computed from — always 'attestations' (never backing). */
+  tierBasis: AgentTierBasis
   momentum: number
   momentumDirection: string
   supportStake: number
@@ -281,9 +290,14 @@ interface AgentCorpus {
 async function loadAgentCorpus(): Promise<AgentCorpus> {
   const corpus = await fetchAgentRows(AGENT_CORPUS_LIMIT)
   const rows = corpus.rows
-  const vault = await agentVaultReads(rows)
+  const [vault, attestations] = await Promise.all([
+    agentVaultReads(rows),
+    // The tier's only input. A failed read leaves every tier unknown (null), never "unverified".
+    fetchAttestationsForSubjects(rows.map(r => r.term_id)).catch(() => null),
+  ])
 
-  const allItems = rows.map(row => rowToAgentItem(row, vault.opposeWeiOf(row), vault.stakersOf(row)))
+  const allItems = rows.map(row =>
+    rowToAgentItem(row, vault.opposeWeiOf(row), vault.stakersOf(row), attestations ? (attestations.get(row.term_id) ?? []) : null))
 
   // Test fixtures + duplicate re-registrations, counted and surfaced
   // (thesis §6 — never silently dropped). See agent-junk-filter.ts. Pass the
@@ -321,15 +335,14 @@ async function loadAgentCorpus(): Promise<AgentCorpus> {
  * - For detail contexts use getAgentTrustBreakdown(), which fetches signal
  *   history and calls calculateCompositeTrust() for the full 4-pillar composite.
  */
-function rowToAgentItem(row: AgentRow, opposeWei: bigint, stakerCount: number): AgentApiItem {
+function rowToAgentItem(row: AgentRow, opposeWei: bigint, stakerCount: number, attested: AttestedEntry[] | null): AgentApiItem {
   const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
   const totalWei = supportWei + opposeWei
   const supportRatio = totalWei > 0n ? Number((supportWei * 100n) / totalWei) : 50
 
   const trustResult = calculateTrustScoreFromStakes(supportWei, opposeWei)
-  const totalStakeTtrust = weiToFloat(supportWei + opposeWei)
-  const ageDays = getAgentAgeDays(row.created_at)
-  const trustTier = calculateTier(stakerCount, totalStakeTtrust, supportRatio, ageDays)
+  // Tier from attestations only — backing on the atom vault never changes it (thesis §6).
+  const trustTier = attested ? calculateAgentTier(summarizeAttesters(attested)).tier : null
 
   // Compound key: termId + lastSignalAt — any new stake invalidates automatically.
   const lastSignalAt = row.positions_aggregate?.aggregate?.max?.created_at ?? ''
@@ -351,7 +364,8 @@ function rowToAgentItem(row: AgentRow, opposeWei: bigint, stakerCount: number): 
     score,
     scoreBasis: scoreBasisOf({ supportWei, opposeWei }),
     agentScore,
-    trustTier: trustTier.tier,
+    trustTier,
+    tierBasis: AGENT_TIER_BASIS,
     momentum: Math.round(trustResult.momentum * 10) / 10,
     momentumDirection: momentumLabel(trustResult.momentum),
     supportStake: weiToFloat(supportWei),
@@ -419,10 +433,13 @@ export async function getAgentDetail(termId: string): Promise<AgentDetailApiItem
   const row = await fetchAgentRow(termId)
   if (!row) return null
 
-  const vault = await agentVaultReads([row])
+  const [vault, attested] = await Promise.all([
+    agentVaultReads([row]),
+    fetchAttestations({ subjectId: termId }).catch(() => null), // the tier's only input
+  ])
   const opposeWei = vault.opposeWeiOf(row)
 
-  const base = rowToAgentItem(row, opposeWei, vault.stakersOf(row))
+  const base = rowToAgentItem(row, opposeWei, vault.stakersOf(row), attested)
 
   const supportWei = parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
   const totalWei = supportWei + opposeWei
@@ -496,9 +513,15 @@ export type AgentTrustBreakdown = {
     largestStakerShare: number
     evaluatorWeightsApplied: boolean
   }
+  /**
+   * The agent tier and what the next rung needs — attestations only (thesis §6).
+   * current null = the attestation read failed (unknown). requirements are
+   * `attesters` and `tTrustAttested` toward nextTier.
+   */
   tier: {
-    current: string
-    nextTier: string | null
+    current: AgentTier | null
+    basis: AgentTierBasis
+    nextTier: AgentTier | null
     requirements: Record<string, string>
   }
 }
@@ -532,10 +555,11 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   const ctid = row.as_subject_triples?.[0]?.counter_term_id
 
   const termIds = ctid ? [termId, ctid] : [termId]
-  const [positionsData, sharePriceWei] = await Promise.all([
+  const [positionsData, sharePriceWei, attested] = await Promise.all([
     fetchVaultPositions(termIds, { order: 'shares-desc', withMeta: true, request: pagedRequest })
       .then(positions => ({ positions })),
     getOnChainSharePrice(serverPublicClient, termId as `0x${string}`).catch(() => null),
+    fetchAttestations({ subjectId: termId }).catch(() => null), // the tier's only input
   ])
 
   // Oppose and stakers from the same positions read — stakers through the one live rule.
@@ -624,19 +648,12 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
   })
   const agentScore = breakdownScore.objectScore ?? breakdownScore.trustScore
 
-  // Tier info
-  const totalStakeTtrust = weiToFloat(totalWei)
-  const ageDays = getAgentAgeDays(row.created_at)
-  const tierProgress = calculateTierProgress(stakerCount, totalStakeTtrust, supportRatio, ageDays)
-  const currentTier = tierProgress.currentTier
-  const nextTier = tierProgress.nextTier
-  const progress = tierProgress.progress
-
-  const tierRequirements: Record<string, string> = nextTier ? {
-    stakers: `${progress.stakers.current}/${progress.stakers.required}`,
-    stake: `${progress.totalStake.current.toFixed(4)}/${progress.totalStake.required} tTRUST`,
-    ratio: `${Math.round(progress.trustRatio.current)}%/${progress.trustRatio.required}%`,
-    age: `${Math.round(progress.ageDays.current)}/${progress.ageDays.required} days`,
+  // Tier: attestations only (thesis §6) — stakers, stake, ratio and age are not inputs.
+  const agentTier = attested ? calculateAgentTier(summarizeAttesters(attested)) : null
+  const next = agentTier?.next ?? null
+  const tierRequirements: Record<string, string> = agentTier && next ? {
+    attesters: `${agentTier.attesters}/${next.minAttesters}`,
+    tTrustAttested: `${(Number(agentTier.attestedWei) / 1e18).toFixed(4)}/${Number(next.minAttestedWei) / 1e18} tTRUST`,
   } : {}
 
   return {
@@ -669,8 +686,9 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
       evaluatorWeightsApplied: false,
     },
     tier: {
-      current: currentTier.tier,
-      nextTier: nextTier?.tier || null,
+      current: agentTier?.tier ?? null,
+      basis: AGENT_TIER_BASIS,
+      nextTier: next?.tier ?? null,
       requirements: tierRequirements,
     },
   }
