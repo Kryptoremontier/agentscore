@@ -95,6 +95,17 @@ describe('evaluator leaderboard — a failure is a failure, never a cached empty
     expect(f2.complete).toBe(true)
     expect(cache.store.size).toBe(1)
   })
+
+  it('the rows of a leaderboard read with a failed count carry null attestations (not checked), never 0', async () => {
+    stubIndexer({ attestationFail: () => true })
+    const { fetchEvaluatorLeaderboard } = await import('../evaluator-data')
+    const rows = await settle(fetchEvaluatorLeaderboard())
+    expect(rows.length).toBeGreaterThan(0)
+    for (const r of rows) {
+      expect(r.attestationCount).toBeNull()
+      expect(r.meetsAttestationThreshold).toBeNull()
+    }
+  })
 })
 
 describe('attestation gate — a failed count is not cached as 0', () => {

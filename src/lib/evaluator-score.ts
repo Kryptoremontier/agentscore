@@ -40,7 +40,7 @@ export interface EvaluatorProfile {
   worstPick: string | null     // agent name with lowest trust score
   // Attestation Gate (Layer 7)
   meetsAttestationThreshold: boolean | null  // null = not yet checked
-  attestationCount: number                   // distinct wallets that attested
+  attestationCount: number | null            // distinct wallets that attested; null = not read (never a 0 nobody counted)
   // PNL Engine
   walletPNL?: WalletPNL                      // aggregate PNL across evaluator positions
 }
@@ -85,7 +85,7 @@ export function calculateEvaluatorScore(
   positions: StakerPosition[],
   options?: {
     meetsAttestationThreshold?: boolean
-    attestationCount?: number
+    attestationCount?: number | null
     walletPNL?: WalletPNL
   },
 ): EvaluatorProfile {
@@ -116,7 +116,7 @@ export function calculateEvaluatorScore(
       bestPick: null,
       worstPick: null,
       meetsAttestationThreshold: options?.meetsAttestationThreshold ?? null,
-      attestationCount: options?.attestationCount ?? 0,
+      attestationCount: options?.attestationCount ?? null,
       walletPNL,
     }
   }
@@ -202,7 +202,7 @@ export function calculateEvaluatorScore(
     bestPick,
     worstPick,
     meetsAttestationThreshold: options?.meetsAttestationThreshold ?? null,
-    attestationCount: options?.attestationCount ?? 0,
+    attestationCount: options?.attestationCount ?? null,
     walletPNL,
   }
 }

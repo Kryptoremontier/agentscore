@@ -327,8 +327,9 @@ async function readEvaluatorLeaderboard(): Promise<CompleteRead<EvaluatorProfile
   for (const [address, stakerPositions] of accountPositions) {
     const attestation = attestationMap.get(address)
     const profile = calculateEvaluatorScore(address, stakerPositions, {
-      meetsAttestationThreshold: attestation?.meetsThreshold,
-      attestationCount: attestation?.attestationCount ?? 0,
+      // A count that couldn't be read is "not checked" (null), never 0 attestations.
+      meetsAttestationThreshold: attestation && !attestation.incomplete ? attestation.meetsThreshold : undefined,
+      attestationCount: attestation && !attestation.incomplete ? attestation.attestationCount : null,
     })
     if (profile.totalPositions > 0) {
       profiles.push(profile)

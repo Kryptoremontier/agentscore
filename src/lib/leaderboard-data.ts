@@ -1,8 +1,18 @@
-import { unstable_cache } from 'next/cache'
-import { APP_CONFIG } from '@/lib/app-config'
-import { AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+/**
+ * The contributor leaderboard (/leaderboard): who registered agents and skills, created claims,
+ * staked and signalled.
+ *
+ * Etap 4b-finish: every read goes through the shared pager (lib/gql-pager.ts) — the old one-shot
+ * reads asked `limit: 500 / 2000 / 5000` and the endpoint returns at most 250 atoms/triples/signals
+ * and 100 positions, so they would have stopped short silently — and the result through the shared
+ * server cache, complete reads only (lib/server-cache.ts): a read that fails or stops at our cap
+ * throws, is never stored, and the page shows an error state, never "no activity" and never a stale
+ * page with no age. The page reads it dynamically and prints the data's age.
+ */
 
-const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
+import { AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+import { fetchAllRows, gqlRequest, SERVER_ROW_CAP, type GqlRequest } from '@/lib/gql-pager'
+import { completeReadCache, SERVER_CACHE_TTL, type CompleteRead } from '@/lib/server-cache'
 
 export interface LeaderboardEntry {
   address: string
@@ -19,96 +29,76 @@ export interface LeaderboardEntry {
 // Checksummed for Hasura _neq filters
 const FEE_PROXY_CS = '0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41'
 
-async function gql<T>(query: string): Promise<T> {
-  const res = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
+const request: GqlRequest = (query, variables) => gqlRequest(query, variables, { cache: 'no-store' })
+
+/** Our ceiling per read. Reaching it with rows left is a failure here (never a silent prefix). */
+const LEADERBOARD_READ_MAX = 10_000
+
+/** Every row of one read, paged to its aggregate count on the same `where`; throws when it can't finish. */
+async function readAll<T>(name: string, table: keyof typeof SERVER_ROW_CAP, where: string, fields: string, orderBy: string, variables?: Record<string, unknown>, varDecl = ''): Promise<T[]> {
+  const page = await fetchAllRows<T>({
+    query: `query ${name}(${varDecl}$limit: Int!, $offset: Int!) {
+      ${table}(where: ${where}, order_by: ${orderBy}, limit: $limit, offset: $offset) { ${fields} }
+    }`,
+    field: table,
+    countQuery: `query ${name}Count${varDecl ? `(${varDecl.replace(/,\s*$/, '')})` : ''} { ${table}_aggregate(where: ${where}) { aggregate { count } } }`,
+    countField: `${table}_aggregate`,
+    variables,
+    pageSize: SERVER_ROW_CAP[table],
+    maxRows: LEADERBOARD_READ_MAX,
+    request,
   })
-  const json = await res.json()
-  if (json.errors) throw new Error(json.errors[0].message)
-  return json.data as T
+  if (page.truncated !== false) throw new Error(`leaderboard ${name} not read to the end`)
+  return page.rows
 }
 
-async function fetchLeaderboardDataImpl(): Promise<LeaderboardEntry[]> {
-  const entities = await gql<{
-    agents: Array<{ term_id: string }>
-    skills: Array<{ term_id: string }>
-    claims: Array<{ creator_id: string }>
-  }>(`
-    query LeaderboardEntities {
-      agents: atoms(
-        where: { label: { _ilike: "${AGENT_PREFIX}%" } }
-        limit: 500
-      ) { term_id }
+async function readLeaderboard(): Promise<CompleteRead<LeaderboardEntry[]>> {
+  const agentWhere = `{ label: { _ilike: "${AGENT_PREFIX}%" } }`
+  const skillWhere = `{ _or: [
+    { label: { _ilike: "${SKILL_PREFIX}%" } }
+    { as_subject_triples: { predicate: { label: { _eq: "is" } } object: { label: { _eq: "Agent Skill" } } } }
+  ] }`
+  const claimWhere = `{
+    creator_id: { _neq: "${FEE_PROXY_CS}" }
+    _or: [
+      { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } }
+      { subject: { label: { _ilike: "${SKILL_PREFIX}%" } } }
+    ]
+  }`
+  const [agents, skills, claims] = await Promise.all([
+    readAll<{ term_id: string }>('LeaderboardAgents', 'atoms', agentWhere, 'term_id', '{ term_id: asc }'),
+    readAll<{ term_id: string }>('LeaderboardSkills', 'atoms', skillWhere, 'term_id', '{ term_id: asc }'),
+    readAll<{ term_id: string; creator_id: string }>('LeaderboardClaims', 'triples', claimWhere, 'term_id creator_id', '{ term_id: asc }'),
+  ])
 
-      skills: atoms(
-        where: {
-          _or: [
-            { label: { _ilike: "${SKILL_PREFIX}%" } }
-            { as_subject_triples: {
-                predicate: { label: { _eq: "is" } }
-                object: { label: { _eq: "Agent Skill" } }
-            }}
-          ]
-        }
-        limit: 500
-      ) { term_id }
-
-      claims: triples(
-        where: {
-          creator_id: { _neq: "${FEE_PROXY_CS}" }
-          _or: [
-            { subject: { label: { _ilike: "${AGENT_PREFIX}%" } } }
-            { subject: { label: { _ilike: "${SKILL_PREFIX}%" } } }
-          ]
-        }
-        limit: 500
-      ) { creator_id }
-    }
-  `)
-
-  const agentTermIds = new Set((entities.agents || []).map(a => a.term_id).filter(Boolean))
-  const skillTermIds = new Set((entities.skills || []).map(s => s.term_id).filter(Boolean))
+  const agentTermIds = new Set(agents.map(a => a.term_id).filter(Boolean))
+  const skillTermIds = new Set(skills.map(s => s.term_id).filter(Boolean))
   const allTermIds = [...agentTermIds, ...skillTermIds]
 
-  let positions: Array<{ account_id: string; shares: string; total_deposit_assets_after_total_fees: string; vault: { term_id: string } }> = []
+  let positions: Array<{ account_id: string; shares: string; total_deposit_assets_after_total_fees: string; term_id: string }> = []
   let signals: Array<{ account_id: string }> = []
-
   if (allTermIds.length > 0) {
-    const termIdList = allTermIds.map(id => `"${id}"`).join(', ')
-    const activity = await gql<{
-      positions: Array<{ account_id: string; shares: string; total_deposit_assets_after_total_fees: string; vault: { term_id: string } }>
-      signals: Array<{ account_id: string }>
-    }>(`
-      query LeaderboardActivity {
-        positions(
-          where: {
-            vault: { term_id: { _in: [${termIdList}] } }
-            shares: { _gt: "0" }
-            account_id: { _neq: "${FEE_PROXY_CS}" }
-          }
-          order_by: { created_at: asc }
-          limit: 2000
-        ) { account_id shares total_deposit_assets_after_total_fees vault { term_id } }
-
-        signals(
-          where: {
-            vault: { term_id: { _in: [${termIdList}] } }
-            account_id: { _neq: "${FEE_PROXY_CS}" }
-          }
-          limit: 5000
-          order_by: { created_at: desc }
-        ) { account_id }
-      }
-    `)
-    positions = activity.positions || []
-    signals = activity.signals || []
+    const ids = { ids: allTermIds }
+    ;[positions, signals] = await Promise.all([
+      // created_at asc, then id: the first holder of a vault is its registrant (CLAUDE.md "GraphQL quirks").
+      readAll<{ account_id: string; shares: string; total_deposit_assets_after_total_fees: string; term_id: string }>(
+        'LeaderboardPositions', 'positions',
+        `{ term_id: { _in: $ids }, shares: { _gt: "0" }, account_id: { _neq: "${FEE_PROXY_CS}" } }`,
+        'account_id shares total_deposit_assets_after_total_fees term_id', '[{ created_at: asc }, { id: asc }]',
+        ids, '$ids: [String!]!, ',
+      ),
+      readAll<{ account_id: string }>(
+        'LeaderboardSignals', 'signals',
+        `{ term_id: { _in: $ids }, account_id: { _neq: "${FEE_PROXY_CS}" } }`,
+        'account_id', '{ id: asc }',
+        ids, '$ids: [String!]!, ',
+      ),
+    ])
   }
 
   const firstHolderByVault = new Map<string, string>()
   for (const p of positions) {
-    const vid = p.vault?.term_id
+    const vid = p.term_id
     if (vid && !firstHolderByVault.has(vid)) firstHolderByVault.set(vid, p.account_id)
   }
 
@@ -130,7 +120,7 @@ async function fetchLeaderboardDataImpl(): Promise<LeaderboardEntry[]> {
     const holder = firstHolderByVault.get(termId)
     if (holder) ensure(holder).skillsRegistered++
   }
-  for (const c of entities.claims || []) { if (c.creator_id) ensure(c.creator_id).claimsCreated++ }
+  for (const c of claims) { if (c.creator_id) ensure(c.creator_id).claimsCreated++ }
 
   for (const p of positions) {
     if (p.account_id) {
@@ -144,7 +134,7 @@ async function fetchLeaderboardDataImpl(): Promise<LeaderboardEntry[]> {
     if (sig.account_id) ensure(sig.account_id).totalSignals++
   }
 
-  return Array.from(map.values())
+  const entries = Array.from(map.values())
     .map(e => ({
       ...e,
       totalEntities: e.agentsRegistered + e.skillsRegistered + e.claimsCreated,
@@ -159,10 +149,15 @@ async function fetchLeaderboardDataImpl(): Promise<LeaderboardEntry[]> {
     }))
     .filter(e => e.score > 0)
     .sort((a, b) => b.score - a.score)
+  // Every read above threw unless it reached the end: what gets here is complete.
+  return { value: entries, complete: true }
 }
 
-export const fetchLeaderboardData = unstable_cache(
-  fetchLeaderboardDataImpl,
-  ['leaderboard-data'],
-  { revalidate: 300, tags: ['leaderboard-data'] },
-)
+/**
+ * The contributor leaderboard — shared server cache, SERVER_CACHE_TTL.contributorLeaderboard
+ * seconds, complete reads only. Throws when the read fails.
+ */
+export const fetchLeaderboardData = completeReadCache('contributor-leaderboard', readLeaderboard, {
+  revalidate: SERVER_CACHE_TTL.contributorLeaderboard,
+  tags: () => [],
+})

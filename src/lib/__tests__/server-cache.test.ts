@@ -224,3 +224,31 @@ describe('every /api/v1 GET runs in a read ledger (meta.dataAgeSeconds can’t b
     expect(src).not.toMatch(/export const revalidate/)
   })
 })
+
+describe('one read in flight per key (Etap 4b-finish: a slow indexer multiplied the reads)', () => {
+  it('concurrent misses share one read; the next miss after it settles reads again', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    const read = vi.fn(async (id: string) => { await gate; return { value: `v:${id}`, complete: true } })
+    // No stored entries between calls (a cache that never keeps anything): every call is a miss.
+    const noStore: CacheImpl = (cb) => cb
+    const get = completeReadCache('k', read, { revalidate: 60, tags: () => [], cache: noStore })
+    const calls = [get('a'), get('a'), get('a'), get('b')]
+    release()
+    expect(await Promise.all(calls)).toEqual(['v:a', 'v:a', 'v:a', 'v:b'])
+    expect(read).toHaveBeenCalledTimes(2) // one per distinct argument, not one per caller
+    await get('a')
+    expect(read).toHaveBeenCalledTimes(3)
+  })
+
+  it('an incomplete shared read is incomplete for every caller that joined it', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    const read = vi.fn(async () => { await gate; return { value: 1, complete: false } })
+    const get = completeReadCache('k', read, { revalidate: 60, tags: () => [], cache: (cb) => cb })
+    const both = Promise.all([0, 1].map(() => runWithReadLedger(async () => { await get(); return currentFreshness().complete })))
+    release()
+    expect(await both).toEqual([false, false])
+    expect(read).toHaveBeenCalledTimes(1)
+  })
+})

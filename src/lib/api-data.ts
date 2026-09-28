@@ -33,7 +33,7 @@ import { getAttestationCount, getAttestationConfig } from './attestation-gate'
 import { calculateAgentTier, AGENT_TIER_BASIS, type AgentTier, type AgentTierBasis } from './agent-tier'
 import { fetchAttestations, fetchAttestationsForSubjects, type AttestedEntry } from './attestation-reader'
 import { summarizeAttesters } from './agent-profile'
-import { fetchCohortAgent } from './cohort-reader'
+import { fetchCohortAgent, fetchCohortAgents, type CohortAgent, type CohortFetchResult } from './cohort-reader'
 import { filterAgents, type AgentJunkReason } from './agent-junk-filter'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP, type GqlRequest, type PagedRows } from './gql-pager'
 import { fetchVaultPositions, sortPositions, sumSharesByVault, vaultStakeStats, type VaultPosition, type VaultPositionWithMeta } from './vault-positions'
@@ -586,19 +586,57 @@ export interface CohortAgentDetail {
   tTrustAttested: number | null
 }
 
-/** Per agent, SERVER_CACHE_TTL.agentDetail seconds — complete only with attestations and declarations read. */
-export const getCohortAgentDetail = completeReadCache('cohort-agent-detail', readCohortAgentDetail, {
-  revalidate: SERVER_CACHE_TTL.agentDetail,
-  tags: (termId) => [`agent:${termId}`],
-})
+/**
+ * The ERC-8004 cohort (identity links + declared domains/skills) — shared server cache,
+ * SERVER_CACHE_TTL.erc8004Cohort seconds. Stored only when read to the end with every agent's
+ * declarations read; a failed read throws (fetchCohortAgents reports it as status 'error').
+ * Etap 4b-finish: the cohort detail used to be a separate per-agent read refilled every 30 s
+ * (~10 of the 23 steady-state requests/min under load); it now reads the agent from this
+ * snapshot, as the AgentScore detail reads the cached corpus.
+ */
+const loadErc8004Cohort = completeReadCache(
+  'erc8004-cohort',
+  async (): Promise<CompleteRead<CohortFetchResult>> => {
+    const cohort = await fetchCohortAgents()
+    if (cohort.status === 'error') throw new Error('ERC-8004 cohort read failed')
+    const complete = cohort.truncated === false
+      && cohort.agents.every(a => a.declaredDomains !== null && a.declaredSkills !== null)
+    return { value: cohort, complete }
+  },
+  { revalidate: SERVER_CACHE_TTL.erc8004Cohort, tags: () => [] },
+)
 
-async function readCohortAgentDetail(termId: string): Promise<CompleteRead<CohortAgentDetail | null>> {
-  const cohort = await fetchCohortAgent(termId)
-  // "Not a cohort agent" is a complete answer.
-  if (!cohort) return { value: null, complete: true }
-  const attested = await fetchAttestations({ subjectId: termId }).catch(() => null)
+/** One subject's attestations — what the cohort read doesn't hold. Per agent, SERVER_CACHE_TTL.agentDetail seconds. */
+const loadSubjectAttestations = completeReadCache(
+  'agent-attestations',
+  // fetchAttestations throws on a failed or capped read: nothing incomplete reaches the cache.
+  async (termId: string) => ({ value: await fetchAttestations({ subjectId: termId }), complete: true }),
+  { revalidate: SERVER_CACHE_TTL.agentDetail, tags: (termId) => [`agent:${termId}`] },
+)
+
+/**
+ * The cohort agent from the cached cohort; null = not a cohort agent (a cohort read to the end
+ * is every cohort agent). When the cohort couldn't answer for this id (read failed, or stopped at
+ * our cap) → the live single-agent read (throws on failure: never "not an ERC-8004 agent").
+ */
+async function cohortAgentOf(termId: string): Promise<CohortAgent | null> {
+  const cohort = await unknownOnFailure('erc8004-cohort', loadErc8004Cohort())
+  if (cohort) {
+    const hit = cohort.agents.find(a => a.termId === termId)
+    if (hit) return hit
+    if (cohort.truncated === false) return null
+  }
+  return fetchCohortAgent(termId)
+}
+
+export async function getCohortAgentDetail(termId: string): Promise<CohortAgentDetail | null> {
+  const cohort = await cohortAgentOf(termId)
+  if (!cohort) return null
+  const attested = await unknownOnFailure('agent-attestations', loadSubjectAttestations(termId))
+  // Declarations unread (a failed classification chunk): the answer is not complete.
+  if (cohort.declaredDomains === null || cohort.declaredSkills === null) recordLiveRead('cohort-declarations', false)
   const summary = attested ? summarizeAttesters(attested) : null
-  const value: CohortAgentDetail = {
+  return {
     id: termId,
     name: cohort.label,
     origin: 'erc8004',
@@ -615,7 +653,6 @@ async function readCohortAgentDetail(termId: string): Promise<CompleteRead<Cohor
       : null,
     tTrustAttested: attested ? weiToFloat(attested.reduce((sum, e) => sum + e.totalStake, 0n)) : null,
   }
-  return { value, complete: attested !== null && cohort.declaredDomains !== null && cohort.declaredSkills !== null }
 }
 
 // ─── Agent Trust Breakdown ────────────────────────────────────────────────────
@@ -1097,7 +1134,8 @@ export async function getEvaluators(options: {
 
   return profiles.slice(0, limit).map((p, i) => {
     const tierConfig = EVALUATOR_TIER_CONFIG[p.evaluatorTier]
-    const isGated = p.rawEvaluatorWeight > 1.0 && !p.meetsAttestationThreshold
+    // Gated only when the gate was checked and not met — "not checked" (null) is not "gated".
+    const isGated = p.meetsAttestationThreshold == null ? null : p.rawEvaluatorWeight > 1.0 && !p.meetsAttestationThreshold
     return {
       rank: i + 1,
       address: p.address,
@@ -1151,14 +1189,20 @@ export async function getEvaluatorProfile(address: string) {
   // Prefer leaderboard (has all data); fall back to computed from positions
   // Always re-apply attestation gate to ensure freshness
   const baseProfile = leaderboardEntry ?? calculateEvaluatorScore(address, positions)
+  // The attestation read failed or stopped at the row cap: count and gate unknown — "—" with the
+  // reason, never "0 attestations" (REPO_MAP §7 rule 5). The answer is incomplete (no-store).
+  const attestationRead = !attestation.incomplete
+  if (!attestationRead) recordLiveRead('evaluator-attestations', false)
+  const amplified = baseProfile.rawEvaluatorWeight > 1.0
   const profile = {
     ...baseProfile,
-    meetsAttestationThreshold: attestation.meetsThreshold,
-    attestationCount: attestation.attestationCount,
-    // Re-apply gate in case leaderboard cached an outdated attestation state
-    evaluatorWeight: baseProfile.rawEvaluatorWeight > 1.0 && !attestation.meetsThreshold
-      ? 1.0
-      : baseProfile.rawEvaluatorWeight,
+    meetsAttestationThreshold: attestationRead ? attestation.meetsThreshold : null,
+    attestationCount: attestationRead ? attestation.attestationCount : null,
+    // Re-apply gate in case leaderboard cached an outdated attestation state. Above 1.0x the gate
+    // decides the weight, so an unread gate leaves it unknown.
+    evaluatorWeight: !amplified ? baseProfile.rawEvaluatorWeight
+      : !attestationRead ? null
+      : attestation.meetsThreshold ? baseProfile.rawEvaluatorWeight : 1.0,
   }
   const tierConfig = EVALUATOR_TIER_CONFIG[profile.evaluatorTier]
 
@@ -1173,7 +1217,7 @@ export async function getEvaluatorProfile(address: string) {
   }))
 
   const cfg = getAttestationConfig()
-  const isGated = profile.rawEvaluatorWeight > 1.0 && !attestation.meetsThreshold
+  const isGated = attestationRead ? amplified && !attestation.meetsThreshold : null
 
   return {
     address: profile.address,
@@ -1191,15 +1235,17 @@ export async function getEvaluatorProfile(address: string) {
     worstPick: profile.worstPick,
     trackRecord,
     // Attestation Gate (Layer 7)
-    attestationCount: attestation.attestationCount,
+    attestationCount: profile.attestationCount,
     attestationThreshold: cfg.minAttestations,
-    meetsAttestationThreshold: attestation.meetsThreshold,
+    meetsAttestationThreshold: profile.meetsAttestationThreshold,
     attestationGateActive: isGated,
-    attestationMessage: isGated
+    attestationMessage: !attestationRead
+      ? `Couldn’t read this evaluator’s attestations — attestation count and gate unknown${amplified ? `, so the weight above 1.0x (raw ${profile.rawEvaluatorWeight.toFixed(2)}x) is unknown too` : ''}`
+      : isGated
       ? `Evaluator weight capped at 1.0x — needs ${cfg.minAttestations} attestation(s) from distinct wallet(s) to unlock ${profile.rawEvaluatorWeight.toFixed(2)}x amplification`
       : attestation.meetsThreshold
         ? `Evaluator weight amplified — ${attestation.attestationCount} attestation(s) verified`
-        : `Evaluator weight at ${profile.evaluatorWeight.toFixed(2)}x (no amplification needed)`,
+        : `Evaluator weight at ${(profile.evaluatorWeight ?? profile.rawEvaluatorWeight).toFixed(2)}x (no amplification needed)`,
   }
 }
 

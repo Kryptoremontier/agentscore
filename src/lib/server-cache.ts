@@ -232,11 +232,27 @@ export function completeReadCache<A extends unknown[], T>(
   const maxStaleMs = (options.maxStaleSeconds ?? options.revalidate * 2) * 1000
 
   // A read and everything it read in turn: complete only if all of it was; as old as its oldest part.
-  const readOnce = async (...args: A): Promise<{ stamped: Stamped; complete: boolean }> => {
+  const readFresh = async (...args: A): Promise<{ stamped: Stamped; complete: boolean }> => {
     const { value: r, reads } = await collect(() => read(...args))
     // As of when the read answered (a live answer is age 0, however long its pages took).
     const readAt = reads.reduce((min, x) => Math.min(min, x.readAt), now())
     return { stamped: { v: encodeForCache(r.value), readAt }, complete: r.complete && reads.every((x) => x.complete) }
+  }
+
+  // One read in flight per key and arguments on this instance (Etap 4b-finish). Without it, every
+  // caller that missed while a read was still running started its own — and Next starts one
+  // background refill per request that hits a stale entry — so a slow indexer (60 s 504s, seen under
+  // load) multiplied the requests exactly when it could least take them. Concurrent callers share
+  // the one read, its result and its completeness; nothing is kept once it settles.
+  const inflight = new Map<string, Promise<{ stamped: Stamped; complete: boolean }>>()
+  const readOnce = (...args: A): Promise<{ stamped: Stamped; complete: boolean }> => {
+    const k = JSON.stringify(args)
+    let p = inflight.get(k)
+    if (!p) {
+      p = readFresh(...args).finally(() => inflight.delete(k))
+      inflight.set(k, p)
+    }
+    return p
   }
 
   return async (...args: A): Promise<T> => {
@@ -277,4 +293,8 @@ export const SERVER_CACHE_TTL = {
   domains: 60,
   agentDetail: 30,
   evaluatorLeaderboard: 300,
+  /** /leaderboard (contributors) — was its own unstable_cache at the same 300 s. */
+  contributorLeaderboard: 300,
+  /** The ERC-8004 cohort (identity links + declarations) behind the cohort agent detail. */
+  erc8004Cohort: 300,
 } as const
