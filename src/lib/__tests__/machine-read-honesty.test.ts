@@ -513,7 +513,7 @@ describe('annotateVaultReads — the one annotation /agents and the landing Feat
 })
 
 describe('cardViewFor — the page\'s bulk-read state → one card', () => {
-  it('in flight → undefined ("— attesters"); failed → null (CTA only); an id missing from a completed read → null, not an endless loading line', async () => {
+  it('in flight → undefined (loading line, no text); failed → null (CTA only); an id missing from a completed read → null, not an endless loading line', async () => {
     const { cardViewFor, cardAttesterLine, cardAttestationView } = await import('../agent-list')
     expect(cardViewFor(undefined, '0xa')).toBeUndefined()
     expect(cardAttesterLine(cardViewFor(null, '0xa'))).toEqual({ kind: 'unread', claim: null, cta: true })
@@ -552,10 +552,10 @@ describe('the components use those lib decisions (source guards — no DOM in th
     }
     for (const f of ['Hero', 'Stats']) expect(src(`src/components/landing/${f}.tsx`), f).toContain('landingStatItems(')
   })
-  it('/agents and Featured read oppose through stakeReadingOf; the card uses cardViewFor / attestScrollStep; DeclaredDomains uses declaredDomainsView', () => {
+  it('/agents and Featured read oppose through stakeReadingOf; the card uses attesterLineOf (→ cardViewFor) / attestScrollStep; DeclaredDomains uses declaredDomainsView', () => {
     const page = src('src/app/agents/page.tsx')
     expect(page).toContain('stakeReadingOf(')
-    expect(page).toContain('cardViewFor(attestationViewBySubject')
+    expect(page).toContain('attesterLineOf(attestationViewBySubject')
     expect(page).toContain('attestScrollStep(')
     expect(page).not.toMatch(/__opposeWei \?\? 0n/)
     const featured = src('src/components/landing/FeaturedAgents.tsx')

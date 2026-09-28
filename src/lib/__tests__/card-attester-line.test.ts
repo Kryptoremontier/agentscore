@@ -1,11 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { installFakeHasura } from './fake-hasura'
+import { CardAttesterLine as CardAttesterLineView } from '../../components/agents/CardAttesterLine'
 import { fetchAttestationsForSubjects, type AttestedEntry } from '../attestation-reader'
 import { fetchAgentProfileVector, computeModalStatSummary, summarizeAttesters } from '../agent-profile'
 import { calculateAgentTier } from '../agent-tier'
 import {
-  cardAttestationView, cardAttesterLine, isCompactCard, CARD_NO_ATTESTATIONS, type CardAttesterLine,
+  cardAttestationView, cardAttesterLine, attesterLineOf, tierChipOf, isCompactCard, CARD_NO_ATTESTATIONS,
+  type CardAttesterLine, type CardAttestationView,
 } from '../agent-list'
 
 /**
@@ -105,17 +111,20 @@ describe('Captain Dackie — the first cohort attestation', () => {
     expect(cardAttesterLine(view)).toEqual({ kind: 'unread', claim: null, cta: true })
   })
 
-  it('keeps the full card (it has an attester); a cohort row with no attestation goes compact', () => {
-    const dackie = cardAttesterLine({ attesters: 1, domains: 1, tier: calculateAgentTier([]) })
-    expect(isCompactCard({ vaultRead: false, line: dackie })).toBe(false)
-    expect(isCompactCard({ vaultRead: false, line: cardAttesterLine(cardAttestationView([])) })).toBe(true)
+  it('its card keeps one shape across the read: compact before and after (it used to grow 82 → 137 px when the read answered)', () => {
+    // A cohort row: the list never reads its atom vault. The shape is decided at first paint.
+    expect(isCompactCard({ vaultRead: false })).toBe(true)
+    // Only the line changes — loading → "1 attester · 1 domain" — inside its reserved height.
+    expect(attesterLineOf(undefined, DACKIE).kind).toBe('loading')
+    const after = new Map([[DACKIE, { attesters: 1, domains: 1, tier: calculateAgentTier([]) }]])
+    expect(attesterLineOf(after, DACKIE).claim).toBe('1 attester · 1 domain')
   })
 
   it('OPEN CLAW (AgentScore row, vault read, 0 attesters) keeps the full card with "No attestations yet · Attest"', async () => {
     fake()
     const line = cardAttesterLine(cardAttestationView((await fetchAttestationsForSubjects([OPEN_CLAW])).get(OPEN_CLAW)!))
     expect(line).toEqual({ kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true })
-    expect(isCompactCard({ vaultRead: true, line })).toBe(false)
+    expect(isCompactCard({ vaultRead: true })).toBe(false)
   })
 })
 
@@ -124,8 +133,8 @@ describe('cardAttesterLine — states (REPO_MAP §7 rule 5: failed ≠ empty)', 
     domain: { label: domain }, attesterStakes: wallets.map(([wallet, shares]) => ({ wallet, shares })),
   }) as unknown as AttestedEntry
 
-  it('not read yet → "— attesters", no CTA', () => {
-    expect(cardAttesterLine(undefined)).toEqual({ kind: 'loading', claim: '— attesters', cta: false })
+  it('not read yet → no text claim at all (a skeleton holds the line), no CTA', () => {
+    expect(cardAttesterLine(undefined)).toEqual({ kind: 'loading', claim: null, cta: false })
   })
   it('read failed → no claim, CTA only', () => {
     expect(cardAttesterLine(null)).toEqual({ kind: 'unread', claim: null, cta: true })
@@ -139,14 +148,71 @@ describe('cardAttesterLine — states (REPO_MAP §7 rule 5: failed ≠ empty)', 
   })
 })
 
-describe('isCompactCard — only rows whose vault the list never read', () => {
-  const lines: CardAttesterLine[] = [
-    cardAttesterLine(undefined), cardAttesterLine(null), cardAttesterLine(cardAttestationView([])),
-  ]
-  it('cohort row (vault not read) with no known attester → compact, whatever the read state', () => {
-    for (const line of lines) expect(isCompactCard({ vaultRead: false, line })).toBe(true)
+describe('isCompactCard — only rows whose vault the list never read, decided at first paint', () => {
+  it('cohort row (vault not read) → compact; AgentScore row (its stake line is a measurement) → full', () => {
+    expect(isCompactCard({ vaultRead: false })).toBe(true)
+    expect(isCompactCard({ vaultRead: true })).toBe(false)
   })
-  it('AgentScore row (vault read, its stake line is a measurement) → always the full card', () => {
-    for (const line of lines) expect(isCompactCard({ vaultRead: true, line })).toBe(false)
+  it('the attestation read cannot reshape a card: the rule takes no attestation input', () => {
+    expect(isCompactCard.length).toBe(1)
+    // @ts-expect-error — the attester line is not an input any more
+    expect(isCompactCard({ vaultRead: false, line: cardAttesterLine({ attesters: 1, domains: 1, tier: calculateAgentTier([]) }) })).toBe(true)
+  })
+})
+
+// ─── Grid ↔ list parity (Etap 4b-finish commit 4) ────────────────────────────
+
+const PAGE = readFileSync(path.join(__dirname, '../../app/agents/page.tsx'), 'utf8')
+const GRID_VIEW = PAGE.slice(PAGE.indexOf('/* ── GRID VIEW ── */'), PAGE.indexOf('/* ── LIST VIEW ──'))
+const LIST_VIEW = PAGE.slice(PAGE.indexOf('/* ── LIST VIEW ──'), PAGE.indexOf('{/* Agent Detail Modal */}'))
+
+/** What a row prints for its attester line: the component's text, tags stripped. */
+function printed(line: CardAttesterLine): string {
+  return renderToStaticMarkup(createElement(CardAttesterLineView, { line, agentName: 'x', onAttest: () => {} }))
+    .replace(/<[^>]+>/g, '').replace(/&#x27;/g, "'").replace(/&amp;/g, '&')
+}
+
+describe('grid ↔ list parity — Dackie, Luda, OPEN CLAW (live rows 2026-09-26)', () => {
+  it('both views derive the line with the one helper and render it with the one component', () => {
+    for (const view of [GRID_VIEW, LIST_VIEW]) {
+      expect(view.match(/attesterLineOf\(attestationViewBySubject, agent\.term_id\)/g)).toHaveLength(1)
+      expect(view.match(/tierChipOf\(attestationViewBySubject, agent\.term_id\)/g)).toHaveLength(1)
+      expect(view).toMatch(/<CardAttesterLine line=\{attesterLine\}/)
+      expect(view).toMatch(/<OriginChip origin=\{agent\.origin\} \/>/)
+    }
+    // No second derivation anywhere on the page.
+    expect(PAGE).not.toMatch(/cardAttesterLine\(|cardViewFor\(/)
+  })
+
+  it('the line each of the three prints, from the bulk read the page makes', async () => {
+    fake()
+    const bulk = await fetchAttestationsForSubjects([DACKIE, LUDA, OPEN_CLAW])
+    const views = new Map<string, CardAttestationView>([...bulk].map(([id, e]) => [id, cardAttestationView(e)]))
+    expect(printed(attesterLineOf(views, DACKIE))).toBe('1 attester · 1 domain')
+    expect(printed(attesterLineOf(views, LUDA))).toBe('1 attester · 1 domain')
+    expect(printed(attesterLineOf(views, OPEN_CLAW))).toBe('No attestations yet · Attest')
+    for (const id of [DACKIE, LUDA, OPEN_CLAW]) expect(tierChipOf(views, id)).toBeNull() // all Unverified
+  })
+
+  it('list names wrap — never truncated to one character on a phone', () => {
+    expect(LIST_VIEW).toMatch(/\[overflow-wrap:anywhere\]">\{name\}/)
+    expect(LIST_VIEW).not.toMatch(/truncate">\{name\}/)
+    // The fixed w-20/w-16/w-12 columns + gap-4 + px-4 left the name ~38 px at 390 px: phones drop the stake columns.
+    expect(PAGE).toMatch(/const LIST_ROW_GRID = 'grid grid-cols-\[2rem_minmax\(0,1fr\)_3rem\] sm:/)
+  })
+})
+
+describe('the attester line keeps its height while loading (no layout shift, no text claim)', () => {
+  it('loading: no text, a skeleton bar shorter than the line; every state: the same 18 px line box', () => {
+    const states: CardAttesterLine[] = [
+      cardAttesterLine(undefined), cardAttesterLine(null), cardAttesterLine(cardAttestationView([])),
+      cardAttesterLine({ attesters: 3, domains: 2, tier: calculateAgentTier([]) }),
+    ]
+    const html = states.map((line) => renderToStaticMarkup(createElement(CardAttesterLineView, { line, agentName: 'x', onAttest: () => {} })))
+    expect(printed(states[0])).toBe('')
+    expect(html[0]).toMatch(/<span aria-hidden="true" class="inline-block align-middle h-2\.5 [^"]*animate-pulse"><\/span>/)
+    const box = (h: string) => h.match(/^<p class="([^"]*)"/)![1]
+    for (const h of html) expect(box(h)).toBe(box(html[0]))
+    expect(box(html[0])).toMatch(/\bleading-\[18px\] min-h-\[18px\]/)
   })
 })

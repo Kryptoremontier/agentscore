@@ -59,6 +59,16 @@ const SHOTS: Shot[] = [
       await expect(page.getByText('via AgentScore', { exact: true })).toHaveCount(0, { timeout: WAIT_CAP })
     },
   },
+  {
+    name: 'agents-list-listview',
+    url: ROUTES.agents,
+    prepare: async (page) => {
+      await agentsListReady(page)
+      await page.getByRole('button', { name: 'List', exact: true }).click()
+      await expect(page.locator('[data-card]')).toHaveCount(0, { timeout: WAIT_CAP })
+    },
+    check: gridListParity,
+  },
   ...(['dackie', 'luda', 'openclaw'] as const).map((key): Shot => ({
     name: `agent-modal-${key}`,
     url: `${ROUTES.agents}?open=${AGENTS[key]}`,
@@ -146,7 +156,7 @@ async function settle(page: Page) {
 
 /**
  * /agents renders its grid only after BOTH corpora (AgentScore + ERC-8004 cohort) resolved;
- * then the cards' attester lines leave "— attesters" once the bulk attestation read answers
+ * then the cards' attester lines leave their loading skeleton once the bulk attestation read answers
  * (data-state "some" / "none", or "unread" when it failed — lib/agent-list.ts cardAttesterLine).
  */
 async function agentsListReady(page: Page) {
@@ -270,4 +280,34 @@ async function modalFitsPhone(page: Page, project: string) {
     await settle(page).catch(() => {}) // measure the tab's loaded content where it loads in time
     expect(await pastViewportEdges(modal), `tab "${name}": elements past the ${width} px viewport`).toEqual([])
   }
+}
+
+/**
+ * The list view carries the grid card's information (Etap 4b-finish commit 4): for Dackie,
+ * Luda and OPEN CLAW the list row and the grid card print the same attester line, and the
+ * list row shows the whole name inside the viewport (it used to collapse to one character).
+ * Runs in list view (the shot's state), then switches to the grid.
+ */
+async function gridListParity(page: Page, _project: string) {
+  const ids = Object.values(AGENTS)
+  const lines = (sel: string) => page.evaluate(({ ids, sel }) => ids.map((id) => {
+    const row = document.querySelector(`${sel}[data-term-id="${id}"]`)
+    const line = row?.querySelector('[data-testid="card-attester-line"]') as HTMLElement | null
+    return line ? `${line.dataset.state}: ${line.innerText.trim()}` : 'no row / no attester line'
+  }), { ids, sel })
+
+  const inList = await lines('[data-row="list"]')
+  const names = await page.evaluate((ids) => ids.map((id) => {
+    const p = document.querySelector(`[data-row="list"][data-term-id="${id}"] p`) as HTMLElement | null
+    if (!p) return 'no row'
+    const r = p.getBoundingClientRect()
+    return p.scrollWidth <= p.clientWidth + 1 && r.left >= 0 && r.right <= window.innerWidth ? 'whole' : `cut: ${Math.round(r.width)} px wide, text ${p.scrollWidth} px`
+  }), ids)
+  expect(names, 'list rows show the whole name').toEqual(ids.map(() => 'whole'))
+
+  await page.getByRole('button', { name: 'Grid', exact: true }).click()
+  await expect(page.locator('[data-row="list"]')).toHaveCount(0)
+  const inGrid = await lines('[data-card]')
+  expect(inList, 'list row line = grid card line').toEqual(inGrid)
+  for (const l of inList) expect(l, 'a read answer, not the loading state').not.toMatch(/^(loading|no row)/)
 }

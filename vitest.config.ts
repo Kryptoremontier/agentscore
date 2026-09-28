@@ -7,6 +7,8 @@ export default defineConfig({
     globals: true,
     include: ['src/**/__tests__/**/*.test.ts', 'src/**/*.test.ts'],
   },
+  // tsconfig's jsx: 'preserve' is for Next; tests that render a component (react-dom/server) need JSX compiled.
+  oxc: { jsx: { runtime: 'automatic' } },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

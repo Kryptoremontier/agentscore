@@ -19,7 +19,7 @@ import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
 import { fetchVaultPositions, sumSharesByVault, type VaultPosition, type VaultPositionWithMeta } from './vault-positions'
 import { countLiveStakers } from './live-position'
 import { summarizeAttesters } from './agent-profile'
-import { calculateAgentTier, type AgentTierResult } from './agent-tier'
+import { calculateAgentTier, type AgentTierResult, type AgentTierDisplay } from './agent-tier'
 import type { AttestedEntry } from './attestation-reader'
 
 /** Cap on the /agents AgentScore fetch. Truncation past it is reported, never silent. */
@@ -311,13 +311,15 @@ export function cardAttestationView(entries: readonly AttestedEntry[]): CardAtte
 /**
  * The card's attester line (REPO_MAP §7 rule 5: failed ≠ empty). `claim` is the
  * text the card prints (null = none), `cta` whether the Attest button follows it.
- * - `loading`: the bulk read is in flight → "— attesters".
+ * - `loading`: the bulk read is in flight → no text at all; the line keeps its
+ *   height with a fixed-height skeleton (CardAttesterLine), so nothing moves when
+ *   the read answers.
  * - `unread`: the read failed → no claim at all, the Attest CTA only.
  * - `none`: the read succeeded and found no live attester → "No attestations yet · Attest".
  * - `some`: "{n} attester(s) · {k} domain(s)".
  */
 export type CardAttesterLine =
-  | { kind: 'loading'; claim: string; cta: false }
+  | { kind: 'loading'; claim: null; cta: false }
   | { kind: 'unread'; claim: null; cta: true }
   | { kind: 'none'; claim: string; cta: true }
   | { kind: 'some'; claim: string; cta: false; attesters: number; domains: number }
@@ -327,7 +329,7 @@ export const CARD_NO_ATTESTATIONS = 'No attestations yet'
 /**
  * One card's view out of the page's bulk-read state: undefined = the read is in flight,
  * null = it failed. A completed read with no entry for this id makes no claim either
- * (null → CTA only) — never an endless "— attesters", never "No attestations yet".
+ * (null → CTA only) — never an endless loading line, never "No attestations yet".
  */
 export function cardViewFor(
   views: ReadonlyMap<string, CardAttestationView> | null | undefined,
@@ -340,7 +342,7 @@ export function cardViewFor(
 
 /** `view`: undefined = not read yet, null = the read failed. */
 export function cardAttesterLine(view: CardAttestationView | null | undefined): CardAttesterLine {
-  if (view === undefined) return { kind: 'loading', claim: '— attesters', cta: false }
+  if (view === undefined) return { kind: 'loading', claim: null, cta: false }
   if (view === null) return { kind: 'unread', claim: null, cta: true }
   if (view.attesters === 0) return { kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true }
   return {
@@ -353,16 +355,44 @@ export function cardAttesterLine(view: CardAttestationView | null | undefined): 
 }
 
 /**
- * Compact card: name, origin, tier chip (Trusted/Verified only) and the attester
- * line — no score slot, caption, stake line, bar or shield. Only for a row whose
- * atom vault the list never read (ERC-8004 cohort rows) and that is not known to
- * have an attester. For those rows the dropped elements are the same on every
- * card ("—", no stake read, an empty bar): they carry nothing about the row
- * (docs/audit/4b-list-findings.md §2). A row with attesters (Captain Dackie)
- * keeps the full card.
+ * The attester line a row prints — the grid card and the list row both call this
+ * (one helper, REPO_MAP §7 rule 4), so the two views can't disagree.
+ * `views`: the page's bulk read (undefined = in flight, null = failed).
  */
-export function isCompactCard(input: { vaultRead: boolean; line: CardAttesterLine }): boolean {
-  return !input.vaultRead && input.line.kind !== 'some'
+export function attesterLineOf(
+  views: ReadonlyMap<string, CardAttestationView> | null | undefined,
+  termId: string,
+): CardAttesterLine {
+  return cardAttesterLine(cardViewFor(views, termId))
+}
+
+/**
+ * The tier chip a row shows next to its name: Trusted / Verified only (thesis §6);
+ * Unverified is the default state, carried by the attester line. null while the read
+ * is in flight, when it failed, and at Unverified. Grid card and list row both call it.
+ */
+export function tierChipOf(
+  views: ReadonlyMap<string, CardAttestationView> | null | undefined,
+  termId: string,
+): AgentTierDisplay | null {
+  const tier = cardViewFor(views, termId)?.tier
+  return tier && tier.tier !== 'unverified' ? tier.display : null
+}
+
+/**
+ * Compact card: name, origin, tier chip (Trusted/Verified only) and the attester
+ * line — no score slot, caption, stake line, bar or shield. For a row whose atom
+ * vault the list never read (ERC-8004 cohort rows): there the dropped elements are
+ * the same on every card ("—", no stake read, an empty bar) and carry nothing about
+ * the row (docs/audit/4b-list-findings.md §2).
+ *
+ * Decided only by what is known at first paint. It used to depend on the attestation
+ * read too (a cohort row with an attester got the full card), so Captain Dackie's
+ * card grew from 82 to 137 px when that read answered and moved every card below it.
+ * Now only the attester line's content changes, inside its reserved height.
+ */
+export function isCompactCard(input: { vaultRead: boolean }): boolean {
+  return !input.vaultRead
 }
 
 /**
