@@ -19,8 +19,9 @@ import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
 import { fetchVaultPositions, sumSharesByVault, type VaultPosition, type VaultPositionWithMeta } from './vault-positions'
 import { countLiveStakers } from './live-position'
 import { summarizeAttesters } from './agent-profile'
-import { calculateAgentTier, type AgentTierResult } from './agent-tier'
+import { calculateAgentTier, type AgentTierResult, type AgentTierDisplay } from './agent-tier'
 import type { AttestedEntry } from './attestation-reader'
+import type { QualityBucket } from './score-basis'
 
 /** Cap on the /agents AgentScore fetch. Truncation past it is reported, never silent. */
 export const AGENT_LIST_LIMIT = 50
@@ -262,10 +263,11 @@ export function agentListHeaderSegments(input: {
   cohort: CohortCorpusCounts
 }): string[] {
   const { agentScore: a, cohort: c } = input
+  const totals = corpusTotals(input)
   const segs: string[] = []
 
-  segs.push(a.status === 'ok' ? `${a.kept} AgentScore` : a.status === 'error' ? 'AgentScore feed unavailable' : '— AgentScore')
-  segs.push(c.status === 'ok' ? `${c.count} ERC-8004` : c.status === 'error' ? 'ERC-8004 feed unavailable' : '— ERC-8004')
+  segs.push(totals.agentscore != null ? `${totals.agentscore} AgentScore` : a.status === 'error' ? 'AgentScore feed unavailable' : '— AgentScore')
+  segs.push(totals.erc8004 != null ? `${totals.erc8004} ERC-8004` : c.status === 'error' ? 'ERC-8004 feed unavailable' : '— ERC-8004')
 
   if (a.status === 'ok' && a.junk > 0) segs.push(`${a.junk} hidden`)
   if (a.status === 'ok' && a.truncated && a.total != null) {
@@ -276,6 +278,100 @@ export function agentListHeaderSegments(input: {
   }
   if (a.status === 'ok' && c.status === 'ok') segs.push(LIVE_FEED_LABEL)
   return segs
+}
+
+// ─── Origin tabs, quality filter, URL state (Etap 4b-finish commit 5) ────────
+
+export type OriginFilter = 'all' | 'agentscore' | 'erc8004'
+export type QualityFilter = 'all' | QualityBucket
+
+export const ORIGIN_TABS: ReadonlyArray<{ id: OriginFilter; label: string; title: string }> = [
+  { id: 'all', label: 'All', title: 'All agents' },
+  { id: 'agentscore', label: 'AgentScore', title: 'Agents registered via AgentScore' },
+  { id: 'erc8004', label: 'ERC-8004', title: 'Real agents from the ERC-8004 registry cohort — self-declared, not yet attested' },
+]
+
+/** The quality buckets, best first; "Unrated" = no measured score (lib/score-basis.ts qualityBucket). */
+export const QUALITY_LEVELS: ReadonlyArray<{ id: QualityBucket; label: string }> = [
+  { id: 'excellent', label: 'Excellent' },
+  { id: 'good', label: 'Good' },
+  { id: 'moderate', label: 'Moderate' },
+  { id: 'low', label: 'Low' },
+  { id: 'critical', label: 'Critical' },
+  { id: 'unrated', label: 'Unrated' },
+]
+
+/**
+ * Corpus sizes — the header segments and the origin tabs both print these (one source).
+ * null: that corpus is still loading or its read failed (never a 0 it didn't measure);
+ * "All" is known only when both are.
+ */
+export function corpusTotals(input: {
+  agentScore: AgentScoreCorpusCounts
+  cohort: CohortCorpusCounts
+}): Record<OriginFilter, number | null> {
+  const agentscore = input.agentScore.status === 'ok' ? input.agentScore.kept : null
+  const erc8004 = input.cohort.status === 'ok' ? input.cohort.count : null
+  return { all: agentscore != null && erc8004 != null ? agentscore + erc8004 : null, agentscore, erc8004 }
+}
+
+export interface QualityOption {
+  id: QualityFilter
+  label: string
+  /** null = the rows aren't read yet (no count is printed). */
+  count: number | null
+  /** A bucket with no rows stays listed, disabled with its 0 — nothing silently disappears. */
+  disabled: boolean
+}
+
+/**
+ * The quality dropdown: "All" plus every bucket, always. Counts are over the rows the list
+ * would show with no quality filter (origin and search applied), so each option says how
+ * many rows choosing it leaves. `buckets`: one entry per such row; null while loading.
+ */
+export function qualityOptions(buckets: readonly QualityBucket[] | null): QualityOption[] {
+  const count = (id: QualityBucket) => (buckets ? buckets.filter((b) => b === id).length : null)
+  return [
+    { id: 'all', label: 'All quality', count: buckets ? buckets.length : null, disabled: false },
+    ...QUALITY_LEVELS.map(({ id, label }) => {
+      const n = count(id)
+      return { id, label, count: n, disabled: n === 0 }
+    }),
+  ]
+}
+
+export function qualityOptionText(o: QualityOption): string {
+  return o.count == null ? o.label : `${o.label} (${o.count})`
+}
+
+const ORIGIN_IDS = new Set<string>(ORIGIN_TABS.map((o) => o.id))
+const QUALITY_IDS = new Set<string>(['all', ...QUALITY_LEVELS.map((l) => l.id)])
+
+/** `?origin=erc8004&quality=unrated` → the list's filters; anything unknown → 'all'. */
+export function parseListFilters(params: { get(name: string): string | null }): { origin: OriginFilter; quality: QualityFilter } {
+  const origin = params.get('origin')
+  const quality = params.get('quality')
+  return {
+    origin: origin && ORIGIN_IDS.has(origin) ? (origin as OriginFilter) : 'all',
+    quality: quality && QUALITY_IDS.has(quality) ? (quality as QualityFilter) : 'all',
+  }
+}
+
+/**
+ * The query string for a filter change, from the current one: `origin` / `quality` set, or
+ * removed at their 'all' default; other params kept — except `open`: a filter changes only
+ * with the modal closed, and a stale `?open=` would reopen it on the next URL update.
+ * Returns '' or a string starting with '?'.
+ */
+export function listFiltersSearch(current: string, f: { origin: OriginFilter; quality: QualityFilter }): string {
+  const params = new URLSearchParams(current)
+  params.delete('open')
+  if (f.origin === 'all') params.delete('origin')
+  else params.set('origin', f.origin)
+  if (f.quality === 'all') params.delete('quality')
+  else params.set('quality', f.quality)
+  const out = params.toString()
+  return out ? `?${out}` : ''
 }
 
 /**
@@ -311,13 +407,15 @@ export function cardAttestationView(entries: readonly AttestedEntry[]): CardAtte
 /**
  * The card's attester line (REPO_MAP §7 rule 5: failed ≠ empty). `claim` is the
  * text the card prints (null = none), `cta` whether the Attest button follows it.
- * - `loading`: the bulk read is in flight → "— attesters".
+ * - `loading`: the bulk read is in flight → no text at all; the line keeps its
+ *   height with a fixed-height skeleton (CardAttesterLine), so nothing moves when
+ *   the read answers.
  * - `unread`: the read failed → no claim at all, the Attest CTA only.
  * - `none`: the read succeeded and found no live attester → "No attestations yet · Attest".
  * - `some`: "{n} attester(s) · {k} domain(s)".
  */
 export type CardAttesterLine =
-  | { kind: 'loading'; claim: string; cta: false }
+  | { kind: 'loading'; claim: null; cta: false }
   | { kind: 'unread'; claim: null; cta: true }
   | { kind: 'none'; claim: string; cta: true }
   | { kind: 'some'; claim: string; cta: false; attesters: number; domains: number }
@@ -327,7 +425,7 @@ export const CARD_NO_ATTESTATIONS = 'No attestations yet'
 /**
  * One card's view out of the page's bulk-read state: undefined = the read is in flight,
  * null = it failed. A completed read with no entry for this id makes no claim either
- * (null → CTA only) — never an endless "— attesters", never "No attestations yet".
+ * (null → CTA only) — never an endless loading line, never "No attestations yet".
  */
 export function cardViewFor(
   views: ReadonlyMap<string, CardAttestationView> | null | undefined,
@@ -340,7 +438,7 @@ export function cardViewFor(
 
 /** `view`: undefined = not read yet, null = the read failed. */
 export function cardAttesterLine(view: CardAttestationView | null | undefined): CardAttesterLine {
-  if (view === undefined) return { kind: 'loading', claim: '— attesters', cta: false }
+  if (view === undefined) return { kind: 'loading', claim: null, cta: false }
   if (view === null) return { kind: 'unread', claim: null, cta: true }
   if (view.attesters === 0) return { kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true }
   return {
@@ -353,16 +451,44 @@ export function cardAttesterLine(view: CardAttestationView | null | undefined): 
 }
 
 /**
- * Compact card: name, origin, tier chip (Trusted/Verified only) and the attester
- * line — no score slot, caption, stake line, bar or shield. Only for a row whose
- * atom vault the list never read (ERC-8004 cohort rows) and that is not known to
- * have an attester. For those rows the dropped elements are the same on every
- * card ("—", no stake read, an empty bar): they carry nothing about the row
- * (docs/audit/4b-list-findings.md §2). A row with attesters (Captain Dackie)
- * keeps the full card.
+ * The attester line a row prints — the grid card and the list row both call this
+ * (one helper, REPO_MAP §7 rule 4), so the two views can't disagree.
+ * `views`: the page's bulk read (undefined = in flight, null = failed).
  */
-export function isCompactCard(input: { vaultRead: boolean; line: CardAttesterLine }): boolean {
-  return !input.vaultRead && input.line.kind !== 'some'
+export function attesterLineOf(
+  views: ReadonlyMap<string, CardAttestationView> | null | undefined,
+  termId: string,
+): CardAttesterLine {
+  return cardAttesterLine(cardViewFor(views, termId))
+}
+
+/**
+ * The tier chip a row shows next to its name: Trusted / Verified only (thesis §6);
+ * Unverified is the default state, carried by the attester line. null while the read
+ * is in flight, when it failed, and at Unverified. Grid card and list row both call it.
+ */
+export function tierChipOf(
+  views: ReadonlyMap<string, CardAttestationView> | null | undefined,
+  termId: string,
+): AgentTierDisplay | null {
+  const tier = cardViewFor(views, termId)?.tier
+  return tier && tier.tier !== 'unverified' ? tier.display : null
+}
+
+/**
+ * Compact card: name, origin, tier chip (Trusted/Verified only) and the attester
+ * line — no score slot, caption, stake line, bar or shield. For a row whose atom
+ * vault the list never read (ERC-8004 cohort rows): there the dropped elements are
+ * the same on every card ("—", no stake read, an empty bar) and carry nothing about
+ * the row (docs/audit/4b-list-findings.md §2).
+ *
+ * Decided only by what is known at first paint. It used to depend on the attestation
+ * read too (a cohort row with an attester got the full card), so Captain Dackie's
+ * card grew from 82 to 137 px when that read answered and moved every card below it.
+ * Now only the attester line's content changes, inside its reserved height.
+ */
+export function isCompactCard(input: { vaultRead: boolean }): boolean {
+  return !input.vaultRead
 }
 
 /**

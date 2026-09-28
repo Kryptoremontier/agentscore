@@ -8,7 +8,7 @@ import {
   renderTrustText,
 } from '@/lib/agent-surface'
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
-import { SERVER_CACHE_TTL } from '@/lib/server-cache'
+import { SERVER_CACHE_TTL, TTL_JITTER } from '@/lib/server-cache'
 
 function exampleJson(): string {
   return JSON.stringify({
@@ -102,7 +102,8 @@ Reads are shared through a server cache: the agent list/corpus (also behind the 
 detail and trust breakdown) ${SERVER_CACHE_TTL.agentCorpus} s, domains and skills ${SERVER_CACHE_TTL.domains} s, per-agent skill triples,
 timeline and a subject's attestations ${SERVER_CACHE_TTL.agentDetail} s, the ERC-8004 cohort behind the ERC-8004 agent detail
 ${SERVER_CACHE_TTL.erc8004Cohort} s, platform-stats counts ${SERVER_CACHE_TTL.platformStats} s, the evaluator
-leaderboard ${SERVER_CACHE_TTL.evaluatorLeaderboard} s.
+leaderboard ${SERVER_CACHE_TTL.evaluatorLeaderboard} s — each cached entry ±${TTL_JITTER * 100}% (spread so
+entries don't all refill at once); meta.dataAgeSeconds always gives the actual age.
 Only complete reads are cached. An answer built on an incomplete read (a failed
 sub-read reported as null, a row cap) is sent "Cache-Control: no-store" and is
 never stored; the next request reads again. A connected wallet's own positions are

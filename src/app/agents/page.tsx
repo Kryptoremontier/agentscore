@@ -56,8 +56,10 @@ import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import {
   fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus,
-  cardAttestationView, cardAttesterLine, cardViewFor, isCompactCard, attestScrollStep, type CardAttestationView,
+  cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, type CardAttestationView,
   listTrustTriple, listVaultSnapshot, listOpposeWei,
+  ORIGIN_TABS, QUALITY_LEVELS, corpusTotals, qualityOptions, qualityOptionText, parseListFilters, listFiltersSearch,
+  type OriginFilter, type QualityFilter, type AgentScoreCorpusCounts, type CohortCorpusCounts,
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import {
@@ -104,9 +106,6 @@ interface GraphQLAgent {
   caipIdentity?: string
 }
 
-type OriginFilter = 'all' | 'agentscore' | 'erc8004'
-
-
 export default function AgentsPage() {
   return (
     <Suspense fallback={
@@ -139,6 +138,24 @@ function getMomentumIndicator(momentum: number): { arrow: string; color: string;
   return               { arrow: '→',  color: '#94a3b8', label: 'Stable' }
 }
 
+/**
+ * List view columns — the header and every row share them. Phones: icon, agent, score
+ * (the name column gets the width; stake and stakers move under the name). From `sm`:
+ * icon, agent, stakes, stakers, score.
+ */
+const LIST_ROW_GRID = 'grid grid-cols-[2rem_minmax(0,1fr)_3rem] sm:grid-cols-[2rem_minmax(0,1fr)_6rem_4rem_3.5rem] gap-x-3 sm:gap-x-4 px-3 sm:px-4'
+
+/** The row's origin, the same chip on the grid card and the list row. */
+function OriginChip({ origin }: { origin?: 'agentscore' | 'erc8004' }) {
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded inline-block flex-shrink-0 ${
+      origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
+    }`}>
+      {origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
+    </span>
+  )
+}
+
 function AgentsPageContent() {
   const searchParams = useSearchParams()
   const { address, isConnected } = useAccount()
@@ -155,7 +172,9 @@ function AgentsPageContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
+  // Origin tab + quality filter live in the URL (?origin=erc8004&quality=unrated) so a filtered
+  // view is shareable; unknown values fall back to 'all' (lib/agent-list.ts parseListFilters).
+  const [qualityFilter, setQualityFilter] = useState<QualityFilter>(() => parseListFilters(searchParams).quality)
   const [sortBy, setSortBy] = useState<'newest' | 'score_desc' | 'score_asc' | 'stakers' | 'stake'>('newest')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
@@ -171,9 +190,24 @@ function AgentsPageContent() {
   // The latest list read, for the modal to reuse at open without re-running on every list update.
   const attestedBySubjectRef = useRef(attestedBySubject)
   attestedBySubjectRef.current = attestedBySubject
-  const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
+  const [originFilter, setOriginFilter] = useState<OriginFilter>(() => parseListFilters(searchParams).origin)
+  // The URL is the source of truth: an in-app link to /agents?origin=… updates the open page too.
+  useEffect(() => {
+    const f = parseListFilters(searchParams)
+    setOriginFilter(f.origin)
+    setQualityFilter(f.quality)
+  }, [searchParams])
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
+  // The modal's tab strip scrolls sideways on the narrowest phones: keep the active tab in view
+  // (Timeline, the default, is the last one). Horizontal only — never scrolls the modal itself.
+  const modalTabsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const list = modalTabsRef.current
+    const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (!list || !tab || list.scrollWidth <= list.clientWidth) return
+    list.scrollLeft = tab.offsetLeft - (list.clientWidth - tab.offsetWidth) / 2
+  }, [activeTab, selectedAgent?.term_id])
   const [trustAmount, setTrustAmount] = useState('0.05')
   const [untrustAmount, setUntrustAmount] = useState('0.05')
   const [claims, setClaims] = useState<any[]>([])
@@ -1490,6 +1524,59 @@ function AgentsPageContent() {
     } catch { return [] }
   }, [selectedAgent, agentSignals, agentTriple.counterTermId, hybridScore, agentTrust, modalMeasured, agentTier])
 
+  // ── List state ────────────────────────────────────────────────────────────
+  // A filter change updates state and the URL. Next's router follows history.replaceState,
+  // so useSearchParams stays in step without a server round-trip.
+  const setListFilters = (next: { origin?: OriginFilter; quality?: QualityFilter }) => {
+    const f = { origin: next.origin ?? originFilter, quality: next.quality ?? qualityFilter }
+    setOriginFilter(f.origin)
+    setQualityFilter(f.quality)
+    const search = listFiltersSearch(window.location.search, f)
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`)
+  }
+
+  // Corpus counts — the header line and the origin tabs print the same totals (corpusTotals).
+  const corpusCounts: { agentScore: AgentScoreCorpusCounts; cohort: CohortCorpusCounts } = {
+    agentScore: {
+      status: loading ? 'loading' : error ? 'error' : 'ok',
+      kept: agents.length,
+      junk: agentJunkFilteredCount,
+      fetched: agentCorpusMeta.fetched,
+      total: agentCorpusMeta.total,
+      truncated: agentCorpusMeta.truncated,
+    },
+    cohort: { status: cohortStatus, count: cohortAgents.length, total: cohortTotal, truncated: cohortTruncated },
+  }
+  const originTotals = corpusTotals(corpusCounts)
+  const listLoaded = !(loading || cohortLoading)
+
+  // The list's rows before the quality filter: the origin's CORPUS, narrowed by search (one
+  // rule for both corpora — the displayed name or the raw label). The quality dropdown counts
+  // these; the grid/list filter and sort them.
+  const listRows = useMemo(() => {
+    const sourceAgents =
+      originFilter === 'agentscore' ? agents :
+      originFilter === 'erc8004' ? cohortAgents :
+      [...agents, ...cohortAgents]
+    const searchedAgents = searchTerm
+      ? sourceAgents.filter(a => matchesAgentSearch(searchTerm, [getAgentNameFromAtom(a), effectiveLabel(a)]))
+      : sourceAgents
+    const enriched = searchedAgents.map(agent => {
+      // supportWei null = the vault was never read (cohort rows); opposeWei null = the
+      // oppose read failed — both unknown, never 0 (lib/score-basis.ts stakeReadingOf).
+      const reading = stakeReadingOf(agent as any)
+      const { supportWei, opposeWei } = reading
+      const measured = hasMeasuredScore(reading)
+      // Computed for every row (sort/filter plumbing), displayed only when measured.
+      const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei ?? 0n)
+      return { agent, trust: cardTrust, measured, noScoreTip: noScoreTooltip(reading), bucket: qualityBucket(cardTrust, measured) }
+    })
+    return { sourceCount: sourceAgents.length, enriched }
+    // getAgentNameFromAtom is a pure per-render closure over effectiveLabel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agents, cohortAgents, originFilter, searchTerm])
+  const qualityOpts = qualityOptions(listLoaded ? listRows.enriched.map(e => e.bucket) : null)
+
   return (
     <PageBackground image="hero" opacity={0.4}>
       {/* Dev error overlay — shows JS errors that would otherwise require DevTools */}
@@ -1506,7 +1593,7 @@ function AgentsPageContent() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-10"
+            className="mb-6 md:mb-10"
           >
             {/* Label */}
             <div className="flex items-center gap-2 mb-4">
@@ -1537,17 +1624,7 @@ function AgentsPageContent() {
               <span className="text-xs text-[#7A838D]">
                 {/* Corpus totals only — no search/filter input; loading → "—", failed →
                     "feed unavailable", "live feed" only when both reads succeeded (lib/agent-list.ts). */}
-                {agentListHeaderSegments({
-                  agentScore: {
-                    status: loading ? 'loading' : error ? 'error' : 'ok',
-                    kept: agents.length,
-                    junk: agentJunkFilteredCount,
-                    fetched: agentCorpusMeta.fetched,
-                    total: agentCorpusMeta.total,
-                    truncated: agentCorpusMeta.truncated,
-                  },
-                  cohort: { status: cohortStatus, count: cohortAgents.length, total: cohortTotal, truncated: cohortTruncated },
-                }).join(' · ')}
+                {agentListHeaderSegments(corpusCounts).join(' · ')}
               </span>
             </div>
           </motion.div>
@@ -1557,10 +1634,10 @@ function AgentsPageContent() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="mb-8"
+            className="mb-4"
           >
             {/* Search Input */}
-            <div className="relative mb-4">
+            <div className="relative mb-3">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7A838D]">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
@@ -1586,76 +1663,59 @@ function AgentsPageContent() {
               )}
             </div>
 
-            {/* Filter + Sort Row */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Trust Level filter */}
-              {([
-                { id: 'all', label: 'All', color: '' },
-                { id: 'excellent', label: 'Excellent', color: '#2ECC71' },
-                { id: 'good', label: 'Good', color: '#22C55E' },
-                { id: 'moderate', label: 'Moderate', color: '#EAB308' },
-                { id: 'low', label: 'Low', color: '#F97316' },
-                { id: 'critical', label: 'Critical', color: '#EF4444' },
-                // No measured score (zero stake / never read): never counted as Moderate.
-                { id: 'unrated', label: 'Unrated', color: '#7A838D' },
-              ]).map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setSelectedCategory(f.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    selectedCategory === f.id
-                      ? 'bg-[#1E2229] text-white border border-[#C8963C]/50'
-                      : 'text-[#B5BDC6] border border-white/[0.12] hover:text-white hover:bg-[#1E2229] hover:border-white/20'
-                  }`}
-                >
-                  {f.color ? (
-                    <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
-                  ) : null}
-                  <span>{f.label}</span>
-                </button>
-              ))}
+            {/* Origin tabs — counts are the corpus totals the header line prints (one source,
+                lib/agent-list.ts corpusTotals): "—" while a corpus loads or when its read failed. */}
+            <div
+              role="tablist"
+              aria-label="Origin"
+              className="grid grid-cols-3 sm:inline-grid sm:grid-flow-col sm:auto-cols-max gap-1 p-1 rounded-xl mb-3"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              {ORIGIN_TABS.map(o => {
+                const Icon = o.id === 'agentscore' ? Layers : o.id === 'erc8004' ? ExternalLink : Globe
+                const active = originFilter === o.id
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    title={o.title}
+                    onClick={() => setListFilters({ origin: o.id })}
+                    className={`flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[36px] px-2 sm:px-4 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                      active
+                        ? 'bg-[#1E2229] text-[#C8963C] border border-[#C8963C]/50'
+                        : 'text-[#B5BDC6] border border-transparent hover:text-white hover:bg-[#1E2229]'
+                    }`}
+                  >
+                    <Icon className="hidden sm:block w-3 h-3 flex-shrink-0" />
+                    {o.label}
+                    <span className={`tabular-nums ${active ? 'text-[#C8963C]/75' : 'text-[#7A838D]'}`}>{originTotals[o.id] ?? '—'}</span>
+                  </button>
+                )
+              })}
+            </div>
 
-              {/* Spacer */}
-              <div className="flex-1" />
-
-              {/* Origin toggle — All / AgentScore / ERC-8004 (Etap 2c) */}
-              <div
-                className="flex items-center gap-0.5 p-1 rounded-lg"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            {/* Quality · sort — one row at 390 px */}
+            <div className="flex items-center gap-2">
+              {/* Quality: every bucket listed; an empty one is disabled with its 0, never hidden. */}
+              <select
+                aria-label="Quality"
+                value={qualityFilter}
+                onChange={(e) => setListFilters({ quality: e.target.value as QualityFilter })}
+                className="min-w-0 flex-1 sm:flex-none bg-[#191C21] border border-white/12 rounded-lg px-2 sm:px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#C8963C]/50 outline-none cursor-pointer"
               >
-                {([
-                  { id: 'all' as const, label: 'All', icon: Globe },
-                  { id: 'agentscore' as const, label: 'AgentScore', icon: Layers },
-                  { id: 'erc8004' as const, label: 'ERC-8004', icon: ExternalLink },
-                ]).map(o => {
-                  const Icon = o.icon
-                  return (
-                    <button
-                      key={o.id}
-                      onClick={() => setOriginFilter(o.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        originFilter === o.id
-                          ? 'bg-[#1E2229] text-[#C8963C] border border-[#C8963C]/50'
-                          : 'text-[#B5BDC6] border border-transparent hover:text-white hover:bg-[#1E2229]'
-                      }`}
-                      title={
-                        o.id === 'agentscore' ? 'Agents registered via AgentScore'
-                        : o.id === 'erc8004' ? 'Real agents from the ERC-8004 registry cohort — self-declared, not yet attested'
-                        : 'All agents'
-                      }
-                    >
-                      <Icon className="w-3 h-3" />
-                      {o.label}
-                    </button>
-                  )
-                })}
-              </div>
+                {qualityOpts.map(o => (
+                  <option key={o.id} value={o.id} disabled={o.disabled}>{qualityOptionText(o)}</option>
+                ))}
+              </select>
 
               {/* Sort dropdown */}
               <select
+                aria-label="Sort"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-[#191C21] border border-white/12 rounded-lg px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#C8963C]/50 outline-none cursor-pointer"
+                className="flex-none bg-[#191C21] border border-white/12 rounded-lg px-2 sm:px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#C8963C]/50 outline-none cursor-pointer"
               >
                 <option value="newest">Newest First</option>
                 <option value="score_desc">Highest Score</option>
@@ -1663,8 +1723,6 @@ function AgentsPageContent() {
                 <option value="stakers">Most Stakers</option>
                 <option value="stake">Most Stake</option>
               </select>
-
-
             </div>
           </motion.div>
 
@@ -1730,36 +1788,17 @@ function AgentsPageContent() {
 
           {/* Agents Grid */}
           {!(loading || cohortLoading) && (agents.length + cohortAgents.length) > 0 && (() => {
-            // Etap 2c: merge AgentScore + ERC-8004 cohort per originFilter. sourceAgents is the
-            // origin's CORPUS; search (one rule for both corpora — the displayed name or the raw
-            // label) and the quality filter narrow it below. The results line prints the
-            // narrowed count; the header above prints corpus totals only.
-            const sourceAgents =
-              originFilter === 'agentscore' ? agents :
-              originFilter === 'erc8004' ? cohortAgents :
-              [...agents, ...cohortAgents]
-            const searchedAgents = searchTerm
-              ? sourceAgents.filter(a => matchesAgentSearch(searchTerm, [getAgentNameFromAtom(a), effectiveLabel(a)]))
-              : sourceAgents
-
-            const enriched = searchedAgents.map(agent => {
-              // supportWei null = the vault was never read (cohort rows); opposeWei null = the
-              // oppose read failed — both unknown, never 0 (lib/score-basis.ts stakeReadingOf).
-              const reading = stakeReadingOf(agent as any)
-              const { supportWei, opposeWei } = reading
-              const measured = hasMeasuredScore(reading)
-              // Computed for every row (sort/filter plumbing), displayed only when measured.
-              const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei ?? 0n)
-              return { agent, trust: cardTrust, measured, noScoreTip: noScoreTooltip(reading) }
-            })
-
-            const filtered = selectedCategory === 'all'
-              ? enriched
-              : enriched.filter(e => qualityBucket(e.trust, e.measured) === selectedCategory)
+            // Etap 2c: AgentScore + ERC-8004 cohort per origin tab. listRows (above) is the
+            // origin's CORPUS narrowed by search; the quality filter narrows it here. The results
+            // line prints the narrowed count; the header and the tabs print corpus totals only.
+            const filtered = qualityFilter === 'all'
+              ? listRows.enriched
+              : listRows.enriched.filter(e => e.bucket === qualityFilter)
 
             // Honesty gate (thesis §6): see lib/agent-list-sort.ts — a row without a measured
             // score (zero stake, or never read) must never rank among measured scores by its prior.
             const sorted = [...filtered].sort((a, b) => compareAgentEntries(a, b, sortBy))
+            const qualityLabel = QUALITY_LEVELS.find(l => l.id === qualityFilter)?.label
 
             return (
             <motion.div
@@ -1767,10 +1806,10 @@ function AgentsPageContent() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
             >
-              <div className="mb-6 flex items-center justify-between">
-                <p className="text-sm text-[#7A838D]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-sm text-[#7A838D]" data-testid="results-line">
                   {(() => {
-                    const line = agentResultsLine(sorted.length, sourceAgents.length)
+                    const line = agentResultsLine(sorted.length, listRows.sourceCount)
                     return (
                       <>
                         <span className="font-semibold text-white">{line.shown}</span>
@@ -1778,56 +1817,53 @@ function AgentsPageContent() {
                       </>
                     )
                   })()}
-                  {selectedCategory !== 'all' && (
-                    <span className="text-[#4A5260]"> · <span className="text-[#B5BDC6]">{selectedCategory}</span></span>
+                  {qualityLabel && (
+                    <span className="text-[#4A5260]"> · <span className="text-[#B5BDC6]">{qualityLabel}</span></span>
                   )}
                 </p>
 
-                {/* View mode toggle — prominent, above content */}
+                {/* View mode toggle — icons only on phones */}
                 <div
-                  className="flex items-center gap-0.5 p-1 rounded-xl"
+                  className="flex items-center gap-0.5 p-1 rounded-xl flex-shrink-0"
                   style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                 >
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200"
-                    style={viewMode === 'grid' ? {
-                      background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.08))',
-                      border: '1px solid rgba(200,150,60,0.35)',
-                      color: '#C8963C',
-                    } : {
-                      border: '1px solid transparent',
-                      color: '#7A838D',
-                    }}
-                  >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                    Grid
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200"
-                    style={viewMode === 'list' ? {
-                      background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.08))',
-                      border: '1px solid rgba(200,150,60,0.35)',
-                      color: '#C8963C',
-                    } : {
-                      border: '1px solid transparent',
-                      color: '#7A838D',
-                    }}
-                  >
-                    <List className="w-3.5 h-3.5" />
-                    List
-                  </button>
+                  {([
+                    { id: 'grid' as const, label: 'Grid', icon: LayoutGrid },
+                    { id: 'list' as const, label: 'List', icon: List },
+                  ]).map(v => {
+                    const Icon = v.icon
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setViewMode(v.id)}
+                        aria-label={v.label}
+                        aria-pressed={viewMode === v.id}
+                        className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200"
+                        style={viewMode === v.id ? {
+                          background: 'linear-gradient(135deg, rgba(200,150,60,0.18), rgba(200,150,60,0.08))',
+                          border: '1px solid rgba(200,150,60,0.35)',
+                          color: '#C8963C',
+                        } : {
+                          border: '1px solid transparent',
+                          color: '#7A838D',
+                        }}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">{v.label}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
               {sorted.length === 0 ? (
                 <div className="text-center py-16">
                   <p className="text-[#7A838D] text-sm">
-                    {searchTerm ? <>No agents match &quot;{searchTerm}&quot;{selectedCategory !== 'all' ? ' in this filter' : ''}</> : 'No agents match this filter'}
+                    {searchTerm ? <>No agents match &quot;{searchTerm}&quot;{qualityFilter !== 'all' ? ' in this filter' : ''}</> : 'No agents match this filter'}
                   </p>
                   <button
-                    onClick={() => { setSelectedCategory('all'); setSearchTerm('') }}
+                    onClick={() => { setListFilters({ quality: 'all' }); setSearchTerm('') }}
                     className="mt-2 text-xs text-[#C8963C] hover:underline"
                   >
                     Show all agents
@@ -1857,33 +1893,26 @@ function AgentsPageContent() {
                   // Cohort rows never fetch the atom vault: their stake/stakers were never
                   // measured, so they are not printed (thesis §6: null ≠ 0.0).
                   const vaultRead = readSharesWei(agent.positions_aggregate) != null
-                  // Attestations — the same read and derivation as the modal (lib/agent-list.ts).
-                  // undefined = still reading, null = the read failed (no claim, CTA only).
-                  const cardView = cardViewFor(attestationViewBySubject, agent.term_id)
-                  const attesterLine = cardAttesterLine(cardView)
-                  // The agent tier — attestations only (thesis §6). The card shows only Trusted /
-                  // Verified; Unverified is the default state, carried by the attester line.
-                  const cardAgentTier = cardView?.tier ?? null
-                  const cardTierChip = cardAgentTier && cardAgentTier.tier !== 'unverified' ? cardAgentTier.display : null
-                  const originChip = (
-                    <span className={`text-xs px-2 py-0.5 rounded inline-block ${
-                      agent.origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
-                    }`}>
-                      {agent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
-                    </span>
-                  )
+                  // Attestations — the same read and derivation as the modal, and the same helper
+                  // as the list row (lib/agent-list.ts attesterLineOf). The tier chip shows only
+                  // Trusted / Verified (thesis §6); Unverified is carried by the attester line.
+                  const attesterLine = attesterLineOf(attestationViewBySubject, agent.term_id)
+                  const cardTierChip = tierChipOf(attestationViewBySubject, agent.term_id)
+                  const originChip = <OriginChip origin={agent.origin} />
                   const cardClass = `bg-[#111318] border border-[#1e2028] rounded-2xl
                                  cursor-pointer transition-all duration-300 ease-out
                                  hover:-translate-y-1 hover:border-[#C8963C]/15
                                  hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]`
 
-                  // Compact: a cohort row (vault never read on the list) not known to have an
-                  // attester. Its score slot, caption, stake line and bar would be the same on
-                  // every such card, so they are not drawn (lib/agent-list.ts isCompactCard).
-                  if (isCompactCard({ vaultRead, line: attesterLine })) {
+                  // Compact: a cohort row (vault never read on the list). Its score slot, caption,
+                  // stake line and bar would be the same on every such card, so they are not drawn.
+                  // Decided at first paint only — the attestation read never reshapes a card
+                  // (lib/agent-list.ts isCompactCard).
+                  if (isCompactCard({ vaultRead })) {
                     return (
                       <motion.div
                         key={agent.term_id}
+                        data-term-id={agent.term_id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.05 }}
@@ -1910,6 +1939,7 @@ function AgentsPageContent() {
                       onClick={() => setSelectedAgent(agent)}
                       className={`${cardClass} p-5`}
                       data-card="full"
+                      data-term-id={agent.term_id}
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
@@ -1961,14 +1991,18 @@ function AgentsPageContent() {
                 })}
               </div>
               ) : (
-              /* ── LIST VIEW ── */
+              /* ── LIST VIEW ──
+                 The grid card's information in one row: name (wraps — never cut to one
+                 character), tier and origin chips, the attester line (the same attesterLineOf
+                 as the card), stake, stakers, score. Phones drop the Stakes/Stakers columns
+                 and print the card's stake line under the name instead. */
               <div className="flex flex-col gap-1.5">
-                <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[#4A5260]">
-                  <span className="w-8" />
+                <div className={`${LIST_ROW_GRID} py-2 text-[10px] font-bold uppercase tracking-widest text-[#4A5260]`}>
+                  <span />
                   <span>Agent</span>
-                  <span className="text-right w-20">Stakes</span>
-                  <span className="text-right w-16">Stakers</span>
-                  <span className="text-right w-12">Score</span>
+                  <span className="hidden sm:block text-right">Stakes</span>
+                  <span className="hidden sm:block text-right">Stakers</span>
+                  <span className="text-right">Score</span>
                 </div>
                 {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }, i) => {
                   const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
@@ -1984,15 +2018,19 @@ function AgentsPageContent() {
                   const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getAgentNameFromAtom(agent)
                   const listVaultRead = readSharesWei(agent.positions_aggregate) != null
+                  const attesterLine = attesterLineOf(attestationViewBySubject, agent.term_id)
+                  const rowTierChip = tierChipOf(attestationViewBySubject, agent.term_id)
 
                   return (
                     <motion.div
                       key={agent.term_id}
+                      data-row="list"
+                      data-term-id={agent.term_id}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.015 }}
                       onClick={() => setSelectedAgent(agent)}
-                      className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center px-4 py-3 rounded-xl cursor-pointer transition-all duration-150"
+                      className={`${LIST_ROW_GRID} items-center py-3 rounded-xl cursor-pointer transition-all duration-150`}
                       style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
                       onMouseEnter={e => {
                         (e.currentTarget as HTMLElement).style.background = 'rgba(200,150,60,0.05)'
@@ -2011,19 +2049,28 @@ function AgentsPageContent() {
                             stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={color + '33'} />
                         </svg>
                       </div>
-                      {/* Name */}
-                      <div className="min-w-0 flex items-center gap-1.5">
-                        <p className="text-sm font-semibold text-white truncate">{name}</p>
-                        {agent.origin === 'erc8004' && (
-                          <span className="text-[10px] text-[#8B5CF6] bg-[#8B5CF6]/10 px-1.5 py-0.5 rounded flex-shrink-0">ERC-8004</span>
+                      {/* Name + chips, attester line (+ stake line on phones) */}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-semibold text-white leading-snug min-w-0 [overflow-wrap:anywhere]">{name}</p>
+                          {rowTierChip && <TrustTierBadge tier={rowTierChip} size="sm" />}
+                          <OriginChip origin={agent.origin} />
+                        </div>
+                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="mt-0.5" />
+                        {listVaultRead && (
+                          <p className="sm:hidden text-xs text-[#B5BDC6] mt-0.5">
+                            <span className="whitespace-nowrap">Stakes: <span className="text-white font-medium">{stakes}</span></span>
+                            {' · '}
+                            <span className="whitespace-nowrap">Stakers: <span className="text-white font-medium">{stakers ?? '—'}</span></span>
+                          </p>
                         )}
                       </div>
                       {/* Stakes */}
-                      <span className="text-xs text-[#B5BDC6] text-right w-20 whitespace-nowrap">{listVaultRead ? stakes : '—'}</span>
+                      <span className="hidden sm:block text-xs text-[#B5BDC6] text-right whitespace-nowrap">{listVaultRead ? stakes : '—'}</span>
                       {/* Stakers */}
-                      <span className="text-xs text-[#B5BDC6] text-right w-16 whitespace-nowrap">{listVaultRead && stakers != null ? stakers : '—'}</span>
+                      <span className="hidden sm:block text-xs text-[#B5BDC6] text-right whitespace-nowrap">{listVaultRead && stakers != null ? stakers : '—'}</span>
                       {/* Score + momentum */}
-                      <div className="flex items-center justify-end gap-1 w-12">
+                      <div className="flex items-center justify-end gap-1">
                         {displayScore != null ? (
                           <>
                             <span className="text-sm font-bold font-mono" style={{ color }}>{displayScore}</span>
@@ -2628,7 +2675,8 @@ function AgentsPageContent() {
 
                 return (
                   <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
-                    <div className="grid grid-cols-2 gap-6">
+                    {/* Stacked on phones — two ~140 px columns wrapped every value (4b-list §6 #5). */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
 
                       {/* LEFT: Agent Score breakdown table */}
                       <div>
@@ -2868,9 +2916,17 @@ function AgentsPageContent() {
                 </div>
               </div>
 
-              {/* === TABS: Overview / Attestations / Activity === */}
-              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl overflow-hidden mb-3">
-                <div className="flex border-b border-[#C8963C]/12">
+              {/* === TABS: Overview / Attestations / Activity / Timeline ===
+                  Every tab stays reachable at 390 px (4b-list §6 #1): on phones the four share the
+                  row (icon over label, ≥44 px tall); on the narrowest ones the strip scrolls sideways
+                  instead of clipping. Each tab's content renders inside this card. */}
+              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl mb-3">
+                <div
+                  ref={modalTabsRef}
+                  role="tablist"
+                  aria-label="Agent details"
+                  className="relative flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shadow-[inset_0_-1px_0_rgba(200,150,60,0.12)]"
+                >
                   {[
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
                     { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
@@ -2879,8 +2935,11 @@ function AgentsPageContent() {
                   ].map((tab) => (
                     <button
                       key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                      className={`flex flex-1 min-w-fit sm:flex-none flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 min-h-[48px] px-2 sm:px-5 py-2 sm:py-3.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
                         activeTab === tab.id
                           ? 'text-white border-[#34a872]'
                           : 'text-[#B5BDC6] border-transparent hover:text-white hover:border-[#C8963C]/25'
@@ -3780,7 +3839,6 @@ function AgentsPageContent() {
                     </div>
                   </div>
                 )}
-              </div>
 
                 {/* Timeline Tab */}
                 {activeTab === 'timeline' && selectedAgent && (() => {
@@ -3804,6 +3862,7 @@ function AgentsPageContent() {
                     />
                   )
                 })()}
+              </div>
 
               {/* === REPORT SECTION === */}
               {isConnected && (
