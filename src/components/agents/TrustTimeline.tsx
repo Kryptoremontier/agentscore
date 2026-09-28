@@ -337,7 +337,7 @@ export function TrustTimeline({
     <div className="p-5">
       {/* Summary row */}
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <div className="flex items-center gap-4 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+        <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
           <span>
             <span className="text-white font-semibold">{summary.totalEvents}</span> events
           </span>
@@ -384,10 +384,11 @@ export function TrustTimeline({
         </div>
       </div>
 
-      {/* Two-column layout when real history exists; otherwise events take the
-          full width and an honest note replaces the chart slot (thesis §6 —
+      {/* Two-column layout when real history exists (one column on phones — two
+          ~150 px columns squeezed the chart and every event); otherwise events take
+          the full width and an honest note replaces the chart slot (thesis §6 —
           no fake curve when there's only one real score point). */}
-      <div className={`grid gap-6 ${hasChart ? 'grid-cols-2' : 'grid-cols-1'}`} style={{ minHeight: hasChart ? 360 : undefined }}>
+      <div className={`grid gap-6 ${hasChart ? 'grid-cols-1 md:grid-cols-2 md:min-h-[360px]' : 'grid-cols-1'}`}>
         {hasChart ? (
           <div
             className="flex flex-col rounded-xl p-4"
@@ -406,7 +407,7 @@ export function TrustTimeline({
         )}
 
         {/* Right: Event list */}
-        <div className={hasChart ? 'overflow-y-auto pr-1' : ''} style={hasChart ? { maxHeight: 480 } : undefined}>
+        <div className={hasChart ? 'md:overflow-y-auto md:max-h-[480px] md:pr-1' : ''}>
           {visibleEvents.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>

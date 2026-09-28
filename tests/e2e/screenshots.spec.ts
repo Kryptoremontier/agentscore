@@ -36,6 +36,11 @@ interface Shot {
   prepare?: (page: Page) => Promise<void>
   /** Capture a specific element at its full height instead of the page. */
   target?: (page: Page) => Promise<Locator>
+  /**
+   * Layout assertions, run after the PNG is written (so a failure still leaves the shot).
+   * Receives the viewport's project name; a failure fails the test with its own message.
+   */
+  check?: (page: Page, project: string) => Promise<void>
 }
 
 const SHOTS: Shot[] = [
@@ -59,6 +64,7 @@ const SHOTS: Shot[] = [
     url: `${ROUTES.agents}?open=${AGENTS[key]}`,
     prepare: modalReady,
     target: unfixModal,
+    check: modalFitsPhone,
   })),
   ...(['dackie', 'luda', 'openclaw'] as const).map((key): Shot => ({
     name: `agent-profile-${key}`,
@@ -103,6 +109,16 @@ for (const shot of SHOTS) {
 
     testInfo.annotations.push({ type: 'screenshot', description: path.relative(REPO_ROOT, file) })
     expect.soft(unsettled, `${shot.name}: page never settled — screenshot shows a loading state`).toBeNull()
+
+    if (shot.check) {
+      let broken: string | null = null
+      try {
+        await shot.check(page, testInfo.project.name)
+      } catch (e) {
+        broken = (e as Error).message.split('\n').slice(0, 6).join('\n')
+      }
+      expect.soft(broken, `${shot.name}: layout check failed`).toBeNull()
+    }
   })
 }
 
@@ -208,4 +224,50 @@ async function unfixModal(page: Page): Promise<Locator> {
     window.scrollTo(0, 0)
   })
   return modal
+}
+
+/**
+ * Elements inside `root` that reach past the viewport's left or right edge (a phone
+ * would clip them or scroll sideways). Only the outermost offender of a subtree is
+ * listed. `[]` = everything fits.
+ */
+async function pastViewportEdges(root: Locator): Promise<string[]> {
+  return root.evaluate((el) => {
+    const w = window.innerWidth
+    const over = (r: DOMRect) => r.width > 0 && (r.left < -0.5 || r.right > w + 0.5)
+    const out: string[] = []
+    for (const node of el.querySelectorAll('*')) {
+      const r = node.getBoundingClientRect()
+      if (!over(r)) continue
+      const parent = node.parentElement
+      if (parent && parent !== el && over(parent.getBoundingClientRect())) continue
+      out.push(`<${node.tagName.toLowerCase()}> ${Math.round(r.left)}..${Math.round(r.right)} px "${(node.textContent ?? '').trim().slice(0, 40)}"`)
+    }
+    return out.slice(0, 8)
+  })
+}
+
+/**
+ * Phones only (4b-list §6 #1, #5): every modal tab is on screen, at least 44 px tall and
+ * clickable (clicking selects it), and on every tab no element reaches past the viewport.
+ */
+async function modalFitsPhone(page: Page, project: string) {
+  if (project !== 'mobile') return
+  const modal = modalLocator(page)
+  const width = page.viewportSize()!.width
+  const tabs = modal.getByRole('tab')
+  await expect(tabs).toHaveCount(4)
+  for (const tab of await tabs.all()) {
+    const name = (await tab.textContent())?.trim()
+    await tab.scrollIntoViewIfNeeded()
+    await expect(tab, `tab "${name}" visible`).toBeVisible()
+    const box = (await tab.boundingBox())!
+    expect(box.x, `tab "${name}" starts on screen`).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width, `tab "${name}" ends on screen`).toBeLessThanOrEqual(width)
+    expect(box.height, `tab "${name}" is a ≥44 px target`).toBeGreaterThanOrEqual(44)
+    await tab.click()
+    await expect(tab, `tab "${name}" selected after a click`).toHaveAttribute('aria-selected', 'true')
+    await settle(page).catch(() => {}) // measure the tab's loaded content where it loads in time
+    expect(await pastViewportEdges(modal), `tab "${name}": elements past the ${width} px viewport`).toEqual([])
+  }
 }

@@ -174,6 +174,15 @@ function AgentsPageContent() {
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
+  // The modal's tab strip scrolls sideways on the narrowest phones: keep the active tab in view
+  // (Timeline, the default, is the last one). Horizontal only — never scrolls the modal itself.
+  const modalTabsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const list = modalTabsRef.current
+    const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (!list || !tab || list.scrollWidth <= list.clientWidth) return
+    list.scrollLeft = tab.offsetLeft - (list.clientWidth - tab.offsetWidth) / 2
+  }, [activeTab, selectedAgent?.term_id])
   const [trustAmount, setTrustAmount] = useState('0.05')
   const [untrustAmount, setUntrustAmount] = useState('0.05')
   const [claims, setClaims] = useState<any[]>([])
@@ -2628,7 +2637,8 @@ function AgentsPageContent() {
 
                 return (
                   <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
-                    <div className="grid grid-cols-2 gap-6">
+                    {/* Stacked on phones — two ~140 px columns wrapped every value (4b-list §6 #5). */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
 
                       {/* LEFT: Agent Score breakdown table */}
                       <div>
@@ -2868,9 +2878,17 @@ function AgentsPageContent() {
                 </div>
               </div>
 
-              {/* === TABS: Overview / Attestations / Activity === */}
-              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl overflow-hidden mb-3">
-                <div className="flex border-b border-[#C8963C]/12">
+              {/* === TABS: Overview / Attestations / Activity / Timeline ===
+                  Every tab stays reachable at 390 px (4b-list §6 #1): on phones the four share the
+                  row (icon over label, ≥44 px tall); on the narrowest ones the strip scrolls sideways
+                  instead of clipping. Each tab's content renders inside this card. */}
+              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl mb-3">
+                <div
+                  ref={modalTabsRef}
+                  role="tablist"
+                  aria-label="Agent details"
+                  className="relative flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shadow-[inset_0_-1px_0_rgba(200,150,60,0.12)]"
+                >
                   {[
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
                     { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
@@ -2879,8 +2897,11 @@ function AgentsPageContent() {
                   ].map((tab) => (
                     <button
                       key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                      className={`flex flex-1 min-w-fit sm:flex-none flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 min-h-[48px] px-2 sm:px-5 py-2 sm:py-3.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
                         activeTab === tab.id
                           ? 'text-white border-[#34a872]'
                           : 'text-[#B5BDC6] border-transparent hover:text-white hover:border-[#C8963C]/25'
@@ -3780,7 +3801,6 @@ function AgentsPageContent() {
                     </div>
                   </div>
                 )}
-              </div>
 
                 {/* Timeline Tab */}
                 {activeTab === 'timeline' && selectedAgent && (() => {
@@ -3804,6 +3824,7 @@ function AgentsPageContent() {
                     />
                   )
                 })()}
+              </div>
 
               {/* === REPORT SECTION === */}
               {isConnected && (
