@@ -33,3 +33,22 @@ jobs:
 
       - name: Unit tests
         run: npx vitest run
+
+      # The build is a gate: type-check and tests passed while `next build` failed (Etap 4b-cache —
+      # a Node-only import pulled into a client page). next.config ignores type/lint errors during the
+      # build (the steps above cover those), so this catches what only the bundler sees.
+      - name: Restore Next.js build cache
+        uses: actions/cache@v4
+        with:
+          # Compiler caches only — never the data cache (fetch-cache), so a CI build can't reuse data.
+          path: |
+            .next/cache
+            !.next/cache/fetch-cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'next.config.js', 'tailwind.config.*', 'postcss.config.*') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
