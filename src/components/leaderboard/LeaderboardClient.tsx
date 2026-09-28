@@ -10,6 +10,7 @@ import {
 import { PageBackground } from '@/components/shared/PageBackground'
 import { cn } from '@/lib/cn'
 import type { LeaderboardEntry } from '@/lib/leaderboard-data'
+import { dataAgeLabel } from '@/lib/data-age'
 
 type SortKey = 'score' | 'entities' | 'staked' | 'signals'
 
@@ -99,7 +100,10 @@ function RankBadge({ rank }: { rank: number }) {
   return <span className="text-[#7A838D] font-mono text-sm w-5 text-center">{rank}</span>
 }
 
-export function LeaderboardClient({ initialData }: { initialData: LeaderboardEntry[] }) {
+/** initialData null = the read failed (not "no activity"). dataAgeSeconds: how old the data is. */
+export function LeaderboardClient({ initialData: data, dataAgeSeconds }: { initialData: LeaderboardEntry[] | null; dataAgeSeconds: number | null }) {
+  const initialData = data ?? []
+  const ageLabel = dataAgeLabel(dataAgeSeconds)
   const { address } = useAccount()
   const [tab, setTab] = useState<SortKey>('score')
 
@@ -139,6 +143,11 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
             <p className="text-[#7A838D] max-w-lg mx-auto">
               Rankings derived entirely from on-chain activity — no off-chain data, no manual scoring.
             </p>
+            {ageLabel && (
+              <p className="text-[11px] text-[#4A5260] mt-2" data-testid="data-age" title="Shared server cache: refreshed at most every 5 minutes">
+                {ageLabel}
+              </p>
+            )}
           </div>
 
           {/* My rank banner */}
@@ -194,7 +203,12 @@ export function LeaderboardClient({ initialData }: { initialData: LeaderboardEnt
               ))}
             </div>
 
-            {sorted.length === 0 ? (
+            {data === null ? (
+              <div className="py-20 text-center text-[#7A838D]" data-testid="leaderboard-error">
+                <Users className="w-8 h-8 mx-auto mb-3 opacity-30" />
+                Couldn’t read the leaderboard from the indexer — try again in a minute
+              </div>
+            ) : sorted.length === 0 ? (
               <div className="py-20 text-center text-[#7A838D]">
                 <Users className="w-8 h-8 mx-auto mb-3 opacity-30" />
                 No activity found on testnet yet
