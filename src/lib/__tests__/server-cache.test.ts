@@ -7,6 +7,7 @@ import {
   currentFreshness,
   decodeFromCache,
   encodeForCache,
+  jitteredTtl,
   runWithReadLedger,
   setDefaultCacheImplForTests,
   type CacheImpl,
@@ -250,5 +251,91 @@ describe('one read in flight per key (Etap 4b-finish: a slow indexer multiplied 
     release()
     expect(await both).toEqual([false, false])
     expect(read).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('each entry\'s TTL is the configured one ±10 % (Etap 4b-finish: 300 s entries refilled in the same minute)', () => {
+  const clock = { t: 1_000_000 }
+  const now = () => clock.t
+  beforeEach(() => { clock.t = 1_000_000 })
+  const draws = (...xs: number[]) => { let i = 0; return () => xs[i++ % xs.length] }
+  const storedTtls = (store: Map<string, { body: string }>) => [...store.values()].map((e) => JSON.parse(e.body).ttl)
+
+  it('jitteredTtl: 300 → 270…330, whole seconds, never below 1', () => {
+    expect(jitteredTtl(300, () => 0)).toBe(270)
+    expect(jitteredTtl(300, () => 0.5)).toBe(300)
+    expect(jitteredTtl(300, () => 0.999999)).toBe(330)
+    for (let i = 0; i < 200; i++) {
+      const t = jitteredTtl(300)
+      expect(t).toBeGreaterThanOrEqual(270)
+      expect(t).toBeLessThanOrEqual(330)
+    }
+    expect(jitteredTtl(1, () => 0)).toBe(1)
+  })
+
+  it('each stored entry carries its own draw', async () => {
+    const cache = fakeNextCache(clock)
+    const get = completeReadCache('k', async (id: string) => ({ value: id, complete: true }),
+      { revalidate: 300, tags: () => [], cache: cache.impl, now, random: draws(0, 0.999999, 0.5) })
+    await get('a'); await get('b'); await get('c')
+    expect(storedTtls(cache.store)).toEqual([270, 330, 300])
+  })
+
+  it('staleness is judged by the entry\'s own TTL, not the configured one', async () => {
+    for (const [draw, ageS, refilled] of [[0, 280, true], [0.999999, 320, false]] as const) {
+      clock.t = 1_000_000
+      const cache = fakeNextCache(clock)
+      const read = vi.fn(async () => ({ value: 1, complete: true }))
+      const get = completeReadCache('k', read, { revalidate: 300, tags: () => [], cache: cache.impl, now, random: () => draw })
+      await get()
+      clock.t += ageS * 1000 // 280 s: stale for a 270 s entry (fresh at 300); 320 s: fresh for a 330 s one
+      await get()
+      await cache.settle()
+      expect(read).toHaveBeenCalledTimes(refilled ? 2 : 1)
+    }
+  })
+
+  it('entries filled together drift apart instead of refilling in the same minute forever', async () => {
+    // Four 300 s entries filled at the same instant (a cold start), then each called every 10 s for
+    // 30 minutes. With one TTL for all, all four refill in the same minute every 5 minutes, forever.
+    // ±10 % spreads each cycle over a 60 s window and the phases then drift apart cycle by cycle.
+    // (Random draws: whether a given cycle's refills straddle a minute boundary is luck — these
+    // draws are fixed so the test is not.)
+    const refills = async (random: () => number) => {
+      clock.t = 0
+      const cache = fakeNextCache(clock)
+      const perMinute = new Map<number, number>()
+      const get = completeReadCache('k', async (id: string) => {
+        const m = Math.floor(clock.t / 60_000)
+        perMinute.set(m, (perMinute.get(m) ?? 0) + 1)
+        return { value: id, complete: true }
+      }, { revalidate: 300, tags: () => [], cache: cache.impl, now, random })
+      for (clock.t = 0; clock.t <= 30 * 60_000; clock.t += 10_000) {
+        for (const id of ['stats', 'evaluators', 'leaderboard', 'cohort']) await get(id)
+        await cache.settle()
+      }
+      perMinute.delete(0) // the cold fill itself
+      return { worst: Math.max(...perMinute.values()), minutes: perMinute.size }
+    }
+    const fixed = await refills(() => 0.5)
+    expect(fixed).toEqual({ worst: 4, minutes: 5 }) // every ~310 s (first call past 300 s): all four each time
+    const jittered = await refills(draws(0.02, 0.37, 0.63, 0.98, 0.21, 0.84, 0.45, 0.11, 0.76, 0.3, 0.58, 0.93))
+    expect(jittered.worst).toBeLessThan(4)
+    expect(jittered.minutes).toBeGreaterThan(2 * fixed.minutes)
+  })
+
+  it('one read still in flight per key: concurrent callers of a stale jittered entry share one refill', async () => {
+    const cache = fakeNextCache(clock)
+    let release!: () => void
+    let gate: Promise<void> = Promise.resolve()
+    const read = vi.fn(async () => { await gate; return { value: 1, complete: true } })
+    const get = completeReadCache('k', read, { revalidate: 300, tags: () => [], cache: cache.impl, now, random: () => 0 })
+    await get()
+    gate = new Promise<void>((r) => { release = r })
+    clock.t += 280_000 // stale for its 270 s TTL
+    await Promise.all([get(), get(), get()])
+    release()
+    await cache.settle()
+    expect(read).toHaveBeenCalledTimes(2) // the fill + one shared refill
   })
 })

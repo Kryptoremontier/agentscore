@@ -17,6 +17,8 @@
  * 3. **Past twice its TTL a cached value is not served.** `unstable_cache` serves a stale
  *    entry while it revalidates in the background; after a quiet hour that entry is an hour
  *    old. Past `maxStaleSeconds` (default 2 × TTL) the read runs live instead.
+ * 4. **Each entry's TTL is the configured one ±10 %,** drawn when the entry is read, so entries
+ *    filled together don't refill together every TTL (`jitteredTtl`).
  *
  * Don't nest: Next bypasses `unstable_cache` for a cached function called inside another's
  * callback (it re-reads live). Compose cached reads outside — `getPlatformStats` and the agent
@@ -168,7 +170,16 @@ export interface CompleteRead<T> {
   complete: boolean
 }
 
-type Stamped = { v: unknown; readAt: number }
+/** A stored entry: the encoded value, when it hit the indexer, and its own TTL (seconds). */
+type Stamped = { v: unknown; readAt: number; ttl?: number }
+
+/** Each entry's TTL: the configured one ±10 %. */
+export const TTL_JITTER = 0.1
+
+/** `seconds` ±TTL_JITTER, drawn from `random()` ∈ [0, 1); whole seconds, at least 1. */
+export function jitteredTtl(seconds: number, random: () => number = Math.random): number {
+  return Math.max(1, Math.round(seconds * (1 - TTL_JITTER + 2 * TTL_JITTER * random())))
+}
 
 /** The subset of `unstable_cache` this module uses — injectable for tests. */
 export type CacheImpl = <A extends unknown[]>(
@@ -213,7 +224,7 @@ const isIncomplete = (e: unknown): e is IncompleteRead =>
   !!e && typeof e === 'object' && (e as Record<symbol, unknown>)[INCOMPLETE] === true
 
 export interface CompleteReadCacheOptions<A extends unknown[]> {
-  /** Seconds a complete read is served from the cache. */
+  /** Seconds a complete read is served from the cache — each entry gets this ±10 % (jitteredTtl). */
   revalidate: number
   /** Tags for `revalidateTag` (per call, e.g. `agent:<termId>`). */
   tags: (...args: A) => string[]
@@ -221,7 +232,12 @@ export interface CompleteReadCacheOptions<A extends unknown[]> {
   maxStaleSeconds?: number
   cache?: CacheImpl
   now?: () => number
+  /** Tests only: the draw behind each entry's jittered TTL. */
+  random?: () => number
 }
+
+/** Entries whose TTL one completeReadCache remembers (per argument list) before forgetting the oldest. */
+const TTL_MEMORY = 1000
 
 export function completeReadCache<A extends unknown[], T>(
   key: string,
@@ -229,6 +245,8 @@ export function completeReadCache<A extends unknown[], T>(
   options: CompleteReadCacheOptions<A>,
 ): (...args: A) => Promise<T> {
   const now = options.now ?? Date.now
+  const random = options.random ?? Math.random
+  // 2 × the configured TTL — above any entry's jittered TTL (at most 1.1 ×).
   const maxStaleMs = (options.maxStaleSeconds ?? options.revalidate * 2) * 1000
 
   // A read and everything it read in turn: complete only if all of it was; as old as its oldest part.
@@ -236,7 +254,23 @@ export function completeReadCache<A extends unknown[], T>(
     const { value: r, reads } = await collect(() => read(...args))
     // As of when the read answered (a live answer is age 0, however long its pages took).
     const readAt = reads.reduce((min, x) => Math.min(min, x.readAt), now())
-    return { stamped: { v: encodeForCache(r.value), readAt }, complete: r.complete && reads.every((x) => x.complete) }
+    return {
+      stamped: { v: encodeForCache(r.value), readAt, ttl: jitteredTtl(options.revalidate, random) },
+      complete: r.complete && reads.every((x) => x.complete),
+    }
+  }
+
+  // Each entry keeps its own TTL, drawn when it was read (Etap 4b-finish): entries filled together
+  // at start-up refilled together every 300 s — 37 indexer requests that minute against a typical
+  // 15–17. `unstable_cache` judges an entry stale by the `revalidate` of the call, not of the entry,
+  // so each call passes the TTL of the entry it last saw (or stored) under these arguments. A fresh
+  // draw per call would not spread anything: under steady traffic the first caller with a short
+  // draw would refill every entry at ~0.9 × TTL, together again.
+  const ttlSeen = new Map<string, number>()
+  const rememberTtl = (k: string, ttl: number | undefined) => {
+    if (ttl == null) return
+    if (!ttlSeen.has(k) && ttlSeen.size >= TTL_MEMORY) ttlSeen.delete(ttlSeen.keys().next().value as string)
+    ttlSeen.set(k, ttl)
   }
 
   // One read in flight per key and arguments on this instance (Etap 4b-finish). Without it, every
@@ -256,18 +290,21 @@ export function completeReadCache<A extends unknown[], T>(
   }
 
   return async (...args: A): Promise<T> => {
+    const k = JSON.stringify(args)
     const cached = (options.cache ?? defaultCache)(
       async (...a: A) => {
         const { stamped, complete } = await readOnce(...a)
         if (!complete) throw new IncompleteRead(stamped, key)
+        rememberTtl(JSON.stringify(a), stamped.ttl) // about to be stored: this is the entry's TTL now
         return stamped
       },
       [`agentscore:${key}`],
-      { revalidate: options.revalidate, tags: [key, ...options.tags(...args)] },
+      { revalidate: ttlSeen.get(k) ?? options.revalidate, tags: [key, ...options.tags(...args)] },
     )
     let stamped: Stamped
     try {
       stamped = await cached(...args)
+      rememberTtl(k, stamped.ttl)
     } catch (e) {
       if (!isIncomplete(e)) throw e
       record({ key, readAt: e.stamped.readAt, cached: false, complete: false })
