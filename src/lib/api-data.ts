@@ -8,7 +8,7 @@
 import { createPublicClient, http } from 'viem'
 import { intuitionTestnet } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
-import { AGENT_WHERE_STR, SKILL_WHERE_STR } from './gql-filters'
+import { AGENT_WHERE_STR, AGENTSCORE_CLAIMS_WHERE_STR, SKILL_WHERE_STR } from './gql-filters'
 import { calculateTrustScoreFromStakes } from './trust-score-engine'
 import { scoreBasisOf, type ScoreBasis } from './score-basis'
 import { calculateHybridScore, getHybridLevel } from './hybrid-trust'
@@ -1361,9 +1361,12 @@ async function readStatsCounts(): Promise<CompleteRead<StatsCounts>> {
     // domain), deduped across agents and domains — commit 1's rule (summarizeAttesters). The
     // landing's "Attesters". null = the read failed, never 0.
     fetchAttestations().then(entries => summarizeAttesters(entries).length).catch(() => null),
-    // Network-wide triple count. null = the read failed — never a 0 nobody counted.
+    // The claims AgentScore lists — the /claims page's and the landing Claims tab's `where`. Was
+    // every triple on the network (78,306 on testnet against 15). null = the read failed, never 0.
     gql<{ triples_aggregate: { aggregate: { count: number } } }>(`
-      { triples_aggregate { aggregate { count } } }
+      query ApiClaimCount {
+        triples_aggregate(where: ${AGENTSCORE_CLAIMS_WHERE_STR}) { aggregate { count } }
+      }
     `).then(d => (typeof d?.triples_aggregate?.aggregate?.count === 'number' ? d.triples_aggregate.aggregate.count : null))
       .catch(() => null),
   ])

@@ -296,9 +296,9 @@ describe('getPlatformStats — attesters, and no 0 for a failed count', () => {
       { match: (q) => q.includes('GetAttestationTriple'), field: 'triples', rows: TRIPLES },
       { match: (q) => q.includes('VaultPositions'), field: 'positions', rows: (_q, v) => POSITIONS.filter((p) => (v.vaultIds as string[]).includes(p.term_id)) },
       { match: (q) => q.includes('GetAllDomainTriples'), field: 'triples', rows: [] },
-      { match: (q) => !q.includes('query') && q.includes('triples_aggregate'), field: 'triples', rows: [], count: 417 },
+      { match: (q) => q.includes('ApiClaimCount'), field: 'triples', rows: [], count: 417 },
     ],
-    fail: (q) => (opts.attestationsFail && q.includes('GetAttestationTriple')) || (opts.claimsFail && !q.includes('query') && q.includes('triples_aggregate'))
+    fail: (q) => (opts.attestationsFail && q.includes('GetAttestationTriple')) || (opts.claimsFail && q.includes('ApiClaimCount'))
       ? 'throw' : undefined,
   })
   const stats = async () => (await vi.importActual<typeof import('../api-data')>('../api-data')).getPlatformStats()
@@ -310,6 +310,26 @@ describe('getPlatformStats — attesters, and no 0 for a failed count', () => {
   it('attestation read fails → attesters null; claims read fails → claims null (was 0)', async () => {
     fake({ attestationsFail: true, claimsFail: true })
     expect(await stats()).toMatchObject({ attesters: null, claims: null })
+  })
+  it('claims = the claims AgentScore lists — the /claims page\'s and the landing Claims tab\'s `where` — not every triple on the network', async () => {
+    const { AGENTSCORE_CLAIMS_WHERE_STR, TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } = await import('../gql-filters')
+    const hasura = fake()
+    await stats()
+    const claimReads = hasura.calls.filter((c) => c.query.includes('ApiClaimCount'))
+    expect(claimReads).toHaveLength(1)
+    expect(claimReads[0].query).toContain(`triples_aggregate(where: ${AGENTSCORE_CLAIMS_WHERE_STR})`)
+    // No unscoped triple count left (it read 78,306 on testnet — every triple on the network).
+    expect(hasura.calls.some((c) => /triples_aggregate\s*\{/.test(c.query))).toBe(false)
+    // Subject AND object both AgentScore atoms (the app scope is on here).
+    expect(AGENTSCORE_CLAIMS_WHERE_STR).toBe(`{ _and: [ { ${TRIPLE_SUBJECT_OR_STR} }, { ${TRIPLE_OBJECT_OR_STR} } ] }`)
+    expect(TRIPLE_SUBJECT_OR_STR).toMatch(/subject:/)
+    expect(TRIPLE_OBJECT_OR_STR).toMatch(/object:/)
+    // The same `where` on the landing's Claims tab (rows and badge) and the /claims page's rows.
+    const { readFileSync } = await import('node:fs')
+    const path = await import('node:path')
+    const src = (f: string) => readFileSync(path.join(__dirname, '..', '..', f), 'utf8')
+    expect(src('components/landing/FeaturedAgents.tsx')).toMatch(/const CLAIM_WHERE = `where: \$\{AGENTSCORE_CLAIMS_WHERE_STR\}`/)
+    expect(src('app/claims/page.tsx')).toMatch(/_and: \[\s*\{ \$\{TRIPLE_SUBJECT_OR_STR\} \}\s*\{ \$\{TRIPLE_OBJECT_OR_STR\} \}\s*\]/)
   })
 })
 
@@ -393,7 +413,7 @@ describe('getPlatformStats — one failed side read never blanks the corpus numb
         { match: (q) => q.includes('ApiAgent'), field: 'atoms', rows: [] },
         { match: (q) => q.includes('GetAttestationTriple'), field: 'triples', rows: [] },
       ],
-      other: (q) => (!q.includes('query') && q.includes('triples_aggregate') ? { triples_aggregate: { aggregate: { count: 3 } } } : undefined),
+      other: (q) => (q.includes('ApiClaimCount') ? { triples_aggregate: { aggregate: { count: 3 } } } : undefined),
       fail: (q) => (q.includes('ApiSkillCount') || q.includes('GetAllDomainTriples') ? 'throw' : undefined),
     })
     const stats = await (await vi.importActual<typeof import('../api-data')>('../api-data')).getPlatformStats()
