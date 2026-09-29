@@ -198,3 +198,149 @@ describe('stakerWeightsFrom — a wallet is weighed only when its weight is know
     expect(() => stakerWeightsFrom(full, ['0xbb'])).toThrow('unknown')
   })
 })
+
+// ─── Commit 3: what the page shows in each indexer state ─────────────────────
+
+describe('/agents in each indexer state — what a visitor sees (Etap 4c)', () => {
+  /** The header line exactly as the page builds it (app/agents/page.tsx: corpusCounts + freshness). */
+  const headerOf = async (view: import('../agents-page-types').AgentsPageView) => {
+    const { agentListHeaderSegments, LIVE_FEED_LABEL } = await import('../agent-list')
+    const a = view.agentScore, c = view.cohort
+    return agentListHeaderSegments({
+      agentScore: a.status === 'ok'
+        ? { status: 'ok', kept: a.rows.length, junk: a.junk, fetched: a.fetched, total: a.total, truncated: a.truncated }
+        : { status: 'error', kept: 0, junk: 0, fetched: 0, total: null, truncated: null },
+      cohort: c.status === 'ok' ? { status: 'ok', count: c.agents.length, total: c.total, truncated: c.truncated } : { status: 'error', count: 0, total: null, truncated: null },
+      freshness: feedFreshnessLabel(view.parts, LIVE_FEED_LABEL, clock.t),
+    })
+  }
+
+  it('indexer down, cache warm → the last read, "Updated 3 min ago" in the header, no error box', async () => {
+    const { agentsPageView } = await import('../agents-page-types')
+    await page()
+    indexer.down = true
+    await advance(3 * 60_000)
+    const view = agentsPageView((await page()).body)
+    expect(view.unreachable).toBe(false)
+    expect(view.agentScore.status === 'ok' && view.agentScore.rows.map((r) => r.term_id)).toEqual([LUDA, OPEN_CLAW])
+    expect(view.cohort.status).toBe('ok')
+    const header = await headerOf(view)
+    expect(header).toEqual(['2 AgentScore', '1 ERC-8004', 'Updated 3 min ago'])
+  })
+
+  it('indexer down, cache warm → the modal says the age too (on a phone it covers the header)', async () => {
+    const { agentsPageView, modalFreshnessLabel } = await import('../agents-page-types')
+    await page()
+    await modal(OPEN_CLAW)
+    expect(modalFreshnessLabel(agentsPageView((await page()).body), (await modal(OPEN_CLAW)).body, false, clock.t)).toBeNull() // live: no line
+    indexer.down = true
+    await advance(3 * 60_000)
+    const body = (await modal(OPEN_CLAW)).body!
+    expect(Object.values(body).every((p) => p.status === 'ok')).toBe(true) // the last complete reads, not failures
+    expect(modalFreshnessLabel(agentsPageView((await page()).body), body, false, clock.t)).toBe('Updated 3 min ago')
+    expect(modalFreshnessLabel(null, body, false, clock.t)).toBe('Updated 3 min ago') // its own parts alone say so
+  })
+
+  it('the modal\'s age line: after the user\'s own trade its live-read parts don\'t count; a failed part never does', async () => {
+    const { modalFreshnessLabel } = await import('../agents-page-types')
+    const part = (ageSeconds: number, staleAfterSeconds: number) => ({
+      status: 'ok' as const, value: null, dataReadAt: new Date(clock.t - ageSeconds * 1000).toISOString(),
+      dataAgeSeconds: ageSeconds, complete: true, staleAfterSeconds,
+    })
+    const old = part(200, 105), fresh = part(10, 105)
+    const m = { vault: old, signals: old, reports: old, skillTriples: fresh, stakerWeights: fresh } as unknown as AgentModalPayload
+    expect(modalFreshnessLabel({ parts: [part(10, 165)] }, m, false, clock.t)).toBe('Updated 3 min ago')
+    expect(modalFreshnessLabel({ parts: [part(10, 165)] }, m, true, clock.t)).toBeNull() // vault, signals, reports read live
+    expect(modalFreshnessLabel({ parts: [part(200, 165)] }, m, true, clock.t)).toBe('Updated 3 min ago') // the row itself is old
+    const failed = { vault: { status: 'failed' }, signals: { status: 'failed' }, reports: { status: 'failed' }, skillTriples: { status: 'failed' }, stakerWeights: { status: 'failed' } } as AgentModalPayload
+    expect(modalFreshnessLabel(null, failed, false, clock.t)).toBeNull()
+  })
+
+  it('indexer down, cache cold → the human error, and no zeros: no rows, "—" counts, "unavailable" segments', async () => {
+    const { agentsPageView, FEED_UNREACHABLE } = await import('../agents-page-types')
+    const { corpusTotals, qualityOptions, qualityOptionText } = await import('../agent-list')
+    indexer.down = true
+    const view = agentsPageView((await page()).body)
+    expect(view.unreachable).toBe(true)
+    expect(view.agentScore).toEqual({ status: 'error' })
+    expect(view.attestations).toBeNull()
+    expect(FEED_UNREACHABLE).toBe('Can’t reach the Intuition network right now. Try again in a minute.')
+    expect(await headerOf(view)).toEqual(['AgentScore feed unavailable', 'ERC-8004 feed unavailable'])
+    const tabs = corpusTotals({
+      agentScore: { status: 'error', kept: 0, junk: 0, fetched: 0, total: null, truncated: null },
+      cohort: { status: 'error', count: 0, total: null, truncated: null },
+    })
+    expect(tabs).toEqual({ all: null, agentscore: null, erc8004: null }) // printed "—"
+    expect(qualityOptions(null).map(qualityOptionText)[0]).toBe('All quality') // no count
+    // Our own API unreachable altogether (offline) → the same.
+    expect(agentsPageView(null)).toMatchObject({ unreachable: true, agentScore: { status: 'error' }, cohort: { status: 'error' }, attestations: null })
+  })
+
+  it('one part failed, the other live → that part says so, the rest renders (its attester lines included)', async () => {
+    const { agentsPageView } = await import('../agents-page-types')
+    const { attesterLineOf, cardAttestationView } = await import('../agent-list')
+    indexer.cohortDown = true
+    const view = agentsPageView((await page()).body)
+    expect(view.unreachable).toBe(false)
+    expect(await headerOf(view)).toEqual(['2 AgentScore', 'ERC-8004 feed unavailable'])
+    const views = new Map([...view.attestations!].map(([id, e]) => [id, cardAttestationView(e)]))
+    expect(attesterLineOf(views, OPEN_CLAW).kind).toBe('none') // read: no attestation
+    expect(attesterLineOf(views, DACKIE).kind).toBe('unread') // its part failed: no claim
+  })
+
+  it('post-trade: the user\'s own position shows live even when the cached list is stale', async () => {
+    const { agentsPageView, isLiveAfterOwnTx, OWN_TX_LIVE_MS } = await import('../agents-page-types')
+    const { withLiveVault, listVaultSnapshot, listOpposeWei } = await import('../agent-list')
+    const { readSharesWei } = await import('../score-basis')
+    await page()
+    indexer.down = true
+    await advance(3 * 60_000) // the list is served from a 3-minute-old read
+    const view = agentsPageView((await page()).body)
+    const stale = view.agentScore.status === 'ok' ? view.agentScore.rows[1] : null
+    expect(readSharesWei(stale!.positions_aggregate)).toBe(335061000000000000n)
+
+    // The user buys 1 share-unit's worth; the live read after the trade (the browser, not the cache):
+    const ME = '0x00000000000000000000000000000000000000ee'
+    const live = [...POSITIONS, { id: `${OPEN_CLAW}-1-${ME}`, term_id: OPEN_CLAW, account_id: ME, shares: '1000000000000000000', created_at: '2026-09-29T05:33:00Z', updated_at: '2026-09-29T05:33:00Z', account: { label: 'me' } }]
+    const row = withLiveVault(stale!, live, clock.t)
+    expect(readSharesWei(row.positions_aggregate)).toBe(1335061000000000000n)
+    expect(row.liveStakerCount).toBe(3)
+    expect(listVaultSnapshot(row)?.positions.some((p) => p.account_id === ME)).toBe(true)
+    expect(listOpposeWei(row)).toBe(1000n)
+    expect(stale!.liveStakerCount).toBe(2) // the cached row itself is untouched
+    // The oppose side fully redeemed since the cached read: its row is gone → 0, not the cached 1000.
+    expect(listOpposeWei(withLiveVault(stale!, live.filter((p) => p.term_id !== OC_COUNTER), clock.t))).toBe(0n)
+
+    // The agent's reads stay live for OWN_TX_LIVE_MS, longer than the cached answers can lag.
+    const until = { [OPEN_CLAW]: clock.t + OWN_TX_LIVE_MS }
+    expect(isLiveAfterOwnTx(until, OPEN_CLAW, clock.t + 4 * 60_000)).toBe(true)
+    expect(isLiveAfterOwnTx(until, OPEN_CLAW, clock.t + OWN_TX_LIVE_MS + 1)).toBe(false)
+    expect(isLiveAfterOwnTx(until, LUDA, clock.t)).toBe(false)
+    expect(OWN_TX_LIVE_MS / 1000).toBeGreaterThan(2 * 30 + 45) // agent parts: 2 × TTL + the CDN window
+  })
+
+  it('the page wires it so (source guards — no DOM here)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const path = await import('node:path')
+    const src = readFileSync(path.join(__dirname, '../../app/agents/page.tsx'), 'utf8')
+    // No indexer read from the browser for the list: one API answer.
+    expect(src).toMatch(/await fetchAgentsPage\(\)/)
+    expect(src).not.toMatch(/fetchAgentListCorpus|fetchAttestationsForSubjects\(|fetchCohortAgents|useAgentStakerWeights/)
+    // The error box: only when nothing is readable, human copy, no "Error:".
+    expect(src).toMatch(/\{!loading && pageView\?\.unreachable && \(/)
+    expect(src).toMatch(/<p className="text-red-400">\{FEED_UNREACHABLE\}<\/p>/)
+    expect(src).not.toMatch(/Error: \{error\}/)
+    // After the user's own trade: that agent live, its row patched — not the whole list re-read.
+    const vote = src.slice(src.indexOf('const executeVote = async'), src.indexOf('// Create the trust triple for the selected agent'))
+    expect(vote).toMatch(/markLiveAfterOwnTx\(agent\.term_id\)/)
+    expect(vote).toMatch(/refreshPositionsAndSupply\(agent\.term_id, pendingVote\.counterTermId\)\n/)
+    expect(vote).not.toMatch(/loadPage\(|fetchAgentsPage\(/)
+    expect(src).toMatch(/if \(!seed\) setAgents\(\(prev\) => prev\.map\(\(row\) => \(row\.term_id === termId \? withLiveVault\(/)
+    // The wallet's own position: its own live read; never derived from cached positions.
+    expect(src).toMatch(/if \(!address \|\| allPositions\.length === 0 \|\| !positionsLive\) return/)
+    expect(src).toMatch(/fetchUserPosition\(selectedAgent\.term_id, address, agentTriple\.counterTermId\)/)
+    // The modal's age line, from the list's parts and its own.
+    expect(src).toMatch(/modalFreshnessLabel\(pageView, modalData, liveAgent, nowTick\)/)
+    expect(src).toMatch(/\{modalAge && <p data-testid="modal-age"/)
+  })
+})

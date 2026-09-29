@@ -230,7 +230,8 @@ export function completeReadCache<A extends unknown[], T>(
   read: (...args: A) => Promise<CompleteRead<T>>,
   options: CompleteReadCacheOptions<A>,
 ): (...args: A) => Promise<T> {
-  const now = options.now ?? Date.now
+  // Late-bound: a clock captured at module load would outlive a swapped Date (fake timers).
+  const now = options.now ?? (() => Date.now())
   const random = options.random ?? Math.random
   // 2 × the configured TTL — above any entry's jittered TTL (at most 1.1 ×).
   const maxStaleMs = (options.maxStaleSeconds ?? options.revalidate * 2) * 1000
