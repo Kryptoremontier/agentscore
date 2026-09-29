@@ -18,6 +18,7 @@ import { truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
 import { summarizeAttesters } from '@/lib/agent-profile'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestButton } from '@/components/attest/AttestButton'
+import { useMediaQuery, DESKTOP_QUERY } from '@/hooks/useMediaQuery'
 
 interface AttestedDomainsProps {
   /** null = the read failed — shown as unavailable, never as "no attestations yet". */
@@ -31,18 +32,15 @@ interface AttestedDomainsProps {
 const fmt = (wei: bigint) => (Number(wei) / 1e18).toFixed(4)
 
 /**
- * Etap 4b: the ONE Attest CTA for this section — desktop-only (mobile has
- * its own always-visible AttestStickyBar; showing both here AND there would
- * double the CTA on small screens). Etap 5a: disconnected too — the click
- * opens the wallet-connect modal and then the attest flow (AttestButton);
- * it used to be an inert "Connect wallet to attest" label with nowhere to go.
+ * The page's ONE primary attest CTA on desktop (Etap 5a) — on a phone it is the
+ * AttestStickyBar, and this renders nothing (not merely hidden: one CTA in the DOM).
+ * Disconnected too — the click opens the wallet-connect modal and then the attest
+ * flow; it used to be an inert "Connect wallet to attest" label with nowhere to go.
  */
 function AttestCta({ agentId, agentName }: { agentId: string; agentName: string }) {
-  return (
-    <div className="hidden md:inline-block">
-      <AttestButton agentId={agentId} agentName={agentName} variant="card" />
-    </div>
-  )
+  const desktop = useMediaQuery(DESKTOP_QUERY)
+  if (desktop !== true) return null
+  return <AttestButton agentId={agentId} agentName={agentName} variant="inline" />
 }
 
 export function AttestedDomains({ entries, loading, agentId, agentName, className }: AttestedDomainsProps) {

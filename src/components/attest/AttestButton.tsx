@@ -48,17 +48,22 @@ interface AttestButtonProps {
   className?: string
   /**
    * Trigger styling only — the modal flow is identical for every variant.
-   * 'hero' = filled primary action (agent header / empty-state CTA),
-   * 'bar'  = large trigger for the mobile sticky action bar,
-   * 'card' = original subtle outline (default, backwards compatible).
+   * 'hero'   = filled primary action, full width (empty-state CTA),
+   * 'inline' = filled primary action, compact (the Attested section's header on desktop),
+   * 'bar'    = large trigger for the mobile sticky action bar,
+   * 'card'   = original subtle outline (default, backwards compatible).
    */
-  variant?: 'hero' | 'bar' | 'card'
+  variant?: 'hero' | 'inline' | 'bar' | 'card'
 }
 
 const TRIGGER_STYLES: Record<NonNullable<AttestButtonProps['variant']>, { className: string; style: CSSProperties }> = {
   hero: {
     className: 'w-full py-3 rounded-xl text-sm md:text-base font-semibold transition-all hover:scale-[1.01] hover:brightness-110 flex items-center justify-center gap-2',
     style: { background: '#8B5CF6', color: '#FFFFFF', boxShadow: '0 4px 20px rgba(139,92,246,0.35)' },
+  },
+  inline: {
+    className: 'px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:brightness-110 inline-flex items-center justify-center gap-2 whitespace-nowrap',
+    style: { background: '#8B5CF6', color: '#FFFFFF', boxShadow: '0 2px 12px rgba(139,92,246,0.3)' },
   },
   bar: {
     className: 'w-full py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2',

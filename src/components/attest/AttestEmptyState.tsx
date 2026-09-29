@@ -10,6 +10,7 @@
 
 import { ShieldQuestion } from 'lucide-react'
 import { AttestButton } from './AttestButton'
+import { useMediaQuery, DESKTOP_QUERY } from '@/hooks/useMediaQuery'
 
 interface AttestEmptyStateProps {
   agentId: string
@@ -18,6 +19,7 @@ interface AttestEmptyStateProps {
 }
 
 export function AttestEmptyState({ agentId, agentName, className }: AttestEmptyStateProps) {
+  const desktop = useMediaQuery(DESKTOP_QUERY)
   return (
     <div
       className={`rounded-2xl p-5 ${className ?? ''}`}
@@ -40,9 +42,9 @@ export function AttestEmptyState({ agentId, agentName, className }: AttestEmptyS
           </p>
         </div>
       </div>
-      {/* Desktop only — mobile has its own always-visible AttestStickyBar
-          (see agents/page.tsx); showing both would double the CTA there. */}
-      <AttestButton agentId={agentId} agentName={agentName} variant="hero" className="hidden md:block" />
+      {/* Desktop only — on a phone the page's one attest CTA is the AttestStickyBar;
+          not rendered at all there, so the page never holds two (Etap 5a). */}
+      {desktop === true && <AttestButton agentId={agentId} agentName={agentName} variant="hero" />}
     </div>
   )
 }

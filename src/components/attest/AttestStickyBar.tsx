@@ -2,6 +2,8 @@
 
 /**
  * AttestStickyBar — mobile-only sticky action bar for the PRIMARY action.
+ * Rendered only on a phone (Etap 5a): the page's one attest CTA is this bar
+ * there and the Attested section's button on desktop — never both in the DOM.
  *
  * Sits directly above the global MobileBottomNav (h-16 = 4rem, z-40,
  * safe-area padded) so the Attest action is always in the viewport on
@@ -10,6 +12,7 @@
  */
 
 import { AttestButton } from './AttestButton'
+import { useMediaQuery, DESKTOP_QUERY } from '@/hooks/useMediaQuery'
 
 interface AttestStickyBarProps {
   agentId: string
@@ -17,9 +20,11 @@ interface AttestStickyBarProps {
 }
 
 export function AttestStickyBar({ agentId, agentName }: AttestStickyBarProps) {
+  const desktop = useMediaQuery(DESKTOP_QUERY)
+  if (desktop !== false) return null
   return (
     <div
-      className="fixed left-0 right-0 z-[45] md:hidden px-4 py-3"
+      className="fixed left-0 right-0 z-[45] px-4 py-3"
       style={{
         bottom: 'calc(4rem + env(safe-area-inset-bottom))',
         // NO backdrop-filter here — it would create a containing block and trap

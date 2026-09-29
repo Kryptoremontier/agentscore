@@ -2134,23 +2134,6 @@ function SkillsPageContent() {
                 )
               })()}
 
-              {/* === BONDING CURVE INFO === */}
-              <div className="bg-[rgba(200,150,60,0.10)] border border-[#1f6feb25] rounded-2xl p-4 mb-3">
-                <div className="flex items-start gap-3">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                    <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2" />
-                    <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  <div>
-                    <p className="text-[#C8963C] text-sm font-semibold mb-1">Bonding Curve Economics</p>
-                    <p className="text-[#B5BDC6] text-xs leading-relaxed">
-                      Early stakers get more shares per tTRUST. As more people trust this skill,
-                      your shares increase in value. Redeem anytime to realize gains.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
               {/* === TABS: Overview / Attestations / Activity === */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl overflow-hidden mb-3">
                 <div className="flex border-b border-[#C8963C]/12">

@@ -22,8 +22,7 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { AgentHeader } from '@/components/agents/AgentHeader'
 import { AgentStats } from '@/components/agents/AgentStats'
 import { AgentTabs } from '@/components/agents/AgentTabs'
-import { TrustButton } from '@/components/trust/TrustButton'
-import { AttestButton } from '@/components/attest/AttestButton'
+import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
@@ -193,11 +192,10 @@ export default function AgentDetailPage() {
               <DeclaredDomains declaredDomains={cohortFailed ? null : cohortMatch?.declaredDomains} />
               <ReportsSection reports={vector.reports} loading={profileLoading} />
 
-              <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
+              {/* A cohort agent has an atom vault the /agents modal can back (it lists the cohort). */}
+              {cohortMatch && <BackWithTTrust agentId={agentId} />}
 
-              {(vector.attested?.length ?? 0) > 0 && (
-                <AttestButton agentId={agentId} agentName={name} variant="hero" />
-              )}
+              <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
             </motion.div>
           </div>
         </div>
@@ -274,12 +272,12 @@ export default function AgentDetailPage() {
         </motion.div>
 
         <div className="space-y-6">
-          {/* Header — Attest is THE primary action, mounted next to the name */}
+          {/* Header. The page's one attest CTA lives in the Attested section (desktop) or the
+              sticky bar (phone) — Etap 5a: one CTA per page, not one per section. */}
           <AgentHeader
             agent={agent}
             tier={agentTier}
             tierLoading={profileLoading}
-            action={<AttestButton agentId={agent.id} agentName={agent.name} variant="hero" />}
           />
 
           {/* ETAP 3 — profile hierarchy (thesis §5): ATTESTED (headline) >
@@ -289,14 +287,9 @@ export default function AgentDetailPage() {
           <DeclaredDomains declaredDomains={cohortMatch?.declaredDomains} />
           <ReportsSection reports={vector.reports} loading={profileLoading} />
 
-          {/* Secondary actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <TrustButton agentId={agent.id} />
-          </motion.div>
+          {/* Backing — secondary, collapsed, the modal's section and copy (Etap 5a). The old gold
+              "Trust Agent" / "Report Issue" pair here never transacted (a 2 s timeout, then closed). */}
+          <BackWithTTrust agentId={agent.id} />
 
           {/* Score context — below the canonical sections */}
           <AgentStats agent={agent} />
@@ -315,5 +308,24 @@ export default function AgentDetailPage() {
       {/* Mobile: Attest always in viewport, above the bottom nav */}
       <AttestStickyBar agentId={agent.id} agentName={agent.name} />
     </PageBackground>
+  )
+}
+
+/**
+ * The profile's "Back this agent": the modal's collapsed section and copy, with one secondary
+ * action — the /agents modal's Buy/Sell panel (the one backing flow; `back=1` opens it expanded).
+ */
+function BackWithTTrust({ agentId }: { agentId: string }) {
+  return (
+    <BackThisAgentSection>
+      <Link
+        href={`/agents?open=${agentId}&back=1`}
+        className="inline-flex items-center justify-center w-full sm:w-auto px-4 py-2 rounded-xl text-sm font-medium transition-colors bg-[#171A1D] border border-[#C8963C]/25 text-[#C8963C] hover:bg-[#C8963C]/10"
+        data-testid="back-with-ttrust"
+      >
+        Back with tTRUST
+      </Link>
+      <p className="text-[#7A838D] text-[11px] mt-2">Opens this agent&apos;s Buy / Sell panel.</p>
+    </BackThisAgentSection>
   )
 }

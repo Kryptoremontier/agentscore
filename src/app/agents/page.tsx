@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Layers, Globe, LayoutGrid, List, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { Layers, Globe, LayoutGrid, List, ExternalLink } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther } from 'viem'
 import Link from 'next/link'
@@ -42,6 +42,9 @@ import { TrustTimeline, ScoreTrajectoryChart } from '@/components/agents/TrustTi
 import { buildAgentTimeline } from '@/lib/trust-timeline'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 import { useNotice } from '@/components/shared/NoticeProvider'
+import { useConnectModal } from '@/components/wallet/ConnectModal'
+import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
+import { intuitionTestnet } from '@0xintuition/protocol'
 import { txFailureNotice } from '@/lib/user-notice'
 import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
@@ -253,6 +256,7 @@ function AgentsPageContent() {
   const [toast, setToast] = useState<string | null>(null)
   // Errors and warnings in the page's flows: in-app notices, never a native browser dialog (Etap 5a).
   const { notify } = useNotice()
+  const { openConnectModal } = useConnectModal()
   const [agentTrust, setAgentTrust] = useState<TrustScoreResult | null>(null)
   const [signalSide, setSignalSide] = useState<'support' | 'oppose'>('support')
   const [tradeAction, setTradeAction] = useState<'buy' | 'sell'>('buy')
@@ -289,6 +293,7 @@ function AgentsPageContent() {
   const [profileLoaded, setProfileLoaded] = useState(false)
   // Etap 4b: "Back this agent" (Buy/Sell) is secondary to the attestation unit — collapsed by default.
   const [backAccordionOpen, setBackAccordionOpen] = useState(false)
+  const openBackOnSelect = useRef(false)
   // Cache hybrid scores keyed by agent term_id, populated when modal computes them.
   // Cards fall back to trust score until the modal has been opened for that agent.
   const [objectScoreByTermId, setObjectScoreByTermId] = useState<Record<string, number>>({})
@@ -446,6 +451,8 @@ function AgentsPageContent() {
     if (openId && (agents.length > 0 || cohortAgents.length > 0) && !selectedAgent) {
       const match = agents.find(a => a.term_id === openId) ?? cohortAgents.find(a => a.term_id === openId)
       if (match) {
+        // ?back=1 (the profile's "Back with tTRUST"): the Back section opens expanded.
+        openBackOnSelect.current = searchParams.get('back') === '1'
         setSelectedAgent(match)
       }
     }
@@ -546,9 +553,15 @@ function AgentsPageContent() {
       : { termId: null, counterTermId: null, loading: false, failed: true })
   }, [selectedAgent?.term_id, modalData])
 
-  // Collapse "Back this agent" whenever a different agent's modal opens.
+  // Collapse "Back this agent" whenever a different agent's modal opens — unless it was opened
+  // to back (?back=1), then expanded and scrolled to.
   useEffect(() => {
-    setBackAccordionOpen(false)
+    const expand = openBackOnSelect.current
+    openBackOnSelect.current = false
+    setBackAccordionOpen(expand)
+    if (!expand) return
+    const t = setTimeout(() => document.querySelector('[data-testid="back-this-agent"]')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 400)
+    return () => clearTimeout(t)
   }, [selectedAgent?.term_id])
 
   // Skill triples (skill trust breakdown + empty-state CTA) from the modal's cached answer.
@@ -2150,22 +2163,7 @@ function AgentsPageContent() {
               {/* === ACTION SECTION: Back this agent (Buy/Sell) — collapsed by default.
                   Secondary to the attestation unit above (thesis §4/§6): backing is a
                   vault stake, not a competence claim, and never changes the tier. */}
-              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
-                <button
-                  type="button"
-                  onClick={() => setBackAccordionOpen(v => !v)}
-                  className="w-full flex items-center justify-between gap-2 text-left"
-                  aria-expanded={backAccordionOpen}
-                >
-                  <span className="text-[#B5BDC6] text-xs font-semibold">Back this agent</span>
-                  {backAccordionOpen ? <ChevronUp className="w-4 h-4 text-[#7A838D]" /> : <ChevronDown className="w-4 h-4 text-[#7A838D]" />}
-                </button>
-                {backAccordionOpen && (
-                <>
-                <p className="text-[#7A838D] text-xs mt-2 mb-3">
-                  Stake tTRUST on this agent&apos;s atom vault. Backing is not attesting — it does not change the tier.
-                </p>
-
+              <BackThisAgentSection open={backAccordionOpen} onToggle={() => setBackAccordionOpen(v => !v)} className="mb-3">
                 {isConnected ? (
                   <>
                     {/* Legacy Oppose position — show sell button if user has against shares */}
@@ -2500,14 +2498,17 @@ function AgentsPageContent() {
 
                   </>
                 ) : (
-                  <div className="p-4 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl text-center">
-                    <p className="text-[#B5BDC6] font-semibold mb-1">Connect wallet to stake</p>
-                    <p className="text-xs text-[#7A838D]">Intuition Testnet · Chain ID 13579</p>
-                  </div>
+                  // Leads somewhere (Etap 5a): the app's connect modal; this panel stays open behind it.
+                  <button
+                    type="button"
+                    onClick={() => openConnectModal({ reason: `Connect a wallet to back ${getAgentNameFromAtom(selectedAgent)}.` })}
+                    className="w-full p-4 bg-[#171A1D] border border-[#C8963C]/25 rounded-xl text-center hover:bg-[#C8963C]/10 transition-colors"
+                  >
+                    <p className="text-[#C8963C] font-semibold mb-1">Connect wallet to back</p>
+                    <p className="text-xs text-[#7A838D]">Intuition Testnet · Chain ID {intuitionTestnet.id}</p>
+                  </button>
                 )}
-                </>
-                )}
-              </div>
+              </BackThisAgentSection>
 
               {/* === YOUR HOLDINGS === */}
               {isConnected && (userPosition.forShares || userPosition.againstShares) && (() => {
@@ -2811,23 +2812,6 @@ function AgentsPageContent() {
                   </div>
                 )
               })()}
-
-              {/* === BONDING CURVE INFO === */}
-              <div className="bg-[rgba(200,150,60,0.10)] border border-[#1f6feb25] rounded-2xl p-4 mb-3">
-                <div className="flex items-start gap-3">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                    <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2" />
-                    <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  <div>
-                    <p className="text-[#C8963C] text-sm font-semibold mb-1">Bonding Curve Economics</p>
-                    <p className="text-[#B5BDC6] text-xs leading-relaxed">
-                      Early stakers get more shares per tTRUST. As more people trust this agent,
-                      your shares increase in value. Redeem anytime to realize gains.
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               {/* === TABS: Overview / Attestations / Activity / Timeline ===
                   Every tab stays reachable at 390 px (4b-list §6 #1): on phones the four share the

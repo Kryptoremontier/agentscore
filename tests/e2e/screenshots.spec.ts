@@ -92,7 +92,10 @@ const SHOTS: Shot[] = [
     url: `${ROUTES.agents}?open=${AGENTS[key]}`,
     prepare: modalReady,
     target: unfixModal,
-    check: modalFitsPhone,
+    check: async (page, project) => {
+      await oneAttestCta(page)
+      await modalFitsPhone(page, project)
+    },
   })),
   {
     // Etap 5a: a newcomer clicks Attest with no wallet → the app's wallet-connect modal (never a
@@ -106,6 +109,7 @@ const SHOTS: Shot[] = [
     name: `agent-profile-${key}`,
     url: ROUTES.agentProfile(AGENTS[key]),
     prepare: profileReady,
+    check: oneAttestCta,
   })),
   { name: 'domains', url: ROUTES.domains },
   { name: 'evaluators', url: ROUTES.evaluators },
@@ -237,6 +241,16 @@ async function profileReady(page: Page) {
       .or(page.getByText('Unverified — no attestations yet', { exact: true }))
       .first(),
   ).toBeVisible({ timeout: WAIT_CAP })
+}
+
+/**
+ * Etap 5a: exactly one attest CTA in the DOM (not one visible and one hidden): inline in the
+ * Attested section on desktop, the sticky bar on a phone — and it is visible.
+ */
+async function oneAttestCta(page: Page) {
+  const ctas = page.locator('[data-testid="attest-cta"]')
+  await expect(ctas, 'attest CTAs in the DOM').toHaveCount(1)
+  await expect(ctas.first(), 'the one attest CTA is visible').toBeVisible()
 }
 
 /** Wallet disconnected: the visible Attest CTA opens the connect modal; no native dialog fires. */
