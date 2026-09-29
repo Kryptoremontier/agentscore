@@ -109,7 +109,10 @@ const SHOTS: Shot[] = [
     name: `agent-profile-${key}`,
     url: ROUTES.agentProfile(AGENTS[key]),
     prepare: profileReady,
-    check: oneAttestCta,
+    check: async (page) => {
+      await oneAttestCta(page)
+      await statRowMatchesModal(page, key)
+    },
   })),
   { name: 'domains', url: ROUTES.domains },
   { name: 'evaluators', url: ROUTES.evaluators },
@@ -228,8 +231,8 @@ async function modalReady(page: Page) {
 }
 
 /**
- * /agents/[id] resolved: the agent tier chip left its loading state and the
- * ATTESTED section rendered (heading or empty state). The reference agents all
+ * /agents/[id] resolved: the agent tier chip left its loading state, the
+ * ATTESTED section rendered (heading or empty state) and the stat row answered. The reference agents all
  * exist — ERC-8004 ones included — so "Agent Not Found" is a failure here, not
  * a settled page.
  */
@@ -241,6 +244,9 @@ async function profileReady(page: Page) {
       .or(page.getByText('Unverified — no attestations yet', { exact: true }))
       .first(),
   ).toBeVisible({ timeout: WAIT_CAP })
+  // The header's stat row (the modal's, Etap 5a) answered: no "—" box, a Backers count.
+  await expect(page.getByTestId('backers-line')).toHaveText(/^Backers: \d/, { timeout: WAIT_CAP })
+  await expect(page.locator('[data-testid="stat-box"] p', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
 }
 
 /**
@@ -251,6 +257,25 @@ async function oneAttestCta(page: Page) {
   const ctas = page.locator('[data-testid="attest-cta"]')
   await expect(ctas, 'attest CTAs in the DOM').toHaveCount(1)
   await expect(ctas.first(), 'the one attest CTA is visible').toBeVisible()
+}
+
+/**
+ * Etap 5a: the profile tells the modal's story — its stat row (attesters, domains, tTRUST attested,
+ * reports) and Backers line read exactly as the /agents modal's for the same agent. Runs on the
+ * profile, then opens the modal in the same page.
+ */
+async function statRowMatchesModal(page: Page, key: keyof typeof AGENTS) {
+  const rowOf = async (root: Locator) => {
+    await expect(root.getByTestId('backers-line')).toHaveText(/^Backers: \d/, { timeout: WAIT_CAP })
+    await expect(root.locator('[data-testid="stat-box"] p', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
+    const boxes = (await root.getByTestId('stat-box').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim())
+    return { boxes, backers: (await root.getByTestId('backers-line').innerText()).trim() }
+  }
+  const profile = await rowOf(page.getByTestId('stat-row'))
+  await page.goto(`${ROUTES.agents}?open=${AGENTS[key]}`, { waitUntil: 'domcontentloaded' })
+  await modalReady(page)
+  const modal = await rowOf(modalLocator(page).getByTestId('stat-row'))
+  expect(profile, `${key}: the profile's stat row = the modal's`).toEqual(modal)
 }
 
 /** Wallet disconnected: the visible Attest CTA opens the connect modal; no native dialog fires. */

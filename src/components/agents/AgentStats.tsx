@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion'
 import { TrustScoreBadge } from '@/components/trust/TrustScoreBadge'
-import { getTrustLevel } from '@/types/agent'
 import { cn } from '@/lib/cn'
 import { formatTTrust } from '@/lib/format'
 import type { Agent } from '@/types/agent'
@@ -12,7 +11,6 @@ interface AgentStatsProps {
 }
 
 export function AgentStats({ agent }: AgentStatsProps) {
-  const trustLevel = getTrustLevel(agent.trustScore)
   const netStake = Number(agent.positiveStake - agent.negativeStake) / 1e18
   const positivePercentage = agent.positiveStake + agent.negativeStake > BigInt(0)
     ? (Number(agent.positiveStake) / Number(agent.positiveStake + agent.negativeStake)) * 100
@@ -38,16 +36,10 @@ export function AgentStats({ agent }: AgentStatsProps) {
         <div className="text-center lg:text-left">
           <h2 className="text-2xl font-bold mb-6">Trust Score</h2>
 
+          {/* The number only (Etap 5a): no "Moderate Trust" / "Trust Level" — a tier-sounding word
+              derived from the vault score beside the attestation tier chip contradicted it. */}
           <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6">
-            <TrustScoreBadge score={agent.trustScore} size="lg" />
-
-            <div className="space-y-4 flex-1">
-              {/* Trust Level Description */}
-              <div>
-                <p className="text-sm text-text-muted mb-1">Trust Level</p>
-                <p className="font-semibold capitalize">{trustLevel}</p>
-              </div>
-            </div>
+            <TrustScoreBadge score={agent.trustScore} size="lg" showLabel={false} />
           </div>
         </div>
 

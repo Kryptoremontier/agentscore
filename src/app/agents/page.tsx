@@ -50,7 +50,9 @@ import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
-import { fetchAgentReports, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector } from '@/lib/agent-profile'
+import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
+import { AtomIdLine } from '@/components/profile/AtomIdLine'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
 import { startVisiblePoll } from '@/lib/visible-poll'
 import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
@@ -1343,35 +1345,20 @@ function AgentsPageContent() {
   }, [skillTriples])
 
 
-  // Etap 4b — modal stat rows: primary (attestation unit, canonical) + secondary
-  // (Backers, atom vault). No new fetch — derived from profileVector +
-  // combinedStakerCount/positions_aggregate, both already loaded for this modal.
-  // Backers are known only once THIS agent's positions were read; the atom-vault sum
-  // comes from the list's aggregate when it was fetched (AgentScore rows) or from the
-  // modal's own positions read (cohort rows never fetch the aggregate). Unknown → "—".
+  // The header's stat row (Etap 5a): the same derivation as /agents/[id] (lib/agent-profile.ts
+  // statRowView, components/profile/ProfileStatRow), from this modal's reads — the list's
+  // attestations, the modal answer's reports and signals, and this agent's vault positions (the
+  // modal answer's, or the live read after the user's own trade). Backers are known only once THIS
+  // agent's positions were read. A part not read (or failed) renders "—", never 0.
   const positionsKnown = !!selectedAgent && positionsLoadedFor === selectedAgent.term_id
-  const backerVaultWei: bigint | null = useMemo(() => {
-    if (!selectedAgent) return null
-    const fromList = readSharesWei(selectedAgent.positions_aggregate)
-    if (fromList != null) return fromList
-    if (!positionsKnown) return null
-    return allPositions
-      .filter((p: any) => p.term_id === selectedAgent.term_id)
-      .reduce((sum: bigint, p: any) => { try { return sum + BigInt(p.shares) } catch { return sum } }, 0n)
-  }, [selectedAgent, positionsKnown, allPositions])
-  // A part whose read failed is null (the list's attestations, the modal answer's reports): its numbers render "—",
-  // never the zeros computeModalStatSummary would derive from nothing.
   const attestedRead = profileLoaded && profileVector.attested != null
   const reportsRead = profileLoaded && profileVector.reports != null
-  const modalStats = useMemo(() => {
-    return computeModalStatSummary({
-      attested: profileVector.attested ?? [],
-      reportCount,
-      backerCount: combinedStakerCount,
-      backerVaultWei: backerVaultWei ?? 0n, // rendered only when backerVaultWei != null
-      signals: agentSignalsCount,
-    })
-  }, [profileVector.attested, reportCount, combinedStakerCount, backerVaultWei, agentSignalsCount])
+  const statRow = useMemo(() => statRowView({
+    attested: attestedRead ? profileVector.attested : null,
+    reportCount: reportsRead ? reportCount : null,
+    backers: positionsKnown && selectedAgent ? backersFromPositions(allPositions, selectedAgent.term_id, agentTriple.counterTermId) : null,
+    signals: signalsLoading ? null : agentSignalsCount,
+  }), [attestedRead, reportsRead, profileVector.attested, reportCount, positionsKnown, selectedAgent, allPositions, agentTriple.counterTermId, signalsLoading, agentSignalsCount])
 
   // The agent tier — attestations only (thesis §6 "Agent tiers", lib/agent-tier.ts). Backing on
   // the atom vault never changes it. null while the profile loads or when the attestation read
@@ -2089,57 +2076,15 @@ function AgentsPageContent() {
                   })()}
                 </p>
 
-                {/* Atom ID */}
-                <div className="space-y-2 mb-5">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-[#B5BDC6] w-16 flex-shrink-0">Atom ID:</span>
-                    <code className="text-[#B5BDC6] text-xs font-mono">
-                      {selectedAgent.term_id.slice(0, 14)}...{selectedAgent.term_id.slice(-8)}
-                    </code>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(selectedAgent.term_id)}
-                      className="text-[#B5BDC6] hover:text-white transition-colors"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
-                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" strokeWidth="2"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+                {/* Atom ID — shortened hex, copies the full id (shared with /agents/[id]) */}
+                <AtomIdLine termId={selectedAgent.term_id} className="mb-5" />
 
-                {/* Primary stat row — the attestation unit (canonical, thesis §4).
-                    2x2 on mobile, 1x4 on desktop. Loading shows "—", never "0". */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {[
-                    { value: attestedRead ? modalStats.attesters : '—', label: attestedRead && modalStats.attesters === 1 ? 'Attester' : 'Attesters' },
-                    { value: attestedRead ? modalStats.domains : '—', label: attestedRead && modalStats.domains === 1 ? 'Domain attested' : 'Domains attested' },
-                    { value: attestedRead ? formatTTrust(modalStats.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
-                    { value: reportsRead ? modalStats.reports : '—', label: 'Reports' },
-                  ].map((s, i) => (
-                    <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
-                      <p className="text-lg font-bold text-white">{s.value}</p>
-                      <p className="text-xs text-[#B5BDC6] mt-0.5">{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Secondary line — the atom vault (Backers). Muted, never a box: honesty
-                    demotes this, never hides it (thesis §6). Only attestations above count
-                    toward the tier. Signals (raw deposit/redeem event count on the vault —
-                    NOT distinct wallets) ride along here too when non-zero: no primary box of
-                    its own (dropped from the header entirely would violate thesis §6 for any
-                    agent whose signal count is real, e.g. OPEN CLAW at 13 live), but it isn't
-                    always zero so it can't just be omitted either. */}
-                <div className="mt-2.5">
-                  <TooltipWrapper content="Backers stake on the agent's atom; attesters stake on a domain claim. Only attestations count toward the tier.">
-                    <p className="text-xs text-[#7A838D] cursor-help">
-                      Backers: {positionsKnown ? modalStats.backerCount : '—'} · {backerVaultWei != null ? formatTTrust(backerVaultWei) : '—'} on atom vault
-                      {!signalsLoading && modalStats.signals > 0 ? ` · ${modalStats.signals} signal${modalStats.signals !== 1 ? 's' : ''}` : ''}
-                    </p>
-                  </TooltipWrapper>
-                  {modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
-                </div>
+                {/* The stat row — attestation unit primary, Backers demoted (thesis §4/§6) — and the
+                    modal's own age line. The same component as /agents/[id] (Etap 5a). */}
+                <ProfileStatRow
+                  view={statRow}
+                  footer={modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
+                />
               </div>
 
               {/* ETAP 3 — profile hierarchy (thesis §5), always visible above the

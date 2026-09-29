@@ -2,14 +2,14 @@
 
 import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, ExternalLink, Copy, AlertTriangle } from 'lucide-react'
+import { Shield, ExternalLink, Copy } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/cn'
-import { formatDate, formatTTrust } from '@/lib/format'
+import { formatDate } from '@/lib/format'
 import type { Agent } from '@/types/agent'
 import type { AgentTierResult } from '@/lib/agent-tier'
 import { AgentTierChip } from '@/components/agents/AgentTierChip'
+import { AtomIdLine } from '@/components/profile/AtomIdLine'
 
 interface AgentHeaderProps {
   agent: Agent
@@ -18,19 +18,16 @@ interface AgentHeaderProps {
   tierLoading: boolean
   /** Primary action slot rendered directly under the agent name — the hero CTA. */
   action?: ReactNode
+  /** The stat row + Backers line (components/profile/ProfileStatRow) — the modal's, full width. */
+  stats?: ReactNode
 }
 
-export function AgentHeader({ agent, action, tier, tierLoading }: AgentHeaderProps) {
+export function AgentHeader({ agent, action, stats, tier, tierLoading }: AgentHeaderProps) {
   const handleCopyAddress = () => {
     if (agent.walletAddress) {
       navigator.clipboard.writeText(agent.walletAddress)
       // TODO: Show toast notification
     }
-  }
-
-  const handleCopyAtomId = () => {
-    navigator.clipboard.writeText(agent.atomId.toString())
-    // TODO: Show toast notification
   }
 
   return (
@@ -105,68 +102,14 @@ export function AgentHeader({ agent, action, tier, tierLoading }: AgentHeaderPro
               </div>
             )}
 
-            {/* Atom ID */}
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-text-muted">Atom ID:</span>
-              <code className="font-mono text-text-secondary">
-                {agent.atomId.toString()}
-              </code>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleCopyAtomId}
-                className="h-6 w-6 p-0"
-              >
-                <Copy className="w-3 h-3" />
-              </Button>
-            </div>
+            {/* Atom ID — shortened hex + copy-full, as the modal shows it (Etap 5a) */}
+            <AtomIdLine termId={agent.id} />
           </div>
-        </div>
-
-        {/* Right: Quick Stats */}
-        <div className="lg:w-80">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Attestations */}
-            <div className="glass rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold font-mono">{agent.attestationCount ?? '—'}</p>
-              <p className="text-sm text-text-muted">Attestations</p>
-            </div>
-
-            {/* Stakers */}
-            <div className="glass rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold font-mono">{agent.stakerCount}</p>
-              <p className="text-sm text-text-muted">Stakers</p>
-            </div>
-
-            {/* Total Stake */}
-            <div className="glass rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold font-mono">
-                {formatTTrust(agent.positiveStake + agent.negativeStake)}
-              </p>
-              <p className="text-sm text-text-muted">Total Stake</p>
-            </div>
-
-            {/* Reports */}
-            <div className={cn(
-              "glass rounded-lg p-4 text-center",
-              (agent.reportCount ?? 0) > 0 && "border-trust-low"
-            )}>
-              <p className="text-2xl font-bold font-mono">{agent.reportCount ?? '—'}</p>
-              <p className="text-sm text-text-muted">Reports</p>
-            </div>
-          </div>
-
-          {/* Warning if high report count */}
-          {(agent.reportCount ?? 0) > 10 && (
-            <div className="mt-4 p-3 rounded-lg bg-trust-low/10 border border-trust-low/20 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-trust-low flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-trust-low">
-                This agent has received multiple reports. Exercise caution.
-              </p>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* The modal's stat row and Backers line — same component, same data (Etap 5a) */}
+      {stats && <div className="mt-6">{stats}</div>}
     </motion.div>
   )
 }
