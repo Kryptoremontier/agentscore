@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { startVisiblePoll, firstDelayFor, type VisiblePollDeps } from '../visible-poll'
-import { fetchAgentListCorpus, listOpposeWei, listTrustTriple, listVaultSnapshot, type AgentListAtom } from '../agent-list'
+import { listOpposeWei, listTrustTriple, listVaultSnapshot, type AgentListAtom } from '../agent-list'
 import { installFakeHasura } from './fake-hasura'
 
 /**
@@ -98,10 +98,17 @@ const atom = (term_id: string, triples: Array<{ term_id: string; counter_term_id
 })
 
 describe('the /agents list reads what the modal needs, once', () => {
+  // Etap 4c: the rows come from the server corpus through /api/v1/agents/page (lib/agents-page-data.ts).
+  const pageRows = async () => {
+    const { getAgentsPageData } = await import('../agents-page-data')
+    const page = await getAgentsPageData()
+    return page.agentScore.status === 'ok' ? page.agentScore.value.rows : null
+  }
+
   it('trust triple, positions (with meta) and oppose come with the row — the modal needs no request for them', async () => {
     const fake = installFakeHasura({
       tables: [
-        { match: (q) => q.includes('AgentListCorpus'), field: 'atoms', rows: [atom(LUDA, []), atom(OPEN_CLAW, [{ term_id: TRIPLE, counter_term_id: COUNTER }])] },
+        { match: (q) => q.includes('ApiAgents'), field: 'atoms', rows: [atom(LUDA, []), atom(OPEN_CLAW, [{ term_id: TRIPLE, counter_term_id: COUNTER }])] },
         {
           match: (q) => q.includes('VaultPositions'), field: 'positions',
           rows: [
@@ -111,7 +118,7 @@ describe('the /agents list reads what the modal needs, once', () => {
         },
       ],
     })
-    const { rows } = await fetchAgentListCorpus()
+    const rows = (await pageRows())!
     const claw = rows.find((r) => r.term_id === OPEN_CLAW)!
     const luda = rows.find((r) => r.term_id === LUDA)!
 
@@ -121,19 +128,16 @@ describe('the /agents list reads what the modal needs, once', () => {
     expect(listVaultSnapshot(claw)?.positions[0]).toHaveProperty('created_at')
     expect(listOpposeWei(claw)).toBe(400n)
     expect(listOpposeWei(luda)).toBe(0n)
-    expect(fake.calls.find((c) => c.query.includes('AgentListCorpus'))!.query).toMatch(/as_subject_triples[\s\S]*\{ term_id counter_term_id \}/)
+    expect(fake.calls.find((c) => c.query.includes('ApiAgents'))!.query).toMatch(/as_subject_triples[\s\S]*\{ term_id counter_term_id \}/)
     expect(fake.calls.find((c) => c.query.includes('VaultPositions'))!.query).toContain('created_at')
   })
 
-  it('a failed list positions read is not reused — the modal reads them itself', async () => {
+  it('a failed positions read never reaches the page half-read: the corpus part fails (no rows scored on missing oppose)', async () => {
     installFakeHasura({
-      tables: [{ match: (q) => q.includes('AgentListCorpus'), field: 'atoms', rows: [atom(OPEN_CLAW, [{ term_id: TRIPLE, counter_term_id: COUNTER }])] }],
+      tables: [{ match: (q) => q.includes('ApiAgents'), field: 'atoms', rows: [atom(OPEN_CLAW, [{ term_id: TRIPLE, counter_term_id: COUNTER }])] }],
       fail: (q) => (q.includes('VaultPositions') ? 'throw' : undefined),
     })
-    const { rows } = await fetchAgentListCorpus()
-    expect(listVaultSnapshot(rows[0])).toBeNull()
-    expect(listOpposeWei(rows[0])).toBeUndefined()
-    expect(listTrustTriple(rows[0])).toEqual({ termId: TRIPLE, counterTermId: COUNTER }) // the row itself read fine
+    expect(await pageRows()).toBeNull()
   })
 
   it('a cohort row (never read the vaults or the triple) → the modal looks them up', () => {

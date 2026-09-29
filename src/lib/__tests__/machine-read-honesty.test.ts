@@ -216,13 +216,10 @@ describe('agents list: a failed positions read leaves oppose unknown', () => {
     positions_aggregate: { aggregate: { sum: { shares: '1000000000000000' } } },
     as_subject_triples: counter ? [{ counter_term_id: counter }] : [],
   })
-  it('fetchAgentListCorpus: row with a counter-vault → __opposeWei null (unknown), stakers null; no counter-vault → untouched', async () => {
-    installFakeHasura({
-      tables: [{ match: (q) => q.includes('AgentListCorpus'), field: 'atoms', rows: [atomRow('0xa', COUNTER), atomRow('0xb', null)] }],
-      fail: (q) => (q.includes('VaultPositions') ? 'rate-limit' : undefined),
-    })
-    const { fetchAgentListCorpus } = await import('../agent-list')
-    const { rows } = await fetchAgentListCorpus()
+  it('a list row annotated from a failed positions read: with a counter-vault → __opposeWei null (unknown), stakers null; no counter-vault → untouched', async () => {
+    const { attachVaultSnapshot } = await import('../agent-list')
+    const rows = [atomRow('0xa', COUNTER), atomRow('0xb', null)] as unknown as import('../agent-list').AgentListAtom[]
+    attachVaultSnapshot(rows, null, Date.now())
     const [a, b] = rows
     expect(a.__opposeWei).toBeNull()
     expect(a.liveStakerCount).toBeNull()

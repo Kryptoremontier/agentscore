@@ -181,7 +181,7 @@ async function agentsListReady(page: Page) {
   await page
     .getByText(/^\d+( of \d+)? agents?/)
     .or(page.getByText('No agents registered yet'))
-    .or(page.getByText(/^Error:/))
+    .or(page.getByTestId('feed-unreachable'))
     .first()
     .waitFor({ timeout: WAIT_CAP })
   await expect(page.locator('[data-testid="card-attester-line"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })

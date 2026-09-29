@@ -1,12 +1,13 @@
 /**
- * /agents list — the AgentScore corpus read and the numbers the page prints
- * about it. One source per number:
+ * /agents list — the rows the page consumes and the numbers it prints about
+ * them. One source per number:
  *
+ * - The rows are the shared server corpus (lib/api-data.ts loadAgentCorpus,
+ *   the same read as REST and MCP), served to the page by /api/v1/agents/page
+ *   (lib/agents-page-data.ts, Etap 4c) with its truncation and total (REPO_MAP
+ *   §7 rule 1). The page used to read its own copy from the browser.
  * - The header prints CORPUS totals: fetched once, never search-dependent.
  * - The results line prints the FILTERED count (search + origin + quality).
- * - A capped fetch reports its own truncation (REPO_MAP §7 rule 1): the rows
- *   are paged to an aggregate count on the SAME `where` (lib/gql-pager.ts),
- *   so neither our cap nor the endpoint's 250-row cap truncates silently.
  *
  * Search is applied client-side to both corpora with one rule
  * (matchesAgentSearch), so the AgentScore and ERC-8004 segments can't drift
@@ -14,19 +15,12 @@
  * label-only, blind to JSON-labelled atoms) did.
  */
 
-import { AGENT_WHERE_STR } from './gql-filters'
-import { fetchAllRows, SERVER_ROW_CAP } from './gql-pager'
-import { fetchVaultPositions, sumSharesByVault, type VaultPosition, type VaultPositionWithMeta } from './vault-positions'
+import { sumSharesByVault, type VaultPosition, type VaultPositionWithMeta } from './vault-positions'
 import { countLiveStakers } from './live-position'
 import { summarizeAttesters } from './agent-profile'
 import { calculateAgentTier, type AgentTierResult, type AgentTierDisplay } from './agent-tier'
 import type { AttestedEntry } from './attestation-reader'
 import type { QualityBucket } from './score-basis'
-
-/** Cap on the /agents AgentScore fetch. Truncation past it is reported, never silent. */
-export const AGENT_LIST_LIMIT = 50
-
-const TRUST_PREDICATE_ID = '0xc5f40275b1a5faf84eea97536c8358352d144729ef3e0e6108d67616f96272ba'
 
 /** Row shape as the /agents page consumes it (indexer fields + client annotations). */
 export interface AgentListAtom {
@@ -60,74 +54,6 @@ export interface AgentListAtom {
    */
   __vaultPositions?: VaultPositionWithMeta[] | null
   __vaultReadAt?: number
-}
-
-export interface AgentListFetch<T extends AgentListAtom = AgentListAtom> {
-  /** Raw rows (pre-junk-filter), created_at desc, at most AGENT_LIST_LIMIT. */
-  rows: T[]
-  /** Size of the whole corpus (pre-junk): the aggregate, or read to the end; null if unknown. */
-  total: number | null
-  /** true = rows is a prefix of the corpus; null = unknown (count failed at the cap). */
-  truncated: boolean | null
-}
-
-/**
- * Fetch the AgentScore corpus for /agents: rows (paged, capped) + a same-filter
- * aggregate count, then oppose shares for the trust triples (annotated as
- * `__opposeWei`, as the cards expect; null when that read failed). Throws on a failed corpus read — the
- * page shows its error state; it never renders an empty list for a failure.
- */
-export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAtom>(): Promise<AgentListFetch<T>> {
-  const page = await fetchAllRows<T>({
-    // created_at ties are common (218 of the newest 250 atoms, live) — term_id makes the order unique.
-    query: `
-    query AgentListCorpus($limit: Int!, $offset: Int!) {
-      atoms(
-        where: ${AGENT_WHERE_STR}
-        limit: $limit
-        offset: $offset
-        order_by: [{ created_at: desc }, { term_id: asc }]
-      ) {
-        term_id
-        label
-        data
-        type
-        emoji
-        created_at
-        creator { label id }
-        positions_aggregate {
-          aggregate {
-            sum { shares }
-          }
-        }
-        as_subject_triples(
-          where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
-          limit: 1
-        ) { term_id counter_term_id }
-      }
-    }
-  `,
-    field: 'atoms',
-    countQuery: `query AgentListCorpusCount { atoms_aggregate(where: ${AGENT_WHERE_STR}) { aggregate { count } } }`,
-    countField: 'atoms_aggregate',
-    pageSize: SERVER_ROW_CAP.atoms,
-    maxRows: AGENT_LIST_LIMIT,
-  })
-  const rows = page.rows
-
-  // One paged read of every position on the atom vaults + trust counter-vaults: oppose shares
-  // per counter-vault, and stakers per agent counted with the one live rule (0-share rows are
-  // not stakers — they are what `positions_aggregate.count` used to count).
-  const counterTermIds = rows
-    .map(a => a.as_subject_triples?.[0]?.counter_term_id)
-    .filter((id): id is string => !!id)
-  if (rows.length > 0) {
-    // withMeta: the same request, and the modal's backers table can open on these rows.
-    const positions = await fetchVaultPositions([...rows.map(a => a.term_id), ...counterTermIds], { withMeta: true }).catch(() => null)
-    attachVaultSnapshot(rows, positions, Date.now())
-  }
-
-  return { rows, total: page.total, truncated: page.truncated }
 }
 
 /** The fields annotateVaultReads reads and writes on a list row. */
@@ -183,6 +109,19 @@ export function attachVaultSnapshot<T extends AgentListAtom>(rows: T[], position
     row.__vaultPositions = positions ? positions.filter(p => p.term_id === row.term_id || (!!ctid && p.term_id === ctid)) : null
     row.__vaultReadAt = readAt
   }
+}
+
+/**
+ * A list row updated from a live read of its vaults — right after the user's own trade, so the
+ * card and the modal show it at once even while the cached list is older (Etap 4c): atom-vault
+ * support shares, oppose shares, live stakers and the modal's snapshot, all from `positions`.
+ */
+export function withLiveVault<T extends AgentListAtom>(row: T, positions: readonly VaultPositionWithMeta[], readAt: number): T {
+  const next: T = { ...row, __opposeWei: undefined }
+  const support = sumSharesByVault(positions).get(row.term_id) ?? 0n
+  next.positions_aggregate = { aggregate: { ...(row.positions_aggregate?.aggregate ?? {}), sum: { shares: support.toString() } } }
+  attachVaultSnapshot([next], [...positions], readAt)
+  return next
 }
 
 // ─── What the modal reuses from the list (Etap 4b-cache) ─────────────────────
@@ -264,11 +203,18 @@ export const LIVE_FEED_LABEL = 'GraphQL live feed'
  *
  * A corpus that is still loading prints "—", one that failed prints
  * "… feed unavailable" — never a 0 it didn't measure, and never a silently
- * missing segment. "GraphQL live feed" is claimed only when both reads succeeded.
+ * missing segment. "GraphQL live feed" is claimed only when both reads succeeded and
+ * neither is stale; stale data says how old it is instead ("Updated 3 min ago").
  */
 export function agentListHeaderSegments(input: {
   agentScore: AgentScoreCorpusCounts
   cohort: CohortCorpusCounts
+  /**
+   * The freshness line (lib/agents-page-types.ts feedFreshnessLabel): "Updated N min ago" when
+   * what is shown is older than it should be (the indexer is failing and the page shows our last
+   * complete read). Omitted or the live label = live.
+   */
+  freshness?: string | null
 }): string[] {
   const { agentScore: a, cohort: c } = input
   const totals = corpusTotals(input)
@@ -284,7 +230,8 @@ export function agentListHeaderSegments(input: {
   if (c.status === 'ok' && c.truncated && c.total != null) {
     segs.push(`showing first ${c.count} of ${c.total} ERC-8004 agents`)
   }
-  if (a.status === 'ok' && c.status === 'ok') segs.push(LIVE_FEED_LABEL)
+  if (input.freshness && input.freshness !== LIVE_FEED_LABEL) segs.push(input.freshness)
+  else if (a.status === 'ok' && c.status === 'ok') segs.push(LIVE_FEED_LABEL)
   return segs
 }
 

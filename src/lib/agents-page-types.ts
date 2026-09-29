@@ -95,12 +95,87 @@ export function updatedAgoLabel(ageSeconds: number): string {
  * part was served (the page shows its error instead).
  */
 export function feedFreshnessLabel(parts: ReadonlyArray<PagePart<unknown>>, liveLabel: string, now: number = Date.now()): string | null {
-  const served = parts.filter((p) => p.status === 'ok')
-  if (served.length === 0) return null
-  const stale = served.filter((p) => partIsStale(p, now))
-  if (stale.length === 0) return liveLabel
-  return updatedAgoLabel(Math.max(...stale.map((p) => partAgeSeconds(p, now) ?? 0)))
+  if (!parts.some((p) => p.status === 'ok')) return null
+  return staleAgeLabel(parts, now) ?? liveLabel
+}
+
+/** "Updated N min ago" from the oldest stale part; null when none is stale. */
+function staleAgeLabel(parts: ReadonlyArray<PagePart<unknown>>, now: number): string | null {
+  const stale = parts.filter((p) => partIsStale(p, now))
+  return stale.length ? updatedAgoLabel(Math.max(...stale.map((p) => partAgeSeconds(p, now) ?? 0))) : null
 }
 
 /** The page's error when nothing could be read and nothing is cached — for humans. */
 export const FEED_UNREACHABLE = 'Can’t reach the Intuition network right now. Try again in a minute.'
+
+/**
+ * What the list renders from one page answer. `null` payload = our own API couldn't be reached:
+ * every part failed. A corpus that failed is status 'error' with no rows (never an empty corpus);
+ * attestations merge what was read — a subject whose part failed is absent (the card makes no
+ * claim, lib/agent-list.ts cardViewFor), and null when neither part was read.
+ */
+export interface AgentsPageView {
+  agentScore:
+    | { status: 'ok'; rows: AgentListAtom[]; junk: number; fetched: number; total: number | null; truncated: boolean | null }
+    | { status: 'error' }
+  cohort: { status: 'ok'; agents: CohortAgent[]; total: number | null; truncated: boolean | null } | { status: 'error' }
+  attestations: Map<string, AttestedEntry[]> | null
+  /** The parts that were served, for the freshness line. */
+  parts: Array<PagePart<unknown>>
+  /** Nothing at all could be read and nothing was cached: the page's error. */
+  unreachable: boolean
+}
+
+export function agentsPageView(payload: AgentsPagePayload | null): AgentsPageView {
+  const a = payload?.agentScore ?? { status: 'failed' as const }
+  const c = payload?.cohort ?? { status: 'failed' as const }
+  const ca = payload?.cohortAttestations ?? { status: 'failed' as const }
+  const read: Array<Record<string, AttestedEntry[]>> = []
+  if (a.status === 'ok' && a.value.attestations) read.push(a.value.attestations)
+  if (ca.status === 'ok') read.push(ca.value)
+  return {
+    agentScore: a.status === 'ok'
+      ? { status: 'ok', rows: a.value.rows, junk: a.value.junk, fetched: a.value.fetched, total: a.value.total, truncated: a.value.truncated }
+      : { status: 'error' },
+    cohort: c.status === 'ok' ? { status: 'ok', ...c.value } : { status: 'error' },
+    attestations: read.length ? new Map(read.flatMap((r) => Object.entries(r))) : null,
+    parts: [a, c, ca].filter((p) => p.status === 'ok'),
+    unreachable: a.status !== 'ok' && c.status !== 'ok',
+  }
+}
+
+/**
+ * The modal's age line — it covers the list's header on a phone, so it says the age itself:
+ * "Updated N min ago" when anything it shows (the list's parts: row, tier, attestations; its own
+ * parts) is older than the cache serves while the indexer answers; null otherwise. After the
+ * user's own trade its vault, signals and reports are read live, so they don't count.
+ */
+export function modalFreshnessLabel(
+  list: Pick<AgentsPageView, 'parts'> | null,
+  modal: AgentModalPayload | null,
+  liveAfterOwnTx: boolean,
+  now: number = Date.now(),
+): string | null {
+  const own = !modal ? [] : liveAfterOwnTx ? [modal.skillTriples, modal.stakerWeights] : Object.values(modal)
+  return staleAgeLabel([...(list?.parts ?? []), ...own], now)
+}
+
+/** The modal answer when our own API couldn't be reached: every part unknown. */
+export const MODAL_UNREACHABLE: AgentModalPayload = {
+  vault: { status: 'failed' },
+  signals: { status: 'failed' },
+  skillTriples: { status: 'failed' },
+  reports: { status: 'failed' },
+  stakerWeights: { status: 'failed' },
+}
+
+/**
+ * After the user's own transaction on an agent, that agent's modal reads go straight to the
+ * indexer for this long — longer than the cached answers can lag behind it (2 × the 30 s agent
+ * TTL + the CDN window) — so they never show the state from before the user's action.
+ */
+export const OWN_TX_LIVE_MS = 5 * 60_000
+
+export function isLiveAfterOwnTx(liveUntil: Readonly<Record<string, number>>, termId: string, now: number = Date.now()): boolean {
+  return (liveUntil[termId] ?? 0) > now
+}
