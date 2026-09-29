@@ -22,8 +22,11 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { AgentHeader } from '@/components/agents/AgentHeader'
 import { AgentStats } from '@/components/agents/AgentStats'
 import { AgentTabs } from '@/components/agents/AgentTabs'
-import { TrustButton } from '@/components/trust/TrustButton'
-import { AttestButton } from '@/components/attest/AttestButton'
+import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
+import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
+import { AtomIdLine } from '@/components/profile/AtomIdLine'
+import { fetchAgentModalData } from '@/lib/agents-page-client'
+import { MODAL_HEADER_PARTS, type AgentModalPayload } from '@/lib/agents-page-types'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
@@ -37,6 +40,8 @@ import {
   fetchAgentProfileVector,
   fetchAgentBackers,
   summarizeAttesters,
+  statRowView,
+  backersFromPositions,
   type AgentProfileVector,
   type Backer,
   type ProfileAtom,
@@ -64,6 +69,17 @@ export default function AgentDetailPage() {
   const [vector, setVector] = useState<AgentProfileVector>(EMPTY_VECTOR)
   const [backers, setBackers] = useState<Backer[] | null>([])
   const [profileLoading, setProfileLoading] = useState(true)
+  // The modal's own answer for this agent (vault positions, signals, reports — cached, our API):
+  // the header's stat row reads exactly what the /agents modal reads (Etap 5a). null = not answered
+  // yet, or unreachable / not a listed agent — its parts then render "—".
+  const [modalData, setModalData] = useState<Partial<AgentModalPayload> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setModalData(null)
+    // The header's parts only: they never wait on the modal's slow ones (skill triples).
+    fetchAgentModalData(agentId, MODAL_HEADER_PARTS).then((d) => { if (!cancelled) setModalData(d) })
+    return () => { cancelled = true }
+  }, [agentId])
 
   useEffect(() => {
     let cancelled = false
@@ -155,6 +171,15 @@ export default function AgentDetailPage() {
 
   // null = the attestation read failed: the Attesters list says so instead of "no one".
   const attesters = vector.attested ? summarizeAttesters(vector.attested) : null
+  // The header's stat row — the modal's derivation (lib/agent-profile.ts statRowView) over the same
+  // parts: the agent's attestations, and the modal answer's reports, vault positions and signals.
+  const vault = modalData?.vault?.status === 'ok' ? modalData.vault.value : null
+  const statRow = statRowView({
+    attested: profileLoading ? null : vector.attested,
+    reportCount: modalData?.reports?.status === 'ok' ? modalData.reports.value.length : null,
+    backers: vault ? backersFromPositions(vault.positions, agentId, vault.trustTriple?.counterTermId ?? null) : null,
+    signals: modalData?.signals?.status === 'ok' ? modalData.signals.value.totalCount : null,
+  })
   // The agent tier — attestations only (thesis §6). null while loading or if the read failed.
   const agentTier = attesters ? calculateAgentTier(attesters) : null
 
@@ -188,16 +213,18 @@ export default function AgentDetailPage() {
                 )}
               </div>
 
+              <AtomIdLine termId={agentId} />
+              <ProfileStatRow view={statRow} />
+
               {/* ATTESTED > DECLARED > REPORTS (thesis §5 hierarchy) */}
               <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agentId} agentName={name} />
               <DeclaredDomains declaredDomains={cohortFailed ? null : cohortMatch?.declaredDomains} />
               <ReportsSection reports={vector.reports} loading={profileLoading} />
 
-              <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
+              {/* A cohort agent has an atom vault the /agents modal can back (it lists the cohort). */}
+              {cohortMatch && <BackWithTTrust agentId={agentId} />}
 
-              {(vector.attested?.length ?? 0) > 0 && (
-                <AttestButton agentId={agentId} agentName={name} variant="hero" />
-              )}
+              <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
             </motion.div>
           </div>
         </div>
@@ -274,12 +301,13 @@ export default function AgentDetailPage() {
         </motion.div>
 
         <div className="space-y-6">
-          {/* Header — Attest is THE primary action, mounted next to the name */}
+          {/* Header. The page's one attest CTA lives in the Attested section (desktop) or the
+              sticky bar (phone) — Etap 5a: one CTA per page, not one per section. */}
           <AgentHeader
             agent={agent}
             tier={agentTier}
             tierLoading={profileLoading}
-            action={<AttestButton agentId={agent.id} agentName={agent.name} variant="hero" />}
+            stats={<ProfileStatRow view={statRow} />}
           />
 
           {/* ETAP 3 — profile hierarchy (thesis §5): ATTESTED (headline) >
@@ -289,14 +317,9 @@ export default function AgentDetailPage() {
           <DeclaredDomains declaredDomains={cohortMatch?.declaredDomains} />
           <ReportsSection reports={vector.reports} loading={profileLoading} />
 
-          {/* Secondary actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <TrustButton agentId={agent.id} />
-          </motion.div>
+          {/* Backing — secondary, collapsed, the modal's section and copy (Etap 5a). The old gold
+              "Trust Agent" / "Report Issue" pair here never transacted (a 2 s timeout, then closed). */}
+          <BackWithTTrust agentId={agent.id} />
 
           {/* Score context — below the canonical sections */}
           <AgentStats agent={agent} />
@@ -315,5 +338,24 @@ export default function AgentDetailPage() {
       {/* Mobile: Attest always in viewport, above the bottom nav */}
       <AttestStickyBar agentId={agent.id} agentName={agent.name} />
     </PageBackground>
+  )
+}
+
+/**
+ * The profile's "Back this agent": the modal's collapsed section and copy, with one secondary
+ * action — the /agents modal's Buy/Sell panel (the one backing flow; `back=1` opens it expanded).
+ */
+function BackWithTTrust({ agentId }: { agentId: string }) {
+  return (
+    <BackThisAgentSection>
+      <Link
+        href={`/agents?open=${agentId}&back=1`}
+        className="inline-flex items-center justify-center w-full sm:w-auto px-4 py-2 rounded-xl text-sm font-medium transition-colors bg-[#171A1D] border border-[#C8963C]/25 text-[#C8963C] hover:bg-[#C8963C]/10"
+        data-testid="back-with-ttrust"
+      >
+        Back with tTRUST
+      </Link>
+      <p className="text-[#7A838D] text-[11px] mt-2">Opens this agent&apos;s Buy / Sell panel.</p>
+    </BackThisAgentSection>
   )
 }

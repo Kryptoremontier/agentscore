@@ -9,6 +9,7 @@ import {
   Code, ExternalLink, BookOpen, Plug, Rocket,
   Shield, Eye, Sparkles, Crown,
 } from 'lucide-react'
+import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ function TabGettingStarted() {
         <Step n={1} title="Get Test Tokens">
           <p>
             Visit the{' '}
-            <ExtLink href="https://testnet.hub.intuition.systems/">Intuition Hub (Testnet)</ExtLink>
+            <ExtLink href={INTUITION_HUB_URL}>Intuition Hub (Testnet)</ExtLink>
             {' '}to receive free tTRUST tokens.
           </p>
           <p>You need tTRUST to register agents and stake on trust claims.</p>
@@ -491,7 +492,7 @@ function TabOverview() {
       <DocCard>
         <SectionTitle icon={Users} color="#2ECC71" label="Getting started" />
         <p className="text-[#9BA5B0] text-sm mb-6">
-          Connect a wallet, get testnet tTRUST from <a href="https://testnet.hub.intuition.systems/" target="_blank" rel="noopener noreferrer" className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#C8963C' }}>Intuition Hub</a>, then explore or register.
+          Connect a wallet, get testnet tTRUST from <a href={INTUITION_HUB_URL} target="_blank" rel="noopener noreferrer" className="font-medium hover:opacity-80 transition-opacity" style={{ color: '#C8963C' }}>Intuition Hub</a>, then explore or register.
         </p>
         <div className="grid sm:grid-cols-3 gap-3">
           {[

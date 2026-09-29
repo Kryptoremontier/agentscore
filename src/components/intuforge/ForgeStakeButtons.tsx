@@ -17,6 +17,7 @@ import { TrendingUp, TrendingDown, Loader2, Check, X } from 'lucide-react'
 import { useWalletClient, usePublicClient, useAccount, useBalance } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import { createWriteConfig, depositToVault, getFeeConfig, getFeeBreakdown } from '@/lib/intuition'
+import { useConnectModal } from '@/components/wallet/ConnectModal'
 
 interface ForgeStakeButtonsProps {
   atomId: string
@@ -39,6 +40,7 @@ export function ForgeStakeButtons({
   initialSide,
 }: ForgeStakeButtonsProps) {
   const { isConnected, address } = useAccount()
+  const { openConnectModal } = useConnectModal()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
 
@@ -76,9 +78,14 @@ export function ForgeStakeButtons({
 
   function openPanel(s: 'support' | 'oppose') {
     if (!isConnected) {
-      alert('Connect your wallet to Intuition Testnet first.')
+      // The app's wallet-connect modal, then straight into this side's panel (no native dialog).
+      openConnectModal({ reason: 'Connect a wallet to stake on this project.', onConnected: () => showPanel(s) })
       return
     }
+    showPanel(s)
+  }
+
+  function showPanel(s: 'support' | 'oppose') {
     setSide(s)
     setAmount('0.01')
     setStatus('amount')

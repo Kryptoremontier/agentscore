@@ -22,6 +22,8 @@ import { TRUST_PREDICATE_TERM_ID } from './intuition'
 import { fetchAttestations, isLivePosition, type AttestedEntry } from './attestation-reader'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
 import { fetchVaultPositions } from './vault-positions'
+import { countLiveStakers, type PositionLike } from './live-position'
+import { formatTTrust } from './format'
 
 // `reported for` — the canonical (mainnet-minted, cross-network) report
 // predicate. Same term_id the modal's report query and predicates.ts use.
@@ -241,6 +243,60 @@ export function computeModalStatSummary(input: {
     backerVaultWei: input.backerVaultWei,
     signals: input.signals,
   }
+}
+
+/**
+ * The header stat row both agent surfaces render (Etap 5a: the /agents modal and /agents/[id]
+ * tell the same story, from the same data — REPO_MAP §7 rule 4). Every input is "unread" as
+ * null and renders "—", never a 0 derived from nothing (rule 5).
+ */
+export interface StatRowInput {
+  /** The agent's attestations; null = not read (loading, or the read failed). */
+  attested: readonly AttestedEntry[] | null
+  reportCount: number | null
+  /** From the agent's vault positions (backersFromPositions); null = not read. */
+  backers: { count: number; atomVaultWei: bigint } | null
+  /** Signals on the vaults (deposits + redemptions); null = not read → no segment. */
+  signals: number | null
+}
+
+export interface StatRowView {
+  boxes: Array<{ value: string; label: string }>
+  /** "Backers: 1 · 0.0010 tTRUST on atom vault · 1 signal" */
+  backersLine: string
+}
+
+export function statRowView(i: StatRowInput): StatRowView {
+  const s = i.attested ? computeModalStatSummary({ attested: i.attested, reportCount: 0, backerCount: 0, backerVaultWei: 0n, signals: 0 }) : null
+  const plural = (n: number | undefined, one: string, many: string) => (n === 1 ? one : many)
+  const signals = i.signals != null && i.signals > 0 ? ` · ${i.signals} signal${i.signals !== 1 ? 's' : ''}` : ''
+  return {
+    boxes: [
+      { value: s ? String(s.attesters) : '—', label: plural(s?.attesters, 'Attester', 'Attesters') },
+      { value: s ? String(s.domains) : '—', label: plural(s?.domains, 'Domain attested', 'Domains attested') },
+      { value: s ? formatTTrust(s.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
+      { value: i.reportCount != null ? String(i.reportCount) : '—', label: 'Reports' },
+    ],
+    backersLine: `Backers: ${i.backers ? i.backers.count : '—'} · ${i.backers ? formatTTrust(i.backers.atomVaultWei) : '—'} on atom vault${signals}`,
+  }
+}
+
+/**
+ * Backers from the agent's vault positions (atom vault + trust counter-vault): distinct wallets with
+ * a live position (countLiveStakers — the modal's rule) and the stake on the atom vault itself.
+ */
+export function backersFromPositions(
+  positions: readonly PositionLike[],
+  atomId: string,
+  counterId: string | null | undefined,
+): { count: number; atomVaultWei: bigint } {
+  // The stake on the atom vault (a 0-share row adds nothing; it isn't a backer either — countLiveStakers).
+  let atomVaultWei = 0n
+  for (const p of positions) {
+    if (p.term_id !== atomId) continue
+    try { atomVaultWei += typeof p.shares === 'bigint' ? p.shares : BigInt(p.shares || '0') } catch { /* unparseable: not counted */ }
+  }
+  return { count: countLiveStakers(positions, { atomId, counterId }), atomVaultWei }
 }
 
 export type ProfileSectionKey = 'attested' | 'declared' | 'reports'

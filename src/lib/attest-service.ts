@@ -28,7 +28,8 @@
  *     stray atom.
  */
 
-import { intuitionTestnet, MultiVaultAbi } from '@0xintuition/protocol'
+import { MultiVaultAbi } from '@0xintuition/protocol'
+import { ATTEST_CHAIN_ID } from './attest-gate'
 import { stringToHex, type Hex, type PublicClient } from 'viem'
 import { calculateAtomId as sdkCalculateAtomId } from '@0xintuition/sdk'
 import {
@@ -104,7 +105,8 @@ export function mapWriteError(err: unknown): AttestError {
 
 // ─── Network guard ───────────────────────────────────────────────────────────
 
-export const ATTEST_CHAIN_ID = intuitionTestnet.id // 13579
+// The SDK's testnet id, defined once in lib/attest-gate.ts (the steps before signing read it too).
+export { ATTEST_CHAIN_ID }
 
 /**
  * Hard guard: refuse to build any transaction unless the chainId is the

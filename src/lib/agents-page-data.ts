@@ -29,7 +29,7 @@ import { fetchAgentReports } from './agent-profile'
 import { EVALUATOR_LEADERBOARD_MAX, fetchEvaluatorLeaderboard } from './evaluator-data'
 import { calculateEvaluatorScore, type EvaluatorProfile } from './evaluator-score'
 import { gqlRequest, type GqlRequest } from './gql-pager'
-import type { AgentModalPayload, AgentsPagePayload, PagePart } from './agents-page-types'
+import { MODAL_PARTS, type AgentModalPayload, type AgentsPagePayload, type ModalPart, type PagePart } from './agents-page-types'
 
 /** Server reads bypass Next's fetch cache: the complete-reads cache decides what is kept. */
 const serverRequest: GqlRequest = (query, variables) => gqlRequest(query, variables, { cache: 'no-store' })
@@ -162,21 +162,42 @@ export function stakerWalletsOf(positions: readonly VaultPositionWithMeta[]): st
 }
 
 export async function getAgentModalData(termId: string): Promise<AgentModalPayload> {
-  const vault = await pagePart('agent-vault', SERVER_CACHE_TTL.agentDetail, () => loadAgentVault(termId))
+  return (await getAgentModalParts(termId, MODAL_PARTS)) as AgentModalPayload
+}
+
+/**
+ * Only the parts asked for (`?parts=`): the agent header asks for vault, signals and reports and
+ * gets them without waiting on skill triples (~5.5 s cold) — one answer used to wait for its
+ * slowest part, so a cold modal's Backers line read "—" for 6–14 s. Each part is still its own
+ * cached read; asking twice (header, then the rest) shares them.
+ */
+export async function getAgentModalParts(termId: string, parts: readonly ModalPart[]): Promise<Partial<AgentModalPayload>> {
+  const want = new Set(parts)
+  // Signals and staker weights depend on the vault (which vaults to read; whose weights).
+  const needVault = want.has('vault') || want.has('signals') || want.has('stakerWeights')
+  const vault = needVault ? await pagePart('agent-vault', SERVER_CACHE_TTL.agentDetail, () => loadAgentVault(termId)) : FAILED
   const [signals, skillTriples, reports, stakerWeights] = await Promise.all([
-    // Which vaults to read depends on the trust triple: no vault read, no signals.
-    vault.status === 'ok'
-      ? pagePart('agent-signals', SERVER_CACHE_TTL.agentDetail, () => loadAgentSignals(termId, vault.value.trustTriple?.counterTermId ?? null))
-      : FAILED,
-    pagePart('agent-skill-triples', SERVER_CACHE_TTL.agentDetail, () => cachedAgentSkillTriples(termId)),
-    pagePart('agent-reports', SERVER_CACHE_TTL.agentDetail, () => loadAgentReports(termId)),
-    // All or nothing: a wallet whose weight is unknown is not weighed as a newcomer.
-    vault.status === 'ok'
-      ? pagePart('staker-weights', SERVER_CACHE_TTL.evaluatorLeaderboard, async () =>
-          stakerWeightsFrom(await fetchEvaluatorLeaderboard(), stakerWalletsOf(vault.value.positions)))
-      : FAILED,
+    !want.has('signals') ? undefined
+      // Which vaults to read depends on the trust triple: no vault read, no signals.
+      : vault.status === 'ok'
+        ? pagePart('agent-signals', SERVER_CACHE_TTL.agentDetail, () => loadAgentSignals(termId, vault.value.trustTriple?.counterTermId ?? null))
+        : FAILED,
+    want.has('skillTriples') ? pagePart('agent-skill-triples', SERVER_CACHE_TTL.agentDetail, () => cachedAgentSkillTriples(termId)) : undefined,
+    want.has('reports') ? pagePart('agent-reports', SERVER_CACHE_TTL.agentDetail, () => loadAgentReports(termId)) : undefined,
+    !want.has('stakerWeights') ? undefined
+      // All or nothing: a wallet whose weight is unknown is not weighed as a newcomer.
+      : vault.status === 'ok'
+        ? pagePart('staker-weights', SERVER_CACHE_TTL.evaluatorLeaderboard, async () =>
+            stakerWeightsFrom(await fetchEvaluatorLeaderboard(), stakerWalletsOf(vault.value.positions)))
+        : FAILED,
   ])
-  return { vault, signals, skillTriples, reports, stakerWeights }
+  const out: Partial<AgentModalPayload> = {}
+  if (want.has('vault')) out.vault = vault
+  if (signals) out.signals = signals
+  if (skillTriples) out.skillTriples = skillTriples
+  if (reports) out.reports = reports
+  if (stakerWeights) out.stakerWeights = stakerWeights
+  return out
 }
 
 /**

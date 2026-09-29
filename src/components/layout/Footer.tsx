@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ExternalLink, Shield, Bot, Zap, MessageSquare, Github, Twitter, Globe } from 'lucide-react'
+import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
@@ -28,7 +29,7 @@ const navLinks = [
     heading: 'Ecosystem',
     items: [
       { label: 'Intuition Protocol', href: 'https://github.com/0xIntuition', external: true },
-      { label: 'Intuition Hub (Testnet)', href: 'https://testnet.hub.intuition.systems/', external: true },
+      { label: 'Intuition Hub (Testnet)', href: INTUITION_HUB_URL, external: true },
       { label: 'Intuition Docs', href: 'https://docs.intuition.systems', external: true },
       { label: 'GitHub', href: 'https://github.com/Kryptoremontier/agentscore', external: true },
     ],

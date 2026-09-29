@@ -92,12 +92,37 @@ const SHOTS: Shot[] = [
     url: `${ROUTES.agents}?open=${AGENTS[key]}`,
     prepare: modalReady,
     target: unfixModal,
-    check: modalFitsPhone,
+    check: async (page, project) => {
+      await oneAttestCta(page)
+      await modalFitsPhone(page, project)
+    },
   })),
+  {
+    // Etap 5a: the modal as it opens, at normal scroll — its title clears the fixed site header
+    // (the overlap in the full-height modal PNGs was a capture artifact; see unfixModal).
+    name: 'agent-modal-dackie-first-screen',
+    url: `${ROUTES.agents}?open=${AGENTS.dackie}`,
+    prepare: modalReady,
+    firstScreen: true,
+    check: modalTitleClearsHeader,
+  },
+  {
+    // Etap 5a: a newcomer clicks Attest with no wallet → the app's wallet-connect modal (never a
+    // browser dialog). The first screen, as they see it.
+    name: 'attest-disconnected-click',
+    url: `${ROUTES.agents}?open=${AGENTS.luda}`,
+    prepare: attestClickOpensConnectModal,
+    firstScreen: true,
+  },
   ...(['dackie', 'luda', 'openclaw'] as const).map((key): Shot => ({
     name: `agent-profile-${key}`,
     url: ROUTES.agentProfile(AGENTS[key]),
     prepare: profileReady,
+    check: async (page, project) => {
+      await oneAttestCta(page)
+      await profileFitsPhone(page, project)
+      await statRowMatchesModal(page, key)
+    },
   })),
   { name: 'domains', url: ROUTES.domains },
   { name: 'evaluators', url: ROUTES.evaluators },
@@ -134,6 +159,9 @@ for (const shot of SHOTS) {
     } else {
       await page.screenshot({ path: file, fullPage: !shot.firstScreen })
     }
+
+    // A target may hide fixed chrome for its capture (unfixModal); put it back before the checks.
+    await page.evaluate(() => (window as unknown as { __restoreShotChrome?: () => void }).__restoreShotChrome?.())
 
     testInfo.annotations.push({ type: 'screenshot', description: path.relative(REPO_ROOT, file) })
     expect.soft(unsettled, `${shot.name}: page never settled — screenshot shows a loading state`).toBeNull()
@@ -216,8 +244,8 @@ async function modalReady(page: Page) {
 }
 
 /**
- * /agents/[id] resolved: the agent tier chip left its loading state and the
- * ATTESTED section rendered (heading or empty state). The reference agents all
+ * /agents/[id] resolved: the agent tier chip left its loading state, the
+ * ATTESTED section rendered (heading or empty state) and the stat row answered. The reference agents all
  * exist — ERC-8004 ones included — so "Agent Not Found" is a failure here, not
  * a settled page.
  */
@@ -229,6 +257,49 @@ async function profileReady(page: Page) {
       .or(page.getByText('Unverified — no attestations yet', { exact: true }))
       .first(),
   ).toBeVisible({ timeout: WAIT_CAP })
+  // The header's stat row (the modal's, Etap 5a) answered: no "—" box, a Backers count.
+  await expect(page.getByTestId('backers-line')).toHaveText(/^Backers: \d/, { timeout: WAIT_CAP })
+  await expect(page.locator('[data-testid="stat-box"] p', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
+}
+
+/**
+ * Etap 5a: exactly one attest CTA in the DOM (not one visible and one hidden): inline in the
+ * Attested section on desktop, the sticky bar on a phone — and it is visible.
+ */
+async function oneAttestCta(page: Page) {
+  const ctas = page.locator('[data-testid="attest-cta"]')
+  await expect(ctas, 'attest CTAs in the DOM').toHaveCount(1)
+  await expect(ctas.first(), 'the one attest CTA is visible').toBeVisible()
+}
+
+/**
+ * Etap 5a: the profile tells the modal's story — its stat row (attesters, domains, tTRUST attested,
+ * reports) and Backers line read exactly as the /agents modal's for the same agent. Runs on the
+ * profile, then opens the modal in the same page.
+ */
+async function statRowMatchesModal(page: Page, key: keyof typeof AGENTS) {
+  const rowOf = async (root: Locator) => {
+    await expect(root.getByTestId('backers-line')).toHaveText(/^Backers: \d/, { timeout: WAIT_CAP })
+    await expect(root.locator('[data-testid="stat-box"] p', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
+    const boxes = (await root.getByTestId('stat-box').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim())
+    return { boxes, backers: (await root.getByTestId('backers-line').innerText()).trim() }
+  }
+  const profile = await rowOf(page.getByTestId('stat-row'))
+  await page.goto(`${ROUTES.agents}?open=${AGENTS[key]}`, { waitUntil: 'domcontentloaded' })
+  await modalReady(page)
+  const modal = await rowOf(modalLocator(page).getByTestId('stat-row'))
+  expect(profile, `${key}: the profile's stat row = the modal's`).toEqual(modal)
+}
+
+/** Wallet disconnected: the visible Attest CTA opens the connect modal; no native dialog fires. */
+async function attestClickOpensConnectModal(page: Page) {
+  await modalReady(page)
+  const dialogs: string[] = []
+  page.on('dialog', (d) => { dialogs.push(d.message()); void d.dismiss() })
+  await page.locator('[data-testid="attest-cta"]').filter({ visible: true }).first().click()
+  await expect(page.getByTestId('connect-wallet-modal')).toBeVisible({ timeout: WAIT_CAP })
+  await expect(page.getByTestId('connect-wallet-modal')).toContainText('Connect a wallet to attest Luda.')
+  expect(dialogs, 'no native browser dialog').toEqual([])
 }
 
 function modalLocator(page: Page) {
@@ -239,10 +310,36 @@ function modalLocator(page: Page) {
  * The modal is a fixed, internally-scrolling overlay — a page screenshot only
  * gets its first screen. Un-fix it (test-side styling only) so the element
  * screenshot has the modal's full height.
+ *
+ * Fixed chrome outside the modal (site header, bottom nav, the attest sticky bar) is hidden for
+ * this capture and restored after it (window.__restoreShotChrome): Playwright scrolls a tall
+ * element to the viewport top, where the fixed header painted over the modal's first 80 px — the
+ * "header over the modal title" in earlier PNGs was that, not the page (Etap 5a; at normal scroll
+ * the modal's scroll container starts below the header — modalTitleClearsHeader).
  */
 async function unfixModal(page: Page): Promise<Locator> {
   const modal = modalLocator(page)
   if ((await modal.count()) === 0) throw new Error('modal not open')
+  await modal.evaluate((el: HTMLElement) => {
+    const hidden: HTMLElement[] = []
+    for (const node of document.body.querySelectorAll<HTMLElement>('*')) {
+      if (el.contains(node) || node.contains(el)) continue
+      const pos = getComputedStyle(node).position
+      if (pos === 'fixed' || pos === 'sticky') {
+        node.setAttribute('data-shot-hidden', '')
+        hidden.push(node)
+      }
+    }
+    // !important on the element AND its descendants, transitions off: `transition-all` (the navbar,
+    // the sticky bar's button) would otherwise keep them visible through the capture.
+    const style = document.createElement('style')
+    style.textContent = '[data-shot-hidden], [data-shot-hidden] * { visibility: hidden !important; transition: none !important; }'
+    document.head.appendChild(style)
+    ;(window as unknown as { __restoreShotChrome?: () => void }).__restoreShotChrome = () => {
+      style.remove()
+      for (const n of hidden) n.removeAttribute('data-shot-hidden')
+    }
+  })
   await modal.evaluate((el: HTMLElement) => {
     Object.assign(el.style, {
       position: 'absolute', inset: 'auto', top: getComputedStyle(el).top, left: '0', width: '100%',
@@ -276,12 +373,92 @@ async function pastViewportEdges(root: Locator): Promise<string[]> {
 }
 
 /**
+ * Etap 5a: at normal scroll the open modal's title sits below the fixed site header — nothing of
+ * the header covers it.
+ */
+async function modalTitleClearsHeader(page: Page) {
+  const title = modalLocator(page).locator('h2, h3').first()
+  const titleBox = (await title.boundingBox())!
+  const headerBottom = await page.evaluate(() => {
+    const nav = [...document.querySelectorAll<HTMLElement>('nav')].find((n) => getComputedStyle(n).position === 'fixed' && n.getBoundingClientRect().top <= 0)
+    return nav ? nav.getBoundingClientRect().bottom : 0
+  })
+  expect(titleBox.y, `modal title (top ${Math.round(titleBox.y)} px) below the header (bottom ${Math.round(headerBottom)} px)`).toBeGreaterThanOrEqual(headerBottom)
+}
+
+/**
+ * Etap 5a, phones: inside the ATTESTED section no text overlaps other text (the domain icon ran
+ * into the attester count: "⛓1attester"), and every domain name shows — not truncated to nothing.
+ */
+async function attestedTextNoOverlap(scope: Locator) {
+  const section = scope.getByTestId('attested-section')
+  if ((await section.count()) === 0) return // no attestations: the empty state
+  const problems = await section.first().evaluate((root) => {
+    const boxes: Array<{ t: string; r: DOMRect }> = []
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = (n.textContent ?? '').trim()
+      if (!text) continue
+      const range = document.createRange()
+      range.selectNodeContents(n)
+      for (const r of range.getClientRects()) if (r.width > 0 && r.height > 0) boxes.push({ t: text.slice(0, 24), r })
+    }
+    const out: string[] = []
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i].r, b = boxes[j].r
+        const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left)
+        const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+        if (ox > 1 && oy > 1) out.push(`"${boxes[i].t}" overlaps "${boxes[j].t}"`)
+      }
+    }
+    for (const row of root.querySelectorAll('[data-testid="attested-row"]')) {
+      const name = row.querySelector<HTMLElement>('span.font-semibold')
+      if (!name || name.getBoundingClientRect().width < 20 || name.scrollWidth > name.clientWidth + 1) out.push(`domain name cut: "${name?.textContent ?? ''}"`)
+    }
+    return out.slice(0, 8)
+  })
+  expect(problems, 'ATTESTED section: overlapping or cut text').toEqual([])
+}
+
+/** Etap 5a, phones: the profile never scrolls sideways, nothing in it reaches past the viewport, ATTESTED reads clean. */
+async function profileFitsPhone(page: Page, project: string) {
+  if (project !== 'mobile') return
+  const width = page.viewportSize()!.width
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), 'the page scrolls sideways').toBeLessThanOrEqual(width)
+  // Past the edge AND visible: overflow a clipping ancestor hides (the footer's decorative glow) is not seen.
+  const visiblyPast = await page.evaluate(() => {
+    const w = window.innerWidth
+    const past = (r: DOMRect) => r.width > 0 && (r.left < -0.5 || r.right > w + 0.5)
+    const clipped = (el: Element) => {
+      for (let a = el.parentElement; a; a = a.parentElement) {
+        const ox = getComputedStyle(a).overflowX
+        if ((ox === 'hidden' || ox === 'clip') && !past(a.getBoundingClientRect())) return true
+      }
+      return false
+    }
+    const out: string[] = []
+    for (const node of document.body.querySelectorAll('*')) {
+      const r = node.getBoundingClientRect()
+      if (!past(r) || clipped(node)) continue
+      const p = node.parentElement
+      if (p && past(p.getBoundingClientRect()) && !clipped(p)) continue
+      out.push(`<${node.tagName.toLowerCase()}> ${Math.round(r.left)}..${Math.round(r.right)} px "${(node.textContent ?? '').trim().slice(0, 40)}"`)
+    }
+    return out.slice(0, 8)
+  })
+  expect(visiblyPast, `elements past the ${width} px viewport`).toEqual([])
+  await attestedTextNoOverlap(page.locator('main'))
+}
+
+/**
  * Phones only (4b-list §6 #1, #5): every modal tab is on screen, at least 44 px tall and
  * clickable (clicking selects it), and on every tab no element reaches past the viewport.
  */
 async function modalFitsPhone(page: Page, project: string) {
   if (project !== 'mobile') return
   const modal = modalLocator(page)
+  await attestedTextNoOverlap(modal)
   const width = page.viewportSize()!.width
   const tabs = modal.getByRole('tab')
   await expect(tabs).toHaveCount(4)

@@ -7,6 +7,9 @@ import { useIntuition, useAtom, useSearchAtoms, useUserPositions, useCreatorAtom
 import { parseEther } from 'viem'
 import { AGENTS_TO_REGISTER } from '@/data/realAgents'
 import { formatDate } from '@/lib/format'
+import { useNotice } from '@/components/shared/NoticeProvider'
+import { txFailureNotice } from '@/lib/user-notice'
+import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 
 interface CreatedAtom {
   id: string           // termId (bytes32)
@@ -21,6 +24,7 @@ export default function TestIntuitionPage() {
   if (process.env.NEXT_PUBLIC_ENABLE_TEST_PAGE !== 'true') {
     notFound()
   }
+  const { notify } = useNotice()
   const [testAtomId, setTestAtomId] = useState<`0x${string}`>()
   const [searchQuery, setSearchQuery] = useState('')
   const [testText, setTestText] = useState('Hello Intuition')
@@ -199,7 +203,7 @@ export default function TestIntuitionPage() {
                               [agent.name]: result.state.termId
                             }))
                           } catch (e: any) {
-                            alert(`Error: ${e.message}`)
+                            notify(txFailureNotice(`Registering ${agent.name}`, e))
                           }
                         }}
                         disabled={!intuition.isConnected}
@@ -713,7 +717,7 @@ export default function TestIntuitionPage() {
           <h3 className="font-bold mb-2">ℹ️ Testing Instructions</h3>
           <ol className="text-sm space-y-2 list-decimal list-inside">
             <li>Connect wallet to Intuition Testnet (Chain ID: 13579)</li>
-            <li>Get testnet tTRUST from faucet: https://testnet.hub.intuition.systems/</li>
+            <li>Get testnet tTRUST from faucet: {INTUITION_HUB_URL}</li>
             <li>Try creating a simple atom (test 1)</li>
             <li>Try creating an agent with metadata (test 2)</li>
             <li>Copy the atom ID from transaction and test fetching (test 4)</li>
@@ -906,7 +910,7 @@ export default function TestIntuitionPage() {
                             <button
                               onClick={() => {
                                 navigator.clipboard.writeText(atom.term_id)
-                                alert('Atom ID copied!')
+                                notify({ kind: 'info', text: 'Atom ID copied.' })
                               }}
                               className="text-text-muted hover:text-white text-lg"
                               title="Copy Atom ID"

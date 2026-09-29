@@ -14,11 +14,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useAccount } from 'wagmi'
 import { truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
 import { summarizeAttesters } from '@/lib/agent-profile'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestButton } from '@/components/attest/AttestButton'
+import { useMediaQuery, DESKTOP_QUERY } from '@/hooks/useMediaQuery'
 
 interface AttestedDomainsProps {
   /** null = the read failed — shown as unavailable, never as "no attestations yet". */
@@ -32,26 +32,15 @@ interface AttestedDomainsProps {
 const fmt = (wei: bigint) => (Number(wei) / 1e18).toFixed(4)
 
 /**
- * Etap 4b: the ONE Attest CTA for this section — desktop-only (mobile has
- * its own always-visible AttestStickyBar; showing both here AND there would
- * double the CTA on small screens). Disconnected: an inert prompt, no click
- * handler — wallet connection happens via the nav's Connect Wallet button,
- * same convention as the Buy/Sell panel's own disconnected state.
+ * The page's ONE primary attest CTA on desktop (Etap 5a) — on a phone it is the
+ * AttestStickyBar, and this renders nothing (not merely hidden: one CTA in the DOM).
+ * Disconnected too — the click opens the wallet-connect modal and then the attest
+ * flow; it used to be an inert "Connect wallet to attest" label with nowhere to go.
  */
 function AttestCta({ agentId, agentName }: { agentId: string; agentName: string }) {
-  const { isConnected } = useAccount()
-  if (!isConnected) {
-    return (
-      <span className="hidden md:inline-flex text-xs font-medium px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}>
-        Connect wallet to attest
-      </span>
-    )
-  }
-  return (
-    <div className="hidden md:inline-block">
-      <AttestButton agentId={agentId} agentName={agentName} variant="card" />
-    </div>
-  )
+  const desktop = useMediaQuery(DESKTOP_QUERY)
+  if (desktop !== true) return null
+  return <AttestButton agentId={agentId} agentName={agentName} variant="inline" />
 }
 
 export function AttestedDomains({ entries, loading, agentId, agentName, className }: AttestedDomainsProps) {
@@ -81,7 +70,7 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
   const attesterCount = summarizeAttesters(entries).length
 
   return (
-    <div className={`rounded-2xl p-5 ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.3)' }}>
+    <div className={`rounded-2xl p-5 ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.3)' }} data-testid="attested-section">
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#2ECC71' }} />
@@ -109,17 +98,21 @@ function AttestedRow({ entry }: { entry: AttestedEntry }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="rounded-xl bg-[#0F1113]/80 border border-white/[0.06]">
+      {/* Etap 5a: on a phone the row stacks — the domain name on its own line (it wraps, never
+          truncates to nothing), the numbers under it; the icon never shrinks into the text. At
+          390 px the numbers used to take the whole row: "⛓1attester", no domain name. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left"
+        className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 px-3.5 py-2.5 text-left"
         aria-expanded={open}
+        data-testid="attested-row"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base leading-none">{entry.domain.emoji}</span>
-          <span className="text-sm font-semibold text-white truncate">{entry.domain.label}</span>
+        <div className="flex items-start gap-2 min-w-0">
+          <span className="text-base leading-5 flex-shrink-0" aria-hidden="true">{entry.domain.emoji}</span>
+          <span className="text-sm font-semibold text-white leading-5 break-words min-w-0">{entry.domain.label}</span>
         </div>
-        <div className="flex items-center gap-3 text-xs flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs pl-7 sm:pl-0 sm:flex-shrink-0">
           <span className="text-white">
             {entry.distinctAttesters} attester{entry.distinctAttesters !== 1 ? 's' : ''}
           </span>

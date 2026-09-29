@@ -22,6 +22,7 @@ import {
   TRIPLE_OBJECT_OR_STR,
 } from './gql-filters'
 import { type AgentCardData, serializeAgentCard } from './agent-card'
+import { INTUITION_HUB_URL } from './intuition-links'
 
 // ============================================================================
 // Fee Proxy
@@ -1649,7 +1650,7 @@ export const INTUITION_TESTNET = {
   rpcUrl: 'https://testnet.rpc.intuition.systems/http',
   explorer: 'https://testnet.explorer.intuition.systems',
   portal: 'https://testnet.portal.intuition.systems',
-  hub: 'https://testnet.hub.intuition.systems',
+  hub: INTUITION_HUB_URL,
 }
 
 /**

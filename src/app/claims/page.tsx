@@ -71,6 +71,7 @@ function AtomTypeIcon({ type, color }: { type: 'agent' | 'skill' | 'unknown'; co
 import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
+import { useNotice } from '@/components/shared/NoticeProvider'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -179,6 +180,8 @@ function ClaimsPageContent() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
   const [toast, setToast] = useState<string | null>(null)
+  // Errors and warnings in the page's flows: in-app notices, never a native browser dialog (Etap 5a).
+  const { notify } = useNotice()
 
   // Trust data for selected claim
   const [claimTriple, setClaimTriple] = useState<{ termId: string | null; counterTermId: string | null; loading: boolean }>({ termId: null, counterTermId: null, loading: false })
@@ -613,7 +616,7 @@ function ClaimsPageContent() {
       if (pendingVote.type === 'redeem_trust' || pendingVote.type === 'redeem_distrust') {
         const isDistrust = pendingVote.type === 'redeem_distrust'
         const redeemVaultId = isDistrust ? pendingVote.counterTermId : pendingVote.claim.term_id
-        if (!redeemVaultId) { alert('Vault not found'); return }
+        if (!redeemVaultId) { notify({ kind: 'error', text: 'This claim’s vault couldn’t be found — reopen the claim and try again.' }); return }
 
         // Primary: use already-loaded allPositions (same source as POSITIONS tab — most reliable)
         const qAddr = address!.toLowerCase()
@@ -640,9 +643,9 @@ function ClaimsPageContent() {
         }
 
         if (freshSharesBig === 0n) {
-          alert(isDistrust
-            ? 'No AGAINST shares to redeem — you have not staked in the Oppose vault'
-            : 'No FOR shares to redeem — position may already be empty')
+          notify({ kind: 'info', text: isDistrust
+            ? 'No AGAINST shares to redeem — you have not staked in the Oppose vault.'
+            : 'No FOR shares to redeem — position may already be empty.' })
           return
         }
 
@@ -1730,22 +1733,6 @@ function ClaimsPageContent() {
                   </div>
                 )
               })()}
-
-              {/* === BONDING CURVE INFO BANNER === */}
-              <div className="bg-[rgba(200,150,60,0.10)] border border-[#1f6feb25] rounded-2xl p-4 mb-3">
-                <div className="flex items-start gap-3">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                    <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2" />
-                    <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  <div>
-                    <p className="text-[#C8963C] text-sm font-semibold mb-1">Bonding Curve Economics</p>
-                    <p className="text-[#B5BDC6] text-xs leading-relaxed">
-                      Early stakers get more shares per tTRUST. As more people support this claim, your shares increase in value. Redeem anytime to realize gains.
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               {/* === TABS: Overview / Attestations / Activity === */}
               <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl overflow-hidden mb-3">

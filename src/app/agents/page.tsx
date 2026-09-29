@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Layers, Globe, LayoutGrid, List, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { Layers, Globe, LayoutGrid, List, ExternalLink } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther } from 'viem'
 import Link from 'next/link'
@@ -41,11 +41,18 @@ import { AgentRadar } from '@/components/AgentRadar'
 import { TrustTimeline, ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
+import { useNotice } from '@/components/shared/NoticeProvider'
+import { useConnectModal } from '@/components/wallet/ConnectModal'
+import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
+import { intuitionTestnet } from '@0xintuition/protocol'
+import { txFailureNotice } from '@/lib/user-notice'
 import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
-import { fetchAgentReports, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector } from '@/lib/agent-profile'
+import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
+import { AtomIdLine } from '@/components/profile/AtomIdLine'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
 import { startVisiblePoll } from '@/lib/visible-poll'
 import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
@@ -61,7 +68,8 @@ import {
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import {
-  agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, MODAL_UNREACHABLE, OWN_TX_LIVE_MS,
+  agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, OWN_TX_LIVE_MS,
+  MODAL_PARTS, MODAL_HEADER_PARTS, MODAL_REST_PARTS, type ModalPart,
   type AgentModalPayload, type AgentsPageView,
 } from '@/lib/agents-page-types'
 import { fetchAgentModalData, fetchAgentsPage } from '@/lib/agents-page-client'
@@ -249,6 +257,9 @@ function AgentsPageContent() {
   }>({ termId: null, counterTermId: null, loading: false })
   const [creatingTriple, setCreatingTriple] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  // Errors and warnings in the page's flows: in-app notices, never a native browser dialog (Etap 5a).
+  const { notify } = useNotice()
+  const { openConnectModal } = useConnectModal()
   const [agentTrust, setAgentTrust] = useState<TrustScoreResult | null>(null)
   const [signalSide, setSignalSide] = useState<'support' | 'oppose'>('support')
   const [tradeAction, setTradeAction] = useState<'buy' | 'sell'>('buy')
@@ -285,6 +296,7 @@ function AgentsPageContent() {
   const [profileLoaded, setProfileLoaded] = useState(false)
   // Etap 4b: "Back this agent" (Buy/Sell) is secondary to the attestation unit — collapsed by default.
   const [backAccordionOpen, setBackAccordionOpen] = useState(false)
+  const openBackOnSelect = useRef(false)
   // Cache hybrid scores keyed by agent term_id, populated when modal computes them.
   // Cards fall back to trust score until the modal has been opened for that agent.
   const [objectScoreByTermId, setObjectScoreByTermId] = useState<Record<string, number>>({})
@@ -302,23 +314,27 @@ function AgentsPageContent() {
 
   // ── The modal beyond the list: one cached answer per agent (Etap 4c) ─────────
   // Vault, signals, skill triples, reports and staker weights from /api/v1/agents/page/:id — no
-  // indexer request from the browser. Refreshed every 15 s while the tab is visible (other users'
-  // trades; the server re-reads at most every 30 s). null = not answered yet.
-  const [modalData, setModalData] = useState<AgentModalPayload | null>(null)
+  // indexer request from the browser. First the header's parts on their own and the rest beside
+  // them (Etap 5a: the header never waits on skill triples, ~5.5 s cold); then every 15 s while the
+  // tab is visible, one request for every part (cached by then). A part not answered yet is absent;
+  // null = nothing answered yet.
+  const [modalData, setModalData] = useState<Partial<AgentModalPayload> | null>(null)
   useEffect(() => {
     setModalData(null)
     if (!selectedAgent) return
     const termId = selectedAgent.term_id
     let cancelled = false
-    let answered = false
-    const load = () => fetchAgentModalData(termId).then((d) => {
+    const merge = (parts: readonly ModalPart[]) => (d: Partial<AgentModalPayload> | null) => {
       if (cancelled) return
-      // Unreachable on the first try: every part unknown (never a spinner forever, never zeros).
-      // Later: keep the last answer.
-      if (d) { answered = true; setModalData(d) } else if (!answered) setModalData(MODAL_UNREACHABLE)
-    })
-    load()
-    const stop = startVisiblePoll({ intervalMs: MODAL_POLL_MS, firstDelayMs: MODAL_POLL_MS, tick: load })
+      // Unreachable: a part never answered is unknown ("failed" — never a spinner forever, never
+      // zeros); a part answered before keeps its last answer.
+      setModalData((prev) => d
+        ? { ...(prev ?? {}), ...d }
+        : { ...Object.fromEntries(parts.filter((p) => !prev?.[p]).map((p) => [p, { status: 'failed' as const }])), ...(prev ?? {}) })
+    }
+    fetchAgentModalData(termId, MODAL_HEADER_PARTS).then(merge(MODAL_HEADER_PARTS))
+    fetchAgentModalData(termId, MODAL_REST_PARTS).then(merge(MODAL_REST_PARTS))
+    const stop = startVisiblePoll({ intervalMs: MODAL_POLL_MS, firstDelayMs: MODAL_POLL_MS, tick: () => fetchAgentModalData(termId).then(merge(MODAL_PARTS)) })
     return () => { cancelled = true; stop() }
   }, [selectedAgent?.term_id])
 
@@ -331,7 +347,7 @@ function AgentsPageContent() {
 
   // Evaluator weight per staker wallet (the cached evaluator leaderboard's). Unread → none applied.
   const evaluatorWeights = useMemo(
-    () => new Map(modalData?.stakerWeights.status === 'ok' ? Object.entries(modalData.stakerWeights.value) : []),
+    () => new Map(modalData?.stakerWeights?.status === 'ok' ? Object.entries(modalData.stakerWeights.value) : []),
     [modalData],
   )
 
@@ -442,6 +458,8 @@ function AgentsPageContent() {
     if (openId && (agents.length > 0 || cohortAgents.length > 0) && !selectedAgent) {
       const match = agents.find(a => a.term_id === openId) ?? cohortAgents.find(a => a.term_id === openId)
       if (match) {
+        // ?back=1 (the profile's "Back with tTRUST"): the Back section opens expanded.
+        openBackOnSelect.current = searchParams.get('back') === '1'
         setSelectedAgent(match)
       }
     }
@@ -483,7 +501,7 @@ function AgentsPageContent() {
         .catch(() => { if (!cancelled) applySignals(null) })
       return () => { cancelled = true }
     }
-    if (!modalData) {
+    if (!modalData?.signals) {
       setSignalsLoading(true)
       setAgentSignals([])
       return
@@ -532,7 +550,7 @@ function AgentsPageContent() {
       return
     }
     // Otherwise (cohort rows) the modal's cached answer carries it (Etap 4c).
-    if (!modalData) {
+    if (!modalData?.vault) {
       setAgentTriple({ termId: null, counterTermId: null, loading: true })
       return
     }
@@ -542,9 +560,15 @@ function AgentsPageContent() {
       : { termId: null, counterTermId: null, loading: false, failed: true })
   }, [selectedAgent?.term_id, modalData])
 
-  // Collapse "Back this agent" whenever a different agent's modal opens.
+  // Collapse "Back this agent" whenever a different agent's modal opens — unless it was opened
+  // to back (?back=1), then expanded and scrolled to.
   useEffect(() => {
-    setBackAccordionOpen(false)
+    const expand = openBackOnSelect.current
+    openBackOnSelect.current = false
+    setBackAccordionOpen(expand)
+    if (!expand) return
+    const t = setTimeout(() => document.querySelector('[data-testid="back-this-agent"]')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 400)
+    return () => clearTimeout(t)
   }, [selectedAgent?.term_id])
 
   // Skill triples (skill trust breakdown + empty-state CTA) from the modal's cached answer.
@@ -671,7 +695,7 @@ function AgentsPageContent() {
   // Positions (backers table, Backers line) + on-chain supply. Visitors: the positions the list read,
   // then each refresh of the modal's cached answer (polled every 15 s above) — no indexer request
   // from the browser. After the user's own trade on this agent: read live, polled every 15 s.
-  const modalVaultPositions = modalData?.vault.status === 'ok' ? modalData.vault.value.positions : undefined
+  const modalVaultPositions = modalData?.vault?.status === 'ok' ? modalData.vault.value.positions : undefined
   useEffect(() => {
     if (!selectedAgent) {
       setAllPositions([])
@@ -731,7 +755,7 @@ function AgentsPageContent() {
 
     // Otherwise the modal's cached answer read the vaults (Etap 4c). Unread → the score stays
     // unmeasured ("—"): a failed oppose read is not "0 oppose".
-    if (modalData?.vault.status === 'ok') {
+    if (modalData?.vault?.status === 'ok') {
       const opposeWei = sumSharesByVault(modalData.vault.value.positions).get(agentTriple.counterTermId) ?? 0n
       setAgentTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
     }
@@ -768,7 +792,7 @@ function AgentsPageContent() {
       debugLog('✅ import succeeded, keys:', Object.keys(intuitionLib))
     } catch (importErr: any) {
       console.error('❌ import failed:', importErr?.message)
-      alert('Import error: ' + importErr?.message)
+      notify({ kind: 'error', text: `Couldn’t load the transaction code (${importErr?.message ?? 'unknown error'}). Reload the page and try again.` })
       isExecutingRef.current = false
       return
     }
@@ -808,7 +832,7 @@ function AgentsPageContent() {
         } else {
           const counterTermId = pendingVote.counterTermId
           if (!counterTermId) {
-            alert('Oppose vault not set up — please activate it first via the Oppose tab')
+            notify({ kind: 'error', text: 'Oppose vault not set up — please activate it first via the Oppose tab.' })
             return
           }
           redeemVaultId = counterTermId as `0x${string}`
@@ -822,9 +846,9 @@ function AgentsPageContent() {
         debugLog('redeemVaultId:', redeemVaultId, 'freshSharesRaw:', freshSharesRaw, '→ BigInt:', freshShares.toString())
 
         if (freshShares === 0n) {
-          alert(pendingVote.type === 'redeem_trust'
-            ? 'No FOR shares to redeem — position may already be empty'
-            : 'No AGAINST shares to redeem — you have not staked in the Oppose vault')
+          notify({ kind: 'info', text: pendingVote.type === 'redeem_trust'
+            ? 'No FOR shares to redeem — position may already be empty.'
+            : 'No AGAINST shares to redeem — you have not staked in the Oppose vault.' })
           return
         }
 
@@ -858,11 +882,11 @@ function AgentsPageContent() {
         // counterTermId and tripleTermId were captured at click time — agentTriple may be null now
         const { counterTermId, tripleTermId } = pendingVote
         if (!counterTermId) {
-          alert('Oppose vault not set up — please activate it first via the Oppose tab')
+          notify({ kind: 'error', text: 'Oppose vault not set up — please activate it first via the Oppose tab.' })
           return
         }
         if (!tripleTermId) {
-          alert('Oppose vault is not fully initialized. Please reopen the agent modal and try again.')
+          notify({ kind: 'error', text: 'Oppose vault is not fully initialized. Please reopen the agent modal and try again.' })
           return
         }
         debugLog('distrust counterTermId:', counterTermId)
@@ -941,7 +965,7 @@ function AgentsPageContent() {
     } catch (e: any) {
       console.error('❌ executeVote error:', e?.message, e)
       setVoteStatus(prev => { const n = { ...prev }; delete n[pendingVote.agent.term_id]; return n })
-      alert(`Error: ${e?.message || 'Unknown error'}`)
+      notify(txFailureNotice('Transaction', e))
     } finally {
       isExecutingRef.current = false
       setPendingVote(null)
@@ -967,11 +991,7 @@ function AgentsPageContent() {
       setTimeout(() => setToast(null), 5000)
     } catch (e: any) {
       console.error('handleCreateTrustTriple error:', e)
-      if (e?.message?.includes('InsufficientBalance') || e?.message?.includes('insufficient')) {
-        alert('Insufficient tTRUST balance. Get tTRUST from the faucet at https://testnet.hub.intuition.systems/')
-      } else {
-        alert(`Error creating Oppose vault: ${e?.message || 'Unknown error'}`)
-      }
+      notify(txFailureNotice('Creating the Oppose vault', e))
     } finally {
       setCreatingTriple(false)
     }
@@ -1076,7 +1096,7 @@ function AgentsPageContent() {
       fetchAgentReports(selectedAgent.term_id).catch(() => null).then((r) => { if (!cancelled) apply(r) })
       return () => { cancelled = true }
     }
-    if (!modalData) return
+    if (!modalData?.reports) return
     apply(modalData.reports.status === 'ok' ? modalData.reports.value : null)
   }, [selectedAgent?.term_id, modalData, liveAgent])
 
@@ -1143,11 +1163,7 @@ function AgentsPageContent() {
       setTimeout(() => setToast(null), 5000)
     } catch (e: any) {
       console.error('Report error:', e)
-      if (e?.message?.includes('InsufficientBalance') || e?.message?.includes('insufficient')) {
-        alert('Insufficient tTRUST balance.')
-      } else {
-        alert(`Report failed: ${e?.message || 'Unknown error'}`)
-      }
+      notify(txFailureNotice('Report', e))
     } finally {
       setReportSubmitting(false)
     }
@@ -1334,35 +1350,20 @@ function AgentsPageContent() {
   }, [skillTriples])
 
 
-  // Etap 4b — modal stat rows: primary (attestation unit, canonical) + secondary
-  // (Backers, atom vault). No new fetch — derived from profileVector +
-  // combinedStakerCount/positions_aggregate, both already loaded for this modal.
-  // Backers are known only once THIS agent's positions were read; the atom-vault sum
-  // comes from the list's aggregate when it was fetched (AgentScore rows) or from the
-  // modal's own positions read (cohort rows never fetch the aggregate). Unknown → "—".
+  // The header's stat row (Etap 5a): the same derivation as /agents/[id] (lib/agent-profile.ts
+  // statRowView, components/profile/ProfileStatRow), from this modal's reads — the list's
+  // attestations, the modal answer's reports and signals, and this agent's vault positions (the
+  // modal answer's, or the live read after the user's own trade). Backers are known only once THIS
+  // agent's positions were read. A part not read (or failed) renders "—", never 0.
   const positionsKnown = !!selectedAgent && positionsLoadedFor === selectedAgent.term_id
-  const backerVaultWei: bigint | null = useMemo(() => {
-    if (!selectedAgent) return null
-    const fromList = readSharesWei(selectedAgent.positions_aggregate)
-    if (fromList != null) return fromList
-    if (!positionsKnown) return null
-    return allPositions
-      .filter((p: any) => p.term_id === selectedAgent.term_id)
-      .reduce((sum: bigint, p: any) => { try { return sum + BigInt(p.shares) } catch { return sum } }, 0n)
-  }, [selectedAgent, positionsKnown, allPositions])
-  // A part whose read failed is null (the list's attestations, the modal answer's reports): its numbers render "—",
-  // never the zeros computeModalStatSummary would derive from nothing.
   const attestedRead = profileLoaded && profileVector.attested != null
   const reportsRead = profileLoaded && profileVector.reports != null
-  const modalStats = useMemo(() => {
-    return computeModalStatSummary({
-      attested: profileVector.attested ?? [],
-      reportCount,
-      backerCount: combinedStakerCount,
-      backerVaultWei: backerVaultWei ?? 0n, // rendered only when backerVaultWei != null
-      signals: agentSignalsCount,
-    })
-  }, [profileVector.attested, reportCount, combinedStakerCount, backerVaultWei, agentSignalsCount])
+  const statRow = useMemo(() => statRowView({
+    attested: attestedRead ? profileVector.attested : null,
+    reportCount: reportsRead ? reportCount : null,
+    backers: positionsKnown && selectedAgent ? backersFromPositions(allPositions, selectedAgent.term_id, agentTriple.counterTermId) : null,
+    signals: signalsLoading ? null : agentSignalsCount,
+  }), [attestedRead, reportsRead, profileVector.attested, reportCount, positionsKnown, selectedAgent, allPositions, agentTriple.counterTermId, signalsLoading, agentSignalsCount])
 
   // The agent tier — attestations only (thesis §6 "Agent tiers", lib/agent-tier.ts). Backing on
   // the atom vault never changes it. null while the profile loads or when the attestation read
@@ -2080,57 +2081,15 @@ function AgentsPageContent() {
                   })()}
                 </p>
 
-                {/* Atom ID */}
-                <div className="space-y-2 mb-5">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-[#B5BDC6] w-16 flex-shrink-0">Atom ID:</span>
-                    <code className="text-[#B5BDC6] text-xs font-mono">
-                      {selectedAgent.term_id.slice(0, 14)}...{selectedAgent.term_id.slice(-8)}
-                    </code>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(selectedAgent.term_id)}
-                      className="text-[#B5BDC6] hover:text-white transition-colors"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
-                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" strokeWidth="2"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+                {/* Atom ID — shortened hex, copies the full id (shared with /agents/[id]) */}
+                <AtomIdLine termId={selectedAgent.term_id} className="mb-5" />
 
-                {/* Primary stat row — the attestation unit (canonical, thesis §4).
-                    2x2 on mobile, 1x4 on desktop. Loading shows "—", never "0". */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {[
-                    { value: attestedRead ? modalStats.attesters : '—', label: attestedRead && modalStats.attesters === 1 ? 'Attester' : 'Attesters' },
-                    { value: attestedRead ? modalStats.domains : '—', label: attestedRead && modalStats.domains === 1 ? 'Domain attested' : 'Domains attested' },
-                    { value: attestedRead ? formatTTrust(modalStats.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
-                    { value: reportsRead ? modalStats.reports : '—', label: 'Reports' },
-                  ].map((s, i) => (
-                    <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-3 text-center">
-                      <p className="text-lg font-bold text-white">{s.value}</p>
-                      <p className="text-xs text-[#B5BDC6] mt-0.5">{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Secondary line — the atom vault (Backers). Muted, never a box: honesty
-                    demotes this, never hides it (thesis §6). Only attestations above count
-                    toward the tier. Signals (raw deposit/redeem event count on the vault —
-                    NOT distinct wallets) ride along here too when non-zero: no primary box of
-                    its own (dropped from the header entirely would violate thesis §6 for any
-                    agent whose signal count is real, e.g. OPEN CLAW at 13 live), but it isn't
-                    always zero so it can't just be omitted either. */}
-                <div className="mt-2.5">
-                  <TooltipWrapper content="Backers stake on the agent's atom; attesters stake on a domain claim. Only attestations count toward the tier.">
-                    <p className="text-xs text-[#7A838D] cursor-help">
-                      Backers: {positionsKnown ? modalStats.backerCount : '—'} · {backerVaultWei != null ? formatTTrust(backerVaultWei) : '—'} on atom vault
-                      {!signalsLoading && modalStats.signals > 0 ? ` · ${modalStats.signals} signal${modalStats.signals !== 1 ? 's' : ''}` : ''}
-                    </p>
-                  </TooltipWrapper>
-                  {modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
-                </div>
+                {/* The stat row — attestation unit primary, Backers demoted (thesis §4/§6) — and the
+                    modal's own age line. The same component as /agents/[id] (Etap 5a). */}
+                <ProfileStatRow
+                  view={statRow}
+                  footer={modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
+                />
               </div>
 
               {/* ETAP 3 — profile hierarchy (thesis §5), always visible above the
@@ -2154,22 +2113,7 @@ function AgentsPageContent() {
               {/* === ACTION SECTION: Back this agent (Buy/Sell) — collapsed by default.
                   Secondary to the attestation unit above (thesis §4/§6): backing is a
                   vault stake, not a competence claim, and never changes the tier. */}
-              <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-5 mb-3">
-                <button
-                  type="button"
-                  onClick={() => setBackAccordionOpen(v => !v)}
-                  className="w-full flex items-center justify-between gap-2 text-left"
-                  aria-expanded={backAccordionOpen}
-                >
-                  <span className="text-[#B5BDC6] text-xs font-semibold">Back this agent</span>
-                  {backAccordionOpen ? <ChevronUp className="w-4 h-4 text-[#7A838D]" /> : <ChevronDown className="w-4 h-4 text-[#7A838D]" />}
-                </button>
-                {backAccordionOpen && (
-                <>
-                <p className="text-[#7A838D] text-xs mt-2 mb-3">
-                  Stake tTRUST on this agent&apos;s atom vault. Backing is not attesting — it does not change the tier.
-                </p>
-
+              <BackThisAgentSection open={backAccordionOpen} onToggle={() => setBackAccordionOpen(v => !v)} className="mb-3">
                 {isConnected ? (
                   <>
                     {/* Legacy Oppose position — show sell button if user has against shares */}
@@ -2504,14 +2448,17 @@ function AgentsPageContent() {
 
                   </>
                 ) : (
-                  <div className="p-4 bg-[#171A1D] border border-[#C8963C]/12 rounded-xl text-center">
-                    <p className="text-[#B5BDC6] font-semibold mb-1">Connect wallet to stake</p>
-                    <p className="text-xs text-[#7A838D]">Intuition Testnet · Chain ID 13579</p>
-                  </div>
+                  // Leads somewhere (Etap 5a): the app's connect modal; this panel stays open behind it.
+                  <button
+                    type="button"
+                    onClick={() => openConnectModal({ reason: `Connect a wallet to back ${getAgentNameFromAtom(selectedAgent)}.` })}
+                    className="w-full p-4 bg-[#171A1D] border border-[#C8963C]/25 rounded-xl text-center hover:bg-[#C8963C]/10 transition-colors"
+                  >
+                    <p className="text-[#C8963C] font-semibold mb-1">Connect wallet to back</p>
+                    <p className="text-xs text-[#7A838D]">Intuition Testnet · Chain ID {intuitionTestnet.id}</p>
+                  </button>
                 )}
-                </>
-                )}
-              </div>
+              </BackThisAgentSection>
 
               {/* === YOUR HOLDINGS === */}
               {isConnected && (userPosition.forShares || userPosition.againstShares) && (() => {
@@ -2815,23 +2762,6 @@ function AgentsPageContent() {
                   </div>
                 )
               })()}
-
-              {/* === BONDING CURVE INFO === */}
-              <div className="bg-[rgba(200,150,60,0.10)] border border-[#1f6feb25] rounded-2xl p-4 mb-3">
-                <div className="flex items-start gap-3">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                    <circle cx="12" cy="12" r="9" stroke="#C8963C" strokeWidth="2" />
-                    <path d="M12 8v4m0 4h.01" stroke="#C8963C" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  <div>
-                    <p className="text-[#C8963C] text-sm font-semibold mb-1">Bonding Curve Economics</p>
-                    <p className="text-[#B5BDC6] text-xs leading-relaxed">
-                      Early stakers get more shares per tTRUST. As more people trust this agent,
-                      your shares increase in value. Redeem anytime to realize gains.
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               {/* === TABS: Overview / Attestations / Activity / Timeline ===
                   Every tab stays reachable at 390 px (4b-list §6 #1): on phones the four share the
