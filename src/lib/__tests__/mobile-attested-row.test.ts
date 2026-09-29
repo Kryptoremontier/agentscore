@@ -38,9 +38,9 @@ describe('the profile header on a phone', () => {
 })
 
 describe('the harness: full-height modal PNGs are not covered by fixed chrome', () => {
-  it('unfixModal hides fixed/sticky elements outside the modal (transition off) and restores them before the checks', () => {
+  it('unfixModal hides fixed/sticky elements outside the modal and their descendants (transitions off) and restores them before the checks', () => {
     const spec = readFileSync(path.join(__dirname, '../../../tests/e2e/screenshots.spec.ts'), 'utf8')
-    expect(spec).toMatch(/node\.style\.transition = 'none'\n\s*node\.style\.visibility = 'hidden'/)
+    expect(spec).toContain("'[data-shot-hidden], [data-shot-hidden] * { visibility: hidden !important; transition: none !important; }'")
     expect(spec).toMatch(/__restoreShotChrome\?\.\(\)\)\n/)
     expect(spec).toMatch(/check: modalTitleClearsHeader/)
     expect(spec).toMatch(/await profileFitsPhone\(page, project\)/)

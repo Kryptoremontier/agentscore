@@ -321,19 +321,23 @@ async function unfixModal(page: Page): Promise<Locator> {
   const modal = modalLocator(page)
   if ((await modal.count()) === 0) throw new Error('modal not open')
   await modal.evaluate((el: HTMLElement) => {
-    const hidden: Array<{ node: HTMLElement; visibility: string; transition: string }> = []
+    const hidden: HTMLElement[] = []
     for (const node of document.body.querySelectorAll<HTMLElement>('*')) {
       if (el.contains(node) || node.contains(el)) continue
       const pos = getComputedStyle(node).position
-      if ((pos === 'fixed' || pos === 'sticky') && node.style.visibility !== 'hidden') {
-        hidden.push({ node, visibility: node.style.visibility, transition: node.style.transition })
-        // No transition: the navbar's `transition-all` would keep it visible through the capture.
-        node.style.transition = 'none'
-        node.style.visibility = 'hidden'
+      if (pos === 'fixed' || pos === 'sticky') {
+        node.setAttribute('data-shot-hidden', '')
+        hidden.push(node)
       }
     }
+    // !important on the element AND its descendants, transitions off: `transition-all` (the navbar,
+    // the sticky bar's button) would otherwise keep them visible through the capture.
+    const style = document.createElement('style')
+    style.textContent = '[data-shot-hidden], [data-shot-hidden] * { visibility: hidden !important; transition: none !important; }'
+    document.head.appendChild(style)
     ;(window as unknown as { __restoreShotChrome?: () => void }).__restoreShotChrome = () => {
-      for (const h of hidden) { h.node.style.visibility = h.visibility; h.node.style.transition = h.transition }
+      style.remove()
+      for (const n of hidden) n.removeAttribute('data-shot-hidden')
     }
   })
   await modal.evaluate((el: HTMLElement) => {
