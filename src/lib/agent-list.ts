@@ -124,13 +124,7 @@ export async function fetchAgentListCorpus<T extends AgentListAtom = AgentListAt
   if (rows.length > 0) {
     // withMeta: the same request, and the modal's backers table can open on these rows.
     const positions = await fetchVaultPositions([...rows.map(a => a.term_id), ...counterTermIds], { withMeta: true }).catch(() => null)
-    annotateVaultReads(rows, positions, { stakers: true })
-    const readAt = Date.now()
-    for (const row of rows) {
-      const ctid = row.as_subject_triples?.[0]?.counter_term_id ?? null
-      row.__vaultPositions = positions ? positions.filter(p => p.term_id === row.term_id || (!!ctid && p.term_id === ctid)) : null
-      row.__vaultReadAt = readAt
-    }
+    attachVaultSnapshot(rows, positions, Date.now())
   }
 
   return { rows, total: page.total, truncated: page.truncated }
@@ -174,6 +168,20 @@ export function annotateVaultReads<T extends VaultAnnotatedRow>(
     }
     if (ctid && sums.has(ctid)) row.__opposeWei = sums.get(ctid) || 0n
     if (opts.stakers) row.liveStakerCount = countLiveStakers(positions!, { atomId: row.term_id, counterId: ctid })
+  }
+}
+
+/**
+ * Annotate list rows from one read of their vaults (annotateVaultReads: oppose, live stakers) and
+ * keep each row's own positions and the read's time, for the modal to open on (listVaultSnapshot).
+ * `positions` null = the read failed: every row's snapshot is null (the modal reads it itself).
+ */
+export function attachVaultSnapshot<T extends AgentListAtom>(rows: T[], positions: VaultPositionWithMeta[] | null, readAt: number): void {
+  annotateVaultReads(rows, positions, { stakers: true })
+  for (const row of rows) {
+    const ctid = row.as_subject_triples?.[0]?.counter_term_id ?? null
+    row.__vaultPositions = positions ? positions.filter(p => p.term_id === row.term_id || (!!ctid && p.term_id === ctid)) : null
+    row.__vaultReadAt = readAt
   }
 }
 

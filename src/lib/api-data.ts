@@ -99,7 +99,7 @@ function momentumLabel(momentum: number): string {
   return 'stable'
 }
 
-type AgentRow = {
+export type AgentRow = {
   term_id: string
   label: string | null
   data?: string | null
@@ -109,7 +109,8 @@ type AgentRow = {
   creator?: { label: string; id?: string } | null
   /** Atom-vault support stake + last signal time. No row count: it counts 0-share rows (stakers come from agentVaultReads). */
   positions_aggregate?: { aggregate: { sum: { shares: string | null } | null; max: { created_at: string | null } | null } | null }
-  as_subject_triples?: Array<{ counter_term_id: string }> | null
+  /** The trust triple (its own vault, and its counter-vault) — the /agents modal opens on it. */
+  as_subject_triples?: Array<{ term_id?: string; counter_term_id: string }> | null
   subjectTriplesCount?: Array<{ id: string }>
 }
 
@@ -197,7 +198,7 @@ const AGENT_ROW_FIELDS = `
   as_subject_triples(
     where: { predicate_id: { _eq: "${TRUST_PREDICATE_ID}" } }
     limit: 1
-  ) { counter_term_id }
+  ) { term_id counter_term_id }
 `
 
 /**
@@ -279,7 +280,7 @@ const AGENT_CORPUS_LIMIT = 500
 /** Our ceiling on the domain-claim triples read (the pager reports it; live 2026-09-26: 75). */
 const DOMAIN_TRIPLES_MAX = 5_000
 
-interface AgentCorpus {
+export interface AgentCorpus {
   /** Post-junk items, in GraphQL order (created_at desc). */
   kept: AgentApiItem[]
   junk: Array<{ item: AgentApiItem; reason: AgentJunkReason }>
@@ -287,6 +288,8 @@ interface AgentCorpus {
   rowsById: Map<string, AgentRow>
   /** REPO_MAP §7 rule 1: capped fetch reports its own truncation (null = count unknown). */
   truncated: boolean | null
+  /** Raw rows in the corpus (pre-junk): the aggregate, or read to the end; null if unknown. */
+  total: number | null
   /** Raw positions on every corpus agent's atom vault + trust counter-vault. */
   positions: VaultPositionWithMeta[]
   /** term_id → attestation entries; null = the attestation read failed (every tier unknown). */
@@ -301,7 +304,7 @@ interface AgentCorpus {
  * Served from the shared server cache for SERVER_CACHE_TTL.agentCorpus seconds — only when
  * complete: read to the end (not truncated, count known) with the attestation read answered.
  */
-const loadAgentCorpus = completeReadCache('agent-corpus', readAgentCorpus, {
+export const loadAgentCorpus = completeReadCache('agent-corpus', readAgentCorpus, {
   revalidate: SERVER_CACHE_TTL.agentCorpus,
   tags: () => [],
 })
@@ -344,6 +347,7 @@ async function readAgentCorpus(): Promise<CompleteRead<AgentCorpus>> {
       junk: junk.map(j => ({ item: j.item, reason: j.reason })),
       rowsById: new Map(rows.map(r => [r.term_id, r])),
       truncated,
+      total: corpus.total,
       positions: vault.positions,
       attestationsBySubject: attestations,
     },
@@ -496,7 +500,7 @@ async function agentSnapshot(termId: string): Promise<AgentSnapshot | null> {
 }
 
 /** An agent's skill triples with their stake — per agent, SERVER_CACHE_TTL.agentDetail seconds. */
-const cachedAgentSkillTriples = completeReadCache(
+export const cachedAgentSkillTriples = completeReadCache(
   'agent-skill-triples',
   // fetchAgentSkillTriples throws on a failed or capped read: nothing incomplete reaches the cache.
   async (termId: string) => ({ value: await fetchAgentSkillTriples(termId), complete: true }),
@@ -594,7 +598,7 @@ export interface CohortAgentDetail {
  * (~10 of the 23 steady-state requests/min under load); it now reads the agent from this
  * snapshot, as the AgentScore detail reads the cached corpus.
  */
-const loadErc8004Cohort = completeReadCache(
+export const loadErc8004Cohort = completeReadCache(
   'erc8004-cohort',
   async (): Promise<CompleteRead<CohortFetchResult>> => {
     const cohort = await fetchCohortAgents()

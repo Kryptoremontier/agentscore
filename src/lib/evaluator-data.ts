@@ -343,13 +343,16 @@ async function readEvaluatorLeaderboard(): Promise<CompleteRead<EvaluatorProfile
         ? b.adjustedAccuracy - a.adjustedAccuracy
         : b.totalPositions - a.totalPositions
     )
-    .slice(0, 50)
+    .slice(0, EVALUATOR_LEADERBOARD_MAX)
 
   // Complete = every oppose sum and every attestation count was read. Otherwise the profiles
   // are still returned (unknown trust is left out of each track record) but never stored.
   const attestationsRead = [...attestationMap.values()].every(a => !a.incomplete)
   return { value: ranked, complete: opposeSums !== null && attestationsRead }
 }
+
+/** The leaderboard keeps the top evaluators by adjusted accuracy — below this, it holds every evaluator. */
+export const EVALUATOR_LEADERBOARD_MAX = 50
 
 /**
  * The evaluator leaderboard — shared server cache, SERVER_CACHE_TTL.evaluatorLeaderboard seconds,

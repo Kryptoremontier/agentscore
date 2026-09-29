@@ -102,6 +102,35 @@ describe('completeReadCache — only complete reads are stored', () => {
     expect(live.v).toBeGreaterThan(2) // a fresh read, not the value from an hour ago
   })
 
+  it('past 2 × TTL with the indexer down → the last complete read, with its real age (Etap 4c); cold and down → the failure', async () => {
+    const cache = fakeNextCache(clock)
+    let down = false
+    const read = vi.fn(async () => { if (down) throw new Error('fetch failed'); return { value: { n: 7 }, complete: true } })
+    const get = completeReadCache('k', read, { revalidate: 60, tags: () => [], cache: cache.impl, now })
+    await get()
+    down = true
+    clock.t += 10 * 60_000 // ten minutes of outage
+    const served = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
+    await cache.settle()
+    expect(served.v).toEqual({ n: 7 })
+    expect(served.f).toMatchObject({ dataAgeSeconds: 600, complete: true })
+    expect(read).toHaveBeenCalledTimes(2) // the fill, then one attempt (the background refill and the live read share it)
+
+    const cold = completeReadCache('k2', read, { revalidate: 60, tags: () => [], cache: fakeNextCache(clock).impl, now })
+    await expect(cold()).rejects.toThrow('fetch failed')
+  })
+
+  it('past 2 × TTL, a live read that answers wins over the old one', async () => {
+    const cache = fakeNextCache(clock)
+    let n = 0
+    const get = completeReadCache('k', async () => ({ value: ++n, complete: true }), { revalidate: 60, tags: () => [], cache: cache.impl, now })
+    await get()
+    clock.t += 10 * 60_000
+    const live = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
+    expect(live.v).toBeGreaterThan(1)
+    expect(live.f.dataAgeSeconds).toBe(0)
+  })
+
   it('per-call tags (agent:<termId>) and the key reach the cache', async () => {
     const seen: string[][] = []
     const impl: CacheImpl = (cb, _k, { tags }) => { seen.push(tags); return cb }

@@ -3,6 +3,8 @@ import { currentFreshness, runWithReadLedger, type Freshness } from './server-ca
 
 /** CDN cache for a complete answer. Anything incomplete (a failed or capped read) is never cached. */
 export const API_CACHE_CONTROL = 'public, s-maxage=15, stale-while-revalidate=30'
+/** The most a CDN adds to an answer's age under API_CACHE_CONTROL: s-maxage + stale-while-revalidate. */
+export const CDN_MAX_EXTRA_AGE_SECONDS = 15 + 30
 export const NO_STORE = 'no-store'
 
 /**
