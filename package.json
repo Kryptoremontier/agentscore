@@ -14,7 +14,8 @@
     "type-check:tests": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "shots": "playwright test -c tests/e2e/playwright.config.ts"
+    "shots": "playwright test -c tests/e2e/playwright.config.ts",
+    "shots:dead-indexer": "playwright test -c tests/e2e/resilience.config.ts"
   },
   "dependencies": {
     "@0xintuition/protocol": "^2.0.2",

@@ -10,8 +10,8 @@ vi.mock('../evaluator-data', () => ({
 import { getAgentsWithScores, getPlatformStats } from '../api-data'
 import { qualityCacheClear } from '../scoring/quality-cache'
 import {
-  fetchAgentListCorpus, pluralize, matchesAgentSearch,
-  agentListHeaderSegments, agentResultsLine, AGENT_LIST_LIMIT,
+  pluralize, matchesAgentSearch,
+  agentListHeaderSegments, agentResultsLine,
 } from '../agent-list'
 import { fetchFeaturedTotal, featuredBadgeText } from '../featured-counts'
 import { installFakeHasura } from './fake-hasura'
@@ -153,28 +153,6 @@ describe('truncation fires at limit + 1, never at the limit (paged — lib/gql-p
   const atomsTable = (rows: unknown[], match: (q: string) => boolean) =>
     ({ match, field: 'atoms' as const, rows })
 
-  it('/agents corpus fetch: 51 atoms, our cap 50 → 50 rows, total 51, truncated — count on the SAME where', async () => {
-    const rows = Array.from({ length: AGENT_LIST_LIMIT + 1 }, (_, i) => row(`0x${String(i).padStart(64, '0')}`, `Agent: A${i}`))
-    const fake = installFakeHasura({ tables: [atomsTable(rows, q => q.includes('AgentListCorpus'))], other: () => ({ positions: [] }) })
-    const r = await fetchAgentListCorpus()
-    expect(r.rows).toHaveLength(AGENT_LIST_LIMIT)
-    expect(r.total).toBe(AGENT_LIST_LIMIT + 1)
-    expect(r.truncated).toBe(true)
-    // The first page and the count are one document (lib/gql-pager.ts mergeCountIntoQuery):
-    // its rows `where` and its aggregate `where` must be the same.
-    const doc = fake.calls.find(c => c.query.includes('AgentListCorpus(') && c.query.includes('atoms_aggregate'))!.query
-    const wheres = [...doc.matchAll(/where: (\{[\s\S]*?\})\s*(limit|\))/g)].map(m => m[1].replace(/\s+/g, ' '))
-    // The rows' own `where` comes first (nested selections have theirs), the aggregate's last.
-    expect(wheres.length).toBeGreaterThanOrEqual(2)
-    expect(wheres[0]).toBe(wheres[wheres.length - 1])
-  })
-
-  it('/agents corpus fetch: exactly 50 atoms → not truncated', async () => {
-    const rows = Array.from({ length: AGENT_LIST_LIMIT }, (_, i) => row(`0x${String(i).padStart(64, '0')}`, `Agent: A${i}`))
-    installFakeHasura({ tables: [atomsTable(rows, q => q.includes('AgentListCorpus'))], other: () => ({ positions: [] }) })
-    expect(await fetchAgentListCorpus()).toMatchObject({ total: AGENT_LIST_LIMIT, truncated: false })
-  })
-
   it('/api/v1/agents: 501 atoms, corpus cap 500 → paged past the 250 server cap, truncated reported', async () => {
     const many = Array.from({ length: 501 }, (_, i) => row(`0x${String(i + 1).padStart(64, '0')}`, `Agent: Real ${i}`))
     const fake = installFakeHasura({
@@ -184,6 +162,16 @@ describe('truncation fires at limit + 1, never at the limit (paged — lib/gql-p
     const r = await getAgentsWithScores({ limit: 1 })
     expect(r.truncated).toBe(true)
     expect(fake.rowCalls('atoms').map(c => c.variables.offset)).toEqual([0, 250])
+    // The first page and the count are one document (lib/gql-pager.ts mergeCountIntoQuery):
+    // its rows `where` and its aggregate `where` must be the same.
+    const doc = fake.calls.find(c => c.query.includes('ApiAgents(') && c.query.includes('atoms_aggregate'))!.query
+    const wheres = [...doc.matchAll(/where: (\{[\s\S]*?\})\s*(limit|\))/g)].map(m => m[1].replace(/\s+/g, ' '))
+    expect(wheres.length).toBeGreaterThanOrEqual(2)
+    expect(wheres[0]).toBe(wheres[wheres.length - 1])
+    // /agents lists the same corpus read (Etap 4c: it used to read its own, capped at 50).
+    const { getAgentsPageData } = await import('../agents-page-data')
+    const page = await getAgentsPageData()
+    expect(page.agentScore).toMatchObject({ status: 'ok', value: { fetched: 500, total: 501, truncated: true } })
   })
 
   it('/api/v1/agents: 300 atoms (above the 250 server cap, under our 500) → all read, not truncated', async () => {

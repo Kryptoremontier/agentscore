@@ -567,7 +567,9 @@ const handler = createMcpHandler(
           'topAgent.trustScore is trustScore-based (list context — no quality ' +
           'composite computed in aggregate; use get_agent_trust for the full envelope). ' +
           'attesters = distinct wallets with a live position on any attestation triple ' +
-          '(is skilled in → canonical domain). A count whose read failed is null, never 0. ' +
+          '(is skilled in → canonical domain). claims = the claims AgentScore lists (subject and ' +
+          'object both AgentScore agents or skills — the /claims page), not every triple on the network. ' +
+          'A count whose read failed is null, never 0. ' +
           'Use this for a quick overview of the ecosystem.',
         inputSchema: {},
       },

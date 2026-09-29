@@ -17,10 +17,9 @@ import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
 import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
-import { useAgentStakerWeights } from '@/hooks/useEvaluatorScore'
 import { calculateAgentTier } from '@/lib/agent-tier'
 import { AgentTierChip } from '@/components/agents/AgentTierChip'
-import { fetchAttestationsForSubjects, type AttestedEntry } from '@/lib/attestation-reader'
+import type { AttestedEntry } from '@/lib/attestation-reader'
 import { calculateWeightedTrust } from '@/lib/reputation-decay'
 import {
   calculateCompositeTrust, calculateStableDays, findPeakPrice,
@@ -35,7 +34,6 @@ import { parseAgentCard, calculateProfileCompleteness, AGENT_CATEGORIES } from '
 import { APP_CONFIG } from '@/lib/app-config'
 import { AGENT_WHERE_STR } from '@/lib/gql-filters'
 import { calculateSkillBreakdown, type SkillBreakdownResult } from '@/lib/skill-trust'
-import { fetchAgentSkillTriples } from '@/lib/intuition'
 import { effectiveLabel } from '@/lib/api-data'
 import { SkillBreakdown } from '@/components/SkillBreakdown'
 import { TrustSparkline } from '@/components/TrustSparkline'
@@ -47,27 +45,32 @@ import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
-import { fetchAgentProfileVector, fetchAgentReports, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
-import { fetchVaultBackers, sortPositions, type VaultPositionWithMeta } from '@/lib/vault-positions'
-import { startVisiblePoll, firstDelayFor } from '@/lib/visible-poll'
+import { fetchAgentReports, summarizeAttesters, computeModalStatSummary, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
+import { startVisiblePoll } from '@/lib/visible-poll'
 import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { TooltipWrapper } from '@/components/ui/tooltip'
 import { compareAgentEntries } from '@/lib/agent-list-sort'
 import {
-  fetchAgentListCorpus, matchesAgentSearch, agentListHeaderSegments, agentResultsLine, type FeedStatus,
+  matchesAgentSearch, agentListHeaderSegments, LIVE_FEED_LABEL, agentResultsLine, type FeedStatus,
   cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, type CardAttestationView,
-  listTrustTriple, listVaultSnapshot, listOpposeWei,
+  listTrustTriple, listVaultSnapshot, listOpposeWei, withLiveVault,
   ORIGIN_TABS, QUALITY_LEVELS, corpusTotals, qualityOptions, qualityOptionText, parseListFilters, listFiltersSearch,
   type OriginFilter, type QualityFilter, type AgentScoreCorpusCounts, type CohortCorpusCounts,
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import {
+  agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, MODAL_UNREACHABLE, OWN_TX_LIVE_MS,
+  type AgentModalPayload, type AgentsPageView,
+} from '@/lib/agents-page-types'
+import { fetchAgentModalData, fetchAgentsPage } from '@/lib/agents-page-client'
+import { readAgentSignals } from '@/lib/agent-signals'
+import {
   readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP, noScoreTooltip,
   stakeReadingOf,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
-import { filterAgents } from '@/lib/agent-junk-filter'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -198,6 +201,9 @@ function AgentsPageContent() {
     setQualityFilter(f.quality)
   }, [searchParams])
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
+  // The open modal's agent, for async results that must not land on another agent's modal.
+  const selectedAgentIdRef = useRef<string | null>(null)
+  selectedAgentIdRef.current = selectedAgent?.term_id ?? null
   const [activeTab, setActiveTab] = useState<'overview' | 'attestations' | 'activity' | 'timeline'>('timeline')
   // The modal's tab strip scrolls sideways on the narrowest phones: keep the active tab in view
   // (Timeline, the default, is the last one). Horizontal only — never scrolls the modal itself.
@@ -261,6 +267,8 @@ function AgentsPageContent() {
   // positionsLoading starts false, so without this the modal prints "Backers: 0"
   // before any fetch (and on a failed one).
   const [positionsLoadedFor, setPositionsLoadedFor] = useState<string | null>(null)
+  // true = allPositions came from a direct indexer read (after the user's own trade), not a cache.
+  const [positionsLive, setPositionsLive] = useState(false)
   const [supportSupply, setSupportSupply] = useState(0)
   const [opposeSupply, setOpposeSupply] = useState(0)
   const [onChainPrice, setOnChainPrice] = useState<number | null>(null)
@@ -292,19 +300,40 @@ function AgentsPageContent() {
     tradeAction === 'sell' ? (Number(redeemShares) || 0) : undefined,
   )
 
-  // Unique staker addresses for selected agent (support + oppose), capped at 20
-  const agentStakerAddresses = useMemo(() => {
-    if (!selectedAgent?.term_id) return []
-    const seen = new Set<string>()
-    for (const p of allPositions) {
-      const id = p.account_id?.toLowerCase()
-      if (id) seen.add(id)
-    }
-    return Array.from(seen).slice(0, 20)
-  }, [allPositions, selectedAgent?.term_id])
+  // ── The modal beyond the list: one cached answer per agent (Etap 4c) ─────────
+  // Vault, signals, skill triples, reports and staker weights from /api/v1/agents/page/:id — no
+  // indexer request from the browser. Refreshed every 15 s while the tab is visible (other users'
+  // trades; the server re-reads at most every 30 s). null = not answered yet.
+  const [modalData, setModalData] = useState<AgentModalPayload | null>(null)
+  useEffect(() => {
+    setModalData(null)
+    if (!selectedAgent) return
+    const termId = selectedAgent.term_id
+    let cancelled = false
+    let answered = false
+    const load = () => fetchAgentModalData(termId).then((d) => {
+      if (cancelled) return
+      // Unreachable on the first try: every part unknown (never a spinner forever, never zeros).
+      // Later: keep the last answer.
+      if (d) { answered = true; setModalData(d) } else if (!answered) setModalData(MODAL_UNREACHABLE)
+    })
+    load()
+    const stop = startVisiblePoll({ intervalMs: MODAL_POLL_MS, firstDelayMs: MODAL_POLL_MS, tick: load })
+    return () => { cancelled = true; stop() }
+  }, [selectedAgent?.term_id])
 
-  // Evaluator weights for all stakers of current agent
-  const { weights: evaluatorWeights } = useAgentStakerWeights(agentStakerAddresses)
+  // Agents this user just transacted on: their modal reads go straight to the indexer for a
+  // while (lib/agents-page-types.ts OWN_TX_LIVE_MS) — a user always sees the effect of their own
+  // action at once, even while the cached answers are older than it.
+  const [liveUntil, setLiveUntil] = useState<Record<string, number>>({})
+  const liveAgent = !!selectedAgent && isLiveAfterOwnTx(liveUntil, selectedAgent.term_id)
+  const markLiveAfterOwnTx = (termId: string) => setLiveUntil((prev) => ({ ...prev, [termId]: Date.now() + OWN_TX_LIVE_MS }))
+
+  // Evaluator weight per staker wallet (the cached evaluator leaderboard's). Unread → none applied.
+  const evaluatorWeights = useMemo(
+    () => new Map(modalData?.stakerWeights.status === 'ok' ? Object.entries(modalData.stakerWeights.value) : []),
+    [modalData],
+  )
 
   // Load platform fee config from FeeProxy contract (once per session)
   useEffect(() => {
@@ -331,93 +360,61 @@ function AgentsPageContent() {
     }
   }, [])
 
-  const fetchAgents = async () => {
+  // ── The list: one answer from our cache (Etap 4c) ─────────────────────────
+  // The page used to read the indexer from the browser (32 requests for a cold list and three
+  // modals) and went blank whenever that failed, while our server held a complete read. The list
+  // now comes from /api/v1/agents/page (lib/agents-page-data.ts): every part served with its age,
+  // the last complete read when the indexer is down, "failed" only when nothing can be shown.
+  const [pageView, setPageView] = useState<AgentsPageView | null>(null)
+  const loadPage = async (isCancelled: () => boolean = () => false) => {
     setLoading(true)
+    setCohortLoading(true)
     setError(null)
-    try {
-      // The AgentScore CORPUS — fetched once, never search-dependent (search is
-      // client-side, same rule for both corpora). Rows + a same-filter aggregate
-      // count, so a capped fetch reports its truncation (lib/agent-list.ts).
-      const corpus = await fetchAgentListCorpus<GraphQLAgent>()
-      const atoms = corpus.rows
-      setAgentCorpusMeta({ fetched: atoms.length, total: corpus.total, truncated: corpus.truncated })
-
-      for (const atom of atoms) atom.origin = 'agentscore'
-
-      // Test fixtures + duplicate re-registrations, counted and surfaced
-      // (thesis §6) — see agent-junk-filter.ts. Two-surface pattern: same
-      // filter as api-data.ts's getAgentsWithScores, applied here too since
-      // this page fetches independently rather than through that function.
-      // Pass the RAW label via the same effectiveLabel() this page already
-      // imports from api-data.ts (label-vs-data Hasura quirk resolved, no
-      // further cleaning) — agent-junk-filter.ts owns all fold-matching
-      // normalization itself, so this path and the server path can't drift
-      // apart on how a label is read (see agent-junk-filter.ts file header).
-      const candidates = atoms.map(a => ({
-        termId: a.term_id,
-        label: effectiveLabel(a),
-        stakerCount: a.liveStakerCount ?? 0,
-        totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
-        createdAt: a.created_at,
-        original: a,
-      }))
-      const { kept, junk } = filterAgents(candidates)
-      setAgentJunkFilteredCount(junk.length)
-      setAgents(kept)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
+    // null = our own API couldn't be reached: every part failed — the page says so.
+    const payload = await fetchAgentsPage()
+    if (isCancelled()) return
+    const view = agentsPageView(payload)
+    setPageView(view)
+    if (view.agentScore.status === 'ok') {
+      // Post-junk rows: the server applied agent-junk-filter.ts to the raw labels (one rule, §7 rule 4).
+      const rows = view.agentScore.rows as GraphQLAgent[]
+      for (const row of rows) row.origin = 'agentscore'
+      setAgents(rows)
+      setAgentJunkFilteredCount(view.agentScore.junk)
+      setAgentCorpusMeta({ fetched: view.agentScore.fetched, total: view.agentScore.total, truncated: view.agentScore.truncated })
+    } else {
+      setAgents([])
+      setError(FEED_UNREACHABLE)
     }
+    if (view.cohort.status === 'ok') {
+      setCohortAgents(view.cohort.agents.map((c): GraphQLAgent => ({
+        term_id: c.termId,
+        label: c.label,
+        type: 'Thing',
+        created_at: c.createdAt,
+        origin: 'erc8004',
+        declaredDomains: c.declaredDomains,
+        declaredSkills: c.declaredSkills,
+        caipIdentity: c.caipIdentity,
+      })))
+      setCohortTotal(view.cohort.total)
+      setCohortTruncated(view.cohort.truncated)
+      setCohortStatus('ok')
+    } else {
+      setCohortAgents([])
+      setCohortStatus('error')
+    }
+    // A subject whose part failed is absent: its card makes no claim (cardViewFor → unread).
+    setAttestedBySubject(view.attestations)
+    setLoading(false)
+    setCohortLoading(false)
   }
 
   useEffect(() => {
-    fetchAgents()
-  }, [])
-
-  // Etap 2c: ERC-8004 cohort — fetched once, no search/sort params server-side
-  // (cohort has no score data; search/sort/filter apply client-side below).
-  useEffect(() => {
     let cancelled = false
-    import('@/lib/cohort-reader').then(({ fetchCohortAgents }) => {
-      fetchCohortAgents().then(cohort => {
-        if (cancelled) return
-        setCohortStatus(cohort.status)
-        setCohortAgents(cohort.agents.map((c): GraphQLAgent => ({
-          term_id: c.termId,
-          label: c.label,
-          type: 'Thing',
-          created_at: c.createdAt,
-          origin: 'erc8004',
-          declaredDomains: c.declaredDomains,
-          declaredSkills: c.declaredSkills,
-          caipIdentity: c.caipIdentity,
-        })))
-        setCohortTotal(cohort.total)
-        setCohortTruncated(cohort.truncated)
-        setCohortLoading(false)
-      })
-    }).catch(() => {
-      // Chunk-load failure: without this the grid (gated on cohortLoading) never rendered at all.
-      if (cancelled) return
-      setCohortStatus('error')
-      setCohortLoading(false)
-    })
+    loadPage(() => cancelled)
     return () => { cancelled = true }
   }, [])
-
-  // Attestations for the listed agents — the card's tier (and attester line) come only from
-  // these (thesis §6). Waits for both corpora; a failed read is null (no claim), never 0.
-  useEffect(() => {
-    if (loading || cohortLoading) return
-    const ids = [...agents.map(a => a.term_id), ...cohortAgents.map(a => a.term_id)]
-    let cancelled = false
-    setAttestedBySubject(undefined)
-    fetchAttestationsForSubjects(ids)
-      .then(map => { if (!cancelled) setAttestedBySubject(map) })
-      .catch(() => { if (!cancelled) setAttestedBySubject(null) })
-    return () => { cancelled = true }
-  }, [loading, cohortLoading, agents, cohortAgents])
 
   // Per agent: attesters, domains and the tier — the same derivation as the modal
   // (lib/agent-list.ts cardAttestationView), computed once per read, not per render.
@@ -465,20 +462,34 @@ function AgentsPageContent() {
     }
   }, [agents])
 
-  // Fetch full signals list when modal opens (needed for chart + attestations + activity)
+  // Signals (chart, Activity, Timeline) from the modal's cached answer. Right after the user's own
+  // trade they come from the post-trade live read (executeVote) instead. Unread → "—", never 0.
+  const [signalsUnread, setSignalsUnread] = useState(false)
+  const applySignals = (read: { signals: any[]; totalCount: number } | null) => {
+    setAgentSignals(read ? read.signals : [])
+    setAgentSignalsCount(read ? read.totalCount : 0)
+    setSignalsUnread(!read)
+    setSignalsLoading(false)
+  }
   useEffect(() => {
     if (!selectedAgent) return
-
-    setSignalsLoading(true)
-    setAgentSignals([])
-
-    fetchAgentSignals(selectedAgent.term_id, agentTriple.counterTermId)
-      .then(({ signals, totalCount }) => {
-        setAgentSignals(signals)
-        setAgentSignalsCount(totalCount)
-      })
-      .finally(() => setSignalsLoading(false))
-  }, [selectedAgent?.term_id, agentTriple.counterTermId])
+    let cancelled = false
+    if (liveAgent) {
+      // The user's own trade on this agent: straight from the indexer.
+      if (agentTriple.loading) return
+      setSignalsLoading(true)
+      readAgentSignals(selectedAgent.term_id, agentTriple.counterTermId)
+        .then((read) => { if (!cancelled) applySignals(read) })
+        .catch(() => { if (!cancelled) applySignals(null) })
+      return () => { cancelled = true }
+    }
+    if (!modalData) {
+      setSignalsLoading(true)
+      setAgentSignals([])
+      return
+    }
+    applySignals(modalData.signals.status === 'ok' ? modalData.signals.value : null)
+  }, [selectedAgent?.term_id, modalData, liveAgent, agentTriple.loading, agentTriple.counterTermId])
 
   // The connected wallet's own shares on the atom vault (FOR) and trust counter-vault (AGAINST),
   // and its shares on one vault (the redeem amount); the modal's backers table. One module for
@@ -520,49 +531,36 @@ function AgentsPageContent() {
       setAgentTriple({ ...known, loading: false })
       return
     }
-    setAgentTriple({ termId: null, counterTermId: null, loading: true })
-    import('@/lib/intuition').then(({ findTrustTriple }) => {
-      findTrustTriple(selectedAgent.term_id)
-        .then(triple => setAgentTriple({
-          termId: triple?.termId ?? null,
-          counterTermId: triple?.counterTermId ?? null,
-          loading: false,
-        }))
-        .catch(() => setAgentTriple({ termId: null, counterTermId: null, loading: false, failed: true }))
-    })
-  }, [selectedAgent?.term_id])
+    // Otherwise (cohort rows) the modal's cached answer carries it (Etap 4c).
+    if (!modalData) {
+      setAgentTriple({ termId: null, counterTermId: null, loading: true })
+      return
+    }
+    const vault = modalData.vault
+    setAgentTriple(vault.status === 'ok'
+      ? { termId: vault.value.trustTriple?.termId ?? null, counterTermId: vault.value.trustTriple?.counterTermId ?? null, loading: false }
+      : { termId: null, counterTermId: null, loading: false, failed: true })
+  }, [selectedAgent?.term_id, modalData])
 
   // Collapse "Back this agent" whenever a different agent's modal opens.
   useEffect(() => {
     setBackAccordionOpen(false)
   }, [selectedAgent?.term_id])
 
-  // Fetch skill triples when modal opens (for skill trust breakdown + empty-state CTA)
+  // Skill triples (skill trust breakdown + empty-state CTA) from the modal's cached answer.
+  // Unread → unknown: loaded stays false so the CTA stays hidden.
   useEffect(() => {
-    let cancelled = false
-    setSkillTriplesLoaded(false)
-    if (!selectedAgent) {
-      setSkillTriples([])
-      return
-    }
-    fetchAgentSkillTriples(selectedAgent.term_id)
-      .then(triples => {
-        if (cancelled) return
-        setSkillTriples(triples)
-        setSkillTriplesLoaded(true)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setSkillTriples([])
-        // fetch failed — unknown, keep loaded=false so the CTA stays hidden
-      })
-    return () => { cancelled = true }
-  }, [selectedAgent?.term_id])
+    const part = selectedAgent ? modalData?.skillTriples : undefined
+    setSkillTriples(part?.status === 'ok' ? part.value : [])
+    setSkillTriplesLoaded(part?.status === 'ok')
+  }, [selectedAgent?.term_id, modalData])
 
   // PRIMARY: Derive userPosition from allPositions (same data that feeds Attestations — reliable)
-  // This prevents race conditions with separate fetchUserPosition calls
+  // This prevents race conditions with separate fetchUserPosition calls. Only when those positions
+  // were read live (after the user's own trade): cached ones can predate it (Etap 4c) — then the
+  // wallet's own live read below is the source.
   useEffect(() => {
-    if (!address || allPositions.length === 0) return
+    if (!address || allPositions.length === 0 || !positionsLive) return
     const qAddr = address.toLowerCase()
     const atomId = selectedAgent?.term_id?.toLowerCase()
     const ctrId = agentTriple.counterTermId?.toLowerCase()
@@ -586,7 +584,7 @@ function AgentsPageContent() {
       rawPositions: forPos,
       againstRawPositions: agaPos,
     })
-  }, [allPositions, address, selectedAgent?.term_id, agentTriple.counterTermId])
+  }, [allPositions, address, selectedAgent?.term_id, agentTriple.counterTermId, positionsLive])
 
   // FALLBACK: Also fetch directly when agent/address changes (covers fresh connect or post-tx)
   useEffect(() => {
@@ -645,6 +643,10 @@ function AgentsPageContent() {
       setAllPositions(positions)
       setCombinedStakerCount(uniqueCount)
       setPositionsLoadedFor(termId)
+      setPositionsLive(!seed)
+      // A live read (the user's own trade): the agent's list row follows it at once, so the card
+      // and the modal show the trade even while the cached list is older (Etap 4c).
+      if (!seed) setAgents((prev) => prev.map((row) => (row.term_id === termId ? withLiveVault(row, positions, Date.now()) : row)))
 
       // FALLBACK: compute supply from indexed positions when publicClient is unavailable
       if (!publicClient) {
@@ -666,12 +668,16 @@ function AgentsPageContent() {
     }
   }
 
-  // Fetch all positions when modal opens + poll every 15s while open
+  // Positions (backers table, Backers line) + on-chain supply. Visitors: the positions the list read,
+  // then each refresh of the modal's cached answer (polled every 15 s above) — no indexer request
+  // from the browser. After the user's own trade on this agent: read live, polled every 15 s.
+  const modalVaultPositions = modalData?.vault.status === 'ok' ? modalData.vault.value.positions : undefined
   useEffect(() => {
     if (!selectedAgent) {
       setAllPositions([])
       setCombinedStakerCount(0)
       setPositionsLoadedFor(null)
+      setPositionsLive(false)
       setSupportSupply(0)
       setOpposeSupply(0)
       setOnChainPrice(null)
@@ -682,29 +688,22 @@ function AgentsPageContent() {
     // The counter-vault must be known first: reading without it and again with it cost two reads.
     if (agentTriple.loading) return
 
-    // Open on the positions the list already read (no request); on-chain supply is read now.
-    // Without them (cohort rows, a failed list read) read at once.
-    const snapshot = listVaultSnapshot(selectedAgent)
-    refreshPositionsAndSupply(
-      selectedAgent.term_id,
-      agentTriple.counterTermId,
-      true, // show loading spinner on first load
-      snapshot?.positions,
-    )
+    if (liveAgent) {
+      refreshPositionsAndSupply(selectedAgent.term_id, agentTriple.counterTermId, positionsLoadedFor !== selectedAgent.term_id)
+      // Only while the tab is visible; back in view it refreshes at once.
+      return startVisiblePoll({
+        intervalMs: MODAL_POLL_MS,
+        firstDelayMs: MODAL_POLL_MS,
+        tick: () => refreshPositionsAndSupply(selectedAgent.term_id, agentTriple.counterTermId, false),
+      })
+    }
 
-    // Poll every 15s to catch other users' transactions — only while the tab is visible (a
-    // background tab spent 8 requests a minute); back in view it refreshes at once. The first tick
-    // comes when the list's snapshot is one interval old.
-    return startVisiblePoll({
-      intervalMs: MODAL_POLL_MS,
-      firstDelayMs: snapshot ? firstDelayFor(snapshot.readAt, MODAL_POLL_MS) : MODAL_POLL_MS,
-      tick: () => refreshPositionsAndSupply(
-        selectedAgent.term_id,
-        agentTriple.counterTermId,
-        false // silent refresh, no loading spinner
-      ),
-    })
-  }, [selectedAgent?.term_id, agentTriple.counterTermId, agentTriple.loading])
+    // The newest positions we hold: the modal's answer, else the list's snapshot. Neither yet →
+    // the modal's answer is on its way (or failed: backers unknown, "—").
+    const seed = modalVaultPositions ?? listVaultSnapshot(selectedAgent)?.positions
+    if (!seed) return
+    refreshPositionsAndSupply(selectedAgent.term_id, agentTriple.counterTermId, positionsLoadedFor !== selectedAgent.term_id, seed)
+  }, [selectedAgent?.term_id, agentTriple.counterTermId, agentTriple.loading, modalVaultPositions, liveAgent])
 
   // Compute trust score from real on-chain data whenever agent or triple changes.
   // null (rendered "—") while loading, when the atom vault was never read (cohort
@@ -730,36 +729,14 @@ function AgentsPageContent() {
       return
     }
 
-    // Fetch oppose vault total shares from GraphQL
-    fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `
-          query GetOpposeVault($termId: String!) {
-            positions_aggregate(where: { term_id: { _eq: $termId } }) {
-              aggregate {
-                count
-                sum { shares }
-              }
-            }
-          }
-        `,
-        variables: { termId: agentTriple.counterTermId },
-      }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (cancelled || data?.errors) return
-        const opposeWei = readSharesWei(data?.data?.positions_aggregate)
-        if (opposeWei == null) return
-        setAgentTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
-      })
-      .catch(() => {
-        // A failed oppose read is not "0 oppose" — the score stays unmeasured ("—").
-      })
+    // Otherwise the modal's cached answer read the vaults (Etap 4c). Unread → the score stays
+    // unmeasured ("—"): a failed oppose read is not "0 oppose".
+    if (modalData?.vault.status === 'ok') {
+      const opposeWei = sumSharesByVault(modalData.vault.value.positions).get(agentTriple.counterTermId) ?? 0n
+      setAgentTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
+    }
     return () => { cancelled = true }
-  }, [selectedAgent?.term_id, selectedAgent?.positions_aggregate?.aggregate?.sum?.shares, agentTriple.counterTermId, agentTriple.loading, agentTriple.failed])
+  }, [selectedAgent?.term_id, selectedAgent?.positions_aggregate?.aggregate?.sum?.shares, agentTriple.counterTermId, agentTriple.loading, agentTriple.failed, modalData])
 
   // Reset redeem input when switching signal side to avoid stale values
   useEffect(() => {
@@ -942,14 +919,17 @@ function AgentsPageContent() {
 
       setVoteStatus(prev => { const n = { ...prev }; delete n[agent.term_id]; return n })
 
-      // Refetch after 2s (indexer lag) + again at 5s (backup)
+      // The user's own action: this agent's reads go straight to the indexer for a while
+      // (OWN_TX_LIVE_MS) — the cached answers can be older than the trade.
+      markLiveAfterOwnTx(agent.term_id)
+
+      // Refetch after 2s (indexer lag) + again at 5s (backup) — live, this agent only: its
+      // positions (the card's row follows them, refreshPositionsAndSupply), its signals and the
+      // wallet's own position. The rest of the list stays on the cached answer.
       const refetchAll = () => {
-        fetchAgents()
-        fetchAgentSignals(agent.term_id, pendingVote.counterTermId)
-          .then(({ signals, totalCount }) => {
-            setAgentSignals(signals)
-            setAgentSignalsCount(totalCount)
-          })
+        readAgentSignals(agent.term_id, pendingVote.counterTermId)
+          .then((read) => { if (selectedAgentIdRef.current === agent.term_id) applySignals(read) })
+          .catch(() => { /* keep what the modal shows */ })
         if (address) {
           fetchUserPosition(agent.term_id, address, pendingVote.counterTermId).then(pos => { if (pos) setUserPosition(pos) })
         }
@@ -1065,114 +1045,40 @@ function AgentsPageContent() {
     }
   }
 
-  // Fetch individual signals (deposit/redeem events) for an agent
-  const fetchAgentSignals = async (
-    agentTermId: string,
-    counterTermId?: string | null
-  ): Promise<{ signals: any[]; totalCount: number }> => {
-    try {
-      const termIds = [agentTermId]
-      if (counterTermId) termIds.push(counterTermId)
-
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetSignals($termIds: [String!]!) {
-              signals(
-                where: { term_id: { _in: $termIds } }
-                order_by: { created_at: desc }
-                limit: 50
-              ) {
-                id
-                delta
-                account_id
-                account { label }
-                atom_id
-                triple_id
-                term_id
-                created_at
-                transaction_hash
-                deposit_id
-                redemption_id
-              }
-              signals_aggregate(where: { term_id: { _in: $termIds } }) {
-                aggregate { count }
-              }
-            }
-          `,
-          variables: { termIds }
-        })
-      })
-      const data = await response.json()
-      return {
-        signals: data.data?.signals || [],
-        totalCount: data.data?.signals_aggregate?.aggregate?.count || 0
-      }
-    } catch (e) {
-      console.error('Signals fetch error:', e)
-      return { signals: [], totalCount: 0 }
-    }
-  }
-
-  // Lightweight count-only query for stats grid
-  const fetchAgentSignalsCount = async (
-    agentTermId: string,
-    counterTermId?: string | null
-  ): Promise<number> => {
-    try {
-      const termIds = [agentTermId]
-      if (counterTermId) termIds.push(counterTermId)
-
-      const response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetSignalsCount($termIds: [String!]!) {
-              signals_aggregate(where: { term_id: { _in: $termIds } }) {
-                aggregate { count }
-              }
-            }
-          `,
-          variables: { termIds }
-        })
-      })
-      const data = await response.json()
-      return data.data?.signals_aggregate?.aggregate?.count || 0
-    } catch {
-      return 0
-    }
-  }
-
   // ETAP 3: canonical profile vector (attested domains + reports) in one read.
   // reportCount (stats grid) is derived from the same data — the former
   // reports-only query is folded in here.
   const [reportCount, setReportCount] = useState(0)
+  const reportCountFor = useRef<string | null>(null)
   useEffect(() => {
-    let cancelled = false
     setProfileLoaded(false)
     if (!selectedAgent) {
       setProfileVector({ attested: [], reports: [] })
       setReportCount(0)
       return
     }
-    // The list's attestation read covers this agent: reuse it, read only the reports (the list
-    // never reads those). Still loading or failed on the list → the modal reads both.
+    // Attestations: the same data the list already has (its card's attester line and tier chip);
+    // a subject whose part failed is absent → unknown (null), never "no attestations". Reports:
+    // the modal's cached answer (Etap 4c) — or, after the user's own report, read live.
     const listed = attestedBySubjectRef.current
-    const read = listed instanceof Map
-      ? fetchAgentReports(selectedAgent.term_id).catch(() => null)
-          .then((reports): AgentProfileVector => ({ attested: listed.get(selectedAgent.term_id) ?? [], reports }))
-      : fetchAgentProfileVector(selectedAgent.term_id)
-    read.then(v => {
-      if (cancelled) return
-      setProfileVector(v)
-      setReportCount(v.reports?.length ?? 0) // null reports render "—" below, never this 0
+    const attested = listed instanceof Map ? (listed.get(selectedAgent.term_id) ?? null) : null
+    const apply = (reports: AgentProfileVector['reports']) => {
+      setProfileVector({ attested, reports })
+      // Reports never disappear: never below what this modal already showed for this agent (the
+      // user's own report counts at once, before any read catches up with it).
+      const n = reports?.length ?? 0 // null reports render "—" below, never this 0
+      setReportCount((prev) => (reportCountFor.current === selectedAgent.term_id ? Math.max(prev, n) : n))
+      reportCountFor.current = selectedAgent.term_id
       setProfileLoaded(true)
-    })
-    return () => { cancelled = true }
-  }, [selectedAgent?.term_id])
+    }
+    if (liveAgent) {
+      let cancelled = false
+      fetchAgentReports(selectedAgent.term_id).catch(() => null).then((r) => { if (!cancelled) apply(r) })
+      return () => { cancelled = true }
+    }
+    if (!modalData) return
+    apply(modalData.reports.status === 'ok' ? modalData.reports.value : null)
+  }, [selectedAgent?.term_id, modalData, liveAgent])
 
   // The modal's read is the newest read of the same rows the card counted: when it differs
   // (an attestation landed since the list read), the card follows it, so list and modal agree.
@@ -1231,6 +1137,8 @@ function AgentsPageContent() {
       setShowReportModal(false)
       setReportReason('')
       setReportCount(prev => prev + 1)
+      // The user's own action: this agent's reports are read live from now on (OWN_TX_LIVE_MS).
+      markLiveAfterOwnTx(selectedAgent.term_id)
       setToast('Report submitted on-chain!')
       setTimeout(() => setToast(null), 5000)
     } catch (e: any) {
@@ -1442,7 +1350,7 @@ function AgentsPageContent() {
       .filter((p: any) => p.term_id === selectedAgent.term_id)
       .reduce((sum: bigint, p: any) => { try { return sum + BigInt(p.shares) } catch { return sum } }, 0n)
   }, [selectedAgent, positionsKnown, allPositions])
-  // A part whose read failed is null (fetchAgentProfileVector): its numbers render "—",
+  // A part whose read failed is null (the list's attestations, the modal answer's reports): its numbers render "—",
   // never the zeros computeModalStatSummary would derive from nothing.
   const attestedRead = profileLoaded && profileVector.attested != null
   const reportsRead = profileLoaded && profileVector.reports != null
@@ -1548,7 +1456,14 @@ function AgentsPageContent() {
     cohort: { status: cohortStatus, count: cohortAgents.length, total: cohortTotal, truncated: cohortTruncated },
   }
   const originTotals = corpusTotals(corpusCounts)
+  // The header's "Updated N min ago" keeps counting while the page is open.
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
   const listLoaded = !(loading || cohortLoading)
+  const modalAge = selectedAgent ? modalFreshnessLabel(pageView, modalData, liveAgent, nowTick) : null
 
   // The list's rows before the quality filter: the origin's CORPUS, narrowed by search (one
   // rule for both corpora — the displayed name or the raw label). The quality dropdown counts
@@ -1624,7 +1539,7 @@ function AgentsPageContent() {
               <span className="text-xs text-[#7A838D]">
                 {/* Corpus totals only — no search/filter input; loading → "—", failed →
                     "feed unavailable", "live feed" only when both reads succeeded (lib/agent-list.ts). */}
-                {agentListHeaderSegments(corpusCounts).join(' · ')}
+                {agentListHeaderSegments({ ...corpusCounts, freshness: pageView ? feedFreshnessLabel(pageView.parts, LIVE_FEED_LABEL, nowTick) : null }).join(' · ')}
               </span>
             </div>
           </motion.div>
@@ -1734,11 +1649,12 @@ function AgentsPageContent() {
             </div>
           )}
 
-          {/* Error */}
-          {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg mb-6">
-              <p className="text-red-400">Error: {error}</p>
-              <button onClick={() => fetchAgents()} className="mt-2 text-sm text-accent-cyan hover:underline">
+          {/* Nothing could be read and nothing is cached: say so, for humans. One corpus failing is
+              said in the header ("… feed unavailable") while the other renders. */}
+          {!loading && pageView?.unreachable && (
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg mb-6" data-testid="feed-unreachable">
+              <p className="text-red-400">{FEED_UNREACHABLE}</p>
+              <button onClick={() => loadPage()} className="mt-2 text-sm text-accent-cyan hover:underline">
                 Try again →
               </button>
             </div>
@@ -2213,6 +2129,7 @@ function AgentsPageContent() {
                       {!signalsLoading && modalStats.signals > 0 ? ` · ${modalStats.signals} signal${modalStats.signals !== 1 ? 's' : ''}` : ''}
                     </p>
                   </TooltipWrapper>
+                  {modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
                 </div>
               </div>
 
@@ -3641,7 +3558,7 @@ function AgentsPageContent() {
                         </div>
                       </div>
                       <span className="text-xs text-[#B5BDC6] bg-[#1E2229] px-2 py-1 rounded-full">
-                        {uniqueStakers ?? '—'} profile{uniqueStakers !== 1 ? 's' : ''} · {agentSignalsCount} signal{agentSignalsCount !== 1 ? 's' : ''}
+                        {uniqueStakers ?? '—'} profile{uniqueStakers !== 1 ? 's' : ''} · {signalsUnread ? '—' : agentSignalsCount} signal{agentSignalsCount !== 1 || signalsUnread ? 's' : ''}
                       </span>
                     </div>
 
@@ -3732,7 +3649,7 @@ function AgentsPageContent() {
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-white font-semibold">Activity</h4>
                       <span className="text-xs text-[#B5BDC6] bg-[#1E2229] px-2 py-1 rounded-full">
-                        {agentSignalsCount + 1} event{agentSignalsCount !== 0 ? 's' : ''}
+                        {signalsUnread ? '—' : agentSignalsCount + 1} event{agentSignalsCount !== 0 || signalsUnread ? 's' : ''}
                       </span>
                     </div>
                     <div className="space-y-0">
@@ -3833,7 +3750,7 @@ function AgentsPageContent() {
 
                       {!signalsLoading && agentSignals.length === 0 && (
                         <div className="text-center py-4">
-                          <p className="text-[#B5BDC6] text-sm">No staking activity yet</p>
+                          <p className="text-[#B5BDC6] text-sm">{signalsUnread ? 'Couldn’t read the activity right now — try again in a minute.' : 'No staking activity yet'}</p>
                         </div>
                       )}
                     </div>

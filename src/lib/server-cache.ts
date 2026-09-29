@@ -14,9 +14,12 @@
  *    into the request's read ledger (`runWithReadLedger`); `currentFreshness()` gives the
  *    answer's `dataAgeSeconds` (oldest read behind it; 0 when everything was read live) and
  *    `complete` (false → the response must not be cached downstream either).
- * 3. **Past twice its TTL a cached value is not served.** `unstable_cache` serves a stale
- *    entry while it revalidates in the background; after a quiet hour that entry is an hour
- *    old. Past `maxStaleSeconds` (default 2 × TTL) the read runs live instead.
+ * 3. **Past twice its TTL a cached value is not served — unless the indexer is down.**
+ *    `unstable_cache` serves a stale entry while it revalidates in the background; after a
+ *    quiet hour that entry is an hour old. Past `maxStaleSeconds` (default 2 × TTL) the read
+ *    runs live instead; when that live read fails, the last complete read is served with its
+ *    real age (Etap 4c: a page never goes blank while we hold good data). No entry at all and
+ *    a failed read → the failure.
  * 4. **Each entry's TTL is the configured one ±10 %,** drawn when the entry is read, so entries
  *    filled together don't refill together every TTL (`jitteredTtl`).
  *
@@ -28,6 +31,7 @@
  */
 
 import { unstable_cache } from 'next/cache'
+import { encodeForCache, decodeFromCache } from './json-codec'
 
 // ─── Read ledger (per request) ────────────────────────────────────────────────
 
@@ -89,6 +93,16 @@ async function collect<T>(fn: () => Promise<T>): Promise<{ value: T; reads: Read
   return { value, reads: child.reads }
 }
 
+/**
+ * One part of an answer with its own age: `fn` runs in a child ledger (its reads still count
+ * for the whole answer) and the part's freshness is what `fn` alone read. For answers made of
+ * independently cached parts (the /agents page: corpus, cohort, attestations).
+ */
+export async function readWithFreshness<T>(fn: () => Promise<T>, now: () => number = Date.now): Promise<{ value: T; freshness: Freshness }> {
+  const { value, reads } = await collect(fn)
+  return { value, freshness: freshnessOf(reads, now()) }
+}
+
 export interface Freshness {
   /** Whole seconds since the oldest read behind this answer hit the indexer. 0 = read live. */
   dataAgeSeconds: number
@@ -131,36 +145,8 @@ export function currentFreshness(now: number = Date.now()): Freshness {
 
 // ─── JSON codec (unstable_cache stores JSON) ─────────────────────────────────
 
-/** bigint and Map survive the Data Cache's JSON round trip (JSON.stringify(bigint) throws). */
-export function encodeForCache(value: unknown): unknown {
-  if (typeof value === 'bigint') return { $bigint: value.toString() }
-  if (value instanceof Map) return { $map: [...value.entries()].map(([k, v]) => [encodeForCache(k), encodeForCache(v)]) }
-  if (Array.isArray(value)) return value.map(encodeForCache)
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(value)) if (v !== undefined) out[k] = encodeForCache(v)
-    return out
-  }
-  return value
-}
-
-export function decodeFromCache<T>(value: unknown): T {
-  const walk = (v: unknown): unknown => {
-    if (Array.isArray(v)) return v.map(walk)
-    if (v && typeof v === 'object') {
-      const o = v as Record<string, unknown>
-      if (typeof o.$bigint === 'string' && Object.keys(o).length === 1) return BigInt(o.$bigint)
-      if (Array.isArray(o.$map) && Object.keys(o).length === 1) {
-        return new Map((o.$map as Array<[unknown, unknown]>).map(([k, val]) => [walk(k), walk(val)]))
-      }
-      const out: Record<string, unknown> = {}
-      for (const [k, val] of Object.entries(o)) out[k] = walk(val)
-      return out
-    }
-    return v
-  }
-  return walk(value) as T
-}
+// In lib/json-codec.ts so the browser can decode an API answer without importing this module.
+export { encodeForCache, decodeFromCache } from './json-codec'
 
 // ─── The cache ────────────────────────────────────────────────────────────────
 
@@ -244,7 +230,8 @@ export function completeReadCache<A extends unknown[], T>(
   read: (...args: A) => Promise<CompleteRead<T>>,
   options: CompleteReadCacheOptions<A>,
 ): (...args: A) => Promise<T> {
-  const now = options.now ?? Date.now
+  // Late-bound: a clock captured at module load would outlive a swapped Date (fake timers).
+  const now = options.now ?? (() => Date.now())
   const random = options.random ?? Math.random
   // 2 × the configured TTL — above any entry's jittered TTL (at most 1.1 ×).
   const maxStaleMs = (options.maxStaleSeconds ?? options.revalidate * 2) * 1000
@@ -313,7 +300,16 @@ export function completeReadCache<A extends unknown[], T>(
     const t = now()
     if (t - stamped.readAt > maxStaleMs) {
       // Too old to serve (a quiet spell): read live, returned as-is. The cache refreshes itself.
-      const live = await readOnce(...args)
+      let live: { stamped: Stamped; complete: boolean }
+      try {
+        live = await readOnce(...args)
+      } catch (err) {
+        // The indexer can't be read: the last complete read, with its real age — never an error
+        // while we hold good data, never data passed off as fresh (REPO_MAP §7 rule 6).
+        console.warn(`[server-cache] ${key}: live read failed, serving the last complete read (${Math.round((t - stamped.readAt) / 1000)} s old):`, err instanceof Error ? err.message : err)
+        record({ key, readAt: stamped.readAt, cached: true, complete: true })
+        return decodeFromCache<T>(stamped.v)
+      }
       record({ key, readAt: live.stamped.readAt, cached: false, complete: live.complete })
       return decodeFromCache<T>(live.stamped.v)
     }
@@ -334,4 +330,6 @@ export const SERVER_CACHE_TTL = {
   contributorLeaderboard: 300,
   /** The ERC-8004 cohort (identity links + declarations) behind the cohort agent detail. */
   erc8004Cohort: 300,
+  /** Attestations on every ERC-8004 cohort agent — the /agents attester lines (AgentScore rows' come with the corpus). */
+  cohortAttestations: 60,
 } as const

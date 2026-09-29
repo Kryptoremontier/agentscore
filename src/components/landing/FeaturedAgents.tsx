@@ -10,7 +10,7 @@ import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
 import { readSharesWei, hasMeasuredScore, measuredScore, noScoreTooltip, stakeReadingOf } from '@/lib/score-basis'
 
 import { APP_CONFIG } from '@/lib/app-config'
-import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+import { AGENTSCORE_CLAIMS_WHERE_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
 import { cleanAtomName } from '@/types/claim'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import { effectiveLabel } from '@/lib/api-data'
@@ -22,9 +22,7 @@ import { fetchFeaturedTotal, featuredBadgeText, type FeaturedTotal } from '@/lib
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
 // Same `where` for the claims tab's rows and its aggregate count (REPO_MAP §7 rule 1).
-const CLAIM_WHERE = TRIPLE_SUBJECT_OR_STR && TRIPLE_OBJECT_OR_STR
-  ? `where: { _and: [ { ${TRIPLE_SUBJECT_OR_STR} }, { ${TRIPLE_OBJECT_OR_STR} } ] }`
-  : 'where: {}'
+const CLAIM_WHERE = `where: ${AGENTSCORE_CLAIMS_WHERE_STR}`
 
 interface FeaturedItem {
   term_id: string

@@ -140,6 +140,16 @@ export const TRIPLE_OBJECT_OR_STR: string = APP_CONFIG.APP_SCOPE_ENABLED
       ]`
   : ''
 
+/**
+ * The claims AgentScore lists: triples whose subject AND object are AgentScore atoms (agents,
+ * skills). One `where` for the /claims page's rows, the landing's Claims tab (rows and badge) and
+ * /api/v1/stats `claims` (MCP platform_stats) — REPO_MAP §7 rule 1. Every triple when the app scope
+ * is off. Attestations (object: a domain) and trust triples (object: "AI Agent") are not claims here.
+ */
+export const AGENTSCORE_CLAIMS_WHERE_STR: string = TRIPLE_SUBJECT_OR_STR && TRIPLE_OBJECT_OR_STR
+  ? `{ _and: [ { ${TRIPLE_SUBJECT_OR_STR} }, { ${TRIPLE_OBJECT_OR_STR} } ] }`
+  : '{}'
+
 /** Full claims (triples) WHERE string that includes subject+object scoping. */
 export const CLAIMS_WHERE_STR: string = (() => {
   const parts: string[] = []

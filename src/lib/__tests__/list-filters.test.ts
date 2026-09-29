@@ -105,7 +105,7 @@ describe('/agents wires them (source guards — no DOM in this env)', () => {
 
   it('tabs and header read the same corpus counts object', () => {
     expect(page).toMatch(/const originTotals = corpusTotals\(corpusCounts\)/)
-    expect(page).toMatch(/agentListHeaderSegments\(corpusCounts\)/)
+    expect(page).toMatch(/agentListHeaderSegments\(\{ \.\.\.corpusCounts, freshness:/)
     expect(page).toMatch(/\{originTotals\[o\.id\] \?\? '—'\}/)
     expect(page).toMatch(/role="tab"\s+aria-selected=\{active\}/)
   })
