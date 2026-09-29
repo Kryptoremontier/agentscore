@@ -34,27 +34,28 @@ export function AgentHeader({ agent, action, stats, tier, tierLoading }: AgentHe
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass rounded-xl p-8"
+      className="glass rounded-xl p-5 sm:p-8"
     >
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Left: Agent Info */}
         <div className="flex-1">
           <div className="flex items-start gap-4 mb-6">
             {/* Avatar */}
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent-cyan flex items-center justify-center flex-shrink-0">
-              <Shield className="w-10 h-10 text-white" />
+            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-primary to-accent-cyan flex items-center justify-center flex-shrink-0">
+              <Shield className="w-7 h-7 sm:w-10 sm:h-10 text-white" />
             </div>
 
-            {/* Name & Platform */}
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold">{agent.name}</h1>
+            {/* Name & Platform — min-w-0 + wrapping: at 390 px a long name (OPEN CLAW's) and the
+                tier chip beside it pushed the page 187 px past the screen (Etap 5a). */}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold break-words min-w-0">{agent.name}</h1>
                 {/* Was a "Verified" badge on every scored agent (verificationLevel is hardcoded
                     'wallet'). The tier comes only from attestations (thesis §6). */}
                 <AgentTierChip tier={tier} loading={tierLoading} size="lg" />
               </div>
 
-              <div className="flex items-center gap-3 text-text-secondary">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-secondary">
                 <Badge variant="secondary">{agent.platform}</Badge>
                 <span className="text-sm">
                   Registered {formatDate(agent.createdAt)}
