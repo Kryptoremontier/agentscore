@@ -13,12 +13,17 @@
  *
  * TESTNET ONLY — attest-service hard-guards chainId 13579; this component
  * additionally disables the confirm button on a wrong network.
+ *
+ * Etap 5a — the path before the picker never dead-ends (lib/attest-gate.ts): a disconnected
+ * click opens the app's wallet-connect modal and, once connected, this agent's attest flow;
+ * connected on another network → one button, "Switch to Intuition Testnet"; 0 tTRUST → where to
+ * get it free (the Hub link the landing uses). It used to end in a native browser dialog.
  */
 
 import { useState, useEffect, useMemo, type CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Award, Loader2, Check, AlertTriangle, ExternalLink } from 'lucide-react'
-import { useAccount, useWalletClient, usePublicClient, useBalance } from 'wagmi'
+import { X, Award, Loader2, Check, AlertTriangle, ExternalLink, Wallet, Droplets } from 'lucide-react'
+import { useAccount, useWalletClient, usePublicClient, useBalance, useSwitchChain } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import { createWriteConfig, INTUITION_TESTNET } from '@/lib/intuition'
 import { CANONICAL_DOMAINS_REGISTRY, type CanonicalDomainDef } from '@/lib/canonical-domains'
@@ -32,6 +37,9 @@ import {
   type AttestCostPreview,
   type AttestResult,
 } from '@/lib/attest-service'
+import { attestStep, balanceReadOf, type AttestStep } from '@/lib/attest-gate'
+import { INTUITION_HUB_URL } from '@/lib/intuition-links'
+import { useConnectModal } from '@/components/wallet/ConnectModal'
 
 interface AttestButtonProps {
   /** Agent atom term_id (the /agents/[id] URL param IS the term_id). */
@@ -67,12 +75,20 @@ type Status = 'pick' | 'preview' | 'pending' | 'success' | 'error'
 const fmt = (wei: bigint) => parseFloat(formatEther(wei)).toFixed(4)
 
 export function AttestButton({ agentId, agentName, className, variant = 'card' }: AttestButtonProps) {
-  const { isConnected, address, chain } = useAccount()
+  const { isConnected, address, chainId } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
-  const { data: balanceData } = useBalance({ address })
+  const { openConnectModal } = useConnectModal()
 
   const [open, setOpen] = useState(false)
+  // At 0 tTRUST the balance is re-read while this flow is open: coming back from the Hub, the
+  // step moves on by itself. One retry: an RPC outage shouldn't hold "Checking…" through the
+  // default three (the step then doesn't block — lib/attest-gate.ts).
+  const balanceQuery = useBalance({
+    address,
+    query: { retry: 1, refetchInterval: (q) => (open && q.state.data?.value === 0n ? 8_000 : false) },
+  })
+  const balanceData = balanceQuery.data
   const [status, setStatus] = useState<Status>('pick')
   const [domain, setDomain] = useState<CanonicalDomainDef | null>(null)
   const [amount, setAmount] = useState('0.01')
@@ -82,7 +98,8 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
   const [errorMsg, setErrorMsg] = useState('')
   const [result, setResult] = useState<(AttestResult & { domain: CanonicalDomainDef; stake: string }) | null>(null)
 
-  const wrongNetwork = isConnected && chain?.id !== ATTEST_CHAIN_ID
+  const step: AttestStep = attestStep({ connected: isConnected, chainId, balance: balanceReadOf(balanceQuery) })
+  const wrongNetwork = step === 'wrong-network'
 
   const stakeWei = useMemo(() => {
     try {
@@ -170,11 +187,13 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
       <button
         onClick={() => {
           if (!isConnected) {
-            alert('Connect your wallet to Intuition Testnet first.')
+            // Connect first, then straight into this agent's attest flow.
+            openConnectModal({ reason: `Connect a wallet to attest ${agentName}.`, onConnected: () => setOpen(true) })
             return
           }
           setOpen(true)
         }}
+        data-testid="attest-cta"
         className={TRIGGER_STYLES[variant].className}
         style={TRIGGER_STYLES[variant].style}
       >
@@ -226,7 +245,9 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-x-4 top-[8%] md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md z-50"
+              // Centered by margins, not translate: framer-motion writes `transform` inline, which
+              // overrode -translate-x-1/2 and left the dialog right of center on desktop.
+              className="fixed inset-x-4 top-[8%] md:inset-x-0 md:mx-auto md:w-full md:max-w-md z-50"
             >
               <div className="glass-card overflow-hidden rounded-2xl" style={{ background: 'rgba(15,17,19,0.95)', border: '1px solid rgba(139,92,246,0.2)' }}>
                 {/* Header */}
@@ -241,12 +262,9 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
                 </div>
 
                 <div className="p-5 space-y-4">
-                  {/* Wrong network banner */}
-                  {wrongNetwork && (
-                    <div className="flex items-start gap-2 p-3 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#EF4444' }}>
-                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                      Switch your wallet to Intuition Testnet (chain {ATTEST_CHAIN_ID}) to attest.
-                    </div>
+                  {/* Before the picker: the one step between this person and signing (lib/attest-gate.ts) */}
+                  {step !== 'ready' && (status === 'pick' || status === 'preview' || status === 'error') && (
+                    <AttestStepPanel step={step} agentName={agentName} />
                   )}
 
                   {/* ── Success ── */}
@@ -292,7 +310,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
                   )}
 
                   {/* ── Pick + preview ── */}
-                  {(status === 'pick' || status === 'preview' || status === 'error') && (
+                  {step === 'ready' && (status === 'pick' || status === 'preview' || status === 'error') && (
                     <>
                       {/* Domain picker — constrained to the 8 canonical buckets */}
                       <div>
@@ -397,6 +415,57 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
           </>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+/** One step, one way forward. data-step is what the harness reads. */
+function AttestStepPanel({ step, agentName }: { step: Exclude<AttestStep, 'ready'>; agentName: string }) {
+  const { openConnectModal } = useConnectModal()
+  const { switchChain, isPending: switching, isError: switchFailed } = useSwitchChain()
+  const box = 'rounded-xl p-4 space-y-3 text-sm'
+  const primary = 'w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50'
+  const primaryStyle = { background: '#8B5CF6', color: '#FFFFFF' }
+
+  if (step === 'disconnected') {
+    return (
+      <div className={box} style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)' }} data-testid="attest-step" data-step={step}>
+        <p className="text-white">Connect a wallet to attest {agentName}.</p>
+        <button className={primary} style={primaryStyle} onClick={() => openConnectModal({ reason: `Connect a wallet to attest ${agentName}.` })}>
+          <Wallet className="w-4 h-4" /> Connect wallet
+        </button>
+      </div>
+    )
+  }
+  if (step === 'wrong-network') {
+    return (
+      <div className={box} style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }} data-testid="attest-step" data-step={step}>
+        <p className="text-white">Your wallet is on another network. Attestations live on Intuition Testnet.</p>
+        <button className={primary} style={primaryStyle} disabled={switching} onClick={() => switchChain({ chainId: ATTEST_CHAIN_ID })}>
+          {switching ? <><Loader2 className="w-4 h-4 animate-spin" /> Switching…</> : 'Switch to Intuition Testnet'}
+        </button>
+        {switchFailed && (
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            Your wallet didn&apos;t switch. Pick Intuition Testnet (chain {ATTEST_CHAIN_ID}) in the wallet itself.
+          </p>
+        )}
+      </div>
+    )
+  }
+  if (step === 'checking-balance') {
+    return (
+      <p className="text-xs flex items-center gap-1.5" style={{ color: 'rgba(255,255,255,0.4)' }} data-testid="attest-step" data-step={step}>
+        <Loader2 className="w-3 h-3 animate-spin" /> Checking your tTRUST balance…
+      </p>
+    )
+  }
+  return (
+    <div className={box} style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.25)' }} data-testid="attest-step" data-step={step}>
+      <p className="text-white">You need a little testnet tTRUST to vouch — it&apos;s free.</p>
+      <a href={INTUITION_HUB_URL} target="_blank" rel="noopener noreferrer" className={primary} style={primaryStyle}>
+        <Droplets className="w-4 h-4" /> Get free tTRUST from Intuition Hub <ExternalLink className="w-3.5 h-3.5" />
+      </a>
+      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>This moves on by itself once the tTRUST arrives.</p>
     </div>
   )
 }

@@ -14,7 +14,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useAccount } from 'wagmi'
 import { truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
 import { summarizeAttesters } from '@/lib/agent-profile'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
@@ -34,19 +33,11 @@ const fmt = (wei: bigint) => (Number(wei) / 1e18).toFixed(4)
 /**
  * Etap 4b: the ONE Attest CTA for this section — desktop-only (mobile has
  * its own always-visible AttestStickyBar; showing both here AND there would
- * double the CTA on small screens). Disconnected: an inert prompt, no click
- * handler — wallet connection happens via the nav's Connect Wallet button,
- * same convention as the Buy/Sell panel's own disconnected state.
+ * double the CTA on small screens). Etap 5a: disconnected too — the click
+ * opens the wallet-connect modal and then the attest flow (AttestButton);
+ * it used to be an inert "Connect wallet to attest" label with nowhere to go.
  */
 function AttestCta({ agentId, agentName }: { agentId: string; agentName: string }) {
-  const { isConnected } = useAccount()
-  if (!isConnected) {
-    return (
-      <span className="hidden md:inline-flex text-xs font-medium px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}>
-        Connect wallet to attest
-      </span>
-    )
-  }
   return (
     <div className="hidden md:inline-block">
       <AttestButton agentId={agentId} agentName={agentName} variant="card" />

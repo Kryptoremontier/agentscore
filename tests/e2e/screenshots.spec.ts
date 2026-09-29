@@ -94,6 +94,14 @@ const SHOTS: Shot[] = [
     target: unfixModal,
     check: modalFitsPhone,
   })),
+  {
+    // Etap 5a: a newcomer clicks Attest with no wallet → the app's wallet-connect modal (never a
+    // browser dialog). The first screen, as they see it.
+    name: 'attest-disconnected-click',
+    url: `${ROUTES.agents}?open=${AGENTS.luda}`,
+    prepare: attestClickOpensConnectModal,
+    firstScreen: true,
+  },
   ...(['dackie', 'luda', 'openclaw'] as const).map((key): Shot => ({
     name: `agent-profile-${key}`,
     url: ROUTES.agentProfile(AGENTS[key]),
@@ -229,6 +237,17 @@ async function profileReady(page: Page) {
       .or(page.getByText('Unverified — no attestations yet', { exact: true }))
       .first(),
   ).toBeVisible({ timeout: WAIT_CAP })
+}
+
+/** Wallet disconnected: the visible Attest CTA opens the connect modal; no native dialog fires. */
+async function attestClickOpensConnectModal(page: Page) {
+  await modalReady(page)
+  const dialogs: string[] = []
+  page.on('dialog', (d) => { dialogs.push(d.message()); void d.dismiss() })
+  await page.locator('[data-testid="attest-cta"]').filter({ visible: true }).first().click()
+  await expect(page.getByTestId('connect-wallet-modal')).toBeVisible({ timeout: WAIT_CAP })
+  await expect(page.getByTestId('connect-wallet-modal')).toContainText('Connect a wallet to attest Luda.')
+  expect(dialogs, 'no native browser dialog').toEqual([])
 }
 
 function modalLocator(page: Page) {

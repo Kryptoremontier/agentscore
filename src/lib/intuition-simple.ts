@@ -8,6 +8,7 @@
  */
 
 import { type PublicClient, type WalletClient } from 'viem'
+import { INTUITION_HUB_URL } from './intuition-links'
 
 export interface SimpleAgentMetadata {
   name: string
@@ -74,5 +75,5 @@ export const INTUITION_TESTNET_CONFIG = {
   rpcUrl: process.env.NEXT_PUBLIC_INTUITION_RPC_URL || 'https://testnet.rpc.intuition.systems/http',
   explorer: 'https://testnet.explorer.intuition.systems',
   portal: 'https://testnet.portal.intuition.systems',
-  hub: 'https://testnet.hub.intuition.systems',
+  hub: INTUITION_HUB_URL,
 }

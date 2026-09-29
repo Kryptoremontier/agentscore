@@ -41,6 +41,8 @@ import { AgentRadar } from '@/components/AgentRadar'
 import { TrustTimeline, ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
+import { useNotice } from '@/components/shared/NoticeProvider'
+import { txFailureNotice } from '@/lib/user-notice'
 import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
@@ -249,6 +251,8 @@ function AgentsPageContent() {
   }>({ termId: null, counterTermId: null, loading: false })
   const [creatingTriple, setCreatingTriple] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  // Errors and warnings in the page's flows: in-app notices, never a native browser dialog (Etap 5a).
+  const { notify } = useNotice()
   const [agentTrust, setAgentTrust] = useState<TrustScoreResult | null>(null)
   const [signalSide, setSignalSide] = useState<'support' | 'oppose'>('support')
   const [tradeAction, setTradeAction] = useState<'buy' | 'sell'>('buy')
@@ -768,7 +772,7 @@ function AgentsPageContent() {
       debugLog('✅ import succeeded, keys:', Object.keys(intuitionLib))
     } catch (importErr: any) {
       console.error('❌ import failed:', importErr?.message)
-      alert('Import error: ' + importErr?.message)
+      notify({ kind: 'error', text: `Couldn’t load the transaction code (${importErr?.message ?? 'unknown error'}). Reload the page and try again.` })
       isExecutingRef.current = false
       return
     }
@@ -808,7 +812,7 @@ function AgentsPageContent() {
         } else {
           const counterTermId = pendingVote.counterTermId
           if (!counterTermId) {
-            alert('Oppose vault not set up — please activate it first via the Oppose tab')
+            notify({ kind: 'error', text: 'Oppose vault not set up — please activate it first via the Oppose tab.' })
             return
           }
           redeemVaultId = counterTermId as `0x${string}`
@@ -822,9 +826,9 @@ function AgentsPageContent() {
         debugLog('redeemVaultId:', redeemVaultId, 'freshSharesRaw:', freshSharesRaw, '→ BigInt:', freshShares.toString())
 
         if (freshShares === 0n) {
-          alert(pendingVote.type === 'redeem_trust'
-            ? 'No FOR shares to redeem — position may already be empty'
-            : 'No AGAINST shares to redeem — you have not staked in the Oppose vault')
+          notify({ kind: 'info', text: pendingVote.type === 'redeem_trust'
+            ? 'No FOR shares to redeem — position may already be empty.'
+            : 'No AGAINST shares to redeem — you have not staked in the Oppose vault.' })
           return
         }
 
@@ -858,11 +862,11 @@ function AgentsPageContent() {
         // counterTermId and tripleTermId were captured at click time — agentTriple may be null now
         const { counterTermId, tripleTermId } = pendingVote
         if (!counterTermId) {
-          alert('Oppose vault not set up — please activate it first via the Oppose tab')
+          notify({ kind: 'error', text: 'Oppose vault not set up — please activate it first via the Oppose tab.' })
           return
         }
         if (!tripleTermId) {
-          alert('Oppose vault is not fully initialized. Please reopen the agent modal and try again.')
+          notify({ kind: 'error', text: 'Oppose vault is not fully initialized. Please reopen the agent modal and try again.' })
           return
         }
         debugLog('distrust counterTermId:', counterTermId)
@@ -941,7 +945,7 @@ function AgentsPageContent() {
     } catch (e: any) {
       console.error('❌ executeVote error:', e?.message, e)
       setVoteStatus(prev => { const n = { ...prev }; delete n[pendingVote.agent.term_id]; return n })
-      alert(`Error: ${e?.message || 'Unknown error'}`)
+      notify(txFailureNotice('Transaction', e))
     } finally {
       isExecutingRef.current = false
       setPendingVote(null)
@@ -967,11 +971,7 @@ function AgentsPageContent() {
       setTimeout(() => setToast(null), 5000)
     } catch (e: any) {
       console.error('handleCreateTrustTriple error:', e)
-      if (e?.message?.includes('InsufficientBalance') || e?.message?.includes('insufficient')) {
-        alert('Insufficient tTRUST balance. Get tTRUST from the faucet at https://testnet.hub.intuition.systems/')
-      } else {
-        alert(`Error creating Oppose vault: ${e?.message || 'Unknown error'}`)
-      }
+      notify(txFailureNotice('Creating the Oppose vault', e))
     } finally {
       setCreatingTriple(false)
     }
@@ -1143,11 +1143,7 @@ function AgentsPageContent() {
       setTimeout(() => setToast(null), 5000)
     } catch (e: any) {
       console.error('Report error:', e)
-      if (e?.message?.includes('InsufficientBalance') || e?.message?.includes('insufficient')) {
-        alert('Insufficient tTRUST balance.')
-      } else {
-        alert(`Report failed: ${e?.message || 'Unknown error'}`)
-      }
+      notify(txFailureNotice('Report', e))
     } finally {
       setReportSubmitting(false)
     }

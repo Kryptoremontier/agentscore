@@ -39,6 +39,8 @@ import { annotateVaultReads } from '@/lib/agent-list'
 import { stakeReadingOf, scoreUnlessOpposeUnread, readSharesWei, OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
 import { gqlRequest } from '@/lib/gql-pager'
 import { OpposeUnreadNotice } from '@/components/shared/OpposeUnreadNotice'
+import { useNotice } from '@/components/shared/NoticeProvider'
+import { txFailureNotice } from '@/lib/user-notice'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -132,6 +134,8 @@ function SkillsPageContent() {
   }>({ termId: null, counterTermId: null, loading: false })
   const [creatingTriple, setCreatingTriple] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  // Errors and warnings in the page's flows: in-app notices, never a native browser dialog (Etap 5a).
+  const { notify } = useNotice()
   const [skillTrust, setSkillTrust] = useState<TrustScoreResult | null>(null)
   // The modal's oppose read failed: no trust score (never one computed on 0 oppose).
   const [skillOpposeUnread, setSkillOpposeUnread] = useState(false)
@@ -527,7 +531,7 @@ function SkillsPageContent() {
       debugLog('✅ import succeeded, keys:', Object.keys(intuitionLib))
     } catch (importErr: any) {
       console.error('❌ import failed:', importErr?.message)
-      alert('Import error: ' + importErr?.message)
+      notify({ kind: 'error', text: `Couldn’t load the transaction code (${importErr?.message ?? 'unknown error'}). Reload the page and try again.` })
       isExecutingRef.current = false
       return
     }
@@ -567,7 +571,7 @@ function SkillsPageContent() {
         } else {
           const counterTermId = pendingVote.counterTermId
           if (!counterTermId) {
-            alert('Oppose vault not set up — please activate it first via the Oppose tab')
+            notify({ kind: 'error', text: 'Oppose vault not set up — please activate it first via the Oppose tab.' })
             return
           }
           redeemVaultId = counterTermId as `0x${string}`
@@ -581,9 +585,9 @@ function SkillsPageContent() {
         debugLog('redeemVaultId:', redeemVaultId, 'freshSharesRaw:', freshSharesRaw, '→ BigInt:', freshShares.toString())
 
         if (freshShares === 0n) {
-          alert(pendingVote.type === 'redeem_trust'
-            ? 'No FOR shares to redeem — position may already be empty'
-            : 'No AGAINST shares to redeem — you have not staked in the Oppose vault')
+          notify({ kind: 'info', text: pendingVote.type === 'redeem_trust'
+            ? 'No FOR shares to redeem — position may already be empty.'
+            : 'No AGAINST shares to redeem — you have not staked in the Oppose vault.' })
           return
         }
 
@@ -614,11 +618,11 @@ function SkillsPageContent() {
       } else if (pendingVote.type === 'distrust') {
         const { counterTermId, tripleTermId } = pendingVote
         if (!counterTermId) {
-          alert('Oppose vault not set up — please activate it first via the Oppose tab')
+          notify({ kind: 'error', text: 'Oppose vault not set up — please activate it first via the Oppose tab.' })
           return
         }
         if (!tripleTermId) {
-          alert('Oppose vault is not fully initialized. Please reopen the skill modal and try again.')
+          notify({ kind: 'error', text: 'Oppose vault is not fully initialized. Please reopen the skill modal and try again.' })
           return
         }
         debugLog('distrust counterTermId:', counterTermId)
@@ -688,7 +692,7 @@ function SkillsPageContent() {
     } catch (e: any) {
       console.error('❌ executeVote error:', e?.message, e)
       setVoteStatus(prev => { const n = { ...prev }; delete n[pendingVote.agent.term_id]; return n })
-      alert(`Error: ${e?.message || 'Unknown error'}`)
+      notify(txFailureNotice('Transaction', e))
     } finally {
       isExecutingRef.current = false
       setPendingVote(null)
@@ -713,11 +717,7 @@ function SkillsPageContent() {
       setTimeout(() => setToast(null), 5000)
     } catch (e: any) {
       console.error('handleCreateTrustTriple error:', e)
-      if (e?.message?.includes('InsufficientBalance') || e?.message?.includes('insufficient')) {
-        alert('Insufficient tTRUST balance. Get tTRUST from the faucet at https://testnet.hub.intuition.systems/')
-      } else {
-        alert(`Error creating Oppose vault: ${e?.message || 'Unknown error'}`)
-      }
+      notify(txFailureNotice('Creating the Oppose vault', e))
     } finally {
       setCreatingTriple(false)
     }
@@ -942,11 +942,7 @@ function SkillsPageContent() {
       setTimeout(() => setToast(null), 5000)
     } catch (e: any) {
       console.error('Report error:', e)
-      if (e?.message?.includes('InsufficientBalance') || e?.message?.includes('insufficient')) {
-        alert('Insufficient tTRUST balance.')
-      } else {
-        alert(`Report failed: ${e?.message || 'Unknown error'}`)
-      }
+      notify(txFailureNotice('Report', e))
     } finally {
       setReportSubmitting(false)
     }

@@ -1,10 +1,8 @@
 'use client'
 
-import { useAccount, useConnect, useDisconnect, useBalance, useSwitchChain } from 'wagmi'
+import { useAccount, useDisconnect, useBalance, useSwitchChain } from 'wagmi'
 import { intuitionTestnet } from '@0xintuition/protocol'
 import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Wallet, ChevronDown, Copy, ExternalLink, LogOut, User, Shield, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -17,15 +15,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/cn'
+import { useConnectModal } from './ConnectModal'
 
 export function WalletButton() {
   const { address, isConnected, isConnecting, chain } = useAccount()
-  const { connect, connectors } = useConnect()
+  // The app's one wallet-connect modal (components/wallet/ConnectModal.tsx).
+  const { openConnectModal } = useConnectModal()
   const { disconnect } = useDisconnect()
   const { data: balance } = useBalance({ address })
   const { switchChain, isPending: isSwitching } = useSwitchChain()
 
-  const [showConnectors, setShowConnectors] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   const isWrongChain = isConnected && chain?.id !== intuitionTestnet.id
@@ -63,29 +62,13 @@ export function WalletButton() {
 
   if (!isConnected) {
     return (
-      <>
-        <Button
-          onClick={() => setShowConnectors(true)}
-          className="bg-gradient-to-r from-[#C8963C] to-[#A87820] text-[#0F1113] font-bold hover:shadow-lg hover:shadow-[#C8963C]/25 border-0"
-        >
-          <Wallet className="w-4 h-4 mr-2" />
-          Connect Wallet
-        </Button>
-
-        {/* Wallet selection modal */}
-        <AnimatePresence>
-          {showConnectors && (
-            <WalletModal
-              connectors={connectors}
-              onConnect={(connector) => {
-                connect({ connector })
-                setShowConnectors(false)
-              }}
-              onClose={() => setShowConnectors(false)}
-            />
-          )}
-        </AnimatePresence>
-      </>
+      <Button
+        onClick={() => openConnectModal()}
+        className="bg-gradient-to-r from-[#C8963C] to-[#A87820] text-[#0F1113] font-bold hover:shadow-lg hover:shadow-[#C8963C]/25 border-0"
+      >
+        <Wallet className="w-4 h-4 mr-2" />
+        Connect Wallet
+      </Button>
     )
   }
 
@@ -161,60 +144,5 @@ export function WalletButton() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-// Wallet Modal Component
-interface WalletModalProps {
-  connectors: readonly any[]
-  onConnect: (connector: any) => void
-  onClose: () => void
-}
-
-function WalletModal({ connectors, onConnect, onClose }: WalletModalProps) {
-  useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = '' }
-  }, [])
-
-  // Portal to document.body to escape navbar's backdrop-blur containing block
-  return createPortal(
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm overflow-y-auto"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="glass rounded-xl p-6 w-full max-w-md mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-xl font-semibold mb-4">Connect Wallet</h2>
-        <div className="space-y-3">
-          {connectors.map((connector) => (
-            <button
-              key={connector.id}
-              onClick={() => onConnect(connector)}
-              className="w-full glass glass-hover rounded-lg p-4 text-left transition-all flex items-center gap-3"
-            >
-              <span className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#C8963C] to-[#A87820] flex items-center justify-center">
-                <Wallet className="w-5 h-5 text-white" />
-              </span>
-              <span className="flex flex-col">
-                <span className="font-medium">{connector.name}</span>
-                <span className="text-sm text-text-secondary">
-                  {connector.type === 'injected' ? 'Browser Wallet' : 'Mobile Wallet'}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </motion.div>
-    </motion.div>,
-    document.body
   )
 }
