@@ -26,7 +26,7 @@ import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AtomIdLine } from '@/components/profile/AtomIdLine'
 import { fetchAgentModalData } from '@/lib/agents-page-client'
-import type { AgentModalPayload } from '@/lib/agents-page-types'
+import { MODAL_HEADER_PARTS, type AgentModalPayload } from '@/lib/agents-page-types'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
@@ -72,11 +72,12 @@ export default function AgentDetailPage() {
   // The modal's own answer for this agent (vault positions, signals, reports — cached, our API):
   // the header's stat row reads exactly what the /agents modal reads (Etap 5a). null = not answered
   // yet, or unreachable / not a listed agent — its parts then render "—".
-  const [modalData, setModalData] = useState<AgentModalPayload | null>(null)
+  const [modalData, setModalData] = useState<Partial<AgentModalPayload> | null>(null)
   useEffect(() => {
     let cancelled = false
     setModalData(null)
-    fetchAgentModalData(agentId).then((d) => { if (!cancelled) setModalData(d) })
+    // The header's parts only: they never wait on the modal's slow ones (skill triples).
+    fetchAgentModalData(agentId, MODAL_HEADER_PARTS).then((d) => { if (!cancelled) setModalData(d) })
     return () => { cancelled = true }
   }, [agentId])
 
@@ -172,12 +173,12 @@ export default function AgentDetailPage() {
   const attesters = vector.attested ? summarizeAttesters(vector.attested) : null
   // The header's stat row — the modal's derivation (lib/agent-profile.ts statRowView) over the same
   // parts: the agent's attestations, and the modal answer's reports, vault positions and signals.
-  const vault = modalData?.vault.status === 'ok' ? modalData.vault.value : null
+  const vault = modalData?.vault?.status === 'ok' ? modalData.vault.value : null
   const statRow = statRowView({
     attested: profileLoading ? null : vector.attested,
-    reportCount: modalData?.reports.status === 'ok' ? modalData.reports.value.length : null,
+    reportCount: modalData?.reports?.status === 'ok' ? modalData.reports.value.length : null,
     backers: vault ? backersFromPositions(vault.positions, agentId, vault.trustTriple?.counterTermId ?? null) : null,
-    signals: modalData?.signals.status === 'ok' ? modalData.signals.value.totalCount : null,
+    signals: modalData?.signals?.status === 'ok' ? modalData.signals.value.totalCount : null,
   })
   // The agent tier — attestations only (thesis §6). null while loading or if the read failed.
   const agentTier = attesters ? calculateAgentTier(attesters) : null

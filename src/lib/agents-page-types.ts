@@ -64,6 +64,16 @@ export interface AgentModalPayload {
   stakerWeights: PagePart<Record<string, number>>
 }
 
+/** The modal answer's parts, and which of them the agent header (stat row + Backers line) needs. */
+export const MODAL_PARTS = ['vault', 'signals', 'skillTriples', 'reports', 'stakerWeights'] as const
+export type ModalPart = (typeof MODAL_PARTS)[number]
+/**
+ * The header's parts — fast reads (vault, signals, reports: well under a second cold). Asked for on
+ * their own (`?parts=`) so the header never waits on the slow ones (skill triples: ~5.5 s cold).
+ */
+export const MODAL_HEADER_PARTS = ['vault', 'signals', 'reports'] as const satisfies readonly ModalPart[]
+export const MODAL_REST_PARTS = ['skillTriples', 'stakerWeights'] as const satisfies readonly ModalPart[]
+
 /** A part's age now, from its absolute read time (never negative). null when it failed. */
 export function partAgeSeconds(part: PagePart<unknown>, now: number = Date.now()): number | null {
   if (part.status !== 'ok') return null
@@ -152,21 +162,13 @@ export function agentsPageView(payload: AgentsPagePayload | null): AgentsPageVie
  */
 export function modalFreshnessLabel(
   list: Pick<AgentsPageView, 'parts'> | null,
-  modal: AgentModalPayload | null,
+  modal: Partial<AgentModalPayload> | null,
   liveAfterOwnTx: boolean,
   now: number = Date.now(),
 ): string | null {
-  const own = !modal ? [] : liveAfterOwnTx ? [modal.skillTriples, modal.stakerWeights] : Object.values(modal)
-  return staleAgeLabel([...(list?.parts ?? []), ...own], now)
-}
-
-/** The modal answer when our own API couldn't be reached: every part unknown. */
-export const MODAL_UNREACHABLE: AgentModalPayload = {
-  vault: { status: 'failed' },
-  signals: { status: 'failed' },
-  skillTriples: { status: 'failed' },
-  reports: { status: 'failed' },
-  stakerWeights: { status: 'failed' },
+  // A part not answered yet (the header's and the rest arrive separately) doesn't count.
+  const own: Array<PagePart<unknown> | undefined> = !modal ? [] : liveAfterOwnTx ? [modal.skillTriples, modal.stakerWeights] : Object.values(modal)
+  return staleAgeLabel([...(list?.parts ?? []), ...own.filter((p): p is PagePart<unknown> => p != null)], now)
 }
 
 /**

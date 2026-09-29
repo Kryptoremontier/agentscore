@@ -86,9 +86,9 @@ async function page(): Promise<{ status: number; cacheControl: string | null; bo
   return { status: res.status, cacheControl: res.headers.get('cache-control'), body: decodeFromCache<AgentsPagePayload>(json.data) }
 }
 
-async function modal(id: string): Promise<{ status: number; body: AgentModalPayload | null }> {
+async function modal(id: string, parts?: string): Promise<{ status: number; body: AgentModalPayload | null }> {
   const { GET } = await import('@/app/api/v1/agents/page/[id]/route')
-  const res = await GET(new NextRequest(`http://localhost/api/v1/agents/page/${id}`), { params: Promise.resolve({ id }) })
+  const res = await GET(new NextRequest(`http://localhost/api/v1/agents/page/${id}${parts != null ? `?parts=${parts}` : ''}`), { params: Promise.resolve({ id }) })
   const json = await res.json()
   return { status: res.status, body: json.success ? decodeFromCache<AgentModalPayload>(json.data) : null }
 }
@@ -185,6 +185,39 @@ describe('GET /api/v1/agents/page/:id — the modal beyond the list', () => {
     const { status, body } = await modal(OPEN_CLAW)
     expect(status).toBe(200)
     expect(Object.values(body!).every((p) => p.status === 'failed')).toBe(true)
+  })
+})
+
+describe('GET /api/v1/agents/page/:id?parts= — the header never waits on the slow parts (Etap 5a)', () => {
+  it('?parts=vault,signals,reports → only those, and no skill-triple or leaderboard read behind them', async () => {
+    await page()
+    hasura.calls.length = 0
+    leaderboard.mockClear()
+    const { status, body } = await modal(OPEN_CLAW, 'vault,signals,reports')
+    expect(status).toBe(200)
+    expect(Object.keys(body!).sort()).toEqual(['reports', 'signals', 'vault'])
+    expect(body!.vault.status).toBe('ok')
+    expect(hasura.calls.some((c) => /GetAgentAllTriples/.test(c.query))).toBe(false)
+    expect(leaderboard).not.toHaveBeenCalled()
+  })
+
+  it('?parts=skillTriples → only that; no parts = every part (the 4c contract); an unknown part → 400', async () => {
+    await page()
+    expect(Object.keys((await modal(OPEN_CLAW, 'skillTriples')).body!)).toEqual(['skillTriples'])
+    expect(Object.keys((await modal(OPEN_CLAW)).body!).sort()).toEqual(['reports', 'signals', 'skillTriples', 'stakerWeights', 'vault'])
+    expect((await modal(OPEN_CLAW, 'vault,bogus')).status).toBe(400)
+    expect((await modal(OPEN_CLAW, '')).status).toBe(200) // empty = default: every part
+  })
+
+  it('the modal\'s age line ignores parts not answered yet', async () => {
+    const { modalFreshnessLabel } = await import('../agents-page-types')
+    await page()
+    await modal(OPEN_CLAW)
+    indexer.down = true
+    await advance(3 * 60_000)
+    const header = (await modal(OPEN_CLAW, 'vault,signals,reports')).body!
+    expect(modalFreshnessLabel(null, header, false, clock.t)).toBe('Updated 3 min ago')
+    expect(modalFreshnessLabel(null, {}, false, clock.t)).toBeNull()
   })
 })
 

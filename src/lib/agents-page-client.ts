@@ -5,7 +5,7 @@
  */
 
 import { decodeFromCache } from './json-codec'
-import type { AgentModalPayload, AgentsPagePayload } from './agents-page-types'
+import type { AgentModalPayload, AgentsPagePayload, ModalPart } from './agents-page-types'
 
 async function readApi<T>(path: string): Promise<T | null> {
   try {
@@ -21,6 +21,7 @@ export function fetchAgentsPage(): Promise<AgentsPagePayload | null> {
   return readApi<AgentsPagePayload>('/api/v1/agents/page')
 }
 
-export function fetchAgentModalData(termId: string): Promise<AgentModalPayload | null> {
-  return readApi<AgentModalPayload>(`/api/v1/agents/page/${termId}`)
+/** Every part, or only `parts` (e.g. MODAL_HEADER_PARTS — the header never waits on the slow ones). */
+export function fetchAgentModalData(termId: string, parts?: readonly ModalPart[]): Promise<Partial<AgentModalPayload> | null> {
+  return readApi<Partial<AgentModalPayload>>(`/api/v1/agents/page/${termId}${parts ? `?parts=${parts.join(',')}` : ''}`)
 }

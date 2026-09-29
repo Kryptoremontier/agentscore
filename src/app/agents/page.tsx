@@ -68,7 +68,8 @@ import {
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import {
-  agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, MODAL_UNREACHABLE, OWN_TX_LIVE_MS,
+  agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, OWN_TX_LIVE_MS,
+  MODAL_PARTS, MODAL_HEADER_PARTS, MODAL_REST_PARTS, type ModalPart,
   type AgentModalPayload, type AgentsPageView,
 } from '@/lib/agents-page-types'
 import { fetchAgentModalData, fetchAgentsPage } from '@/lib/agents-page-client'
@@ -313,23 +314,27 @@ function AgentsPageContent() {
 
   // ── The modal beyond the list: one cached answer per agent (Etap 4c) ─────────
   // Vault, signals, skill triples, reports and staker weights from /api/v1/agents/page/:id — no
-  // indexer request from the browser. Refreshed every 15 s while the tab is visible (other users'
-  // trades; the server re-reads at most every 30 s). null = not answered yet.
-  const [modalData, setModalData] = useState<AgentModalPayload | null>(null)
+  // indexer request from the browser. First the header's parts on their own and the rest beside
+  // them (Etap 5a: the header never waits on skill triples, ~5.5 s cold); then every 15 s while the
+  // tab is visible, one request for every part (cached by then). A part not answered yet is absent;
+  // null = nothing answered yet.
+  const [modalData, setModalData] = useState<Partial<AgentModalPayload> | null>(null)
   useEffect(() => {
     setModalData(null)
     if (!selectedAgent) return
     const termId = selectedAgent.term_id
     let cancelled = false
-    let answered = false
-    const load = () => fetchAgentModalData(termId).then((d) => {
+    const merge = (parts: readonly ModalPart[]) => (d: Partial<AgentModalPayload> | null) => {
       if (cancelled) return
-      // Unreachable on the first try: every part unknown (never a spinner forever, never zeros).
-      // Later: keep the last answer.
-      if (d) { answered = true; setModalData(d) } else if (!answered) setModalData(MODAL_UNREACHABLE)
-    })
-    load()
-    const stop = startVisiblePoll({ intervalMs: MODAL_POLL_MS, firstDelayMs: MODAL_POLL_MS, tick: load })
+      // Unreachable: a part never answered is unknown ("failed" — never a spinner forever, never
+      // zeros); a part answered before keeps its last answer.
+      setModalData((prev) => d
+        ? { ...(prev ?? {}), ...d }
+        : { ...Object.fromEntries(parts.filter((p) => !prev?.[p]).map((p) => [p, { status: 'failed' as const }])), ...(prev ?? {}) })
+    }
+    fetchAgentModalData(termId, MODAL_HEADER_PARTS).then(merge(MODAL_HEADER_PARTS))
+    fetchAgentModalData(termId, MODAL_REST_PARTS).then(merge(MODAL_REST_PARTS))
+    const stop = startVisiblePoll({ intervalMs: MODAL_POLL_MS, firstDelayMs: MODAL_POLL_MS, tick: () => fetchAgentModalData(termId).then(merge(MODAL_PARTS)) })
     return () => { cancelled = true; stop() }
   }, [selectedAgent?.term_id])
 
@@ -342,7 +347,7 @@ function AgentsPageContent() {
 
   // Evaluator weight per staker wallet (the cached evaluator leaderboard's). Unread → none applied.
   const evaluatorWeights = useMemo(
-    () => new Map(modalData?.stakerWeights.status === 'ok' ? Object.entries(modalData.stakerWeights.value) : []),
+    () => new Map(modalData?.stakerWeights?.status === 'ok' ? Object.entries(modalData.stakerWeights.value) : []),
     [modalData],
   )
 
@@ -496,7 +501,7 @@ function AgentsPageContent() {
         .catch(() => { if (!cancelled) applySignals(null) })
       return () => { cancelled = true }
     }
-    if (!modalData) {
+    if (!modalData?.signals) {
       setSignalsLoading(true)
       setAgentSignals([])
       return
@@ -545,7 +550,7 @@ function AgentsPageContent() {
       return
     }
     // Otherwise (cohort rows) the modal's cached answer carries it (Etap 4c).
-    if (!modalData) {
+    if (!modalData?.vault) {
       setAgentTriple({ termId: null, counterTermId: null, loading: true })
       return
     }
@@ -690,7 +695,7 @@ function AgentsPageContent() {
   // Positions (backers table, Backers line) + on-chain supply. Visitors: the positions the list read,
   // then each refresh of the modal's cached answer (polled every 15 s above) — no indexer request
   // from the browser. After the user's own trade on this agent: read live, polled every 15 s.
-  const modalVaultPositions = modalData?.vault.status === 'ok' ? modalData.vault.value.positions : undefined
+  const modalVaultPositions = modalData?.vault?.status === 'ok' ? modalData.vault.value.positions : undefined
   useEffect(() => {
     if (!selectedAgent) {
       setAllPositions([])
@@ -750,7 +755,7 @@ function AgentsPageContent() {
 
     // Otherwise the modal's cached answer read the vaults (Etap 4c). Unread → the score stays
     // unmeasured ("—"): a failed oppose read is not "0 oppose".
-    if (modalData?.vault.status === 'ok') {
+    if (modalData?.vault?.status === 'ok') {
       const opposeWei = sumSharesByVault(modalData.vault.value.positions).get(agentTriple.counterTermId) ?? 0n
       setAgentTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
     }
@@ -1091,7 +1096,7 @@ function AgentsPageContent() {
       fetchAgentReports(selectedAgent.term_id).catch(() => null).then((r) => { if (!cancelled) apply(r) })
       return () => { cancelled = true }
     }
-    if (!modalData) return
+    if (!modalData?.reports) return
     apply(modalData.reports.status === 'ok' ? modalData.reports.value : null)
   }, [selectedAgent?.term_id, modalData, liveAgent])
 

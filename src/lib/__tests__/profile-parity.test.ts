@@ -127,7 +127,7 @@ describe('source guards — same components on both surfaces, no tier-sounding s
     const profile = code('app/agents/[id]/page.tsx')
     expect(profile).toMatch(/const statRow = statRowView\(\{/)
     expect(profile.match(/<ProfileStatRow view=\{statRow\} \/>/g)).toHaveLength(2) // scored + non-scored tier
-    expect(profile).toMatch(/fetchAgentModalData\(agentId\)/) // the modal's own answer
+    expect(profile).toMatch(/fetchAgentModalData\(agentId, MODAL_HEADER_PARTS\)/) // the modal's own answer, its header's parts
     expect(profile).toMatch(/<AtomIdLine termId=\{agentId\} \/>/)
     const header = code('components/agents/AgentHeader.tsx')
     expect(header).toMatch(/<AtomIdLine termId=\{agent\.id\} \/>/)
