@@ -77,8 +77,8 @@ async function modalView(id: string) {
 
 describe('list ↔ modal parity — Dackie, Luda, OPEN CLAW (live rows 2026-09-26)', () => {
   const expected = {
-    [DACKIE]: { attesters: 1, domains: 1, tier: 'unverified', claim: '1 attester · 1 domain' },
-    [LUDA]: { attesters: 1, domains: 1, tier: 'unverified', claim: '1 attester · 1 domain' },
+    [DACKIE]: { attesters: 1, domains: 1, tier: 'unverified', claim: '1 person vouches · for Crypto / Onchain' },
+    [LUDA]: { attesters: 1, domains: 1, tier: 'unverified', claim: '1 person vouches · for Knowledge / Productivity' },
     [OPEN_CLAW]: { attesters: 0, domains: 0, tier: 'unverified', claim: CARD_NO_ATTESTATIONS },
   } as const
 
@@ -96,15 +96,15 @@ describe('list ↔ modal parity — Dackie, Luda, OPEN CLAW (live rows 2026-09-2
 })
 
 describe('Captain Dackie — the first cohort attestation', () => {
-  it('the card shows "1 attester", never "No attestations yet" (a sold-out wallet on the same triple changes nothing)', async () => {
+  it('the card shows "1 person vouches", never "Nobody vouches yet" (a sold-out wallet on the same triple changes nothing)', async () => {
     fake()
     const line = cardAttesterLine(cardAttestationView((await fetchAttestationsForSubjects([DACKIE])).get(DACKIE)!))
     expect(line.kind).toBe('some')
-    expect(line.claim).toBe('1 attester · 1 domain')
+    expect(line.claim).toBe('1 person vouches · for Crypto / Onchain')
     expect(line.claim).not.toContain(CARD_NO_ATTESTATIONS)
   })
 
-  it('a failed read → no claim (CTA only), never "No attestations yet"', async () => {
+  it('a failed read → no claim (CTA only), never "Nobody vouches yet"', async () => {
     fake((q) => (q.includes('VaultPositions(') ? 'throw' : undefined))
     const view = await fetchAttestationsForSubjects([DACKIE]).then((m) => cardAttestationView(m.get(DACKIE)!), () => null)
     expect(view).toBeNull()
@@ -114,13 +114,13 @@ describe('Captain Dackie — the first cohort attestation', () => {
   it('its card keeps one shape across the read: compact before and after (it used to grow 82 → 137 px when the read answered)', () => {
     // A cohort row: the list never reads its atom vault. The shape is decided at first paint.
     expect(isCompactCard({ vaultRead: false })).toBe(true)
-    // Only the line changes — loading → "1 attester · 1 domain" — inside its reserved height.
+    // Only the line changes — loading → "1 person vouches · for Crypto / Onchain" — inside its reserved height.
     expect(attesterLineOf(undefined, DACKIE).kind).toBe('loading')
-    const after = new Map([[DACKIE, { attesters: 1, domains: 1, tier: calculateAgentTier([]) }]])
-    expect(attesterLineOf(after, DACKIE).claim).toBe('1 attester · 1 domain')
+    const after = new Map([[DACKIE, { attesters: 1, domains: 1, areas: ['Crypto / Onchain'], tier: calculateAgentTier([]) }]])
+    expect(attesterLineOf(after, DACKIE).claim).toBe('1 person vouches · for Crypto / Onchain')
   })
 
-  it('OPEN CLAW (AgentScore row, vault read, 0 attesters) keeps the full card with "No attestations yet · Attest"', async () => {
+  it('OPEN CLAW (AgentScore row, vault read, 0 attesters) keeps the full card with "Nobody vouches yet · Vouch"', async () => {
     fake()
     const line = cardAttesterLine(cardAttestationView((await fetchAttestationsForSubjects([OPEN_CLAW])).get(OPEN_CLAW)!))
     expect(line).toEqual({ kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true })
@@ -139,12 +139,17 @@ describe('cardAttesterLine — states (REPO_MAP §7 rule 5: failed ≠ empty)', 
   it('read failed → no claim, CTA only', () => {
     expect(cardAttesterLine(null)).toEqual({ kind: 'unread', claim: null, cta: true })
   })
-  it('read ok, no attestation → "No attestations yet" + CTA', () => {
-    expect(cardAttesterLine(cardAttestationView([]))).toEqual({ kind: 'none', claim: 'No attestations yet', cta: true })
+  it('read ok, no attestation → "Nobody vouches yet" + CTA', () => {
+    expect(cardAttesterLine(cardAttestationView([]))).toEqual({ kind: 'none', claim: 'Nobody vouches yet', cta: true })
   })
-  it('plurals and cross-domain dedup: one wallet on two domains + another on one → 2 attesters · 2 domains', () => {
+  it('plurals and cross-domain dedup: one wallet on two domains + another on one → "2 people vouch · for 2 areas"', () => {
     const view = cardAttestationView([entry('Crypto / Onchain', [['0xA', 5n], ['0xB', 1n]]), entry('Social', [['0xa', 3n]])])
-    expect(cardAttesterLine(view).claim).toBe('2 attesters · 2 domains')
+    expect(cardAttesterLine(view).claim).toBe('2 people vouch · for 2 areas')
+  })
+  it('one area is named; one person is singular', () => {
+    const view = cardAttestationView([entry('Knowledge / Productivity', [['0xA', 5n]])])
+    expect(cardAttesterLine(view).claim).toBe('1 person vouches · for Knowledge / Productivity')
+    expect(cardAttesterLine(cardAttestationView([entry('Social', [['0xA', 5n], ['0xB', 1n]])])).claim).toBe('2 people vouch · for Social')
   })
 })
 
@@ -156,7 +161,7 @@ describe('isCompactCard — only rows whose vault the list never read, decided a
   it('the attestation read cannot reshape a card: the rule takes no attestation input', () => {
     expect(isCompactCard.length).toBe(1)
     // @ts-expect-error — the attester line is not an input any more
-    expect(isCompactCard({ vaultRead: false, line: cardAttesterLine({ attesters: 1, domains: 1, tier: calculateAgentTier([]) }) })).toBe(true)
+    expect(isCompactCard({ vaultRead: false, line: cardAttesterLine({ attesters: 1, domains: 1, areas: ['Social'], tier: calculateAgentTier([]) }) })).toBe(true)
   })
 })
 
@@ -188,9 +193,9 @@ describe('grid ↔ list parity — Dackie, Luda, OPEN CLAW (live rows 2026-09-26
     fake()
     const bulk = await fetchAttestationsForSubjects([DACKIE, LUDA, OPEN_CLAW])
     const views = new Map<string, CardAttestationView>([...bulk].map(([id, e]) => [id, cardAttestationView(e)]))
-    expect(printed(attesterLineOf(views, DACKIE))).toBe('1 attester · 1 domain')
-    expect(printed(attesterLineOf(views, LUDA))).toBe('1 attester · 1 domain')
-    expect(printed(attesterLineOf(views, OPEN_CLAW))).toBe('No attestations yet · Attest')
+    expect(printed(attesterLineOf(views, DACKIE))).toBe('1 person vouches · for Crypto / Onchain')
+    expect(printed(attesterLineOf(views, LUDA))).toBe('1 person vouches · for Knowledge / Productivity')
+    expect(printed(attesterLineOf(views, OPEN_CLAW))).toBe('Nobody vouches yet · Vouch')
     for (const id of [DACKIE, LUDA, OPEN_CLAW]) expect(tierChipOf(views, id)).toBeNull() // all Unverified
   })
 
@@ -206,7 +211,7 @@ describe('the attester line keeps its height while loading (no layout shift, no 
   it('loading: no text, a skeleton bar shorter than the line; every state: the same 18 px line box', () => {
     const states: CardAttesterLine[] = [
       cardAttesterLine(undefined), cardAttesterLine(null), cardAttesterLine(cardAttestationView([])),
-      cardAttesterLine({ attesters: 3, domains: 2, tier: calculateAgentTier([]) }),
+      cardAttesterLine({ attesters: 3, domains: 2, areas: ['Social', 'Energy'], tier: calculateAgentTier([]) }),
     ]
     const html = states.map((line) => renderToStaticMarkup(createElement(CardAttesterLineView, { line, agentName: 'x', onAttest: () => {} })))
     expect(printed(states[0])).toBe('')

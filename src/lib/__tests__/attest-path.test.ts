@@ -12,6 +12,7 @@ import {
   type AttestStep, type WalletFacts,
 } from '../attest-gate'
 import { ATTEST_CHAIN_ID as SERVICE_CHAIN_ID } from '../attest-service'
+import { connectToVouch } from '../people-copy'
 import { txFailureNotice, GET_TTRUST_LINK } from '../user-notice'
 import { INTUITION_HUB_URL } from '../intuition-links'
 
@@ -133,7 +134,8 @@ describe('source guards — no native dialogs, one Hub URL, the disconnected cli
 
   it('Attest, disconnected → the app\'s connect modal, then this agent\'s attest flow; wrong network → one switch button', () => {
     const attest = all.find(({ f }) => f.endsWith(path.join('attest', 'AttestButton.tsx')))!.s
-    expect(attest).toMatch(/if \(!isConnected\) \{\s*\/\/[^\n]*\n\s*openConnectModal\(\{ reason: `Connect a wallet to attest \$\{agentName\}\.`, onConnected: \(\) => setOpen\(true\) \}\)/)
+    expect(attest).toMatch(/if \(!isConnected\) \{\s*\/\/[^\n]*\n\s*openConnectModal\(\{ reason: connectToVouch\(agentName\), onConnected: \(\) => setOpen\(true\) \}\)/)
+    expect(connectToVouch('Luda')).toBe('Connect a wallet to vouch for Luda.')
     expect(attest).toMatch(/switchChain\(\{ chainId: ATTEST_CHAIN_ID \}\)/)
     expect(attest).toContain("'Switch to Intuition Testnet'")
     // The picker only renders at the ready step.

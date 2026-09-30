@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * AttestButton — "Attest" entry point on the agent profile page.
+ * AttestButton — "Vouch for this agent" (Etap 5b: vouch in the UI = attestation in the protocol).
  *
  * Opens a modal implementing the Etap 1 write path (attest-service.ts):
  *   pick canonical domain → honest cost preview → wallet signature →
@@ -40,6 +40,10 @@ import {
 import { attestStep, balanceReadOf, type AttestStep } from '@/lib/attest-gate'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 import { useConnectModal } from '@/components/wallet/ConnectModal'
+import {
+  VOUCH_CTA, vouchFor, connectToVouch, VOUCH_WRONG_NETWORK, VOUCH_AREA_LABEL, VOUCH_PICK_AREA, vouchIn,
+  firstVouchNote, VOUCH_SUCCESS, VOUCH_INDEXING, VOUCHED_FOR,
+} from '@/lib/people-copy'
 
 interface AttestButtonProps {
   /** Agent atom term_id (the /agents/[id] URL param IS the term_id). */
@@ -192,8 +196,8 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
       <button
         onClick={() => {
           if (!isConnected) {
-            // Connect first, then straight into this agent's attest flow.
-            openConnectModal({ reason: `Connect a wallet to attest ${agentName}.`, onConnected: () => setOpen(true) })
+            // Connect first, then straight into this agent's vouch flow.
+            openConnectModal({ reason: connectToVouch(agentName), onConnected: () => setOpen(true) })
             return
           }
           setOpen(true)
@@ -203,7 +207,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
         style={TRIGGER_STYLES[variant].style}
       >
         <Award className="w-4 h-4" />
-        Attest Competence
+        {VOUCH_CTA}
       </button>
 
       {/* Task 4 — minimal read-back: persistent confirmation after success */}
@@ -215,7 +219,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
           <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#2ECC71' }} />
           <div className="min-w-0">
             <p style={{ color: '#2ECC71' }}>
-              You attested <span className="font-semibold">{agentName}</span> in{' '}
+              {VOUCHED_FOR} <span className="font-semibold">{agentName}</span> in{' '}
               <span className="font-semibold">{result.domain.emoji} {result.domain.label}</span>
               {' '}· stake {result.stake} tTRUST
             </p>
@@ -259,7 +263,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
                 <div className="flex items-center justify-between p-4 border-b border-white/10" style={{ background: 'rgba(139,92,246,0.08)' }}>
                   <h2 className="text-base font-semibold text-white flex items-center gap-2">
                     <Award className="w-4 h-4" style={{ color: '#8B5CF6' }} />
-                    Attest {agentName}
+                    {vouchFor(agentName)}
                   </h2>
                   <button onClick={close} disabled={status === 'pending'} className="p-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30">
                     <X className="w-5 h-5 text-white/60" />
@@ -279,11 +283,9 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
                         <Check className="w-6 h-6" style={{ color: '#2ECC71' }} />
                       </div>
                       <p className="text-sm text-white">
-                        Attested <span className="font-semibold">{result.domain.emoji} {result.domain.label}</span> · stake {result.stake} tTRUST
+                        {VOUCH_SUCCESS} <span className="font-semibold">{result.domain.emoji} {result.domain.label}</span> · stake {result.stake} tTRUST
                       </p>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                        Fresh attestations may take a minute to appear in stats (indexing).
-                      </p>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{VOUCH_INDEXING}</p>
                       <a
                         href={`${INTUITION_TESTNET.explorer}/tx/${result.transactionHash}`}
                         target="_blank"
@@ -319,9 +321,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
                     <>
                       {/* Domain picker — constrained to the 8 canonical buckets */}
                       <div>
-                        <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                          Competence domain
-                        </p>
+                        <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,0.4)' }}>{VOUCH_AREA_LABEL}</p>
                         <div className="grid grid-cols-2 gap-1.5">
                           {CANONICAL_DOMAINS_REGISTRY.map(d => (
                             <button
@@ -365,10 +365,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
                       {domain && preview && (
                         <div className="rounded-lg px-3 py-2.5 space-y-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                           {isFirstInDomain && (
-                            <p className="text-[10px] pb-1" style={{ color: '#F59E0B' }}>
-                              First attestation of this agent in {domain.label} — includes one-time
-                              on-chain creation ({preview.txCount} transaction{preview.txCount > 1 ? 's' : ''}).
-                            </p>
+                            <p className="text-[10px] pb-1" style={{ color: '#F59E0B' }}>{firstVouchNote(domain.label, preview.txCount)}</p>
                           )}
                           <Row label="Your stake" value={`${fmt(preview.stakeWei)} tTRUST`} />
                           {preview.creationCostWei > 0n && (
@@ -410,7 +407,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
                         className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 flex items-center justify-center gap-2"
                         style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.35)', color: '#8B5CF6' }}
                       >
-                        {domain ? `Attest ${domain.label}` : 'Pick a domain'}
+                        {domain ? vouchIn(domain.label) : VOUCH_PICK_AREA}
                       </button>
                     </>
                   )}
@@ -435,8 +432,8 @@ function AttestStepPanel({ step, agentName }: { step: Exclude<AttestStep, 'ready
   if (step === 'disconnected') {
     return (
       <div className={box} style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)' }} data-testid="attest-step" data-step={step}>
-        <p className="text-white">Connect a wallet to attest {agentName}.</p>
-        <button className={primary} style={primaryStyle} onClick={() => openConnectModal({ reason: `Connect a wallet to attest ${agentName}.` })}>
+        <p className="text-white">{connectToVouch(agentName)}</p>
+        <button className={primary} style={primaryStyle} onClick={() => openConnectModal({ reason: connectToVouch(agentName) })}>
           <Wallet className="w-4 h-4" /> Connect wallet
         </button>
       </div>
@@ -445,7 +442,7 @@ function AttestStepPanel({ step, agentName }: { step: Exclude<AttestStep, 'ready
   if (step === 'wrong-network') {
     return (
       <div className={box} style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }} data-testid="attest-step" data-step={step}>
-        <p className="text-white">Your wallet is on another network. Attestations live on Intuition Testnet.</p>
+        <p className="text-white">{VOUCH_WRONG_NETWORK}</p>
         <button className={primary} style={primaryStyle} disabled={switching} onClick={() => switchChain({ chainId: ATTEST_CHAIN_ID })}>
           {switching ? <><Loader2 className="w-4 h-4 animate-spin" /> Switching…</> : 'Switch to Intuition Testnet'}
         </button>

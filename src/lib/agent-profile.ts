@@ -24,6 +24,7 @@ import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
 import { fetchVaultPositions } from './vault-positions'
 import { countLiveStakers, type PositionLike } from './live-position'
 import { formatTTrust } from './format'
+import { STAT_PEOPLE, STAT_AREAS, STAT_STAKE, STAT_REPORTS, backedLine } from './people-copy'
 
 // `reported for` — the canonical (mainnet-minted, cross-network) report
 // predicate. Same term_id the modal's report query and predicates.ts use.
@@ -261,23 +262,23 @@ export interface StatRowInput {
 }
 
 export interface StatRowView {
+  /** People vouching · Areas · tTRUST behind vouches · Reports (lib/people-copy.ts). */
   boxes: Array<{ value: string; label: string }>
-  /** "Backers: 1 · 0.0010 tTRUST on atom vault · 1 signal" */
+  /** "Backed with 0.3351 tTRUST by 1 wallet · 16 signals" */
   backersLine: string
 }
 
 export function statRowView(i: StatRowInput): StatRowView {
   const s = i.attested ? computeModalStatSummary({ attested: i.attested, reportCount: 0, backerCount: 0, backerVaultWei: 0n, signals: 0 }) : null
-  const plural = (n: number | undefined, one: string, many: string) => (n === 1 ? one : many)
-  const signals = i.signals != null && i.signals > 0 ? ` · ${i.signals} signal${i.signals !== 1 ? 's' : ''}` : ''
   return {
     boxes: [
-      { value: s ? String(s.attesters) : '—', label: plural(s?.attesters, 'Attester', 'Attesters') },
-      { value: s ? String(s.domains) : '—', label: plural(s?.domains, 'Domain attested', 'Domains attested') },
-      { value: s ? formatTTrust(s.tTrustAttestedWei) : '—', label: 'tTRUST attested' },
-      { value: i.reportCount != null ? String(i.reportCount) : '—', label: 'Reports' },
+      { value: s ? String(s.attesters) : '—', label: STAT_PEOPLE(s?.attesters) },
+      { value: s ? String(s.domains) : '—', label: STAT_AREAS(s?.domains) },
+      // The label names the unit; the box prints the amount only.
+      { value: s ? formatTTrust(s.tTrustAttestedWei).replace(/ tTRUST$/, '') : '—', label: STAT_STAKE },
+      { value: i.reportCount != null ? String(i.reportCount) : '—', label: STAT_REPORTS },
     ],
-    backersLine: `Backers: ${i.backers ? i.backers.count : '—'} · ${i.backers ? formatTTrust(i.backers.atomVaultWei) : '—'} on atom vault${signals}`,
+    backersLine: backedLine(i.backers, i.signals),
   }
 }
 

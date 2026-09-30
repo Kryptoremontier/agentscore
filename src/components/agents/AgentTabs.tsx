@@ -15,6 +15,7 @@ import { AttestersAndBackers } from '@/components/profile/AttestersAndBackers'
 import { formatDate } from '@/lib/format'
 import type { Agent } from '@/types/agent'
 import type { AttesterSummary, Backer } from '@/lib/agent-profile'
+import { PEOPLE_AND_BACKERS_TAB } from '@/lib/people-copy'
 
 // The former Activity tab rendered generateMockActivities (fabricated
 // wallets/amounts/timestamps) — retired. The /agents modal's Activity tab
@@ -41,7 +42,7 @@ export function AgentTabs({ agent, attesters, backers, profileLoading, legacySki
         <TabsList className="w-full lg:w-auto">
           <TabsTrigger value="attestations" className="flex-1 lg:flex-initial">
             <Shield className="w-4 h-4 mr-2" />
-            Attesters &amp; Backers
+            {PEOPLE_AND_BACKERS_TAB}
           </TabsTrigger>
           <TabsTrigger value="overview" className="flex-1 lg:flex-initial">
             <FileText className="w-4 h-4 mr-2" />
@@ -75,7 +76,7 @@ export function AgentTabs({ agent, attesters, backers, profileLoading, legacySki
               {legacySkillClaimCount > 0 && (
                 <p className="text-xs text-text-muted pt-2 border-t border-white/10">
                   {legacySkillClaimCount} legacy skill claim{legacySkillClaimCount !== 1 ? 's' : ''} on-chain
-                  (pre-canonical <code className="font-mono">hasAgentSkill</code> predicate, free-text objects) — counted here, not shown as attestations.
+                  (pre-canonical <code className="font-mono">hasAgentSkill</code> predicate, free-text objects) — counted here, not shown as vouches.
                 </p>
               )}
             </div>

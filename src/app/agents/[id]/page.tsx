@@ -24,7 +24,8 @@ import { AgentStats } from '@/components/agents/AgentStats'
 import { AgentTabs } from '@/components/agents/AgentTabs'
 import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
-import { AtomIdLine } from '@/components/profile/AtomIdLine'
+import { AgentDetails } from '@/components/profile/AgentDetails'
+import { ERC8004_ABOUT } from '@/lib/people-copy'
 import { fetchAgentModalData } from '@/lib/agents-page-client'
 import { MODAL_HEADER_PARTS, type AgentModalPayload } from '@/lib/agents-page-types'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
@@ -203,17 +204,13 @@ export default function AgentDetailPage() {
                 </div>
                 <p className="text-text-muted text-sm">
                   {cohortMatch
-                    ? 'Real agent from the ERC-8004 registry cohort — self-declared, not scored by AgentScore.'
+                    ? ERC8004_ABOUT
                     : cohortFailed
                       ? 'Not in the scored AgentScore corpus. Couldn’t read its ERC-8004 identity right now — this is not a “no”.'
                       : 'Not in the scored AgentScore corpus — shown because it has on-chain claims. No score is computed for it.'}
                 </p>
-                {cohortMatch && (
-                  <p className="text-xs text-text-muted font-mono break-all opacity-60 mt-1">{cohortMatch.caipIdentity}</p>
-                )}
               </div>
 
-              <AtomIdLine termId={agentId} />
               <ProfileStatRow view={statRow} />
 
               {/* ATTESTED > DECLARED > REPORTS (thesis §5 hierarchy) */}
@@ -223,6 +220,9 @@ export default function AgentDetailPage() {
 
               {/* A cohort agent has an atom vault the /agents modal can back (it lists the cohort). */}
               {cohortMatch && <BackWithTTrust agentId={agentId} />}
+
+              {/* Atom ID and the ERC-8004 id — collapsed; not the story a person reads first (Etap 5b). */}
+              <AgentDetails termId={agentId} caipIdentity={cohortMatch?.caipIdentity} />
 
               <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
             </motion.div>
@@ -320,6 +320,9 @@ export default function AgentDetailPage() {
           {/* Backing — secondary, collapsed, the modal's section and copy (Etap 5a). The old gold
               "Trust Agent" / "Report Issue" pair here never transacted (a 2 s timeout, then closed). */}
           <BackWithTTrust agentId={agent.id} />
+
+          {/* Atom ID — collapsed (Etap 5b) */}
+          <AgentDetails termId={agent.id} />
 
           {/* Score context — below the canonical sections */}
           <AgentStats agent={agent} />

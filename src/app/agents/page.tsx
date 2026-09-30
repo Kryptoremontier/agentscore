@@ -52,7 +52,8 @@ import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
-import { AtomIdLine } from '@/components/profile/AtomIdLine'
+import { AgentDetails } from '@/components/profile/AgentDetails'
+import { LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, PEOPLE_TAB } from '@/lib/people-copy'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
 import { startVisiblePoll } from '@/lib/visible-poll'
 import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
@@ -2036,7 +2037,7 @@ function AgentsPageContent() {
                       </h2>
                       <div className="flex items-center gap-1.5">
                         {/* The agent tier — attestations only (thesis §6), always shown:
-                            "Unverified · 1/3 attesters", "Trusted · 2/3 attesters", "Verified".
+                            Unverified / Trusted + "1 of 3 people needed to verify", or Verified.
                             "—" while loading; unavailable if the attestation read failed. */}
                         <AgentTierChip tier={agentTier} loading={!profileLoaded} />
                       </div>
@@ -2080,9 +2081,6 @@ function AgentsPageContent() {
                     return 'AI Agent registered on Intuition Protocol.'
                   })()}
                 </p>
-
-                {/* Atom ID — shortened hex, copies the full id (shared with /agents/[id]) */}
-                <AtomIdLine termId={selectedAgent.term_id} className="mb-5" />
 
                 {/* The stat row — attestation unit primary, Backers demoted (thesis §4/§6) — and the
                     modal's own age line. The same component as /agents/[id] (Etap 5a). */}
@@ -2460,6 +2458,9 @@ function AgentsPageContent() {
                 )}
               </BackThisAgentSection>
 
+              {/* Atom ID and the ERC-8004 id — collapsed, shared with /agents/[id] (Etap 5b) */}
+              <AgentDetails termId={selectedAgent.term_id} caipIdentity={selectedAgent.caipIdentity} className="mb-3" />
+
               {/* === YOUR HOLDINGS === */}
               {isConnected && (userPosition.forShares || userPosition.againstShares) && (() => {
                 const forSf = userPosition.forShares ? Number(userPosition.forShares) / 1e18 : 0
@@ -2776,7 +2777,7 @@ function AgentsPageContent() {
                 >
                   {[
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
-                    { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+                    { id: 'attestations', label: PEOPLE_TAB, icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'activity', label: 'Activity', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'timeline', label: 'Timeline', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="4" r="1.5" fill="currentColor" fillOpacity="0.5"/><circle cx="12" cy="20" r="1.5" fill="currentColor" fillOpacity="0.5"/><path d="M12 6v4M12 14v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M7 8h3M14 8h3M7 16h3M14 16h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5"/></svg> },
                   ].map((tab) => (
@@ -3093,7 +3094,7 @@ function AgentsPageContent() {
                         skills={skillBreakdown.skills}
                         overallScore={skillBreakdown.overallScore}
                         title="Legacy skill claims"
-                        subtitle="Pre-canonical hasAgentSkill / isTrustedFor claims with free-text objects — real stake, not domain attestations. New claims use Attest Competence above."
+                        subtitle={LEGACY_CLAIMS_NOTE}
                       />
                     )}
 
@@ -3480,8 +3481,8 @@ function AgentsPageContent() {
                     />
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-white font-semibold text-sm">Backers</h4>
-                        <span className="text-[10px] text-[#7A838D]">staked on this agent · not a domain attestation</span>
+                        <h4 className="text-white font-semibold text-sm">{BACKERS_HEADING}</h4>
+                        <span className="text-[10px] text-[#7A838D]">{BACKERS_NOTE}</span>
                         <div className="flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#34a872] animate-pulse" />
                           <span className="text-xs text-[#B5BDC6]">live</span>
@@ -3832,7 +3833,7 @@ function AgentsPageContent() {
             {/* Cost notice */}
             <div className="bg-[#f9731610] border border-[#f9731625] rounded-lg px-3 py-2 mb-4">
               <p className="text-[#f97316] text-xs">
-                <strong>On-chain report:</strong> Submitting this report creates an on-chain attestation triple and costs ~0.03 tTRUST (atom creation + triple deposit).
+                <strong>On-chain report:</strong> Submitting this report creates an on-chain report triple and costs ~0.03 tTRUST (atom creation + triple deposit).
               </p>
             </div>
 
@@ -3931,7 +3932,7 @@ function AgentsPageContent() {
                       )}
                       {claim.positions_aggregate?.aggregate?.count > 0 && (
                         <p className="text-[#B5BDC6] text-xs mt-1">
-                          {claim.positions_aggregate.aggregate.count} attestations
+                          {claim.positions_aggregate.aggregate.count} position{claim.positions_aggregate.aggregate.count === 1 ? '' : 's'}
                         </p>
                       )}
                     </div>

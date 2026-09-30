@@ -16,7 +16,7 @@ import { useConnect, type Connector } from 'wagmi'
 interface ConnectRequest {
   /** Runs once the wallet connected (not on dismiss or a rejected connection). */
   onConnected?: () => void
-  /** Why the wallet is needed, shown under the title ("to attest Luda"). */
+  /** Why the wallet is needed, shown under the title ("to vouch for Luda"). */
   reason?: string
 }
 

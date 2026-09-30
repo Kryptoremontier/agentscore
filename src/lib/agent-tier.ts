@@ -60,12 +60,6 @@ export const AGENT_TIER_DISPLAY: Record<AgentTier, AgentTierDisplay> = {
   },
 }
 
-/** Tooltip copy for every tier chip — the thesis rule, shortened. */
-export const AGENT_TIER_TOOLTIP =
-  'Tier comes only from attestations: distinct live attesters and tTRUST attested. ' +
-  'Verified: ≥ 3 attesters and ≥ 0.1 tTRUST. Trusted: ≥ 2 and ≥ 0.05. Otherwise Unverified. ' +
-  'Backing the agent never changes it; one wallet can never lift it.'
-
 export interface AgentTierResult {
   tier: AgentTier
   display: AgentTierDisplay

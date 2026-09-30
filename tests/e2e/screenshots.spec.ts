@@ -220,45 +220,52 @@ async function landingStatsReady(page: Page) {
   await expect(page.locator('[data-testid="landing-stat"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
 }
 
+// Etap 5b copy (lib/people-copy.ts), spelled out here so the harness checks the words a person reads.
+const WHO_VOUCHES = 'Who vouches, and for what'
+const NOBODY_VOUCHES = 'Unverified — nobody vouches yet'
+const TIER_READ = /\d+ of \d+ people needed to verify|Verified/
+/** The backing line once read: an amount and wallets, or nobody — never "Backed with — by —". */
+const BACKING_READ = /^(Backed with \d|No tTRUST backing yet)/
+
 /**
  * Modal is open and its own "—" loading placeholders resolved: the four
- * primary stat boxes and the Backers line render "—" only while loading
- * (see the Etap 4b comments in src/app/agents/page.tsx), and the ATTESTED
- * section left its skeleton — either the "Attested Domains" heading (≥1
- * attestation) or the empty state (0 attestations, e.g. OPEN CLAW).
+ * primary stat boxes and the backing line render "—" only while loading
+ * (see the Etap 4b comments in src/app/agents/page.tsx), and the "Who vouches"
+ * section left its skeleton — either its heading (≥1 vouch) or the empty
+ * state (nobody vouches, e.g. OPEN CLAW). Copy: lib/people-copy.ts (Etap 5b).
  */
 async function modalReady(page: Page) {
   const modal = modalLocator(page)
   await modal.waitFor({ timeout: WAIT_CAP })
-  await expect(modal.getByText(/^Backers: \d/)).toBeVisible({ timeout: WAIT_CAP })
-  // The agent tier chip resolved: "Unverified · 1/3 attesters", "Trusted · 2/3 attesters" or
-  // "Verified" (lib/agent-tier.ts). "—/3 attesters" (loading) and "Tier unavailable" don't match.
-  await expect(modal.getByTestId('agent-tier-chip').getByText(/\d+\/\d+ attesters|Verified/).first()).toBeVisible({ timeout: WAIT_CAP })
+  await expect(modal.getByTestId('backers-line')).toHaveText(BACKING_READ, { timeout: WAIT_CAP })
+  // The agent tier chip resolved: Unverified / Trusted with "1 of 3 people needed to verify", or
+  // "Verified". "— of 3 people…" (loading) and "Tier unavailable" don't match.
+  await expect(modal.getByTestId('agent-tier-chip').getByText(TIER_READ).first()).toBeVisible({ timeout: WAIT_CAP })
   // The four primary stat boxes print "—" only while their data loads.
   await expect(modal.locator('p.text-lg.font-bold.text-white', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
   await expect(
-    modal.getByText('Attested Domains', { exact: true })
-      .or(modal.getByText('Unverified — no attestations yet', { exact: true }))
+    modal.getByText(WHO_VOUCHES, { exact: true })
+      .or(modal.getByText(NOBODY_VOUCHES, { exact: true }))
       .first(),
   ).toBeVisible({ timeout: WAIT_CAP })
 }
 
 /**
  * /agents/[id] resolved: the agent tier chip left its loading state, the
- * ATTESTED section rendered (heading or empty state) and the stat row answered. The reference agents all
+ * "Who vouches" section rendered (heading or empty state) and the stat row answered. The reference agents all
  * exist — ERC-8004 ones included — so "Agent Not Found" is a failure here, not
  * a settled page.
  */
 async function profileReady(page: Page) {
   await expect(page.getByText('Agent Not Found', { exact: true })).toHaveCount(0)
-  await expect(page.getByTestId('agent-tier-chip').getByText(/\d+\/\d+ attesters|Verified/).first()).toBeVisible({ timeout: WAIT_CAP })
+  await expect(page.getByTestId('agent-tier-chip').getByText(TIER_READ).first()).toBeVisible({ timeout: WAIT_CAP })
   await expect(
-    page.getByText('Attested Domains', { exact: true })
-      .or(page.getByText('Unverified — no attestations yet', { exact: true }))
+    page.getByText(WHO_VOUCHES, { exact: true })
+      .or(page.getByText(NOBODY_VOUCHES, { exact: true }))
       .first(),
   ).toBeVisible({ timeout: WAIT_CAP })
-  // The header's stat row (the modal's, Etap 5a) answered: no "—" box, a Backers count.
-  await expect(page.getByTestId('backers-line')).toHaveText(/^Backers: \d/, { timeout: WAIT_CAP })
+  // The header's stat row (the modal's, Etap 5a) answered: no "—" box, a backing read.
+  await expect(page.getByTestId('backers-line')).toHaveText(BACKING_READ, { timeout: WAIT_CAP })
   await expect(page.locator('[data-testid="stat-box"] p', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
 }
 
@@ -279,7 +286,7 @@ async function oneAttestCta(page: Page) {
  */
 async function statRowMatchesModal(page: Page, key: keyof typeof AGENTS) {
   const rowOf = async (root: Locator) => {
-    await expect(root.getByTestId('backers-line')).toHaveText(/^Backers: \d/, { timeout: WAIT_CAP })
+    await expect(root.getByTestId('backers-line')).toHaveText(BACKING_READ, { timeout: WAIT_CAP })
     await expect(root.locator('[data-testid="stat-box"] p', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
     const boxes = (await root.getByTestId('stat-box').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim())
     return { boxes, backers: (await root.getByTestId('backers-line').innerText()).trim() }
@@ -298,7 +305,7 @@ async function attestClickOpensConnectModal(page: Page) {
   page.on('dialog', (d) => { dialogs.push(d.message()); void d.dismiss() })
   await page.locator('[data-testid="attest-cta"]').filter({ visible: true }).first().click()
   await expect(page.getByTestId('connect-wallet-modal')).toBeVisible({ timeout: WAIT_CAP })
-  await expect(page.getByTestId('connect-wallet-modal')).toContainText('Connect a wallet to attest Luda.')
+  await expect(page.getByTestId('connect-wallet-modal')).toContainText('Connect a wallet to vouch for Luda.')
   expect(dialogs, 'no native browser dialog').toEqual([])
 }
 

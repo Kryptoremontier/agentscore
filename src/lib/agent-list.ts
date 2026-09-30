@@ -21,6 +21,7 @@ import { summarizeAttesters } from './agent-profile'
 import { calculateAgentTier, type AgentTierResult, type AgentTierDisplay } from './agent-tier'
 import type { AttestedEntry } from './attestation-reader'
 import type { QualityBucket } from './score-basis'
+import { NOBODY_VOUCHES, peopleLine, ERC8004_TAB_TITLE } from './people-copy'
 
 /** Row shape as the /agents page consumes it (indexer fields + client annotations). */
 export interface AgentListAtom {
@@ -243,7 +244,7 @@ export type QualityFilter = 'all' | QualityBucket
 export const ORIGIN_TABS: ReadonlyArray<{ id: OriginFilter; label: string; title: string }> = [
   { id: 'all', label: 'All', title: 'All agents' },
   { id: 'agentscore', label: 'AgentScore', title: 'Agents registered via AgentScore' },
-  { id: 'erc8004', label: 'ERC-8004', title: 'Real agents from the ERC-8004 registry cohort — self-declared, not yet attested' },
+  { id: 'erc8004', label: 'ERC-8004', title: ERC8004_TAB_TITLE },
 ]
 
 /** The quality buckets, best first; "Unrated" = no measured score (lib/score-basis.ts qualityBucket). */
@@ -351,12 +352,14 @@ export function agentResultsLine(shown: number, of: number): { shown: number; of
 export interface CardAttestationView {
   attesters: number
   domains: number
+  /** The attested domains' labels, in read order — the line names the area when there is one. */
+  areas: string[]
   tier: AgentTierResult
 }
 
 export function cardAttestationView(entries: readonly AttestedEntry[]): CardAttestationView {
   const summary = summarizeAttesters(entries)
-  return { attesters: summary.length, domains: entries.length, tier: calculateAgentTier(summary) }
+  return { attesters: summary.length, domains: entries.length, areas: entries.map((e) => e.domain.label), tier: calculateAgentTier(summary) }
 }
 
 /**
@@ -366,8 +369,9 @@ export function cardAttestationView(entries: readonly AttestedEntry[]): CardAtte
  *   height with a fixed-height skeleton (CardAttesterLine), so nothing moves when
  *   the read answers.
  * - `unread`: the read failed → no claim at all, the Attest CTA only.
- * - `none`: the read succeeded and found no live attester → "No attestations yet · Attest".
- * - `some`: "{n} attester(s) · {k} domain(s)".
+ * - `none`: the read succeeded and found no live attester → "Nobody vouches yet · Vouch".
+ * - `some`: "1 person vouches · for Knowledge / Productivity" — the area named when there is
+ *   one, "for 2 areas" when more (lib/people-copy.ts peopleLine).
  */
 export type CardAttesterLine =
   | { kind: 'loading'; claim: null; cta: false }
@@ -375,12 +379,12 @@ export type CardAttesterLine =
   | { kind: 'none'; claim: string; cta: true }
   | { kind: 'some'; claim: string; cta: false; attesters: number; domains: number }
 
-export const CARD_NO_ATTESTATIONS = 'No attestations yet'
+export const CARD_NO_ATTESTATIONS = NOBODY_VOUCHES
 
 /**
  * One card's view out of the page's bulk-read state: undefined = the read is in flight,
  * null = it failed. A completed read with no entry for this id makes no claim either
- * (null → CTA only) — never an endless loading line, never "No attestations yet".
+ * (null → CTA only) — never an endless loading line, never "Nobody vouches yet".
  */
 export function cardViewFor(
   views: ReadonlyMap<string, CardAttestationView> | null | undefined,
@@ -398,7 +402,7 @@ export function cardAttesterLine(view: CardAttestationView | null | undefined): 
   if (view.attesters === 0) return { kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true }
   return {
     kind: 'some',
-    claim: `${pluralize(view.attesters, 'attester')} · ${pluralize(view.domains, 'domain')}`,
+    claim: peopleLine(view.attesters, view.areas),
     cta: false,
     attesters: view.attesters,
     domains: view.domains,

@@ -81,9 +81,9 @@ function modalInput(key: keyof typeof ID): StatRowInput {
 
 describe('statRowView — the modal and the profile render the same row', () => {
   it.each([
-    ['dackie', ['1 Attester', '1 Domain attested', '0.0099 tTRUST tTRUST attested', '0 Reports'], 'Backers: 0 · 0.0000 tTRUST on atom vault'],
-    ['luda', ['1 Attester', '1 Domain attested', '0.0208 tTRUST tTRUST attested', '0 Reports'], 'Backers: 1 · 0.0010 tTRUST on atom vault · 1 signal'],
-    ['openclaw', ['0 Attesters', '0 Domains attested', '0.0000 tTRUST tTRUST attested', '0 Reports'], 'Backers: 1 · 0.3351 tTRUST on atom vault · 16 signals'],
+    ['dackie', ['1 Person vouching', '1 Area', '0.0099 tTRUST behind vouches', '0 Reports'], 'No tTRUST backing yet'],
+    ['luda', ['1 Person vouching', '1 Area', '0.0208 tTRUST behind vouches', '0 Reports'], 'Backed with 0.0010 tTRUST by 1 wallet · 1 signal'],
+    ['openclaw', ['0 People vouching', '0 Areas', '0.0000 tTRUST behind vouches', '0 Reports'], 'Backed with 0.3351 tTRUST by 1 wallet · 16 signals'],
   ] as const)('%s', (key, boxes, backersLine) => {
     const profile = statRowView(profileInput(key))
     expect(profile).toEqual(statRowView(modalInput(key)))
@@ -94,10 +94,12 @@ describe('statRowView — the modal and the profile render the same row', () => 
   it('a part not read renders "—", never a 0 derived from nothing; one signal is singular', () => {
     const v = statRowView({ attested: null, reportCount: null, backers: null, signals: null })
     expect(v.boxes.map((b) => b.value)).toEqual(['—', '—', '—', '—'])
-    expect(v.boxes.map((b) => b.label)).toEqual(['Attesters', 'Domains attested', 'tTRUST attested', 'Reports'])
-    expect(v.backersLine).toBe('Backers: — · — on atom vault')
+    expect(v.boxes.map((b) => b.label)).toEqual(['People vouching', 'Areas', 'tTRUST behind vouches', 'Reports'])
+    expect(v.backersLine).toBe('Backed with — by —')
     expect(statRowView({ attested: [], reportCount: 0, backers: { count: 1, atomVaultWei: wei('0.001') }, signals: 1 }).backersLine)
-      .toBe('Backers: 1 · 0.0010 tTRUST on atom vault · 1 signal')
+      .toBe('Backed with 0.0010 tTRUST by 1 wallet · 1 signal')
+    expect(statRowView({ attested: [], reportCount: 0, backers: { count: 2, atomVaultWei: wei('0.5') }, signals: 0 }).backersLine)
+      .toBe('Backed with 0.5000 tTRUST by 2 wallets')
   })
 
   it('backers: live wallets on the atom vault and its counter-vault; stake on the atom vault only; 0-share rows are not backers', () => {
@@ -119,18 +121,23 @@ describe('source guards — same components on both surfaces, no tier-sounding s
   const read = (f: string) => readFileSync(path.join(SRC, f), 'utf8')
   const code = (f: string) => read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/\{\s*\}/g, '')
 
-  it('modal and profile render <ProfileStatRow view={statRow} …> from statRowView and <AtomIdLine>', () => {
+  it('modal and profile render <ProfileStatRow view={statRow} …> from statRowView, and the Atom ID under a collapsed <AgentDetails>', () => {
     const modal = code('app/agents/page.tsx')
     expect(modal).toMatch(/const statRow = useMemo\(\(\) => statRowView\(\{/)
     expect(modal).toMatch(/<ProfileStatRow\s+view=\{statRow\}/)
-    expect(modal).toMatch(/<AtomIdLine termId=\{selectedAgent\.term_id\}/)
+    expect(modal).toMatch(/<AgentDetails termId=\{selectedAgent\.term_id\} caipIdentity=\{selectedAgent\.caipIdentity\}/)
+    expect(modal).not.toMatch(/<AtomIdLine /)
     const profile = code('app/agents/[id]/page.tsx')
     expect(profile).toMatch(/const statRow = statRowView\(\{/)
     expect(profile.match(/<ProfileStatRow view=\{statRow\} \/>/g)).toHaveLength(2) // scored + non-scored tier
     expect(profile).toMatch(/fetchAgentModalData\(agentId, MODAL_HEADER_PARTS\)/) // the modal's own answer, its header's parts
-    expect(profile).toMatch(/<AtomIdLine termId=\{agentId\} \/>/)
+    expect(profile).toMatch(/<AgentDetails termId=\{agentId\} caipIdentity=\{cohortMatch\?\.caipIdentity\} \/>/)
+    expect(profile).toMatch(/<AgentDetails termId=\{agent\.id\}/)
+    expect(profile).not.toMatch(/<AtomIdLine /)
     const header = code('components/agents/AgentHeader.tsx')
-    expect(header).toMatch(/<AtomIdLine termId=\{agent\.id\} \/>/)
+    expect(header).not.toMatch(/AtomIdLine/)
+    // Collapsed by default: the Atom ID renders only once opened.
+    expect(read('components/profile/AgentDetails.tsx')).toMatch(/useState\(false\)[\s\S]*\{open && \([\s\S]*<AtomIdLine termId=\{termId\} \/>/)
     expect(header).not.toMatch(/atomId\.toString\(\)|Total Stake|>\s*Stakers\s*</)
   })
 
