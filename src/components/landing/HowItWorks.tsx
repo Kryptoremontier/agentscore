@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Search, Users, BadgeCheck } from 'lucide-react'
-import type { ExplainerTerm } from '@/lib/people-copy'
+import { LANDING_TIERS_LINE, type ExplainerTerm } from '@/lib/people-copy'
 import { Explainer } from '@/components/shared/Explainer'
 
 // Etap 5b Run 2: how it works is about people vouching — the landing's three steps, told in full.
@@ -207,6 +207,17 @@ export function HowItWorks() {
             </motion.div>
           ))}
         </div>
+
+        {/* The tier rule, in one line (Etap 6) */}
+        <motion.p
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-10 text-center text-sm sm:text-base text-[#B5BDC6] max-w-2xl mx-auto"
+          data-testid="tiers-line"
+        >
+          {LANDING_TIERS_LINE}
+        </motion.p>
       </div>
     </section>
   )

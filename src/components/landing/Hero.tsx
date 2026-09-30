@@ -5,7 +5,8 @@
  *   1. "Trust Layer for AI Agents" and what it means: real people vouch, one wallet never can alone.
  *   2. A live example: the first agent of the /agents list in its default order (Most vouched).
  *   3. Three steps: find an agent · see who vouches, and for what · vouch for one you know.
- *   4. One number: how many people vouch for agents here (/api/v1/stats — distinct live attesters).
+ *   4. One number: how many people vouch for agents here (/api/v1/stats — distinct live attesters),
+ *      and an invitation under it (Etap 6): "Be the second." when it is one person, else "Add yours."
  *   5. Two ways in: vouch for an agent (/agents), or build on it (/docs: MCP / REST).
  * "Live on Intuition Testnet" stays as a small badge. Each part carries data-story="n" so the
  * harness can check it is inside a 390×844 first screen.
@@ -27,10 +28,11 @@ import { effectiveLabel } from '@/lib/api-data'
 import { cleanAtomName } from '@/types/claim'
 import {
   LIVE_ON_TESTNET, LANDING_TITLE, LANDING_SUB, LANDING_STEPS, peopleVouchHereParts,
-  LANDING_CTA_VOUCH, LANDING_CTA_DEVELOPERS,
+  LANDING_CTA_VOUCH, LANDING_CTA_DEVELOPERS, invitationLine,
 } from '@/lib/people-copy'
 import { ExampleAgentCard, type ExampleAgent } from './ExampleAgentCard'
 import { Explainer } from '@/components/shared/Explainer'
+import { setHeroAgent } from './hero-agent'
 
 function WaveText({ text, className }: { text: string; className?: string }) {
   return (
@@ -66,13 +68,16 @@ export function Hero() {
       const view = agentsPageView(payload)
       const top = view.unreachable ? null : mostVouched(view, 1)
       const first = top?.entries[0]
-      if (!top || !first) { setExample({ status: 'error' }); return }
+      if (!top || !first) { setExample({ status: 'error' }); setHeroAgent(null); return }
       const id = first.agent.term_id
+      const name = cleanAtomName(effectiveLabel(first.agent))
+      // The "For developers" block asks the API about this same agent (components/landing/ForDevelopers).
+      setHeroAgent({ termId: id, name })
       const attesters = summarizeAttesters(top.attestations?.get(id) ?? [])
       setExample({
         status: 'ok',
         termId: id,
-        name: cleanAtomName(effectiveLabel(first.agent)),
+        name,
         origin: first.agent.origin,
         line: attesterLineOf(top.views, id),
         tier: tierChipOf(top.views, id),
@@ -86,6 +91,7 @@ export function Hero() {
 
   const people = landingPeopleNumber(statsState)
   const peopleHere = peopleVouchHereParts(people.value)
+  const invitation = invitationLine(people.value)
 
   return (
     <section className="relative overflow-hidden">
@@ -137,11 +143,14 @@ export function Hero() {
           ))}
         </ol>
 
-        {/* 4 — one number */}
-        <p data-story="4" className="mt-5 text-base sm:text-lg text-white font-semibold" data-testid="people-vouching" data-state={statsState.status}>
-          <span className="text-[#C8963C] tabular-nums" title={people.unavailable ?? undefined}>{peopleHere.count}</span>{' '}
-          {peopleHere.rest}
-        </p>
+        {/* 4 — one number, and the invitation under it (never hard-coded: /api/v1/stats) */}
+        <div data-story="4" className="mt-5">
+          <p className="text-base sm:text-lg text-white font-semibold" data-testid="people-vouching" data-state={statsState.status}>
+            <span className="text-[#C8963C] tabular-nums" title={people.unavailable ?? undefined}>{peopleHere.count}</span>{' '}
+            {peopleHere.rest}
+          </p>
+          {invitation && <p className="mt-0.5 text-sm sm:text-base text-[#C8963C] font-medium" data-testid="invitation">{invitation}</p>}
+        </div>
 
         {/* 5 — two ways in */}
         <div data-story="5" className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">

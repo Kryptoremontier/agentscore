@@ -248,3 +248,15 @@ export const EXPLAINERS: Record<ExplainerTerm, { label: string; text: string; li
     link: { text: 'Intuition Hub', href: INTUITION_HUB_URL },
   },
 }
+
+// ─── The landing: invitation, tiers, a real agent answer (Etap 6) ─────────────
+
+/** Under the one number: one person so far → "Be the second."; otherwise "Add yours." (null = unread → none). */
+export const invitationLine = (n: number | null) => (n == null ? null : n === 1 ? 'Be the second.' : 'Add yours.')
+/** How it works, one line after the steps. */
+export const LANDING_TIERS_LINE = 'Trusted takes 2 people. Verified takes 3. Backing with tTRUST never changes the tier.'
+/** The "For developers" block: a live get_agent_trust answer for the landing's example agent. */
+export const DEV_HEADING = 'For developers & agents'
+export const DEV_LINE = 'Your agent can ask before it trusts. Every answer carries the age of its data.'
+export const devAnswerCaption = (agentName: string) => `A live answer for ${agentName}, trimmed.`
+export const DEV_ANSWER_UNREAD = 'Couldn’t get an answer right now — this is not an empty one.'
