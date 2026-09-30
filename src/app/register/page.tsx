@@ -11,6 +11,7 @@ import { RegisterSkillForm } from '@/components/skills/RegisterSkillForm'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/shared/GlassCard'
 import { cn } from '@/lib/cn'
+import { REGISTER_BUILD_TRUST } from '@/lib/people-copy'
 
 type RegisterTab = 'agent' | 'skill'
 
@@ -216,7 +217,7 @@ function RegisterContent() {
             {
               icon: Shield,
               title: 'Build Trust',
-              desc: 'Earn reputation through positive attestations from users',
+              desc: REGISTER_BUILD_TRUST,
               rgb: '200,150,60',
               hex: '#C8963C',
             },

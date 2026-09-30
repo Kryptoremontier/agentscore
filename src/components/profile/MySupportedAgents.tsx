@@ -9,6 +9,7 @@ import {
 import Link from 'next/link'
 import type { AgentSupport } from '@/types/user'
 import { cn } from '@/lib/cn'
+import { NO_POSITIONS_NOTE } from '@/lib/people-copy'
 import { NodeAvatar } from './NodeAvatar'
 
 interface MySupportedAgentsProps {
@@ -103,7 +104,7 @@ export function MySupportedAgents({ supports }: MySupportedAgentsProps) {
         </div>
         <h3 className="text-lg font-semibold mb-2">No Positions Yet</h3>
         <p className="text-[#7A838D] text-sm max-w-sm mb-5">
-          Buy shares in agents or skills to signal trust in the knowledge graph. Your positions will appear here.
+          {NO_POSITIONS_NOTE}
         </p>
         <Link
           href="/agents"

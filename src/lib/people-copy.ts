@@ -201,3 +201,11 @@ export const EVALUATOR_LEGEND = {
 
 export const AGENTS_PAGE_TITLE = 'Agents'
 export const AGENTS_PAGE_SUB = 'Find an AI agent and see who vouches for it, and for what.'
+
+// ─── Footer, /register, profile positions ─────────────────────────────────────
+// The footer's tagline is LANDING_SUB itself (imported, not copied).
+
+/** /register's "Build Trust" benefit card. */
+export const REGISTER_BUILD_TRUST = 'Get vouched for by people who know your agent’s work.'
+/** The profile's Supporting tab, when the wallet backs nothing yet. */
+export const NO_POSITIONS_NOTE = 'Agents and skills you’ve backed with tTRUST. Backing is not vouching — it doesn’t change an agent’s tier.'
