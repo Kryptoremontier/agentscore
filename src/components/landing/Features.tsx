@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { ForDevelopers } from './ForDevelopers'
 import { Layers, GitBranch, Award, Zap, Trophy } from 'lucide-react'
 
 // Etap 5b Run 2: people vouching, in plain words. The "Bonding Curve Market" card (buy and sell
@@ -179,6 +180,9 @@ export function Features() {
             </motion.div>
           ))}
         </div>
+
+        {/* For developers: a real agent answer (Etap 6) */}
+        <ForDevelopers className="mt-5" />
       </div>
     </section>
   )

@@ -12,6 +12,7 @@
  */
 
 import { formatTTrust } from './format'
+import { INTUITION_HUB_URL } from './intuition-links'
 import { plural, pluralize as count } from './plural'
 
 /** "1 person" / "2 people". */
@@ -173,7 +174,6 @@ export const LANDING_CTA_VOUCH = 'Vouch for an agent'
 export const LANDING_CTA_DEVELOPERS = 'For developers & agents (MCP / REST)'
 export const EXAMPLE_HEADING = 'Most vouched right now'
 export const EXAMPLE_UNREAD = 'Couldn’t load an example right now — the list is one tap away.'
-export const WHO_PREFIX = 'by'
 
 // ─── /domains (Etap 5b Run 2) ─────────────────────────────────────────────────
 
@@ -211,3 +211,68 @@ export const REGISTER_BUILD_TRUST = 'Get vouched for by people who know your age
 export const REGISTER_BUILD_TRUST_SKILL = 'Get backed with tTRUST by people who rely on this skill.'
 /** The profile's Supporting tab, when the wallet backs nothing yet. */
 export const NO_POSITIONS_NOTE = 'Agents and skills you’ve backed with tTRUST. Backing is not vouching — it doesn’t change an agent’s tier.'
+
+// ─── Seals: the path to Verified (Etap 6) ─────────────────────────────────────
+
+/** An empty seal slot — a place for the next person who vouches. */
+export const SEAL_OPEN = 'Open'
+/** More people than slots: "and 2 more". */
+export const sealsMore = (n: number) => `and ${n} more`
+/** The row's name for screen readers: "1 person vouches. Verified takes 3 people." */
+export const sealRowLabel = (n: number, needed: number) =>
+  `${n === 0 ? NOBODY_VOUCHES : peopleVouch(n)}. Verified takes ${needed} people.`
+/** One seal's areas: "Knowledge / Productivity · Crypto / Onchain". */
+export const sealAreas = (areaLabels: readonly string[]) => areaLabels.join(' · ')
+
+// ─── Explainers at the point of use (Etap 6) ──────────────────────────────────
+// One short answer per word a newcomer doesn't know, on a small "?" next to its first use on the
+// modal, the profile and the landing (components/shared/Explainer) — never a separate FAQ page.
+
+export type ExplainerTerm = 'vouch' | 'tiers' | 'backing' | 'ttrust'
+export const EXPLAINERS: Record<ExplainerTerm, { label: string; text: string; link?: { text: string; href: string } }> = {
+  vouch: {
+    label: 'What is a vouch?',
+    text: 'A vouch is a person putting a little tTRUST behind one claim: this agent is good at this area. It’s on-chain, with their wallet on it.',
+  },
+  tiers: {
+    label: 'What do Unverified, Trusted and Verified mean?',
+    text: 'Trusted takes 2 different people, Verified takes 3. One wallet can never lift an agent on its own.',
+  },
+  backing: {
+    label: 'What is the backing score?',
+    text: 'How much tTRUST sits on the agent itself. Backing is not vouching — it never changes the tier.',
+  },
+  ttrust: {
+    label: 'What is tTRUST?',
+    text: 'Intuition’s testnet token. It’s free — get it from the Intuition Hub.',
+    link: { text: 'Intuition Hub', href: INTUITION_HUB_URL },
+  },
+}
+
+// ─── The landing: invitation, tiers, a real agent answer (Etap 6) ─────────────
+
+/** Under the one number: one person so far → "Be the second."; otherwise "Add yours." (null = unread → none). */
+export const invitationLine = (n: number | null) => (n == null ? null : n === 1 ? 'Be the second.' : 'Add yours.')
+/** How it works, one line after the steps. */
+export const LANDING_TIERS_LINE = 'Trusted takes 2 people. Verified takes 3. Backing with tTRUST never changes the tier.'
+/** The "For developers" block: a live get_agent_trust answer for the landing's example agent. */
+export const DEV_HEADING = 'For developers & agents'
+export const DEV_LINE = 'Your agent can ask before it trusts. Every answer carries the age of its data.'
+export const devAnswerCaption = (agentName: string) => `A live answer for ${agentName}, trimmed.`
+export const DEV_ANSWER_UNREAD = 'Couldn’t get an answer right now — this is not an empty one.'
+
+// ─── The last internal words on screen (Etap 6) ──────────────────────────────
+
+/** /agents status line: "272 agents, live" / "272 agents, updated 3 min ago". */
+export const AGENTS_LIVE = 'live'
+export const agentsStatus = (n: number, age: string) => `${count(n, 'agent', 'agents')}, ${age.charAt(0).toLowerCase()}${age.slice(1)}`
+export const AGENTS_STATUS_LOADING = '— agents'
+/** One list couldn't be read: the count that was, and which list is missing — never a silent drop. */
+export const agentsStatusMissing = (n: number | null, missing: string) =>
+  `${n == null ? '—' : count(n, 'agent', 'agents')} — couldn’t read the ${missing} list right now`
+/** The line's popover: where the numbers come from, and what is hidden. */
+export const AGENTS_STATUS_DETAILS = 'Where these agents come from'
+export const hiddenNote = (n: number) =>
+  `${n} hidden: test fixtures and duplicate registrations of the same agent — counted here, not shown in the list.`
+/** The timeline's pre-canonical skill claim: "Skill added: watch"; the raw predicate stays in its details. */
+export const skillAdded = (skillName: string) => `Skill added: ${skillName}`

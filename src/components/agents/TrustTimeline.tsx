@@ -17,6 +17,8 @@ import {
   type SkillEvent,
 } from '@/lib/trust-timeline'
 import { formatDate, formatDateShort } from '@/lib/format'
+import { DETAILS_HEADING } from '@/lib/people-copy'
+import { timelineEntryView } from './timeline-entry'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -105,6 +107,7 @@ function getEventIcon(event: TimelineEvent): { Icon: LucideIcon; color: string }
 function EventCard({ event, isLast }: { event: TimelineEvent; isLast: boolean }) {
   const style = SEVERITY_STYLES[event.severity]
   const { Icon, color } = getEventIcon(event)
+  const view = timelineEntryView(event)
 
   return (
     <div className="flex gap-3">
@@ -124,7 +127,7 @@ function EventCard({ event, isLast }: { event: TimelineEvent; isLast: boolean })
       {/* Content */}
       <div className="pb-5 min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2 mb-0.5">
-          <p className="text-sm font-semibold text-white leading-tight">{event.title}</p>
+          <p className="text-sm font-semibold text-white leading-tight">{view.title}</p>
           {event.scoreAtEvent !== null && (
             <span
               className="text-xs font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 tabular-nums"
@@ -137,9 +140,17 @@ function EventCard({ event, isLast }: { event: TimelineEvent; isLast: boolean })
         <p className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
           {formatDate(event.timestamp)}
         </p>
-        <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>
-          {event.description}
-        </p>
+        {view.description && (
+          <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>
+            {view.description}
+          </p>
+        )}
+        {view.details && (
+          <details className="text-xs" data-testid="timeline-details">
+            <summary className="cursor-pointer select-none" style={{ color: 'rgba(255,255,255,0.35)' }}>{DETAILS_HEADING}</summary>
+            <p className="mt-1 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>{view.details}</p>
+          </details>
+        )}
       </div>
     </div>
   )

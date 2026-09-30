@@ -184,7 +184,7 @@ describe('grid ↔ list parity — Dackie, Luda, OPEN CLAW (live rows 2026-09-26
       expect(view.match(/attesterLineOf\(attestationViewBySubject, agent\.term_id\)/g)).toHaveLength(1)
       expect(view.match(/tierChipOf\(attestationViewBySubject, agent\.term_id\)/g)).toHaveLength(1)
       expect(view).toMatch(/<CardAttesterLine line=\{attesterLine\}/)
-      expect(view).toMatch(/<OriginChip origin=\{agent\.origin\} \/>/)
+      expect(view).toMatch(/<OriginChip origin=\{agent\.origin\} tab=\{originFilter\} \/>/)
     }
     // No second derivation anywhere on the page.
     expect(PAGE).not.toMatch(/cardAttesterLine\(|cardViewFor\(/)

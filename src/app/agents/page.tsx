@@ -50,10 +50,10 @@ import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
-import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
-import { AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
+import { AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
 import { ScoreParts } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
@@ -62,13 +62,18 @@ import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-position
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { SORT_OPTIONS, parseSort, type AgentListSortBy } from '@/lib/agent-list-sort'
 import {
-  matchesAgentSearch, agentListHeaderSegments, LIVE_FEED_LABEL, agentResultsLine, type FeedStatus,
+  matchesAgentSearch, agentResultsLine, type FeedStatus,
   cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, orderAgents, listEntryOf, type CardAttestationView,
   listTrustTriple, listVaultSnapshot, listOpposeWei, withLiveVault,
   ORIGIN_TABS, QUALITY_LEVELS, corpusTotals, qualityOptions, qualityOptionText, parseListFilters, listFiltersSearch,
   type OriginFilter, type QualityFilter, type AgentScoreCorpusCounts, type CohortCorpusCounts,
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
+import { SealRow } from '@/components/agents/SealRow'
+import { AgentsStatusLine } from '@/components/agents/AgentsStatusLine'
+import { isAgentOwner } from '@/components/agents/agent-owner'
+import { isRegisteredByUser } from '@/lib/registrant-store'
+import { Explainer } from '@/components/shared/Explainer'
 import {
   agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, OWN_TX_LIVE_MS,
   MODAL_PARTS, MODAL_HEADER_PARTS, MODAL_REST_PARTS, type ModalPart,
@@ -155,7 +160,12 @@ function getMomentumIndicator(momentum: number): { arrow: string; color: string;
 const LIST_ROW_GRID = 'grid grid-cols-[2rem_minmax(0,1fr)_3rem] sm:grid-cols-[2rem_minmax(0,1fr)_6rem_4rem_3.5rem] gap-x-3 sm:gap-x-4 px-3 sm:px-4'
 
 /** The row's origin, the same chip on the grid card and the list row. */
-function OriginChip({ origin }: { origin?: 'agentscore' | 'erc8004' }) {
+/**
+ * Where a listed agent comes from. "via AgentScore" says something only next to agents from the
+ * other registry: inside the AgentScore tab every card would carry it, so it isn't drawn (Etap 6).
+ */
+function OriginChip({ origin, tab }: { origin?: 'agentscore' | 'erc8004'; tab: OriginFilter }) {
+  if (origin !== 'erc8004' && tab === 'agentscore') return null
   return (
     <span className={`text-xs px-2 py-0.5 rounded inline-block flex-shrink-0 ${
       origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
@@ -437,6 +447,16 @@ function AgentsPageContent() {
     for (const [id, entries] of attestedBySubject) out.set(id, cardAttestationView(entries))
     return out
   }, [attestedBySubject])
+  // Per agent: the people who vouch, for the card's seals (components/agents/SealRow) — the same
+  // rows and derivation as the people line. A subject absent from a completed read makes no claim.
+  const attestersBySubject = useMemo(() => {
+    if (!attestedBySubject) return attestedBySubject
+    const out = new Map<string, AttesterSummary[]>()
+    for (const [id, entries] of attestedBySubject) out.set(id, summarizeAttesters(entries))
+    return out
+  }, [attestedBySubject])
+  const sealsOf = (termId: string) =>
+    attestersBySubject === undefined ? undefined : attestersBySubject?.get(termId) ?? null
 
   // A card's "Attest" CTA opens the modal scrolled to its ATTESTED section, once the
   // profile has loaded (the section's height depends on it).
@@ -1361,10 +1381,25 @@ function AgentsPageContent() {
   // The agent tier — attestations only (thesis §6 "Agent tiers", lib/agent-tier.ts). Backing on
   // the atom vault never changes it. null while the profile loads or when the attestation read
   // failed: the chip then says so, never a default "Unverified".
-  const agentTier = useMemo(
-    () => (attestedRead && profileVector.attested ? calculateAgentTier(summarizeAttesters(profileVector.attested)) : null),
-    [attestedRead, profileVector.attested],
+  // The people who vouch, for the modal's seals and its tier: undefined while the profile loads,
+  // null when the attestation read failed (no slots, the tier chip says so).
+  const modalAttesters = useMemo(
+    () => (!profileLoaded ? undefined : profileVector.attested ? summarizeAttesters(profileVector.attested) : null),
+    [profileLoaded, profileVector.attested],
   )
+  const agentTier = useMemo(
+    () => (attestedRead && modalAttesters ? calculateAgentTier(modalAttesters) : null),
+    [attestedRead, modalAttesters],
+  )
+  // The connected wallet registered this agent: only then the Agent Card shows its
+  // "Profile N% complete" bar — a to-do for the owner, not a verdict for visitors (Etap 6).
+  const viewerOwnsAgent = useMemo(() => !!selectedAgent && isAgentOwner({
+    wallet: isConnected ? address : null,
+    atomId: selectedAgent.term_id,
+    atomCreatedAt: selectedAgent.created_at,
+    positions: positionsKnown ? allPositions : null,
+    registeredHere: !!address && isRegisteredByUser(selectedAgent.term_id, address),
+  }), [selectedAgent, isConnected, address, positionsKnown, allPositions])
 
   // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
   const agentAvatar = useMemo(() => {
@@ -1516,15 +1551,9 @@ function AgentsPageContent() {
               {AGENTS_PAGE_SUB}
             </p>
 
-            {/* Live indicator */}
-            <div className="flex items-center gap-2 mt-4">
-              <div className="w-2 h-2 rounded-full bg-[#C8963C] animate-pulse" />
-              <span className="text-xs text-[#7A838D]">
-                {/* Corpus totals only — no search/filter input; loading → "—", failed →
-                    "feed unavailable", "live feed" only when both reads succeeded (lib/agent-list.ts). */}
-                {agentListHeaderSegments({ ...corpusCounts, freshness: pageView ? feedFreshnessLabel(pageView.parts, LIVE_FEED_LABEL, nowTick) : null }).join(' · ')}
-              </span>
-            </div>
+            {/* Status line — corpus totals only, no search/filter input: "272 agents, live" (or
+                "updated N min ago"); the breakdown and the hidden count in its popover (Etap 6). */}
+            <AgentsStatusLine {...corpusCounts} freshness={pageView ? feedFreshnessLabel(pageView.parts, AGENTS_LIVE, nowTick) : null} />
           </motion.div>
 
           {/* Search + Filter Bar */}
@@ -1786,7 +1815,7 @@ function AgentsPageContent() {
                   // Trusted / Verified (thesis §6); Unverified is carried by the people line.
                   const attesterLine = attesterLineOf(attestationViewBySubject, agent.term_id)
                   const cardTierChip = tierChipOf(attestationViewBySubject, agent.term_id)
-                  const originChip = <OriginChip origin={agent.origin} />
+                  const originChip = <OriginChip origin={agent.origin} tab={originFilter} />
                   const backing = <BackingScore value={displayScore} tip={noScoreTip} className="flex-shrink-0 pt-0.5" />
                   const cardClass = `bg-[#111318] border border-[#1e2028] rounded-2xl
                                  cursor-pointer transition-all duration-300 ease-out
@@ -1817,7 +1846,10 @@ function AgentsPageContent() {
                           </div>
                           {backing}
                         </div>
-                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" />
+                        <div className="flex items-start justify-between gap-3">
+                          <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="min-w-0" />
+                          <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[3px]" />
+                        </div>
                       </motion.div>
                     )
                   }
@@ -1845,7 +1877,10 @@ function AgentsPageContent() {
                         {backing}
                       </div>
                       {/* The headline: who vouches, and for what (Etap 5b) — above the vault line. */}
-                      <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="mb-3" />
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="min-w-0" />
+                        <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[3px]" />
+                      </div>
                       {vaultRead && (
                         <div className="flex items-center gap-4 text-sm text-[#B5BDC6]">
                           <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
@@ -1912,9 +1947,12 @@ function AgentsPageContent() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="text-sm font-semibold text-white leading-snug min-w-0 [overflow-wrap:anywhere]">{name}</p>
                           {rowTierChip && <TrustTierBadge tier={rowTierChip} size="sm" />}
-                          <OriginChip origin={agent.origin} />
+                          <OriginChip origin={agent.origin} tab={originFilter} />
                         </div>
-                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="mt-0.5" />
+                        <div className="flex items-start gap-2 mt-0.5">
+                          <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="min-w-0" />
+                          <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[2px]" />
+                        </div>
                         {listVaultRead && (
                           <p className="sm:hidden text-xs text-[#B5BDC6] mt-0.5">
                             <span className="whitespace-nowrap">Stakes: <span className="text-white font-medium">{stakes}</span></span>
@@ -1973,6 +2011,7 @@ function AgentsPageContent() {
                             Unverified / Trusted + "1 of 3 people needed to verify", or Verified.
                             "—" while loading; unavailable if the attestation read failed. */}
                         <AgentTierChip tier={agentTier} loading={!profileLoaded} />
+                        <Explainer term="tiers" />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
@@ -2022,6 +2061,8 @@ function AgentsPageContent() {
                   backing={<BackingScore variant="line" value={modalBackingScore} tip={noScoreTooltip(modalStakeReading)} />}
                   footer={modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
                 />
+                {/* The path to Verified: three seals, the people who vouch (Etap 6) — beside the words, not instead. */}
+                <SealRow attesters={modalAttesters} size="lg" className="mt-3" />
               </div>
 
               {/* ETAP 3 — profile hierarchy (thesis §5), always visible above the
@@ -2574,8 +2615,8 @@ function AgentsPageContent() {
                         </div>
                       )}
 
-                      {/* Profile Completeness */}
-                      <div className="pt-1">
+                      {/* Profile Completeness — the owner's to-do only (Etap 6) */}
+                      {viewerOwnsAgent && <div className="pt-1" data-testid="profile-completeness">
                         <div className="flex items-center justify-between text-[10px] mb-1">
                           <span className="text-[#7A838D]">Profile</span>
                           <span className="text-[#B5BDC6] font-medium">{completeness.percentage}% complete</span>
@@ -2589,7 +2630,7 @@ function AgentsPageContent() {
                             }}
                           />
                         </div>
-                      </div>
+                      </div>}
                     </div>
                   </div>
                 )

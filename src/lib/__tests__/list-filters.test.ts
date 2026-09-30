@@ -111,7 +111,9 @@ describe('/agents wires them (source guards — no DOM in this env)', () => {
 
   it('tabs and header read the same corpus counts object', () => {
     expect(page).toMatch(/const originTotals = corpusTotals\(corpusCounts\)/)
-    expect(page).toMatch(/agentListHeaderSegments\(\{ \.\.\.corpusCounts, freshness:/)
+    expect(page).toMatch(/<AgentsStatusLine \{\.\.\.corpusCounts\} freshness=\{/)
+    // The status line's popover prints the same segments (components/agents/AgentsStatusLine).
+    expect(readFileSync(path.join(__dirname, '../../components/agents/AgentsStatusLine.tsx'), 'utf8')).toMatch(/agentListHeaderSegments\(\{ agentScore: i\.agentScore, cohort: i\.cohort/)
     expect(page).toMatch(/\{originTotals\[o\.id\] \?\? '—'\}/)
     expect(page).toMatch(/role="tab"\s+aria-selected=\{active\}/)
   })
