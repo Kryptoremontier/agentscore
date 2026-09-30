@@ -6,6 +6,8 @@
  * small neutral backing number — and its three seals, the people who vouch by name (Etap 6:
  * components/agents/SealRow). It opens that agent. The box keeps one height while loading, so
  * nothing below it moves when the read answers; a failed read says so (never an empty example).
+ * The name is the card's link and covers the whole card; the "?" explainers (Etap 6) sit above it —
+ * a button can't live inside a link.
  */
 
 import Link from 'next/link'
@@ -16,6 +18,7 @@ import { EXAMPLE_HEADING, EXAMPLE_UNREAD } from '@/lib/people-copy'
 import { TrustTierBadge } from '@/components/agents/TrustTierBadge'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { SealRow } from '@/components/agents/SealRow'
+import { Explainer } from '@/components/shared/Explainer'
 
 export type ExampleAgent =
   | { status: 'loading' }
@@ -52,25 +55,35 @@ export function ExampleAgentCard({ agent }: { agent: ExampleAgent }) {
     )
   }
   return (
-    <Link
-      href={`/agents?open=${agent.termId}`}
-      className={`${BOX} border-[#C8963C]/25 bg-[#111318]/90 hover:border-[#C8963C]/50 transition-colors`}
+    <div
+      className={`relative ${BOX} border-[#C8963C]/25 bg-[#111318]/90 hover:border-[#C8963C]/50 transition-colors`}
       data-testid="example-agent"
       data-state="ok"
     >
       <div className="flex items-center justify-between gap-2 mb-1">
         <p className="text-[10px] uppercase tracking-wider text-[#7A838D]">{EXAMPLE_HEADING}</p>
-        <BackingScore value={agent.backing} tip={agent.backingTip} />
+        <span className="inline-flex items-center gap-1.5">
+          <BackingScore value={agent.backing} tip={agent.backingTip} />
+          <Explainer term="backing" />
+        </span>
       </div>
       <div className="flex items-center gap-1.5 min-w-0">
-        <p className="font-bold text-white text-base leading-tight truncate">{agent.name}</p>
+        <Link
+          href={`/agents?open=${agent.termId}`}
+          className="font-bold text-white text-base leading-tight truncate outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-[#C8963C]/60"
+        >
+          {agent.name}
+        </Link>
         {agent.tier && <TrustTierBadge tier={agent.tier} size="sm" />}
         <span className="text-[10px] text-[#7A838D] flex-shrink-0">{agent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}</span>
       </div>
       <p className={`text-sm leading-5 mt-1 truncate ${agent.line.kind === 'some' ? 'text-[#C8963C] font-medium' : 'text-[#7A838D]'}`}>
         {agent.line.claim ?? '—'}
       </p>
-      <SealRow attesters={agent.attesters} size="md" className="mt-0.5" />
-    </Link>
+      <div className="flex items-center gap-2 mt-0.5 min-w-0">
+        <SealRow attesters={agent.attesters} size="md" className="min-w-0" />
+        <Explainer term="tiers" />
+      </div>
+    </div>
   )
 }

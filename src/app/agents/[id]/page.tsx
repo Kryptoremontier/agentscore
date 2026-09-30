@@ -24,6 +24,7 @@ import { AgentTabs } from '@/components/agents/AgentTabs'
 import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { SealRow } from '@/components/agents/SealRow'
+import { Explainer } from '@/components/shared/Explainer'
 import { AgentDetails } from '@/components/profile/AgentDetails'
 import { ScoreParts, type ScorePartsView } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
@@ -204,6 +205,7 @@ export default function AgentDetailPage() {
                   <h1 className="text-2xl font-bold">{name}</h1>
                   {cohortMatch && <span className="text-xs text-[#8B5CF6] bg-[#8B5CF6]/10 px-2 py-0.5 rounded-full">ERC-8004</span>}
                   <AgentTierChip tier={agentTier} loading={profileLoading} />
+                  <Explainer term="tiers" />
                 </div>
                 <p className="text-text-muted text-sm">
                   {cohortMatch

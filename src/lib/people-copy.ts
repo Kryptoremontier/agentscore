@@ -12,6 +12,7 @@
  */
 
 import { formatTTrust } from './format'
+import { INTUITION_HUB_URL } from './intuition-links'
 import { plural, pluralize as count } from './plural'
 
 /** "1 person" / "2 people". */
@@ -222,3 +223,28 @@ export const sealRowLabel = (n: number, needed: number) =>
   `${n === 0 ? NOBODY_VOUCHES : peopleVouch(n)}. Verified takes ${needed} people.`
 /** One seal's areas: "Knowledge / Productivity · Crypto / Onchain". */
 export const sealAreas = (areaLabels: readonly string[]) => areaLabels.join(' · ')
+
+// ─── Explainers at the point of use (Etap 6) ──────────────────────────────────
+// One short answer per word a newcomer doesn't know, on a small "?" next to its first use on the
+// modal, the profile and the landing (components/shared/Explainer) — never a separate FAQ page.
+
+export type ExplainerTerm = 'vouch' | 'tiers' | 'backing' | 'ttrust'
+export const EXPLAINERS: Record<ExplainerTerm, { label: string; text: string; link?: { text: string; href: string } }> = {
+  vouch: {
+    label: 'What is a vouch?',
+    text: 'A vouch is a person putting a little tTRUST behind one claim: this agent is good at this area. It’s on-chain, with their wallet on it.',
+  },
+  tiers: {
+    label: 'What do Unverified, Trusted and Verified mean?',
+    text: 'Trusted takes 2 different people, Verified takes 3. One wallet can never lift an agent on its own.',
+  },
+  backing: {
+    label: 'What is the backing score?',
+    text: 'How much tTRUST sits on the agent itself. Backing is not vouching — it never changes the tier.',
+  },
+  ttrust: {
+    label: 'What is tTRUST?',
+    text: 'Intuition’s testnet token. It’s free — get it from the Intuition Hub.',
+    link: { text: 'Intuition Hub', href: INTUITION_HUB_URL },
+  },
+}

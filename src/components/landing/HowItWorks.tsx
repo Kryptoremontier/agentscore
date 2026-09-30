@@ -2,6 +2,8 @@
 
 import { motion } from 'framer-motion'
 import { Search, Users, BadgeCheck } from 'lucide-react'
+import type { ExplainerTerm } from '@/lib/people-copy'
+import { Explainer } from '@/components/shared/Explainer'
 
 // Etap 5b Run 2: how it works is about people vouching — the landing's three steps, told in full.
 const steps = [
@@ -26,6 +28,8 @@ const steps = [
     brightHex: '#4AE685',
     label: 'Who vouches',
     bullets: ['Names', 'Areas', 'Tier'],
+    // Etap 6: "tTRUST" first appears on the landing here — its "?" sits right after the word.
+    explain: { after: 'tTRUST', term: 'ttrust' as ExplainerTerm },
   },
   {
     num: '03',
@@ -39,6 +43,14 @@ const steps = [
     bullets: ['Pick an area', 'Put tTRUST behind it', 'On-chain'],
   },
 ]
+
+/** The description with a "?" right after the first use of `word`. */
+function withExplainer(text: string, word: string, term: ExplainerTerm) {
+  const at = text.indexOf(word)
+  if (at < 0) return text
+  const end = at + word.length
+  return <>{text.slice(0, end)} <Explainer term={term} className="-mt-0.5" />{text.slice(end)}</>
+}
 
 export function HowItWorks() {
   return (
@@ -165,7 +177,9 @@ export function HowItWorks() {
                 <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
 
                 {/* Description */}
-                <p className="text-[#6B7480] leading-relaxed text-sm mb-5">{step.description}</p>
+                <p className="text-[#6B7480] leading-relaxed text-sm mb-5">
+                  {step.explain ? withExplainer(step.description, step.explain.after, step.explain.term) : step.description}
+                </p>
 
                 {/* Bullet tags */}
                 <div className="flex flex-wrap gap-1.5">

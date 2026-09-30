@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/format'
 import type { Agent } from '@/types/agent'
 import type { AgentTierResult } from '@/lib/agent-tier'
 import { AgentTierChip } from '@/components/agents/AgentTierChip'
+import { Explainer } from '@/components/shared/Explainer'
 
 interface AgentHeaderProps {
   agent: Agent
@@ -51,7 +52,10 @@ export function AgentHeader({ agent, action, stats, tier, tierLoading }: AgentHe
                 <h1 className="text-2xl sm:text-3xl font-bold break-words min-w-0">{agent.name}</h1>
                 {/* Was a "Verified" badge on every scored agent (verificationLevel is hardcoded
                     'wallet'). The tier comes only from attestations (thesis §6). */}
-                <AgentTierChip tier={tier} loading={tierLoading} size="lg" />
+                <span className="inline-flex items-center gap-1.5">
+                  <AgentTierChip tier={tier} loading={tierLoading} size="lg" />
+                  <Explainer term="tiers" />
+                </span>
               </div>
 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-secondary">

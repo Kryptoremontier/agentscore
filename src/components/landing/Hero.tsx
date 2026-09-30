@@ -30,6 +30,7 @@ import {
   LANDING_CTA_VOUCH, LANDING_CTA_DEVELOPERS,
 } from '@/lib/people-copy'
 import { ExampleAgentCard, type ExampleAgent } from './ExampleAgentCard'
+import { Explainer } from '@/components/shared/Explainer'
 
 function WaveText({ text, className }: { text: string; className?: string }) {
   return (
@@ -114,7 +115,9 @@ export function Hero() {
               className="block bg-gradient-to-r from-[#C9A84C] via-[#C8963C] to-[#A87820] bg-clip-text text-transparent drop-shadow-2xl"
             />
           </h1>
-          <p className="mt-3 text-base sm:text-lg text-slate-300 max-w-xl mx-auto">{LANDING_SUB}</p>
+          <p className="mt-3 text-base sm:text-lg text-slate-300 max-w-xl mx-auto">
+            {LANDING_SUB} <Explainer term="vouch" className="-mt-0.5" />
+          </p>
         </div>
 
         {/* 2 — a live example: the most vouched agent right now */}

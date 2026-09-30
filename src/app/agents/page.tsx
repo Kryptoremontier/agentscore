@@ -70,6 +70,7 @@ import {
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
 import { SealRow } from '@/components/agents/SealRow'
+import { Explainer } from '@/components/shared/Explainer'
 import {
   agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, OWN_TX_LIVE_MS,
   MODAL_PARTS, MODAL_HEADER_PARTS, MODAL_REST_PARTS, type ModalPart,
@@ -1999,6 +2000,7 @@ function AgentsPageContent() {
                             Unverified / Trusted + "1 of 3 people needed to verify", or Verified.
                             "—" while loading; unavailable if the attestation read failed. */}
                         <AgentTierChip tier={agentTier} loading={!profileLoaded} />
+                        <Explainer term="tiers" />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#B5BDC6]">
