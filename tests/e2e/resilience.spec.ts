@@ -54,15 +54,15 @@ test('dead indexer, warm cache: /agents looks normal apart from its age line', a
       await page.goto(ROUTES.agents)
       await listReady(page)
       await expect(page.getByTestId('feed-unreachable')).toHaveCount(0)
-      await expect(page.getByText(/Updated \d+ min ago/).first()).toBeVisible()
-      await expect(page.getByText('GraphQL live feed')).toHaveCount(0)
+      await expect(page.getByTestId('agents-status')).toHaveAttribute('data-fresh', 'stale')
+      await expect(page.getByTestId('agents-status')).toContainText(/, updated \d+ min ago$/)
       await expect(page.locator('[data-card]').first()).toBeVisible()
       await expect(page.locator('[data-testid="card-attester-line"][data-state="some"]').first()).toBeVisible()
       await page.screenshot({ path: path.join(OUT, name, 'agents-list.png') })
 
       await page.goto(`${ROUTES.agents}?open=${AGENTS.openclaw}`)
       await expect(modal(page).getByTestId('backers-line').filter({ hasText: /^(Backed with \d|No tTRUST backing yet)/ })).toBeVisible({ timeout: 30_000 })
-      await expect(modal(page).getByTestId('agent-tier-chip').getByText(/\d+\/\d+ attesters|Verified/).first()).toBeVisible()
+      await expect(modal(page).getByTestId('agent-tier-chip').getByText(/\d+ of \d+ people needed to verify|Verified/).first()).toBeVisible()
       // The modal covers the header on a phone: it says the age itself.
       await expect(modal(page).getByTestId('modal-age')).toHaveText(/^Updated \d+ min ago$/)
       await page.waitForTimeout(1500)

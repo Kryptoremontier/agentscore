@@ -575,10 +575,16 @@ async function firstCardAboveFold(page: Page, _project: string) {
   expect(r!.nameBottom, `first card's name above the fold at ${r!.fold} px`).toBeLessThanOrEqual(r!.fold)
 }
 
-/** Origin tab counts are the header line's corpus totals (one source, lib/agent-list.ts corpusTotals). */
+/**
+ * Origin tab counts are the status line's corpus totals (one source, lib/agent-list.ts corpusTotals).
+ * Etap 6: the line prints the total ("272 agents, live"); its per-origin counts ride on data-*.
+ */
 async function originTabsMatchHeader(page: Page, _project: string) {
-  const header = await page.getByText(/\d+ AgentScore · \d+ ERC-8004/).first().innerText()
-  const [, a, e] = header.match(/(\d+) AgentScore · (\d+) ERC-8004/)!
+  const status = page.getByTestId('agents-status')
+  const a = await status.getAttribute('data-agentscore')
+  const e = await status.getAttribute('data-erc8004')
+  expect(await status.getAttribute('data-total'), 'status line total = AgentScore + ERC-8004').toBe(String(Number(a) + Number(e)))
+  expect(await status.innerText()).toMatch(new RegExp(`^${Number(a) + Number(e)} agents, `))
   const count = async (name: RegExp) => (await page.getByRole('tab', { name }).innerText()).match(/(\d+)\s*$/)?.[1]
   expect(await count(/^AgentScore/), 'AgentScore tab = header').toBe(a)
   expect(await count(/^ERC-8004/), 'ERC-8004 tab = header').toBe(e)

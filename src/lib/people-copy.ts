@@ -260,3 +260,19 @@ export const DEV_HEADING = 'For developers & agents'
 export const DEV_LINE = 'Your agent can ask before it trusts. Every answer carries the age of its data.'
 export const devAnswerCaption = (agentName: string) => `A live answer for ${agentName}, trimmed.`
 export const DEV_ANSWER_UNREAD = 'Couldn’t get an answer right now — this is not an empty one.'
+
+// ─── The last internal words on screen (Etap 6) ──────────────────────────────
+
+/** /agents status line: "272 agents, live" / "272 agents, updated 3 min ago". */
+export const AGENTS_LIVE = 'live'
+export const agentsStatus = (n: number, age: string) => `${count(n, 'agent', 'agents')}, ${age.charAt(0).toLowerCase()}${age.slice(1)}`
+export const AGENTS_STATUS_LOADING = '— agents'
+/** One list couldn't be read: the count that was, and which list is missing — never a silent drop. */
+export const agentsStatusMissing = (n: number | null, missing: string) =>
+  `${n == null ? '—' : count(n, 'agent', 'agents')} — couldn’t read the ${missing} list right now`
+/** The line's popover: where the numbers come from, and what is hidden. */
+export const AGENTS_STATUS_DETAILS = 'Where these agents come from'
+export const hiddenNote = (n: number) =>
+  `${n} hidden: test fixtures and duplicate registrations of the same agent — counted here, not shown in the list.`
+/** The timeline's pre-canonical skill claim: "Skill added: watch"; the raw predicate stays in its details. */
+export const skillAdded = (skillName: string) => `Skill added: ${skillName}`
