@@ -23,6 +23,7 @@ import { AgentHeader } from '@/components/agents/AgentHeader'
 import { AgentTabs } from '@/components/agents/AgentTabs'
 import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
+import { SealRow } from '@/components/agents/SealRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
 import { ScoreParts, type ScorePartsView } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
@@ -213,7 +214,11 @@ export default function AgentDetailPage() {
                 </p>
               </div>
 
-              <ProfileStatRow view={statRow} backing={<BackingScore variant="line" value={null} tip={NOT_SCORED_TIP} />} />
+              <div>
+                <ProfileStatRow view={statRow} backing={<BackingScore variant="line" value={null} tip={NOT_SCORED_TIP} />} />
+                {/* The path to Verified: three seals, the people who vouch (Etap 6). */}
+                <SealRow attesters={profileLoading ? undefined : attesters} size="lg" className="mt-3" />
+              </div>
 
               {/* ATTESTED > DECLARED > REPORTS (thesis §5 hierarchy) */}
               <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agentId} agentName={name} />
@@ -311,7 +316,13 @@ export default function AgentDetailPage() {
             agent={agent}
             tier={agentTier}
             tierLoading={profileLoading}
-            stats={<ProfileStatRow view={statRow} backing={<BackingScore variant="line" value={backingScore} tip={NO_STAKE_TOOLTIP} />} />}
+            stats={
+              <>
+                <ProfileStatRow view={statRow} backing={<BackingScore variant="line" value={backingScore} tip={NO_STAKE_TOOLTIP} />} />
+                {/* The path to Verified: three seals, the people who vouch (Etap 6). */}
+                <SealRow attesters={profileLoading ? undefined : attesters} size="lg" className="mt-3" />
+              </>
+            }
           />
 
           {/* ETAP 3 — profile hierarchy (thesis §5): ATTESTED (headline) >

@@ -50,7 +50,7 @@ import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
-import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector } from '@/lib/agent-profile'
+import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
 import { AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
@@ -69,6 +69,7 @@ import {
   type OriginFilter, type QualityFilter, type AgentScoreCorpusCounts, type CohortCorpusCounts,
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
+import { SealRow } from '@/components/agents/SealRow'
 import {
   agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, OWN_TX_LIVE_MS,
   MODAL_PARTS, MODAL_HEADER_PARTS, MODAL_REST_PARTS, type ModalPart,
@@ -437,6 +438,16 @@ function AgentsPageContent() {
     for (const [id, entries] of attestedBySubject) out.set(id, cardAttestationView(entries))
     return out
   }, [attestedBySubject])
+  // Per agent: the people who vouch, for the card's seals (components/agents/SealRow) — the same
+  // rows and derivation as the people line. A subject absent from a completed read makes no claim.
+  const attestersBySubject = useMemo(() => {
+    if (!attestedBySubject) return attestedBySubject
+    const out = new Map<string, AttesterSummary[]>()
+    for (const [id, entries] of attestedBySubject) out.set(id, summarizeAttesters(entries))
+    return out
+  }, [attestedBySubject])
+  const sealsOf = (termId: string) =>
+    attestersBySubject === undefined ? undefined : attestersBySubject?.get(termId) ?? null
 
   // A card's "Attest" CTA opens the modal scrolled to its ATTESTED section, once the
   // profile has loaded (the section's height depends on it).
@@ -1361,9 +1372,15 @@ function AgentsPageContent() {
   // The agent tier — attestations only (thesis §6 "Agent tiers", lib/agent-tier.ts). Backing on
   // the atom vault never changes it. null while the profile loads or when the attestation read
   // failed: the chip then says so, never a default "Unverified".
+  // The people who vouch, for the modal's seals and its tier: undefined while the profile loads,
+  // null when the attestation read failed (no slots, the tier chip says so).
+  const modalAttesters = useMemo(
+    () => (!profileLoaded ? undefined : profileVector.attested ? summarizeAttesters(profileVector.attested) : null),
+    [profileLoaded, profileVector.attested],
+  )
   const agentTier = useMemo(
-    () => (attestedRead && profileVector.attested ? calculateAgentTier(summarizeAttesters(profileVector.attested)) : null),
-    [attestedRead, profileVector.attested],
+    () => (attestedRead && modalAttesters ? calculateAgentTier(modalAttesters) : null),
+    [attestedRead, modalAttesters],
   )
 
   // ─── Avatar z localStorage (zapisywany przy rejestracji) ───
@@ -1817,7 +1834,10 @@ function AgentsPageContent() {
                           </div>
                           {backing}
                         </div>
-                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" />
+                        <div className="flex items-start justify-between gap-3">
+                          <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="min-w-0" />
+                          <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[3px]" />
+                        </div>
                       </motion.div>
                     )
                   }
@@ -1845,7 +1865,10 @@ function AgentsPageContent() {
                         {backing}
                       </div>
                       {/* The headline: who vouches, and for what (Etap 5b) — above the vault line. */}
-                      <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="mb-3" />
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="min-w-0" />
+                        <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[3px]" />
+                      </div>
                       {vaultRead && (
                         <div className="flex items-center gap-4 text-sm text-[#B5BDC6]">
                           <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
@@ -1914,7 +1937,10 @@ function AgentsPageContent() {
                           {rowTierChip && <TrustTierBadge tier={rowTierChip} size="sm" />}
                           <OriginChip origin={agent.origin} />
                         </div>
-                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="mt-0.5" />
+                        <div className="flex items-start gap-2 mt-0.5">
+                          <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="min-w-0" />
+                          <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[2px]" />
+                        </div>
                         {listVaultRead && (
                           <p className="sm:hidden text-xs text-[#B5BDC6] mt-0.5">
                             <span className="whitespace-nowrap">Stakes: <span className="text-white font-medium">{stakes}</span></span>
@@ -2022,6 +2048,8 @@ function AgentsPageContent() {
                   backing={<BackingScore variant="line" value={modalBackingScore} tip={noScoreTooltip(modalStakeReading)} />}
                   footer={modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
                 />
+                {/* The path to Verified: three seals, the people who vouch (Etap 6) — beside the words, not instead. */}
+                <SealRow attesters={modalAttesters} size="lg" className="mt-3" />
               </div>
 
               {/* ETAP 3 — profile hierarchy (thesis §5), always visible above the

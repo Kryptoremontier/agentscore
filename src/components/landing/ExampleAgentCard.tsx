@@ -3,17 +3,19 @@
 /**
  * The landing's live example (Etap 5b Run 2): the first agent of the /agents list in its default
  * order ("Most vouched", lib/most-vouched.ts), as its card says it — who vouches, for what, and a
- * small neutral backing number. It opens that agent. The box keeps one height while loading, so
+ * small neutral backing number — and its three seals, the people who vouch by name (Etap 6:
+ * components/agents/SealRow). It opens that agent. The box keeps one height while loading, so
  * nothing below it moves when the read answers; a failed read says so (never an empty example).
  */
 
 import Link from 'next/link'
 import type { CardAttesterLine } from '@/lib/agent-list'
 import type { AgentTierDisplay } from '@/lib/agent-tier'
-import { EXAMPLE_HEADING, EXAMPLE_UNREAD, WHO_PREFIX } from '@/lib/people-copy'
+import type { AttesterSummary } from '@/lib/agent-profile'
+import { EXAMPLE_HEADING, EXAMPLE_UNREAD } from '@/lib/people-copy'
 import { TrustTierBadge } from '@/components/agents/TrustTierBadge'
 import { BackingScore } from '@/components/agents/BackingScore'
-import { PersonName } from '@/components/shared/PersonName'
+import { SealRow } from '@/components/agents/SealRow'
 
 export type ExampleAgent =
   | { status: 'loading' }
@@ -27,8 +29,8 @@ export type ExampleAgent =
       tier: AgentTierDisplay | null
       backing: number | null
       backingTip: string
-      /** Who vouches (wallets), most tTRUST first; at most two are named. */
-      who: string[]
+      /** Who vouches (lib/agent-profile.ts summarizeAttesters), most tTRUST first — the seals. */
+      attesters: AttesterSummary[]
     }
 
 const BOX = 'block w-full max-w-md mx-auto rounded-2xl border text-left px-4 py-3 h-[104px]'
@@ -68,15 +70,7 @@ export function ExampleAgentCard({ agent }: { agent: ExampleAgent }) {
       <p className={`text-sm leading-5 mt-1 truncate ${agent.line.kind === 'some' ? 'text-[#C8963C] font-medium' : 'text-[#7A838D]'}`}>
         {agent.line.claim ?? '—'}
       </p>
-      {agent.who.length > 0 && (
-        <p className="text-xs text-[#B5BDC6] mt-0.5 truncate">
-          {WHO_PREFIX}{' '}
-          {agent.who.slice(0, 2).map((w, i) => (
-            <span key={w}>{i > 0 && ', '}<PersonName wallet={w} className="font-mono" /></span>
-          ))}
-          {agent.who.length > 2 && ` +${agent.who.length - 2}`}
-        </p>
-      )}
+      <SealRow attesters={agent.attesters} size="md" className="mt-0.5" />
     </Link>
   )
 }

@@ -67,9 +67,7 @@ export function Hero() {
       const first = top?.entries[0]
       if (!top || !first) { setExample({ status: 'error' }); return }
       const id = first.agent.term_id
-      const who = summarizeAttesters(top.attestations?.get(id) ?? [])
-        .sort((a, b) => (b.totalStake > a.totalStake ? 1 : b.totalStake < a.totalStake ? -1 : 0))
-        .map((a) => a.wallet)
+      const attesters = summarizeAttesters(top.attestations?.get(id) ?? [])
       setExample({
         status: 'ok',
         termId: id,
@@ -79,7 +77,7 @@ export function Hero() {
         tier: tierChipOf(top.views, id),
         backing: measuredScore(first.trust, first.measured),
         backingTip: noScoreTooltip(first.reading),
-        who,
+        attesters,
       })
     })
     return () => { cancelled = true }

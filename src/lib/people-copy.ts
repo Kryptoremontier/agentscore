@@ -173,7 +173,6 @@ export const LANDING_CTA_VOUCH = 'Vouch for an agent'
 export const LANDING_CTA_DEVELOPERS = 'For developers & agents (MCP / REST)'
 export const EXAMPLE_HEADING = 'Most vouched right now'
 export const EXAMPLE_UNREAD = 'Couldn’t load an example right now — the list is one tap away.'
-export const WHO_PREFIX = 'by'
 
 // ─── /domains (Etap 5b Run 2) ─────────────────────────────────────────────────
 
@@ -211,3 +210,15 @@ export const REGISTER_BUILD_TRUST = 'Get vouched for by people who know your age
 export const REGISTER_BUILD_TRUST_SKILL = 'Get backed with tTRUST by people who rely on this skill.'
 /** The profile's Supporting tab, when the wallet backs nothing yet. */
 export const NO_POSITIONS_NOTE = 'Agents and skills you’ve backed with tTRUST. Backing is not vouching — it doesn’t change an agent’s tier.'
+
+// ─── Seals: the path to Verified (Etap 6) ─────────────────────────────────────
+
+/** An empty seal slot — a place for the next person who vouches. */
+export const SEAL_OPEN = 'Open'
+/** More people than slots: "and 2 more". */
+export const sealsMore = (n: number) => `and ${n} more`
+/** The row's name for screen readers: "1 person vouches. Verified takes 3 people." */
+export const sealRowLabel = (n: number, needed: number) =>
+  `${n === 0 ? NOBODY_VOUCHES : peopleVouch(n)}. Verified takes ${needed} people.`
+/** One seal's areas: "Knowledge / Productivity · Crypto / Onchain". */
+export const sealAreas = (areaLabels: readonly string[]) => areaLabels.join(' · ')
