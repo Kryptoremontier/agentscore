@@ -4,53 +4,20 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  Bot, Zap, Trophy, Target, MessageSquare, Crown,
-  PenSquare, BookOpen, User, Menu, X, Hammer, Bug,
-} from 'lucide-react'
+import { User, Menu, X, Bug } from 'lucide-react'
 import { WalletButton } from '@/components/wallet/WalletButton'
 import { cn } from '@/lib/cn'
 import { BugReportModal } from '@/components/shared/BugReportModal'
+import { PRIMARY_NAV, MORE_NAV, MORE_LABEL, isNavActive, type NavItem } from './nav-items'
 
-const BOTTOM_TABS = [
-  { href: '/agents',     label: 'Agents',      icon: Bot,          color: '#C8963C' },
-  { href: '/domains',    label: 'Domains',      icon: Trophy,       color: '#8B5CF6' },
-  { href: '/claims',     label: 'Claims',       icon: MessageSquare, color: '#38B6FF' },
-  { href: '/evaluators', label: 'Evaluators',   icon: Target,       color: '#F59E0B' },
-]
+// Etap 5b Run 2: the phone's bottom nav is Agents · How it works · More. "For developers" opens the
+// More sheet, above everything else under More (components/layout/nav-items.ts — the sidebar's model).
+const BOTTOM_TABS = PRIMARY_NAV.filter(item => item.href !== '/docs')
 
-const MENU_GROUPS = [
-  {
-    label: 'Explore',
-    items: [
-      { href: '/agents',     label: 'Agents',      icon: Bot,          color: '#C8963C' },
-      { href: '/skills',     label: 'Skills',       icon: Zap,          color: '#2EE6D6' },
-      { href: '/domains',    label: 'Domains',      icon: Trophy,       color: '#8B5CF6' },
-      { href: '/evaluators',           label: 'Evaluators',  icon: Target,   color: '#F59E0B' },
-      { href: '/explore/intuforge',    label: 'IntuForge',   icon: Hammer,   color: '#C8963C' },
-    ],
-  },
-  {
-    label: 'Activity',
-    items: [
-      { href: '/claims',      label: 'Claims',      icon: MessageSquare, color: '#38B6FF' },
-      { href: '/leaderboard', label: 'Leaderboard', icon: Crown,         color: '#C8963C' },
-    ],
-  },
-  {
-    label: 'Create',
-    items: [
-      { href: '/register',         label: 'Register Agent', icon: PenSquare, color: '#C8963C' },
-      { href: '/register?tab=skill', label: 'Register Skill', icon: Zap,      color: '#2EE6D6' },
-    ],
-  },
-  {
-    label: 'Info',
-    items: [
-      { href: '/docs',    label: 'Documentation', icon: BookOpen, color: '#7A838D' },
-      { href: '/profile', label: 'My Profile',    icon: User,     color: '#C8963C' },
-    ],
-  },
+const MENU_GROUPS: ReadonlyArray<{ label: string; items: readonly NavItem[] }> = [
+  { label: 'For developers', items: PRIMARY_NAV.filter(item => item.href === '/docs') },
+  ...MORE_NAV,
+  { label: 'You', items: [{ href: '/profile', label: 'My Profile', icon: User, color: '#C8963C' }] },
 ]
 
 export function MobileBottomNav() {
@@ -58,8 +25,7 @@ export function MobileBottomNav() {
   const [bugModalOpen, setBugModalOpen] = useState(false)
   const pathname = usePathname()
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== '/' && pathname.startsWith(href.split('?')[0]))
+  const isActive = (href: string) => isNavActive(href, pathname)
 
   const anyTabActive = BOTTOM_TABS.some(t => isActive(t.href))
 
@@ -75,7 +41,7 @@ export function MobileBottomNav() {
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
-        <div className="grid grid-cols-5 h-16">
+        <div className="grid grid-cols-3 h-16">
           {BOTTOM_TABS.map(tab => {
             const active = isActive(tab.href)
             return (
@@ -111,7 +77,7 @@ export function MobileBottomNav() {
               className="text-[10px] font-medium"
               style={{ color: menuOpen ? '#C8963C' : 'rgba(255,255,255,0.3)' }}
             >
-              More
+              {MORE_LABEL}
             </span>
           </button>
         </div>
@@ -148,7 +114,7 @@ export function MobileBottomNav() {
               {/* Handle + close */}
               <div className="flex items-center justify-between px-5 pt-4 pb-2">
                 <div className="w-10 h-1 rounded-full bg-white/10 mx-auto absolute left-1/2 -translate-x-1/2 top-3" />
-                <span className="text-sm font-semibold text-white/60">Navigation</span>
+                <span className="text-sm font-semibold text-white/60">{MORE_LABEL}</span>
                 <button
                   onClick={() => setMenuOpen(false)}
                   className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-white/10"
