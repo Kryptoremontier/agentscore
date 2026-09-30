@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { ExternalLink, Shield, Bot, Zap, MessageSquare, Github, Twitter, Globe } from 'lucide-react'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
+import { LANDING_SUB } from '@/lib/people-copy'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
@@ -85,11 +86,9 @@ export function Footer() {
               </span>
             </Link>
 
-            {/* Tagline */}
+            {/* Tagline — the landing's line (lib/people-copy.ts) */}
             <p className="text-sm text-[#6B7480] leading-relaxed max-w-xs">
-              Decentralized trust verification for AI agents. Stake{' '}
-              <span className="text-[#B5BDC6] font-medium">tTRUST</span> to signal confidence —
-              every vote is transparent, on-chain, and permanent.
+              {LANDING_SUB}
             </p>
 
             {/* Testnet badge */}

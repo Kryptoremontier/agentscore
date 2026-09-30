@@ -75,7 +75,7 @@ describe('one copy module — the old words are gone from the agent surfaces, th
   })
 
   it('the new strings are written only in lib/people-copy.ts', () => {
-    const NEW = ['Vouch for this agent', 'Nobody vouches yet', 'Who vouches, and for what', 'people needed to verify', 'Backed with', 'Says it does', 'Listed in the ERC-8004 agent registry', 'Find an AI agent and see who vouches']
+    const NEW = ['Vouch for this agent', 'Nobody vouches yet', 'Who vouches, and for what', 'people needed to verify', 'Backed with', 'Says it does', 'Listed in the ERC-8004 agent registry', 'Find an AI agent and see who vouches', 'Real people vouch for AI agents, on-chain. One wallet', 'who know your agent', 'you’ve backed with tTRUST']
     const hits = files(SRC).filter((f) => !f.endsWith(path.join('lib', 'people-copy.ts'))).flatMap((f) => {
       const src = code(f)
       return NEW.filter((s) => src.includes(s)).map((s) => `${rel(f)}: ${s}`)
@@ -93,6 +93,35 @@ describe('the /agents header: plain words, no staking pitch', () => {
     expect(page).toMatch(/<h1[^>]*>\s*\{AGENTS_PAGE_TITLE\}\s*<\/h1>/)
     expect(page).toMatch(/\{AGENTS_PAGE_SUB\}/)
     expect(page).not.toMatch(/Intelligence Registry|to signal\s+confidence|Decentralized trust verification/)
+  })
+})
+
+describe('footer, /register and the Supporting tab: plain words from the copy module', () => {
+  it('the footer tagline is the landing line itself — imported, never copied', async () => {
+    const { LANDING_SUB } = await import('../people-copy')
+    expect(LANDING_SUB).toBe('Real people vouch for AI agents, on-chain. One wallet can never do it alone.')
+    const footer = code(path.join(SRC, 'components/layout/Footer.tsx'))
+    expect(footer).toMatch(/import \{[^}]*\bLANDING_SUB\b[^}]*\} from '@\/lib\/people-copy'/)
+    expect(footer).toMatch(/<p[^>]*>\s*\{LANDING_SUB\}\s*<\/p>/)
+    expect(footer).not.toMatch(/Decentralized trust verification|to signal\s+confidence|every vote is transparent/)
+    const copy = readFileSync(path.join(SRC, 'lib/people-copy.ts'), 'utf8')
+    expect(copy.split(LANDING_SUB).length - 1).toBe(1)
+  })
+
+  it('/register: "Get vouched for by people who know your agent’s work."', async () => {
+    const { REGISTER_BUILD_TRUST } = await import('../people-copy')
+    expect(REGISTER_BUILD_TRUST).toBe('Get vouched for by people who know your agent’s work.')
+    const page = code(path.join(SRC, 'app/register/page.tsx'))
+    expect(page).toMatch(/desc: REGISTER_BUILD_TRUST,/)
+    expect(page).not.toMatch(/Earn reputation/)
+  })
+
+  it('the Supporting tab, empty: backing is not vouching', async () => {
+    const { NO_POSITIONS_NOTE } = await import('../people-copy')
+    expect(NO_POSITIONS_NOTE).toBe('Agents and skills you’ve backed with tTRUST. Backing is not vouching — it doesn’t change an agent’s tier.')
+    const tab = code(path.join(SRC, 'components/profile/MySupportedAgents.tsx'))
+    expect(tab).toMatch(/\{NO_POSITIONS_NOTE\}/)
+    expect(tab).not.toMatch(/Buy shares|to signal trust/)
   })
 })
 
