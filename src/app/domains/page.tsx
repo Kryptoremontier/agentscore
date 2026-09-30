@@ -21,13 +21,14 @@ import {
   UNCATEGORIZED,
   type SkillBucketStatus,
 } from '@/lib/skill-domain-map'
-import { fetchAttestations, truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
+import { fetchAttestations, type AttestedEntry } from '@/lib/attestation-reader'
 import { fetchVaultPositions, vaultStakeStats } from '@/lib/vault-positions'
 import { fetchAllRows, SERVER_ROW_CAP } from '@/lib/gql-pager'
 
 // Our ceiling on the domain-claim triples read (the pager reports it; live 2026-09-26: 75).
 const DOMAIN_TRIPLES_MAX = 5_000
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
+import { PersonName } from '@/components/shared/PersonName'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -197,9 +198,8 @@ function AttestedEntryRow({ entry }: { entry: AttestedEntry }) {
               key={wallet}
               className="text-xs font-mono px-2 py-0.5 rounded-md"
               style={{ background: 'rgba(139,92,246,0.10)', color: 'rgba(255,255,255,0.6)' }}
-              title={wallet}
             >
-              {truncateWallet(wallet)}
+              <PersonName wallet={wallet} />
             </span>
           ))}
           {entry.opposeStake > 0n && (

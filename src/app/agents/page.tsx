@@ -53,7 +53,7 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
-import { LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
+import { LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
 import { ScoreParts } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
@@ -80,6 +80,7 @@ import {
   readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, noScoreTooltip,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
+import { PersonName } from '@/components/shared/PersonName'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -2902,13 +2903,6 @@ function AgentsPageContent() {
                                   const isOppose = agentTriple.counterTermId && pos.term_id === agentTriple.counterTermId
                                   let shares = 0n; try { shares = BigInt(pos.shares || '0') } catch { shares = 0n }
                                   const pct = totalShares > 0n ? Number((shares * 10000n) / totalShares) / 100 : 0
-                                  const walletLabel = pos.account?.label || pos.account_id
-                                  const isENS = walletLabel?.includes('.eth')
-                                  const displayWallet = isENS
-                                    ? walletLabel
-                                    : walletLabel?.length > 14
-                                      ? walletLabel.slice(0, 8) + '...' + walletLabel.slice(-4)
-                                      : walletLabel
                                   const isCreator = selectedAgent.creator?.id &&
                                     pos.account_id?.toLowerCase() === selectedAgent.creator.id.toLowerCase()
 
@@ -2917,7 +2911,7 @@ function AgentsPageContent() {
                                       <td className="py-2">
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                           <Link href={`/profile/${pos.account_id}`} className="text-[#C8963C] hover:underline">
-                                            {displayWallet}
+                                            <PersonName wallet={pos.account_id} label={pos.account?.label} />
                                           </Link>
                                           <EarlySupporterBadge rank={pos.rank} />
                                           {isCreator && (
@@ -3159,18 +3153,11 @@ function AgentsPageContent() {
                             <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#B5BDC6" strokeWidth="2"/>
                           </svg>
                         </div>
-                        <p className="text-[#B5BDC6] text-sm">No backers yet</p>
-                        <p className="text-[#7A838D] text-xs mt-1">No positions on this agent&apos;s vault — stake via the Bonding Curve Market</p>
+                        <p className="text-[#B5BDC6] text-sm">{BACKERS_EMPTY}</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
                         {profiles.map((profile) => {
-                          const isENS = profile.label.includes('.eth')
-                          const displayName = isENS
-                            ? profile.label
-                            : profile.label.length > 14
-                              ? profile.label.slice(0, 8) + '...' + profile.label.slice(-6)
-                              : profile.label
                           const netPositive = profile.netShares >= 0
                           const lastDate = formatDate(profile.lastSeen)
 
@@ -3197,7 +3184,7 @@ function AgentsPageContent() {
                                   </svg>
                                 </div>
                                 <div>
-                                  <p className="text-white text-sm font-medium hover:text-[#C8963C] transition-colors">{displayName}</p>
+                                  <p className="text-white text-sm font-medium hover:text-[#C8963C] transition-colors"><PersonName wallet={profile.accountId} label={profile.label} /></p>
                                   <div className="flex items-center gap-2 mt-0.5">
                                     {profile.supportCount > 0 && (
                                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#2d7a5f20] text-[#34a872]">
@@ -3276,7 +3263,6 @@ function AgentsPageContent() {
                           const delta = Number(signal.delta || 0)
                           const sharesDisplay = (delta / 1e18).toFixed(4)
                           const isFeeProxy = signal.account_id?.toLowerCase() === '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41'
-                          const accountLabel = isFeeProxy ? 'via AgentScore' : (signal.account?.label || signal.account_id?.slice(0, 10) || '?')
                           const isLast = i === agentSignals.length - 1
 
                           const actionLabel = !isDeposit
@@ -3314,10 +3300,10 @@ function AgentsPageContent() {
                                       href={`/profile/${signal.account_id}`}
                                       className="text-[#C8963C] font-normal hover:underline"
                                     >
-                                      {accountLabel}
+                                      <PersonName wallet={signal.account_id} label={signal.account?.label} />
                                     </Link>
                                   ) : (
-                                    <span className="text-[#7A838D] font-normal">{accountLabel}</span>
+                                    <span className="text-[#7A838D] font-normal">{isFeeProxy ? 'via AgentScore' : '?'}</span>
                                   )}
                                 </p>
                                 <p style={{ color: dotColor }} className="text-xs font-medium mt-0.5">

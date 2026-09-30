@@ -14,12 +14,13 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
+import type { AttestedEntry } from '@/lib/attestation-reader'
 import { summarizeAttesters } from '@/lib/agent-profile'
 import { WHO_VOUCHES_HEADING, WHO_VOUCHES_UNREAD, WHO, peopleLine, people } from '@/lib/people-copy'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestButton } from '@/components/attest/AttestButton'
 import { useMediaQuery, DESKTOP_QUERY } from '@/hooks/useMediaQuery'
+import { PersonName } from '@/components/shared/PersonName'
 
 interface AttestedDomainsProps {
   /** null = the read failed — shown as unavailable, never as "nobody vouches yet". */
@@ -126,8 +127,8 @@ function AttestedRow({ entry }: { entry: AttestedEntry }) {
         <div className="px-3.5 pb-3 pt-1 border-t border-white/[0.06] space-y-1">
           {entry.attesterStakes.map((a) => (
             <div key={a.wallet.toLowerCase()} className="flex items-center justify-between text-xs">
-              <Link href={`/profile/${a.wallet}`} className="font-mono text-[#C8963C] hover:underline" title={a.wallet}>
-                {truncateWallet(a.wallet)}
+              <Link href={`/profile/${a.wallet}`} className="font-mono text-[#C8963C] hover:underline">
+                <PersonName wallet={a.wallet} />
               </Link>
               <span className="font-mono text-[#B5BDC6]">{fmt(a.shares)} tTRUST</span>
             </div>

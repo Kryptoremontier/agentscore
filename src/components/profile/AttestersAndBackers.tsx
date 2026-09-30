@@ -15,18 +15,14 @@
  */
 
 import Link from 'next/link'
-import { truncateWallet } from '@/lib/attestation-reader'
 import type { AttesterSummary, Backer } from '@/lib/agent-profile'
 import {
   PEOPLE_WHO_VOUCH_HEADING, PEOPLE_WHO_VOUCH_NOTE, PEOPLE_WHO_VOUCH_EMPTY, WHO_VOUCHES_UNREAD,
   BACKERS_HEADING, BACKERS_NOTE, BACKERS_UNREAD, BACKERS_EMPTY,
 } from '@/lib/people-copy'
+import { PersonName } from '@/components/shared/PersonName'
 
 const fmt = (wei: bigint) => (Number(wei) / 1e18).toFixed(4)
-
-function name(wallet: string, label: string | null | undefined) {
-  return label && label.includes('.eth') ? label : truncateWallet(wallet)
-}
 
 /** `attesters` null = the read failed — shown as unavailable, never as "nobody vouches". */
 export function AttestersList({ attesters, loading, className }: { attesters: AttesterSummary[] | null; loading: boolean; className?: string }) {
@@ -51,7 +47,7 @@ export function AttestersList({ attesters, loading, className }: { attesters: At
               className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-[#171A1D] border border-white/[0.06] hover:border-[#2ECC71]/30 transition-colors"
             >
               <div className="min-w-0">
-                <p className="font-mono text-sm text-white" title={a.wallet}>{truncateWallet(a.wallet)}</p>
+                <p className="font-mono text-sm text-white"><PersonName wallet={a.wallet} /></p>
                 <p className="text-[10px] text-[#B5BDC6] truncate">{a.domains.join(' · ')}</p>
               </div>
               <span className="font-mono text-xs text-[#B5BDC6] flex-shrink-0">{fmt(a.totalStake)} tTRUST</span>
@@ -85,7 +81,7 @@ export function BackersList({ backers, loading, className }: { backers: Backer[]
               href={`/profile/${b.wallet}`}
               className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-[#171A1D] border border-white/[0.06] hover:border-[#C8963C]/30 transition-colors"
             >
-              <p className="font-mono text-sm text-white" title={b.wallet}>{name(b.wallet, b.label)}</p>
+              <p className="font-mono text-sm text-white"><PersonName wallet={b.wallet} label={b.label} /></p>
               <div className="flex items-center gap-2 text-xs font-mono flex-shrink-0">
                 {b.supportShares > 0n && <span style={{ color: '#34a872' }}>↑ {fmt(b.supportShares)}</span>}
                 {b.opposeShares > 0n && <span style={{ color: '#c45454' }}>↓ {fmt(b.opposeShares)}</span>}
