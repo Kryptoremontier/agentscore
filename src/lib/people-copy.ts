@@ -196,3 +196,8 @@ export const EVALUATOR_LEGEND = {
   lock: 'people vouching for this evaluator / needed to unlock a weight above 1.0×.',
   check: 'vouched for — the full weight counts.',
 } as const
+
+// ─── /agents header ───────────────────────────────────────────────────────────
+
+export const AGENTS_PAGE_TITLE = 'Agents'
+export const AGENTS_PAGE_SUB = 'Find an AI agent and see who vouches for it, and for what.'
