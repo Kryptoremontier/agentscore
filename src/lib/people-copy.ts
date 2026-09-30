@@ -205,7 +205,9 @@ export const AGENTS_PAGE_SUB = 'Find an AI agent and see who vouches for it, and
 // ─── Footer, /register, profile positions ─────────────────────────────────────
 // The footer's tagline is LANDING_SUB itself (imported, not copied).
 
-/** /register's "Build Trust" benefit card. */
+/** /register's "Build Trust" benefit card, agent tab. */
 export const REGISTER_BUILD_TRUST = 'Get vouched for by people who know your agent’s work.'
+/** The same card on the skill tab: skills are backed, not vouched for. */
+export const REGISTER_BUILD_TRUST_SKILL = 'Get backed with tTRUST by people who rely on this skill.'
 /** The profile's Supporting tab, when the wallet backs nothing yet. */
 export const NO_POSITIONS_NOTE = 'Agents and skills you’ve backed with tTRUST. Backing is not vouching — it doesn’t change an agent’s tier.'

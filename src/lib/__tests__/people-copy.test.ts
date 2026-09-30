@@ -75,7 +75,7 @@ describe('one copy module — the old words are gone from the agent surfaces, th
   })
 
   it('the new strings are written only in lib/people-copy.ts', () => {
-    const NEW = ['Vouch for this agent', 'Nobody vouches yet', 'Who vouches, and for what', 'people needed to verify', 'Backed with', 'Says it does', 'Listed in the ERC-8004 agent registry', 'Find an AI agent and see who vouches', 'Real people vouch for AI agents, on-chain. One wallet', 'who know your agent', 'you’ve backed with tTRUST']
+    const NEW = ['Vouch for this agent', 'Nobody vouches yet', 'Who vouches, and for what', 'people needed to verify', 'Backed with', 'Says it does', 'Listed in the ERC-8004 agent registry', 'Find an AI agent and see who vouches', 'Real people vouch for AI agents, on-chain. One wallet', 'who know your agent', 'you’ve backed with tTRUST', 'rely on this skill']
     const hits = files(SRC).filter((f) => !f.endsWith(path.join('lib', 'people-copy.ts'))).flatMap((f) => {
       const src = code(f)
       return NEW.filter((s) => src.includes(s)).map((s) => `${rel(f)}: ${s}`)
@@ -108,11 +108,12 @@ describe('footer, /register and the Supporting tab: plain words from the copy mo
     expect(copy.split(LANDING_SUB).length - 1).toBe(1)
   })
 
-  it('/register: "Get vouched for by people who know your agent’s work."', async () => {
-    const { REGISTER_BUILD_TRUST } = await import('../people-copy')
+  it('/register "Build Trust": vouched for on the agent tab, backed on the skill tab', async () => {
+    const { REGISTER_BUILD_TRUST, REGISTER_BUILD_TRUST_SKILL } = await import('../people-copy')
     expect(REGISTER_BUILD_TRUST).toBe('Get vouched for by people who know your agent’s work.')
+    expect(REGISTER_BUILD_TRUST_SKILL).toBe('Get backed with tTRUST by people who rely on this skill.')
     const page = code(path.join(SRC, 'app/register/page.tsx'))
-    expect(page).toMatch(/desc: REGISTER_BUILD_TRUST,/)
+    expect(page).toMatch(/desc: activeTab === 'agent' \? REGISTER_BUILD_TRUST : REGISTER_BUILD_TRUST_SKILL,/)
     expect(page).not.toMatch(/Earn reputation/)
   })
 
