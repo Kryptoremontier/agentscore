@@ -129,3 +129,26 @@ export const ERC8004_TAB_TITLE = 'Listed in the ERC-8004 agent registry — they
 export const DETAILS_HEADING = 'Details'
 export const DETAILS_ATOM_ID = 'Atom ID'
 export const DETAILS_CAIP = 'ERC-8004 id'
+
+// ─── Backing score (Etap 5b score decision A) ────────────────────────────────
+
+/**
+ * The vault-based number, renamed: small, neutral, never tier-sounding. It measures tTRUST on
+ * the agent's own vault — not who vouches. API field names (trustScore / objectScore /
+ * agentScore) do not change.
+ */
+export const BACKING_LABEL = 'Backing'
+export const BACKING_SCORE = 'Backing score'
+export const BACKING_SCORE_TIP =
+  'From the tTRUST staked on this agent itself: support vs oppose. ' +
+  'It says how much money is behind the agent — not who vouches for it, and it never changes the tier.'
+export const NOT_SCORED_TIP = 'Only agents registered through AgentScore get a backing score.'
+/** The list's filter by the backing score's buckets (same buckets as before, secondary). */
+export const BACKING_LEVEL = 'Backing level'
+export const ALL_BACKING_LEVELS = 'All backing levels'
+/** The collapsed Details' breakdown: the score's parts, under their protocol names. */
+export const SCORE_PARTS_HEADING = 'The backing score and the numbers beside it (API names)'
+export const SCORE_PART_TRUST = 'Trust Score — the backing score'
+export const SCORE_PART_COMPOSITE = 'Composite (quality)'
+export const SCORE_PART_HYBRID = 'Hybrid — 60% Trust Score + 40% Composite'
+export const BACKING_TREND = 'Backing trend'

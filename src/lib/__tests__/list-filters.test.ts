@@ -53,7 +53,7 @@ describe('qualityOptions — every bucket listed; an empty one disabled with its
   it('live-like mix: Low and Critical have no rows → listed, disabled, "(0)"', () => {
     const opts = qualityOptions(rows({ excellent: 2, good: 4, moderate: 1, unrated: 265 }))
     expect(opts.map((o) => [qualityOptionText(o), o.disabled])).toEqual([
-      ['All quality (272)', false],
+      ['All backing levels (272)', false],
       ['Excellent (2)', false],
       ['Good (4)', false],
       ['Moderate (1)', false],
@@ -72,7 +72,7 @@ describe('qualityOptions — every bucket listed; an empty one disabled with its
 
   it('rows not read yet → no counts printed and nothing disabled (unknown is not 0)', () => {
     const opts = qualityOptions(null)
-    expect(opts.map(qualityOptionText)).toEqual(['All quality', 'Excellent', 'Good', 'Moderate', 'Low', 'Critical', 'Unrated'])
+    expect(opts.map(qualityOptionText)).toEqual(['All backing levels', 'Excellent', 'Good', 'Moderate', 'Low', 'Critical', 'Unrated'])
     expect(opts.some((o) => o.disabled)).toBe(false)
   })
 })

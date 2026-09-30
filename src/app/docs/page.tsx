@@ -685,7 +685,9 @@ function TabScoring() {
         <p className="text-[#9BA5B0] text-xs leading-relaxed mb-4" data-testid="glossary">
           <span className="text-white font-semibold">Glossary:</span> vouch (UI) = attestation (protocol). The app says
           &ldquo;vouch&rdquo; and &ldquo;people who vouch&rdquo;; REST, MCP, <code>llms.txt</code> and SKILL.md keep{' '}
-          <code>attest</code>, <code>attesters</code> and <code>trustScore</code>.
+          <code>attest</code>, <code>attesters</code> and <code>trustScore</code>. Backing score (UI) ={' '}
+          <code>score.trustScore</code> (support vs oppose on the agent&apos;s own vault), printed only when{' '}
+          <code>scoreBasis</code> is <code>measured</code>; Composite and Hybrid (<code>objectScore</code>) sit under Details.
         </p>
         <div className="rounded-xl overflow-hidden mb-5"
           style={{ border: '1px solid rgba(255,255,255,0.08)' }}>

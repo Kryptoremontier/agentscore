@@ -72,7 +72,7 @@ const SHOTS: Shot[] = [
     prepare: async (page) => {
       await agentsListReady(page)
       await expect(page.getByRole('tab', { name: /^ERC-8004/ })).toHaveAttribute('aria-selected', 'true', { timeout: WAIT_CAP })
-      await expect(page.getByRole('combobox', { name: 'Quality' })).toHaveValue('unrated', { timeout: WAIT_CAP })
+      await expect(page.getByRole('combobox', { name: 'Backing level' })).toHaveValue('unrated', { timeout: WAIT_CAP })
       await expect(page.getByTestId('results-line')).toContainText('Unrated', { timeout: WAIT_CAP })
     },
     check: qualityDropdownListsEveryBucket,
@@ -553,7 +553,7 @@ async function originTabsMatchHeader(page: Page, _project: string) {
  * disabled and shows its 0 — never hidden.
  */
 async function qualityDropdownListsEveryBucket(page: Page, _project: string) {
-  const options = await page.getByRole('combobox', { name: 'Quality' }).locator('option').evaluateAll((els) =>
+  const options = await page.getByRole('combobox', { name: 'Backing level' }).locator('option').evaluateAll((els) =>
     els.map((o) => ({ value: (o as HTMLOptionElement).value, text: o.textContent ?? '', disabled: (o as HTMLOptionElement).disabled })))
   expect(options.map((o) => o.value)).toEqual(['all', 'excellent', 'good', 'moderate', 'low', 'critical', 'unrated'])
   for (const o of options) {

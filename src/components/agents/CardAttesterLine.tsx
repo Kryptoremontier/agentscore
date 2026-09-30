@@ -16,16 +16,22 @@ import type { CardAttesterLine as Line } from '@/lib/agent-list'
 import { VOUCH_SHORT, vouchFor } from '@/lib/people-copy'
 
 /**
- * One text-xs line (the app's inherited line-height is 1.5 → 18 px), reserved while loading.
+ * One line, reserved while loading: text-xs (the app's inherited line-height is 1.5 → 18 px) on
+ * the list row; text-sm on the grid card, where it is the headline (Etap 5b).
  * min-height, not height: on a very narrow row the answer may wrap rather than hide "Vouch".
  */
-const ATTESTER_LINE_CLASS = 'text-xs leading-[18px] min-h-[18px]'
+const ATTESTER_LINE_CLASS = {
+  xs: 'text-xs leading-[18px] min-h-[18px]',
+  sm: 'text-sm leading-5 min-h-[20px]',
+} as const
 
-export function CardAttesterLine({ line, agentName, onAttest, className = '' }: {
+export function CardAttesterLine({ line, agentName, onAttest, size = 'xs', className = '' }: {
   line: Line
   /** Names the button for screen readers — ~270 cards each carry a "Vouch". */
   agentName: string
   onAttest: () => void
+  /** 'sm' on the grid card (the headline), 'xs' on the list row. */
+  size?: keyof typeof ATTESTER_LINE_CLASS
   className?: string
 }) {
   const attest = (e: MouseEvent) => {
@@ -33,7 +39,7 @@ export function CardAttesterLine({ line, agentName, onAttest, className = '' }: 
     onAttest()
   }
   return (
-    <p className={`${ATTESTER_LINE_CLASS} ${className}`} data-testid="card-attester-line" data-state={line.kind} aria-busy={line.kind === 'loading' || undefined}>
+    <p className={`${ATTESTER_LINE_CLASS[size]} ${className}`} data-testid="card-attester-line" data-state={line.kind} aria-busy={line.kind === 'loading' || undefined}>
       {line.kind === 'loading' && (
         <span aria-hidden className="inline-block align-middle h-2.5 w-24 rounded bg-white/[0.08] animate-pulse" />
       )}

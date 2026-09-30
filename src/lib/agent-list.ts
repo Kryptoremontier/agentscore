@@ -21,7 +21,7 @@ import { summarizeAttesters } from './agent-profile'
 import { calculateAgentTier, type AgentTierResult, type AgentTierDisplay } from './agent-tier'
 import type { AttestedEntry } from './attestation-reader'
 import type { QualityBucket } from './score-basis'
-import { NOBODY_VOUCHES, peopleLine, ERC8004_TAB_TITLE } from './people-copy'
+import { NOBODY_VOUCHES, peopleLine, ERC8004_TAB_TITLE, ALL_BACKING_LEVELS } from './people-copy'
 
 /** Row shape as the /agents page consumes it (indexer fields + client annotations). */
 export interface AgentListAtom {
@@ -247,7 +247,7 @@ export const ORIGIN_TABS: ReadonlyArray<{ id: OriginFilter; label: string; title
   { id: 'erc8004', label: 'ERC-8004', title: ERC8004_TAB_TITLE },
 ]
 
-/** The quality buckets, best first; "Unrated" = no measured score (lib/score-basis.ts qualityBucket). */
+/** The backing-level buckets (the backing score's; were "quality"), best first; "Unrated" = no measured score (lib/score-basis.ts qualityBucket). */
 export const QUALITY_LEVELS: ReadonlyArray<{ id: QualityBucket; label: string }> = [
   { id: 'excellent', label: 'Excellent' },
   { id: 'good', label: 'Good' },
@@ -281,14 +281,14 @@ export interface QualityOption {
 }
 
 /**
- * The quality dropdown: "All" plus every bucket, always. Counts are over the rows the list
+ * The backing-level dropdown (was "quality"): "All" plus every bucket, always. Counts are over the rows the list
  * would show with no quality filter (origin and search applied), so each option says how
  * many rows choosing it leaves. `buckets`: one entry per such row; null while loading.
  */
 export function qualityOptions(buckets: readonly QualityBucket[] | null): QualityOption[] {
   const count = (id: QualityBucket) => (buckets ? buckets.filter((b) => b === id).length : null)
   return [
-    { id: 'all', label: 'All quality', count: buckets ? buckets.length : null, disabled: false },
+    { id: 'all', label: ALL_BACKING_LEVELS, count: buckets ? buckets.length : null, disabled: false },
     ...QUALITY_LEVELS.map(({ id, label }) => {
       const n = count(id)
       return { id, label, count: n, disabled: n === 0 }

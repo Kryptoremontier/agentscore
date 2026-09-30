@@ -129,7 +129,7 @@ describe('source guards — same components on both surfaces, no tier-sounding s
     expect(modal).not.toMatch(/<AtomIdLine /)
     const profile = code('app/agents/[id]/page.tsx')
     expect(profile).toMatch(/const statRow = statRowView\(\{/)
-    expect(profile.match(/<ProfileStatRow view=\{statRow\} \/>/g)).toHaveLength(2) // scored + non-scored tier
+    expect(profile.match(/<ProfileStatRow view=\{statRow\} backing=\{<BackingScore variant="line" /g)).toHaveLength(2) // scored + non-scored tier
     expect(profile).toMatch(/fetchAgentModalData\(agentId, MODAL_HEADER_PARTS\)/) // the modal's own answer, its header's parts
     expect(profile).toMatch(/<AgentDetails termId=\{agentId\} caipIdentity=\{cohortMatch\?\.caipIdentity\} \/>/)
     expect(profile).toMatch(/<AgentDetails termId=\{agent\.id\}/)
@@ -141,9 +141,9 @@ describe('source guards — same components on both surfaces, no tier-sounding s
     expect(header).not.toMatch(/atomId\.toString\(\)|Total Stake|>\s*Stakers\s*</)
   })
 
-  it('no "Moderate Trust" / "Trust Level" beside the attestation tier on the profile', () => {
-    const stats = code('components/agents/AgentStats.tsx')
-    expect(stats).not.toMatch(/Trust Level|getTrustLevel/)
-    expect(stats).toMatch(/<TrustScoreBadge score=\{agent\.trustScore\} size="lg" showLabel=\{false\} \/>/)
+  it('no "Moderate Trust" / "Trust Level" beside the attestation tier on the profile; its score card is Details rows now', () => {
+    const profile = code('app/agents/[id]/page.tsx')
+    expect(profile).not.toMatch(/Trust Level|getTrustLevel|TrustScoreBadge|AgentStats/)
+    expect(profile).toMatch(/<AgentDetails termId=\{agent\.id\}>\s*<ScoreParts view=\{scorePartsOf\(agent\)\} \/>/)
   })
 })

@@ -30,5 +30,11 @@ export function apiToAgent(apiAgent: AgentDetailApiItem): Agent {
     attestationCount: null,
     reportCount: null,
     stakerCount: apiAgent.stakerCount,
+    scoreParts: {
+      trustScore: apiAgent.score.trustScore,
+      qualityScore: apiAgent.score.qualityScore,
+      objectScore: apiAgent.score.objectScore,
+      measured: apiAgent.scoreBasis === 'measured',
+    },
   }
 }
