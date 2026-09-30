@@ -11,6 +11,16 @@ import { EvaluatorBadge } from '@/components/shared/EvaluatorBadge'
 import { cn } from '@/lib/cn'
 import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile, type EvaluatorTier } from '@/lib/evaluator-score'
 import { PersonName } from '@/components/shared/PersonName'
+import {
+  EVALUATOR_VOUCHED_COLUMN, EVALUATOR_VOUCHED_COLUMN_TIP, EVALUATOR_NOT_NEEDED_TIP, EVALUATOR_LEGEND,
+  evaluatorCappedTip, evaluatorVouchedTip,
+} from '@/lib/people-copy'
+
+// One column template for the header and the rows. From sm up the Vouched and Picks columns are wide
+// enough for their headers; they used to be 44 px each, and "ATTESTED" ran into "PICKS" (Etap 5b).
+const TABLE_GRID = 'grid grid-cols-[44px_1fr_90px_68px_68px_48px_44px] sm:grid-cols-[44px_1fr_90px_68px_68px_80px_56px]'
+// Narrow columns' headers: tighter type on a phone so they fit 44–48 px.
+const HEAD_NARROW = 'text-[9px] sm:text-[10px] font-semibold text-[#7A838D] uppercase tracking-normal sm:tracking-widest'
 
 const TIER_ICONS: Record<EvaluatorTier, React.ElementType> = {
   newcomer: Shield,
@@ -221,15 +231,15 @@ export function EvaluatorsClient({ initialData: data }: { initialData: Evaluator
             style={{ background: 'rgba(13,15,17,0.9)', border: '1px solid rgba(200,150,60,0.15)' }}>
 
             {/* Header */}
-            <div className="grid grid-cols-[44px_1fr_90px_68px_68px_44px_44px] gap-2 px-5 py-3 border-b border-white/5"
+            <div className={`${TABLE_GRID} gap-2 px-5 py-3 border-b border-white/5`}
               style={{ background: 'rgba(200,150,60,0.04)' }}>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-center">#</span>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest">Evaluator</span>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right">Accuracy</span>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right">Weight</span>
               <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right" title="Realized + unrealized P&L on evaluator positions">P&L</span>
-              <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-center" title="Attestation Gate — verified by distinct wallets">Attested</span>
-              <span className="text-[10px] font-semibold text-[#7A838D] uppercase tracking-widest text-right">Picks</span>
+              <span className={`${HEAD_NARROW} text-center`} title={EVALUATOR_VOUCHED_COLUMN_TIP}>{EVALUATOR_VOUCHED_COLUMN}</span>
+              <span className={`${HEAD_NARROW} text-right`}>Picks</span>
             </div>
 
             {data === null ? (
@@ -258,7 +268,7 @@ export function EvaluatorsClient({ initialData: data }: { initialData: Evaluator
                 <div
                   key={e.address}
                   className={cn(
-                    'grid grid-cols-[44px_1fr_90px_68px_68px_44px_44px] gap-2 px-5 py-3.5 border-b border-white/[0.04] transition-all',
+                    `${TABLE_GRID} gap-2 px-5 py-3.5 border-b border-white/[0.04] transition-all`,
                     isMe
                       ? 'bg-[#C8963C]/[0.06] hover:bg-[#C8963C]/[0.09]'
                       : isTop3
@@ -349,13 +359,13 @@ export function EvaluatorsClient({ initialData: data }: { initialData: Evaluator
                     )}
                   </div>
 
-                  {/* Attested */}
+                  {/* Vouched (the attestation gate) */}
                   <div className="flex items-center justify-center">
                     {!attestationChecked ? (
                       <span className="text-[10px] text-[#7A838D]">—</span>
                     ) : isGated ? (
                       <span
-                        title={`Weight capped at 1.0x — needs attestation from ${1} distinct wallet to unlock ${e.rawEvaluatorWeight.toFixed(2)}x`}
+                        title={evaluatorCappedTip(e.rawEvaluatorWeight)}
                         className="inline-flex items-center gap-0.5"
                       >
                         <Lock className="w-3 h-3 text-[#7A838D]" />
@@ -363,14 +373,14 @@ export function EvaluatorsClient({ initialData: data }: { initialData: Evaluator
                       </span>
                     ) : e.meetsAttestationThreshold ? (
                       <span
-                        title={`Attested by ${e.attestationCount} distinct wallet(s)`}
+                        title={evaluatorVouchedTip(e.attestationCount ?? 0)}
                         className="inline-flex items-center gap-0.5"
                       >
                         <CheckCircle2 className="w-3 h-3 text-[#2ECC71]" />
                         <span className="text-[10px] text-[#2ECC71]">{e.attestationCount}</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] text-[#7A838D]" title="No amplification needed at this weight">✓</span>
+                      <span className="text-[10px] text-[#7A838D]" title={EVALUATOR_NOT_NEEDED_TIP}>✓</span>
                     )}
                   </div>
 
@@ -381,6 +391,19 @@ export function EvaluatorsClient({ initialData: data }: { initialData: Evaluator
                 </div>
               )
             })}
+          </div>
+
+          {/* Legend for the weight and Vouched columns (Etap 5b Run 2) */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 px-1 text-[11px] text-[#7A838D]" data-testid="evaluators-legend">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="line-through tabular-nums">1.40×</span> — {EVALUATOR_LEGEND.struck}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Lock className="w-3 h-3" /> <span className="tabular-nums">0/1</span> — {EVALUATOR_LEGEND.lock}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 className="w-3 h-3 text-[#2ECC71]" /> — {EVALUATOR_LEGEND.check}
+            </span>
           </div>
 
           {/* ── Tier guide ───────────────────────────────────────────────── */}
