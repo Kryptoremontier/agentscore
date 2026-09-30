@@ -9,7 +9,6 @@ import { formatDate } from '@/lib/format'
 import type { Agent } from '@/types/agent'
 import type { AgentTierResult } from '@/lib/agent-tier'
 import { AgentTierChip } from '@/components/agents/AgentTierChip'
-import { AtomIdLine } from '@/components/profile/AtomIdLine'
 
 interface AgentHeaderProps {
   agent: Agent
@@ -102,9 +101,6 @@ export function AgentHeader({ agent, action, stats, tier, tierLoading }: AgentHe
                 </a>
               </div>
             )}
-
-            {/* Atom ID — shortened hex + copy-full, as the modal shows it (Etap 5a) */}
-            <AtomIdLine termId={agent.id} />
           </div>
         </div>
       </div>

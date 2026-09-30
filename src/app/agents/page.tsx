@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { DecimalInput } from '@/components/ui/DecimalInput'
 // Categories unused — filter now uses trust levels directly
 import { calculateTrustScoreFromStakes, type TrustScoreResult } from '@/lib/trust-score-engine'
-import { calculateHybridScore, getHybridLevel } from '@/lib/hybrid-trust'
+import { calculateHybridScore } from '@/lib/hybrid-trust'
 import { calculateDiversityWeightedRatio } from '@/lib/diversity-weight'
 import { getCurrentPrice, calculateBuy, calculateSell, getSellProceeds, generateCurveData } from '@/lib/bonding-curve'
 import { useBuyPreview, useSellPreview } from '@/hooks/useOnChainPricing'
@@ -52,16 +52,18 @@ import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
-import { AtomIdLine } from '@/components/profile/AtomIdLine'
+import { AgentDetails } from '@/components/profile/AgentDetails'
+import { LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
+import { ScoreParts } from '@/components/profile/ScoreParts'
+import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
 import { startVisiblePoll } from '@/lib/visible-poll'
 import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
-import { TooltipWrapper } from '@/components/ui/tooltip'
-import { compareAgentEntries } from '@/lib/agent-list-sort'
+import { SORT_OPTIONS, parseSort, type AgentListSortBy } from '@/lib/agent-list-sort'
 import {
   matchesAgentSearch, agentListHeaderSegments, LIVE_FEED_LABEL, agentResultsLine, type FeedStatus,
-  cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, type CardAttestationView,
+  cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, orderAgents, listEntryOf, type CardAttestationView,
   listTrustTriple, listVaultSnapshot, listOpposeWei, withLiveVault,
   ORIGIN_TABS, QUALITY_LEVELS, corpusTotals, qualityOptions, qualityOptionText, parseListFilters, listFiltersSearch,
   type OriginFilter, type QualityFilter, type AgentScoreCorpusCounts, type CohortCorpusCounts,
@@ -75,19 +77,15 @@ import {
 import { fetchAgentModalData, fetchAgentsPage } from '@/lib/agents-page-client'
 import { readAgentSignals } from '@/lib/agent-signals'
 import {
-  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, NO_STAKE_TOOLTIP, noScoreTooltip,
-  stakeReadingOf,
+  readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, noScoreTooltip,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
+import { PersonName } from '@/components/shared/PersonName'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
   if (process.env.NODE_ENV === 'development') console.log(...args)
 }
-
-// Neutral colour for rows without a measured score — never the yellow "moderate"
-// the 50 prior would otherwise paint them (lib/score-basis.ts).
-const UNRATED_COLOR = '#7A838D'
 
 /** Modal positions poll — catches other wallets' trades; paused while the tab is hidden. */
 const MODAL_POLL_MS = 15_000
@@ -186,7 +184,8 @@ function AgentsPageContent() {
   // Origin tab + quality filter live in the URL (?origin=erc8004&quality=unrated) so a filtered
   // view is shareable; unknown values fall back to 'all' (lib/agent-list.ts parseListFilters).
   const [qualityFilter, setQualityFilter] = useState<QualityFilter>(() => parseListFilters(searchParams).quality)
-  const [sortBy, setSortBy] = useState<'newest' | 'score_desc' | 'score_asc' | 'stakers' | 'stake'>('newest')
+  // Sort in the URL too (?sort=vouched|newest|backing); missing = "Most vouched" (Etap 5b).
+  const [sortBy, setSortBy] = useState<AgentListSortBy>(() => parseListFilters(searchParams).sort)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
   const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>([])
@@ -207,6 +206,7 @@ function AgentsPageContent() {
     const f = parseListFilters(searchParams)
     setOriginFilter(f.origin)
     setQualityFilter(f.quality)
+    setSortBy(f.sort)
   }, [searchParams])
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   // The open modal's agent, for async results that must not land on another agent's modal.
@@ -297,9 +297,6 @@ function AgentsPageContent() {
   // Etap 4b: "Back this agent" (Buy/Sell) is secondary to the attestation unit — collapsed by default.
   const [backAccordionOpen, setBackAccordionOpen] = useState(false)
   const openBackOnSelect = useRef(false)
-  // Cache hybrid scores keyed by agent term_id, populated when modal computes them.
-  // Cards fall back to trust score until the modal has been opened for that agent.
-  const [objectScoreByTermId, setObjectScoreByTermId] = useState<Record<string, number>>({})
 
   // On-chain buy/sell previews (replace fictional local bonding curve)
   const activeVaultId = selectedAgent?.term_id || undefined
@@ -1306,8 +1303,7 @@ function AgentsPageContent() {
   // ─── Hybrid Score (AGENTSCORE = 60% economic confidence + 40% quality metrics) ───
   const hybridScore = useMemo((): number | null => {
     try {
-      // A hybrid built on the zero-stake prior would be cached onto the card
-      // (objectScoreByTermId) as if measured — no measured trust score, no hybrid.
+      // A hybrid built on the zero-stake prior is not a measurement — no measured trust score, no hybrid.
       if (!agentTrust || !compositeTrust || !modalMeasured) return null
       // Support positions are in the ATOM vault (selectedAgent.term_id), NOT the triple vault (agentTriple.termId).
       // agentTriple.termId is the triple's own support-vault termId, which differs from the atom's termId.
@@ -1328,14 +1324,11 @@ function AgentsPageContent() {
     }
   }, [agentTrust, compositeTrust, modalMeasured, allPositions, agentTriple.termId, agentTriple.counterTermId, evaluatorWeights])
 
-  // Populate hybrid score cache so the card shows the same number as the modal.
-  // compositeScore requires per-agent signal history + on-chain RPC calls (not available
-  // for all list cards at once), so we cache lazily from modal opens (Approach B).
-  useEffect(() => {
-    if (hybridScore != null && selectedAgent?.term_id) {
-      setObjectScoreByTermId(prev => ({ ...prev, [selectedAgent.term_id]: hybridScore }))
-    }
-  }, [hybridScore, selectedAgent?.term_id])
+  // The modal's one backing score (Etap 5b): the measured trust score — support vs oppose on the
+  // agent's own vault, the number the card and the profile print from the same stake; "—"
+  // otherwise (lib/score-basis.ts). The hybrid (with the composite) is a part, under Details. The
+  // modal no longer writes its hybrid onto the card: a card's number never changes on a modal open.
+  const modalBackingScore = measuredScore(agentTrust, modalMeasured)
 
   // ─── Skill Trust Breakdown ───
   const skillBreakdown = useMemo((): SkillBreakdownResult | null => {
@@ -1436,10 +1429,11 @@ function AgentsPageContent() {
   // ── List state ────────────────────────────────────────────────────────────
   // A filter change updates state and the URL. Next's router follows history.replaceState,
   // so useSearchParams stays in step without a server round-trip.
-  const setListFilters = (next: { origin?: OriginFilter; quality?: QualityFilter }) => {
-    const f = { origin: next.origin ?? originFilter, quality: next.quality ?? qualityFilter }
+  const setListFilters = (next: { origin?: OriginFilter; quality?: QualityFilter; sort?: AgentListSortBy }) => {
+    const f = { origin: next.origin ?? originFilter, quality: next.quality ?? qualityFilter, sort: next.sort }
     setOriginFilter(f.origin)
     setQualityFilter(f.quality)
+    if (f.sort) setSortBy(f.sort)
     const search = listFiltersSearch(window.location.search, f)
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`)
   }
@@ -1477,15 +1471,10 @@ function AgentsPageContent() {
     const searchedAgents = searchTerm
       ? sourceAgents.filter(a => matchesAgentSearch(searchTerm, [getAgentNameFromAtom(a), effectiveLabel(a)]))
       : sourceAgents
-    const enriched = searchedAgents.map(agent => {
-      // supportWei null = the vault was never read (cohort rows); opposeWei null = the
-      // oppose read failed — both unknown, never 0 (lib/score-basis.ts stakeReadingOf).
-      const reading = stakeReadingOf(agent as any)
-      const { supportWei, opposeWei } = reading
-      const measured = hasMeasuredScore(reading)
-      // Computed for every row (sort/filter plumbing), displayed only when measured.
-      const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei ?? 0n)
-      return { agent, trust: cardTrust, measured, noScoreTip: noScoreTooltip(reading), bucket: qualityBucket(cardTrust, measured) }
+    const enriched = searchedAgents.map(a => {
+      // The list's one derivation (lib/agent-list.ts listEntryOf) — the landing carousel's too.
+      const { agent, trust, measured, reading } = listEntryOf(a as GraphQLAgent & { __opposeWei?: bigint | null })
+      return { agent, trust, measured, noScoreTip: noScoreTooltip(reading), bucket: qualityBucket(trust, measured) }
     })
     return { sourceCount: sourceAgents.length, enriched }
     // getAgentNameFromAtom is a pure per-render closure over effectiveLabel.
@@ -1612,32 +1601,29 @@ function AgentsPageContent() {
               })}
             </div>
 
-            {/* Quality · sort — one row at 390 px */}
+            {/* Sort · backing level — one row at 390 px. The backing level (the backing score's
+                buckets) is secondary: after the sort, muted (Etap 5b). */}
             <div className="flex items-center gap-2">
-              {/* Quality: every bucket listed; an empty one is disabled with its 0, never hidden. */}
-              <select
-                aria-label="Quality"
-                value={qualityFilter}
-                onChange={(e) => setListFilters({ quality: e.target.value as QualityFilter })}
-                className="min-w-0 flex-1 sm:flex-none bg-[#191C21] border border-white/12 rounded-lg px-2 sm:px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#C8963C]/50 outline-none cursor-pointer"
-              >
-                {qualityOpts.map(o => (
-                  <option key={o.id} value={o.id} disabled={o.disabled}>{qualityOptionText(o)}</option>
-                ))}
-              </select>
-
               {/* Sort dropdown */}
               <select
                 aria-label="Sort"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setListFilters({ sort: parseSort(e.target.value) })}
                 className="flex-none bg-[#191C21] border border-white/12 rounded-lg px-2 sm:px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#C8963C]/50 outline-none cursor-pointer"
               >
-                <option value="newest">Newest First</option>
-                <option value="score_desc">Highest Score</option>
-                <option value="score_asc">Lowest Score</option>
-                <option value="stakers">Most Stakers</option>
-                <option value="stake">Most Stake</option>
+                {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+
+              {/* Backing level: every bucket listed; an empty one is disabled with its 0, never hidden. */}
+              <select
+                aria-label={BACKING_LEVEL}
+                value={qualityFilter}
+                onChange={(e) => setListFilters({ quality: e.target.value as QualityFilter })}
+                className="min-w-0 flex-1 sm:flex-none bg-transparent border border-white/[0.08] rounded-lg px-2 sm:px-3 py-1.5 text-xs text-[#7A838D] focus:border-[#C8963C]/50 outline-none cursor-pointer"
+              >
+                {qualityOpts.map(o => (
+                  <option key={o.id} value={o.id} disabled={o.disabled}>{qualityOptionText(o)}</option>
+                ))}
               </select>
             </div>
           </motion.div>
@@ -1677,12 +1663,12 @@ function AgentsPageContent() {
                 </p>
                 <p className="text-sm text-text-muted mb-8">
                   Agents are loaded from Intuition testnet via GraphQL.
-                  Register some real AI agents to get started.
+                  The docs show how to register one — from the app, REST or MCP.
                 </p>
                 <Button size="lg" asChild>
-                  <a href="/test-intuition">
-                    Register Agents →
-                  </a>
+                  <Link href="/docs">
+                    How to register an agent →
+                  </Link>
                 </Button>
               </div>
             </motion.div>
@@ -1714,7 +1700,8 @@ function AgentsPageContent() {
 
             // Honesty gate (thesis §6): see lib/agent-list-sort.ts — a row without a measured
             // score (zero stake, or never read) must never rank among measured scores by its prior.
-            const sorted = [...filtered].sort((a, b) => compareAgentEntries(a, b, sortBy))
+            // People first by default (lib/agent-list.ts orderAgents — the landing carousel's order).
+            const sorted = orderAgents(filtered, attestationViewBySubject, sortBy)
             const qualityLabel = QUALITY_LEVELS.find(l => l.id === qualityFilter)?.label
 
             return (
@@ -1735,7 +1722,7 @@ function AgentsPageContent() {
                     )
                   })()}
                   {qualityLabel && (
-                    <span className="text-[#4A5260]"> · <span className="text-[#B5BDC6]">{qualityLabel}</span></span>
+                    <span className="text-[#4A5260]"> · <span className="text-[#B5BDC6]">{BACKING_LEVEL}: {qualityLabel}</span></span>
                   )}
                 </p>
 
@@ -1790,21 +1777,12 @@ function AgentsPageContent() {
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }) => {
-                  // objectScore populated after modal opens (client) or from quality cache (server).
-                  // Falls back to trustScore on first paint. Only a MEASURED score is displayed:
-                  // at zero stake cardTrust.score is the formula's 50 prior (lib/score-basis.ts).
-                  const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
-                  const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
-                  const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
+                  // The backing score (Etap 5b): the measured trust score from the atom vault's
+                  // support vs oppose — the modal's and the profile's number too; small and neutral.
+                  // At zero stake cardTrust.score is the formula's 50 prior: "—" (lib/score-basis.ts).
+                  const displayScore = measuredScore(cardTrust, measured)
                   // Live stakers only (lib/live-position.ts) — a 0-share row is not a staker.
                   const stakers = agent.liveStakerCount
-                  const color = displayScore == null ? UNRATED_COLOR
-                    : effectiveLevel === 'excellent' ? '#34d399'
-                    : effectiveLevel === 'good' ? '#C8963C'
-                    : effectiveLevel === 'moderate' ? '#eab308'
-                    : effectiveLevel === 'low' ? '#f97316'
-                    : '#ef4444'
-                  const cardMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getAgentNameFromAtom(agent)
                   // Cohort rows never fetch the atom vault: their stake/stakers were never
@@ -1812,17 +1790,18 @@ function AgentsPageContent() {
                   const vaultRead = readSharesWei(agent.positions_aggregate) != null
                   // Attestations — the same read and derivation as the modal, and the same helper
                   // as the list row (lib/agent-list.ts attesterLineOf). The tier chip shows only
-                  // Trusted / Verified (thesis §6); Unverified is carried by the attester line.
+                  // Trusted / Verified (thesis §6); Unverified is carried by the people line.
                   const attesterLine = attesterLineOf(attestationViewBySubject, agent.term_id)
                   const cardTierChip = tierChipOf(attestationViewBySubject, agent.term_id)
                   const originChip = <OriginChip origin={agent.origin} />
+                  const backing = <BackingScore value={displayScore} tip={noScoreTip} className="flex-shrink-0 pt-0.5" />
                   const cardClass = `bg-[#111318] border border-[#1e2028] rounded-2xl
                                  cursor-pointer transition-all duration-300 ease-out
                                  hover:-translate-y-1 hover:border-[#C8963C]/15
                                  hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]`
 
-                  // Compact: a cohort row (vault never read on the list). Its score slot, caption,
-                  // stake line and bar would be the same on every such card, so they are not drawn.
+                  // Compact: a cohort row (vault never read on the list). Its stake line would be
+                  // the same on every such card, so it is not drawn; its backing reads "—".
                   // Decided at first paint only — the attestation read never reshapes a card
                   // (lib/agent-list.ts isCompactCard).
                   if (isCompactCard({ vaultRead })) {
@@ -1837,12 +1816,15 @@ function AgentsPageContent() {
                         className={`${cardClass} p-4`}
                         data-card="compact"
                       >
-                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                          <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
-                          {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
-                          {originChip}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
+                            {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
+                            {originChip}
+                          </div>
+                          {backing}
                         </div>
-                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} />
+                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" />
                       </motion.div>
                     )
                   }
@@ -1858,51 +1840,25 @@ function AgentsPageContent() {
                       data-card="full"
                       data-term-id={agent.term_id}
                     >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: color + '22', border: `1px solid ${color}44` }}>
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                              <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
-                                stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={color + '33'} />
-                            </svg>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
+                            {/* Agent tier chip — Trusted / Verified only (attestations, thesis §6). */}
+                            {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
                           </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                              <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
-                              {/* Agent tier chip — Trusted / Verified only (attestations, thesis §6). */}
-                              {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
-                            </div>
-                            {originChip}
-                          </div>
+                          {originChip}
                         </div>
-                        <div className="text-right">
-                          {displayScore != null ? (
-                            <div className="flex items-baseline justify-end gap-1 mb-0.5">
-                              <p className="text-2xl font-bold leading-none" style={{ color }}>{displayScore}</p>
-                              <span className="text-base leading-none" style={{ color: cardMi.color }}>{cardMi.arrow}</span>
-                            </div>
-                          ) : (
-                            // Native title, not TooltipWrapper: one Radix tooltip per card × 266
-                            // unmeasured cards doubled the list's render cost (measured).
-                            <p className="text-lg font-semibold leading-none text-[#7A838D] cursor-help" title={noScoreTip}>—</p>
-                          )}
-                          {/* "No score", not "Unverified": the tier is its own chip and comes only
-                              from attestations (thesis §6) — a Trusted agent can have no stake. */}
-                          <p className="text-[10px] text-[#7A838D]">{displayScore != null ? 'AGENTSCORE' : 'NO SCORE'}</p>
-                        </div>
+                        {backing}
                       </div>
-                      {/* The canonical unit first, above the vault line (4b-modal's order). */}
-                      <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="mb-3" />
+                      {/* The headline: who vouches, and for what (Etap 5b) — above the vault line. */}
+                      <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="mb-3" />
                       {vaultRead && (
-                        <div className="flex items-center gap-4 text-sm text-[#B5BDC6] mb-4">
+                        <div className="flex items-center gap-4 text-sm text-[#B5BDC6]">
                           <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
                           <span>Stakers: <span className="text-white font-medium">{stakers ?? '—'}</span></span>
                         </div>
                       )}
-                      <div className="w-full h-1.5 bg-[#1e2028] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${displayScore ?? 0}%`, backgroundColor: color }} />
-                      </div>
                     </motion.div>
                   )
                 })}
@@ -1919,19 +1875,12 @@ function AgentsPageContent() {
                   <span>Agent</span>
                   <span className="hidden sm:block text-right">Stakes</span>
                   <span className="hidden sm:block text-right">Stakers</span>
-                  <span className="text-right">Score</span>
+                  <span className="text-right">{BACKING_LABEL}</span>
                 </div>
                 {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }, i) => {
-                  const cachedObjectScore = measured ? (objectScoreByTermId[agent.term_id] ?? null) : null
-                  const displayScore = cachedObjectScore ?? measuredScore(cardTrust, measured)
-                  const effectiveLevel = cachedObjectScore != null ? getHybridLevel(cachedObjectScore) : cardTrust.level
+                  // The card's backing score, the same derivation (small, neutral — Etap 5b).
+                  const displayScore = measuredScore(cardTrust, measured)
                   const stakers = agent.liveStakerCount
-                  const color = displayScore == null ? UNRATED_COLOR
-                    : effectiveLevel === 'excellent' ? '#34d399'
-                    : effectiveLevel === 'good' ? '#C8963C'
-                    : effectiveLevel === 'moderate' ? '#eab308'
-                    : effectiveLevel === 'low' ? '#f97316' : '#ef4444'
-                  const listMi = getMomentumIndicator(cardTrust.momentum ?? 0)
                   const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
                   const name = getAgentNameFromAtom(agent)
                   const listVaultRead = readSharesWei(agent.positions_aggregate) != null
@@ -1958,12 +1907,11 @@ function AgentsPageContent() {
                         ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.05)'
                       }}
                     >
-                      {/* Icon */}
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: color + '18', border: `1px solid ${color}33` }}>
+                      {/* Icon — neutral: it no longer carries the score's colour (Etap 5b) */}
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.03] border border-white/[0.08]">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                           <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
-                            stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill={color + '33'} />
+                            stroke="#7A838D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </div>
                       {/* Name + chips, attester line (+ stake line on phones) */}
@@ -1986,16 +1934,9 @@ function AgentsPageContent() {
                       <span className="hidden sm:block text-xs text-[#B5BDC6] text-right whitespace-nowrap">{listVaultRead ? stakes : '—'}</span>
                       {/* Stakers */}
                       <span className="hidden sm:block text-xs text-[#B5BDC6] text-right whitespace-nowrap">{listVaultRead && stakers != null ? stakers : '—'}</span>
-                      {/* Score + momentum */}
-                      <div className="flex items-center justify-end gap-1">
-                        {displayScore != null ? (
-                          <>
-                            <span className="text-sm font-bold font-mono" style={{ color }}>{displayScore}</span>
-                            <span className="text-xs leading-none" style={{ color: listMi.color }}>{listMi.arrow}</span>
-                          </>
-                        ) : (
-                          <span className="text-xs font-mono text-[#7A838D] cursor-help" title={noScoreTip}>—</span>
-                        )}
+                      {/* Backing score — the card's number, neutral */}
+                      <div className="flex items-center justify-end">
+                        <BackingScore value={displayScore} tip={noScoreTip} variant="value" />
                       </div>
                     </motion.div>
                   )
@@ -2036,7 +1977,7 @@ function AgentsPageContent() {
                       </h2>
                       <div className="flex items-center gap-1.5">
                         {/* The agent tier — attestations only (thesis §6), always shown:
-                            "Unverified · 1/3 attesters", "Trusted · 2/3 attesters", "Verified".
+                            Unverified / Trusted + "1 of 3 people needed to verify", or Verified.
                             "—" while loading; unavailable if the attestation read failed. */}
                         <AgentTierChip tier={agentTier} loading={!profileLoaded} />
                       </div>
@@ -2081,13 +2022,11 @@ function AgentsPageContent() {
                   })()}
                 </p>
 
-                {/* Atom ID — shortened hex, copies the full id (shared with /agents/[id]) */}
-                <AtomIdLine termId={selectedAgent.term_id} className="mb-5" />
-
                 {/* The stat row — attestation unit primary, Backers demoted (thesis §4/§6) — and the
                     modal's own age line. The same component as /agents/[id] (Etap 5a). */}
                 <ProfileStatRow
                   view={statRow}
+                  backing={<BackingScore variant="line" value={modalBackingScore} tip={noScoreTooltip(modalStakeReading)} />}
                   footer={modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
                 />
               </div>
@@ -2511,129 +2450,29 @@ function AgentsPageContent() {
                 )
               })()}
 
-              {/* === AGENTSCORE + STAKE BREAKDOWN === */}
-              {(() => {
-                const t = agentTrust
-                // Agent Score = pure economic trust score (same as card preview).
-                // null while loading, when the vault was never read, and at zero
-                // stake (the formula's 50 prior is not a measurement) → "—".
-                const agentScore = measuredScore(t, modalMeasured)
-                const scoreColor = agentScore == null ? '#7A838D'
-                  : t!.level === 'excellent' ? '#2ECC71'
-                  : t!.level === 'good' ? '#22C55E'
-                  : t!.level === 'moderate' ? '#EAB308'
-                  : t!.level === 'low' ? '#F97316'
-                  : '#EF4444'
-                // Support share exists only when there is stake to share (no 100% of nothing).
-                const supportPct = modalMeasured && t
-                  ? Number((t.supportStake * 1000n) / t.totalStake) / 10
-                  : null
-
-                // Hybrid Score = 60% Agent Score + 40% composite quality (separate metric)
-                const hybridColor = hybridScore == null ? '#7A838D'
-                  : getHybridLevel(hybridScore) === 'excellent' ? '#2ECC71'
-                  : getHybridLevel(hybridScore) === 'good' ? '#22C55E'
-                  : getHybridLevel(hybridScore) === 'moderate' ? '#EAB308'
-                  : getHybridLevel(hybridScore) === 'low' ? '#F97316'
-                  : '#EF4444'
-
-                return (
-                  <div className="bg-[#0F1113] border border-[#C8963C]/12 rounded-2xl p-6 mb-3">
-                    {/* Stacked on phones — two ~140 px columns wrapped every value (4b-list §6 #5). */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-
-                      {/* LEFT: Agent Score breakdown table */}
-                      <div>
-                        {/* Header row: label + big score */}
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-xs font-semibold uppercase tracking-wider text-[#7A838D]">Agent Score</h3>
-                          {agentScore != null ? (
-                            <span className="text-2xl font-bold tabular-nums" style={{ color: scoreColor }}>{agentScore}</span>
-                          ) : (
-                            <TooltipWrapper content={NO_STAKE_TOOLTIP}>
-                              <span className="text-2xl font-bold tabular-nums cursor-help" style={{ color: scoreColor }}>—</span>
-                            </TooltipWrapper>
-                          )}
-                        </div>
-
-                        {/* Thick divider */}
-                        <div className="h-[2px] mb-3 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }} />
-
-                        {/* Component rows */}
-                        <div className="space-y-2.5 mb-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-[#7A838D]">Trust Score</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-white tabular-nums">{agentScore ?? '—'}</span>
-                              <span className="text-xs text-[#4A5260]">(60%)</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-[#7A838D]">Composite</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-white tabular-nums">
-                                {compositeTrust != null ? Math.round(compositeTrust.score) : '—'}
-                              </span>
-                              <span className="text-xs text-[#4A5260]">(40%)</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Thin divider */}
-                        <div className="h-px mb-3" style={{ background: 'rgba(255,255,255,0.07)' }} />
-
-                        {/* Hybrid Score result row */}
-                        <div
-                          className="flex items-center justify-between"
-                          title="Hybrid Score = 60% Agent Score + 40% composite quality (staker diversity, stability, evaluator weights)"
-                        >
-                          <span className="text-xs font-semibold uppercase tracking-wider text-[#B5BDC6]">Hybrid Score</span>
-                          <span className="text-xl font-bold tabular-nums" style={{ color: hybridColor }}>
-                            {hybridScore != null ? hybridScore : '—'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* RIGHT: Stake Breakdown */}
-                      <div>
-                        <h3 className="text-white font-bold mb-4">Stake Breakdown</h3>
-
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-[#C8963C]">Support ({supportPct != null ? `${supportPct.toFixed(1)}%` : '—'})</span>
-                          <span className="text-[#f85149]">Oppose ({supportPct != null ? `${(100 - supportPct).toFixed(1)}%` : '—'})</span>
-                        </div>
-                        <div className="h-2 bg-[#1E2229] rounded-full overflow-hidden mb-4">
-                          {supportPct != null && (
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-[#10b981] to-[#059669] transition-all"
-                              style={{ width: `${supportPct}%` }}
-                            />
-                          )}
-                        </div>
-
-                        {/* Stake values: "—" only while loading / when the vault was never read;
-                            a read of 0 is a real measurement and prints as 0. */}
-                        <div className="space-y-2">
-                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
-                            <p className="text-xs text-[#B5BDC6] mb-0.5">Support Stake</p>
-                            <p className="text-[#C8963C] font-bold">{t ? formatTTrust(t.supportStake) : '—'}</p>
-                          </div>
-                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
-                            <p className="text-xs text-[#B5BDC6] mb-0.5">Oppose Stake</p>
-                            <p className="text-[#f85149] font-bold">{t ? formatTTrust(t.opposeStake) : '—'}</p>
-                          </div>
-                          <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-lg p-3">
-                            <p className="text-xs text-[#B5BDC6] mb-0.5">Net Stake</p>
-                            <p className="text-[#C8963C] font-bold">
-                              {t ? `${t.netStake >= 0n ? '+' : ''}${formatTTrust(t.netStake)}` : '—'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
+              {/* === DETAILS — collapsed: the Atom ID, the ERC-8004 id and the backing score's parts
+                  (Trust Score / Composite / Hybrid, the stake split, the time-weighted ratio and the
+                  composite's pillars). Shared with /agents/[id]; none of it is the headline (Etap 5b). */}
+              <AgentDetails termId={selectedAgent.term_id} caipIdentity={selectedAgent.caipIdentity} className="mb-3">
+                <ScoreParts view={{
+                  trustScore: measuredScore(agentTrust, modalMeasured),
+                  composite: compositeTrust ? compositeTrust.score : null,
+                  hybrid: hybridScore,
+                  supportWei: agentTrust ? agentTrust.supportStake : null,
+                  opposeWei: agentTrust ? agentTrust.opposeStake : null,
+                  // Support share exists only when there is stake to share (no 100% of nothing).
+                  supportPct: modalMeasured && agentTrust ? Number((agentTrust.supportStake * 1000n) / agentTrust.totalStake) / 10 : null,
+                  weighted: weightedTrust
+                    ? { ratio: weightedTrust.weightedRatio, raw: weightedTrust.rawRatio, fresh: weightedTrust.freshSignalsCount, total: weightedTrust.totalSignalsCount }
+                    : null,
+                  pillars: compositeTrust ? [
+                    { label: 'Signal Ratio', value: compositeTrust.breakdown.signalScore, weight: Math.round(COMPOSITE_WEIGHTS.SIGNAL_RATIO * 100) },
+                    { label: 'Staker Diversity', value: compositeTrust.breakdown.stakerScore, weight: Math.round(COMPOSITE_WEIGHTS.STAKERS * 100) },
+                    { label: 'Stability', value: compositeTrust.breakdown.stabilityScore, weight: Math.round(COMPOSITE_WEIGHTS.STABILITY * 100) },
+                    { label: 'Price Retention', value: compositeTrust.breakdown.priceScore, weight: Math.round(COMPOSITE_WEIGHTS.PRICE_RETENTION * 100) },
+                  ] : null,
+                }} />
+              </AgentDetails>
 
               {/* === AGENT CARD (metadata) === */}
               {(() => {
@@ -2776,7 +2615,7 @@ function AgentsPageContent() {
                 >
                   {[
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
-                    { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+                    { id: 'attestations', label: PEOPLE_TAB, icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'activity', label: 'Activity', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'timeline', label: 'Timeline', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="4" r="1.5" fill="currentColor" fillOpacity="0.5"/><circle cx="12" cy="20" r="1.5" fill="currentColor" fillOpacity="0.5"/><path d="M12 6v4M12 14v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M7 8h3M14 8h3M7 16h3M14 16h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5"/></svg> },
                   ].map((tab) => (
@@ -2803,70 +2642,34 @@ function AgentsPageContent() {
                   const t = agentTrust
                   // null → "—": loading, vault never read, or zero stake (the 50 prior).
                   const score = measuredScore(t, modalMeasured)
-                  const level = score != null ? t!.level : null
                   // A support/oppose split exists only when there is stake to split.
                   const supportPct = modalMeasured && t ? Number((t.supportStake * 100n) / t.totalStake) : null
                   const opsPct = supportPct != null ? 100 - supportPct : null
 
-                  const levelColors: Record<string, { bg: string; text: string; border: string }> = {
-                    excellent: { bg: '#2ECC7120', text: '#2ECC71', border: '#2ECC7140' },
-                    good:      { bg: '#22c55e20', text: '#22c55e', border: '#22c55e40' },
-                    moderate:  { bg: '#eab30820', text: '#eab308', border: '#eab30840' },
-                    low:       { bg: '#f9731620', text: '#f97316', border: '#f9731640' },
-                    critical:  { bg: '#ef444420', text: '#ef4444', border: '#ef444440' },
-                  }
-                  const UNRATED_COLORS = { bg: '#7A838D20', text: '#7A838D', border: '#7A838D40' }
-                  const lc = level ? levelColors[level] : UNRATED_COLORS
 
                   const ageDays = Math.floor((Date.now() - new Date(selectedAgent.created_at).getTime()) / 86400000)
                   const ageLabel = ageDays === 0 ? 'today' : ageDays === 1 ? '1 day' : `${ageDays} days`
 
                   return (
                   <div className="p-5 space-y-5">
-                    {/* AGENTSCORE Visual */}
-                    <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">Trust Score</p>
-                        <span
-                          className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: lc.bg, color: lc.text, border: `1px solid ${lc.border}` }}
-                        >
-                          {level ?? 'unrated'}
-                        </span>
-                      </div>
-
-                      {/* Score gauge */}
-                      {(() => {
-                        const momentum = score != null ? t!.momentum : null
-                        const mi = getMomentumIndicator(momentum ?? 0)
-                        const sparkData = buildTrustChartData(agentSignals, agentTriple.counterTermId)
-                          .map((d: { trustRatio: number }) => d.trustRatio)
-                          .slice(-10)
-                        return (
-                          <div className="mb-3">
-                            {/* Score number */}
-                            <div className="flex items-baseline gap-2 mb-3">
-                              {score != null ? (
-                                <>
-                                  <span className="text-4xl font-bold text-white leading-none">{score.toFixed(1)}</span>
-                                  <span className="text-[#7A838D] text-sm leading-none">/100</span>
-                                </>
-                              ) : (
-                                <TooltipWrapper content={NO_STAKE_TOOLTIP}>
-                                  <span className="text-4xl font-bold text-[#7A838D] leading-none cursor-help">—</span>
-                                </TooltipWrapper>
-                              )}
-                            </div>
-
-                            {/* Momentum pill — prominent, own row. Only for a measured score:
-                                at zero stake "Stable" would describe the prior. */}
-                            {momentum != null && (
+                    {/* Backing trend — momentum and the recent support share. The backing score itself
+                        is in the header; its parts (Trust Score, time-weighted, Composite) are under
+                        Details. No level words next to a number (Etap 5b). */}
+                    {(() => {
+                      // Only for a measured score: at zero stake "Stable" would describe the prior.
+                      const momentum = score != null ? t!.momentum : null
+                      const mi = getMomentumIndicator(momentum ?? 0)
+                      const sparkData = buildTrustChartData(agentSignals, agentTriple.counterTermId)
+                        .map((d: { trustRatio: number }) => d.trustRatio)
+                        .slice(-10)
+                      if (momentum == null && sparkData.length < 2) return null
+                      return (
+                        <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4" data-testid="backing-trend">
+                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider mb-3">{BACKING_TREND}</p>
+                          {momentum != null && (
                             <div
                               className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-lg mb-3"
-                              style={{
-                                background: `${mi.color}15`,
-                                border: `1px solid ${mi.color}45`,
-                              }}
+                              style={{ background: `${mi.color}15`, border: `1px solid ${mi.color}45` }}
                             >
                               <span className="text-2xl leading-none" style={{ color: mi.color }}>{mi.arrow}</span>
                               <span className="text-base font-semibold leading-none" style={{ color: mi.color }}>{mi.label}</span>
@@ -2879,164 +2682,16 @@ function AgentsPageContent() {
                                 </span>
                               )}
                             </div>
-                            )}
-
-                            {/* Sparkline */}
-                            {sparkData.length >= 2 && (
-                              <div className="flex items-center gap-2">
-                                <TrustSparkline datapoints={sparkData} color={mi.color} width={110} height={22} />
-                                <span className="text-[10px] text-white/25 tracking-wide">7d trend</span>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })()}
-
-                      {/* Score bar */}
-                      <div className="w-full h-2 bg-[#1E2229] rounded-full overflow-hidden mb-2">
-                        {score != null && (
-                          <div
-                            className="h-full rounded-full transition-all duration-700"
-                            style={{
-                              width: `${score}%`,
-                              background: `linear-gradient(90deg, ${lc.text}80, ${lc.text})`
-                            }}
-                          />
-                        )}
-                      </div>
-                      <div className="flex justify-between text-[10px] text-[#7A838D]">
-                        <span>Critical</span>
-                        <span>Low</span>
-                        <span>Moderate</span>
-                        <span>Good</span>
-                        <span>Excellent</span>
-                      </div>
-
-                      {/* Components breakdown (only when hybridScore available) */}
-                      {hybridScore != null && agentTrust && compositeTrust && (
-                        <div className="mt-3 pt-3 border-t border-[#C8963C]/10 space-y-1.5">
-                          <p className="text-[#7A838D] text-[10px] uppercase tracking-wider mb-1">Components</p>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-[#B5BDC6]">Economic confidence</span>
-                            <span className="text-white font-semibold">{agentTrust.score}</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-[#B5BDC6]">Quality metrics</span>
-                            <span className="text-white font-semibold">{compositeTrust.score.toFixed(1)}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Weighted Trust (time-decayed) */}
-                    {weightedTrust && (
-                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">
-                            Trust Score (time-weighted)
-                          </p>
-                          <span
-                            className="text-base font-bold"
-                            style={{
-                              color: weightedTrust.weightedRatio >= 60 ? '#22c55e'
-                                   : weightedTrust.weightedRatio >= 40 ? '#eab308'
-                                   : '#ef4444',
-                            }}
-                          >
-                            {weightedTrust.weightedRatio.toFixed(1)}%
-                          </span>
-                        </div>
-                        <div className="w-full h-1.5 bg-[#1E2229] rounded-full overflow-hidden mb-2">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${weightedTrust.weightedRatio}%`,
-                              background: weightedTrust.weightedRatio >= 60
-                                ? 'linear-gradient(90deg, #22c55e, #4ade80)'
-                                : weightedTrust.weightedRatio >= 40
-                                  ? 'linear-gradient(90deg, #eab308, #facc15)'
-                                  : 'linear-gradient(90deg, #ef4444, #f87171)',
-                            }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-[#7A838D]">
-                            Raw: {weightedTrust.rawRatio.toFixed(1)}%
-                            {weightedTrust.decayImpact !== 0 && (
-                              <span style={{ color: weightedTrust.decayImpact > 0 ? '#22c55e' : '#ef4444', marginLeft: '4px' }}>
-                                ({weightedTrust.decayImpact > 0 ? '+' : ''}{weightedTrust.decayImpact.toFixed(1)}% freshness)
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-[#7A838D]">
-                            {weightedTrust.freshSignalsCount} fresh / {weightedTrust.totalSignalsCount} signals
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Quality Metrics (Composite) */}
-                    {compositeTrust && (
-                      <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[#B5BDC6] text-xs font-semibold uppercase tracking-wider">
-                            Quality Metrics
-                          </p>
-                          <div className="flex items-center gap-2">
-                            {compositeTrust.isStable && (
-                              <span style={{ fontSize:'10px', padding:'2px 6px', borderRadius:'4px',
-                                background:'rgba(34,197,94,0.1)', color:'#22c55e', border:'1px solid rgba(34,197,94,0.2)' }}>
-                                Stable
-                              </span>
-                            )}
-                            <span className="text-base font-bold"
-                              style={{ color: compositeTrust.score >= 60 ? '#22c55e' : compositeTrust.score >= 40 ? '#eab308' : '#ef4444' }}>
-                              {compositeTrust.score.toFixed(1)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-full h-1.5 bg-[#1E2229] rounded-full overflow-hidden mb-3">
-                          <div className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${compositeTrust.score}%`,
-                              background: compositeTrust.score >= 60
-                                ? 'linear-gradient(90deg, #22c55e, #4ade80)'
-                                : compositeTrust.score >= 40
-                                  ? 'linear-gradient(90deg, #eab308, #facc15)'
-                                  : 'linear-gradient(90deg, #ef4444, #f87171)',
-                            }} />
-                        </div>
-                        <div className="space-y-1.5">
-                          {[
-                            { label: 'Signal Ratio', value: compositeTrust.breakdown.signalScore, weight: Math.round(COMPOSITE_WEIGHTS.SIGNAL_RATIO * 100) },
-                            { label: 'Staker Diversity', value: compositeTrust.breakdown.stakerScore, weight: Math.round(COMPOSITE_WEIGHTS.STAKERS * 100) },
-                            { label: 'Stability', value: compositeTrust.breakdown.stabilityScore, weight: Math.round(COMPOSITE_WEIGHTS.STABILITY * 100) },
-                            { label: 'Price Retention', value: compositeTrust.breakdown.priceScore, weight: Math.round(COMPOSITE_WEIGHTS.PRICE_RETENTION * 100) },
-                          ].map(({ label, value, weight }) => (
-                            <div key={label}>
-                              <div className="flex justify-between text-[10px] text-[#7A838D] mb-0.5">
-                                <span>{label} <span style={{ color:'rgba(255,255,255,0.2)' }}>({weight}%)</span></span>
-                                <span style={{ color: value >= 60 ? '#22c55e' : value >= 40 ? '#eab308' : '#ef4444' }}>{value}</span>
-                              </div>
-                              <div className="w-full h-1 bg-[#0F1113] rounded-full overflow-hidden">
-                                <div className="h-full rounded-full transition-all duration-500"
-                                  style={{
-                                    width: `${value}%`,
-                                    background: value >= 60 ? '#22c55e' : value >= 40 ? '#eab308' : '#ef4444',
-                                    opacity: 0.7,
-                                  }} />
-                              </div>
+                          )}
+                          {sparkData.length >= 2 && (
+                            <div className="flex items-center gap-2">
+                              <TrustSparkline datapoints={sparkData} color="#7A838D" width={110} height={22} />
+                              <span className="text-[10px] text-white/25 tracking-wide">7d trend</span>
                             </div>
-                          ))}
+                          )}
                         </div>
-                        <div className="flex justify-between text-[10px] text-[#7A838D] mt-2">
-                          <span>Price retention: {(compositeTrust.priceRetentionRatio * 100).toFixed(0)}% of ATH</span>
-                          <span style={{ color: compositeTrust.isStable ? '#22c55e' : '#6b7280' }}>
-                            {compositeTrust.isStable ? '● Stable' : '● Unstable'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
+                      )
+                    })()}
 
                     {/* Support vs Oppose breakdown */}
                     <div className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl p-4">
@@ -3093,7 +2748,7 @@ function AgentsPageContent() {
                         skills={skillBreakdown.skills}
                         overallScore={skillBreakdown.overallScore}
                         title="Legacy skill claims"
-                        subtitle="Pre-canonical hasAgentSkill / isTrustedFor claims with free-text objects — real stake, not domain attestations. New claims use Attest Competence above."
+                        subtitle={LEGACY_CLAIMS_NOTE}
                       />
                     )}
 
@@ -3248,13 +2903,6 @@ function AgentsPageContent() {
                                   const isOppose = agentTriple.counterTermId && pos.term_id === agentTriple.counterTermId
                                   let shares = 0n; try { shares = BigInt(pos.shares || '0') } catch { shares = 0n }
                                   const pct = totalShares > 0n ? Number((shares * 10000n) / totalShares) / 100 : 0
-                                  const walletLabel = pos.account?.label || pos.account_id
-                                  const isENS = walletLabel?.includes('.eth')
-                                  const displayWallet = isENS
-                                    ? walletLabel
-                                    : walletLabel?.length > 14
-                                      ? walletLabel.slice(0, 8) + '...' + walletLabel.slice(-4)
-                                      : walletLabel
                                   const isCreator = selectedAgent.creator?.id &&
                                     pos.account_id?.toLowerCase() === selectedAgent.creator.id.toLowerCase()
 
@@ -3263,7 +2911,7 @@ function AgentsPageContent() {
                                       <td className="py-2">
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                           <Link href={`/profile/${pos.account_id}`} className="text-[#C8963C] hover:underline">
-                                            {displayWallet}
+                                            <PersonName wallet={pos.account_id} label={pos.account?.label} />
                                           </Link>
                                           <EarlySupporterBadge rank={pos.rank} />
                                           {isCreator && (
@@ -3480,8 +3128,8 @@ function AgentsPageContent() {
                     />
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-white font-semibold text-sm">Backers</h4>
-                        <span className="text-[10px] text-[#7A838D]">staked on this agent · not a domain attestation</span>
+                        <h4 className="text-white font-semibold text-sm">{BACKERS_HEADING}</h4>
+                        <span className="text-[10px] text-[#7A838D]">{BACKERS_NOTE}</span>
                         <div className="flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#34a872] animate-pulse" />
                           <span className="text-xs text-[#B5BDC6]">live</span>
@@ -3505,18 +3153,11 @@ function AgentsPageContent() {
                             <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#B5BDC6" strokeWidth="2"/>
                           </svg>
                         </div>
-                        <p className="text-[#B5BDC6] text-sm">No backers yet</p>
-                        <p className="text-[#7A838D] text-xs mt-1">No positions on this agent&apos;s vault — stake via the Bonding Curve Market</p>
+                        <p className="text-[#B5BDC6] text-sm">{BACKERS_EMPTY}</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
                         {profiles.map((profile) => {
-                          const isENS = profile.label.includes('.eth')
-                          const displayName = isENS
-                            ? profile.label
-                            : profile.label.length > 14
-                              ? profile.label.slice(0, 8) + '...' + profile.label.slice(-6)
-                              : profile.label
                           const netPositive = profile.netShares >= 0
                           const lastDate = formatDate(profile.lastSeen)
 
@@ -3543,7 +3184,7 @@ function AgentsPageContent() {
                                   </svg>
                                 </div>
                                 <div>
-                                  <p className="text-white text-sm font-medium hover:text-[#C8963C] transition-colors">{displayName}</p>
+                                  <p className="text-white text-sm font-medium hover:text-[#C8963C] transition-colors"><PersonName wallet={profile.accountId} label={profile.label} /></p>
                                   <div className="flex items-center gap-2 mt-0.5">
                                     {profile.supportCount > 0 && (
                                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#2d7a5f20] text-[#34a872]">
@@ -3622,7 +3263,6 @@ function AgentsPageContent() {
                           const delta = Number(signal.delta || 0)
                           const sharesDisplay = (delta / 1e18).toFixed(4)
                           const isFeeProxy = signal.account_id?.toLowerCase() === '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41'
-                          const accountLabel = isFeeProxy ? 'via AgentScore' : (signal.account?.label || signal.account_id?.slice(0, 10) || '?')
                           const isLast = i === agentSignals.length - 1
 
                           const actionLabel = !isDeposit
@@ -3660,10 +3300,10 @@ function AgentsPageContent() {
                                       href={`/profile/${signal.account_id}`}
                                       className="text-[#C8963C] font-normal hover:underline"
                                     >
-                                      {accountLabel}
+                                      <PersonName wallet={signal.account_id} label={signal.account?.label} />
                                     </Link>
                                   ) : (
-                                    <span className="text-[#7A838D] font-normal">{accountLabel}</span>
+                                    <span className="text-[#7A838D] font-normal">{isFeeProxy ? 'via AgentScore' : '?'}</span>
                                   )}
                                 </p>
                                 <p style={{ color: dotColor }} className="text-xs font-medium mt-0.5">
@@ -3832,7 +3472,7 @@ function AgentsPageContent() {
             {/* Cost notice */}
             <div className="bg-[#f9731610] border border-[#f9731625] rounded-lg px-3 py-2 mb-4">
               <p className="text-[#f97316] text-xs">
-                <strong>On-chain report:</strong> Submitting this report creates an on-chain attestation triple and costs ~0.03 tTRUST (atom creation + triple deposit).
+                <strong>On-chain report:</strong> Submitting this report creates an on-chain report triple and costs ~0.03 tTRUST (atom creation + triple deposit).
               </p>
             </div>
 
@@ -3931,7 +3571,7 @@ function AgentsPageContent() {
                       )}
                       {claim.positions_aggregate?.aggregate?.count > 0 && (
                         <p className="text-[#B5BDC6] text-xs mt-1">
-                          {claim.positions_aggregate.aggregate.count} attestations
+                          {claim.positions_aggregate.aggregate.count} position{claim.positions_aggregate.aggregate.count === 1 ? '' : 's'}
                         </p>
                       )}
                     </div>

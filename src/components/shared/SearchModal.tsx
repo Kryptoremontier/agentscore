@@ -10,6 +10,7 @@ import { APP_CONFIG } from '@/lib/app-config'
 import { AGENT_WHERE_STR, TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import { fetchLiveStakerCounts } from '@/lib/vault-positions'
+import { pluralize } from '@/lib/plural'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -374,7 +375,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-white truncate">{name}</div>
                             <div className="text-sm text-slate-400 truncate">
-                              {creator ? `by ${creator}` : 'unknown'}{stakers > 0 ? ` · ${stakers} stakers` : ''}
+                              {creator ? `by ${creator}` : 'unknown'}{stakers > 0 ? ` · ${pluralize(stakers, 'staker')}` : ''}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -423,7 +424,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-white truncate">{name}</div>
                             <div className="text-sm text-slate-400 truncate">
-                              {creator ? `by ${creator}` : 'unknown'}{stakers > 0 ? ` · ${stakers} stakers` : ''}
+                              {creator ? `by ${creator}` : 'unknown'}{stakers > 0 ? ` · ${pluralize(stakers, 'staker')}` : ''}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">

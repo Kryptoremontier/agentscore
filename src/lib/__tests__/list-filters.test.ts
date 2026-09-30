@@ -53,7 +53,7 @@ describe('qualityOptions — every bucket listed; an empty one disabled with its
   it('live-like mix: Low and Critical have no rows → listed, disabled, "(0)"', () => {
     const opts = qualityOptions(rows({ excellent: 2, good: 4, moderate: 1, unrated: 265 }))
     expect(opts.map((o) => [qualityOptionText(o), o.disabled])).toEqual([
-      ['All quality (272)', false],
+      ['All backing levels (272)', false],
       ['Excellent (2)', false],
       ['Good (4)', false],
       ['Moderate (1)', false],
@@ -72,7 +72,7 @@ describe('qualityOptions — every bucket listed; an empty one disabled with its
 
   it('rows not read yet → no counts printed and nothing disabled (unknown is not 0)', () => {
     const opts = qualityOptions(null)
-    expect(opts.map(qualityOptionText)).toEqual(['All quality', 'Excellent', 'Good', 'Moderate', 'Low', 'Critical', 'Unrated'])
+    expect(opts.map(qualityOptionText)).toEqual(['All backing levels', 'Excellent', 'Good', 'Moderate', 'Low', 'Critical', 'Unrated'])
     expect(opts.some((o) => o.disabled)).toBe(false)
   })
 })
@@ -80,11 +80,11 @@ describe('qualityOptions — every bucket listed; an empty one disabled with its
 describe('URL state — ?origin=erc8004&quality=unrated', () => {
   const params = (q: string) => new URLSearchParams(q)
 
-  it('parses both; unknown or missing values fall back to "all"', () => {
-    expect(parseListFilters(params('?origin=erc8004&quality=unrated'))).toEqual({ origin: 'erc8004', quality: 'unrated' })
-    expect(parseListFilters(params('?origin=agentscore&quality=excellent'))).toEqual({ origin: 'agentscore', quality: 'excellent' })
-    expect(parseListFilters(params(''))).toEqual({ origin: 'all', quality: 'all' })
-    expect(parseListFilters(params('?origin=nasa&quality=great'))).toEqual({ origin: 'all', quality: 'all' })
+  it('parses all three; unknown or missing filters fall back to "all", the sort to "Most vouched"', () => {
+    expect(parseListFilters(params('?origin=erc8004&quality=unrated'))).toEqual({ origin: 'erc8004', quality: 'unrated', sort: 'vouched' })
+    expect(parseListFilters(params('?origin=agentscore&quality=excellent&sort=newest'))).toEqual({ origin: 'agentscore', quality: 'excellent', sort: 'newest' })
+    expect(parseListFilters(params(''))).toEqual({ origin: 'all', quality: 'all', sort: 'vouched' })
+    expect(parseListFilters(params('?origin=nasa&quality=great&sort=score_desc'))).toEqual({ origin: 'all', quality: 'all', sort: 'vouched' })
   })
 
   it('writes only non-default filters; keeps unrelated params; drops a stale ?open=', () => {
@@ -93,8 +93,14 @@ describe('URL state — ?origin=erc8004&quality=unrated', () => {
     expect(listFiltersSearch('?ref=x&open=0xabc', { origin: 'agentscore', quality: 'all' })).toBe('?ref=x&origin=agentscore')
   })
 
+  it('the sort stays in the URL once chosen — "Most vouched" too (?sort=vouched); a filter change keeps it', () => {
+    expect(listFiltersSearch('', { origin: 'all', quality: 'all', sort: 'vouched' })).toBe('?sort=vouched')
+    expect(listFiltersSearch('?sort=newest', { origin: 'erc8004', quality: 'all' })).toBe('?sort=newest&origin=erc8004')
+    expect(listFiltersSearch('?sort=newest', { origin: 'all', quality: 'all', sort: 'backing' })).toBe('?sort=backing')
+  })
+
   it('round-trips', () => {
-    for (const f of [{ origin: 'erc8004', quality: 'unrated' }, { origin: 'all', quality: 'good' }, { origin: 'agentscore', quality: 'all' }] as const) {
+    for (const f of [{ origin: 'erc8004', quality: 'unrated', sort: 'vouched' }, { origin: 'all', quality: 'good', sort: 'newest' }, { origin: 'agentscore', quality: 'all', sort: 'backing' }] as const) {
       expect(parseListFilters(params(listFiltersSearch('', f)))).toEqual(f)
     }
   })

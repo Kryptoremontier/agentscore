@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { BACKING_IS_NOT_ATTESTING } from '../../components/profile/BackThisAgentSection'
+import { BACKING_IS_NOT_VOUCHING } from '../people-copy'
 
 const SRC = path.join(__dirname, '..', '..')
 const read = (f: string) => readFileSync(path.join(SRC, f), 'utf8')
@@ -29,10 +29,11 @@ describe('backing is not called trust', () => {
   })
 
   it('the modal and the profile share the section and its copy', () => {
-    expect(BACKING_IS_NOT_ATTESTING).toBe("Stake tTRUST on this agent's atom vault. Backing is not attesting — it does not change the tier.")
+    expect(BACKING_IS_NOT_VOUCHING).toBe('Put tTRUST behind this agent. Backing is not vouching — it doesn’t change the tier.')
+    expect(read('components/profile/BackThisAgentSection.tsx')).toMatch(/\{BACKING_IS_NOT_VOUCHING\}/)
     const modal = read('app/agents/page.tsx')
     expect(modal).toMatch(/<BackThisAgentSection open=\{backAccordionOpen\} onToggle=/)
-    expect(modal).not.toMatch(/Backing is not attesting/) // the copy lives in the component only
+    expect(modal).not.toMatch(/Backing is not (attesting|vouching)/) // the copy lives in lib/people-copy.ts only
     // The profile's link lands on the modal's Back section, expanded.
     expect(modal).toMatch(/openBackOnSelect\.current = searchParams\.get\('back'\) === '1'/)
   })

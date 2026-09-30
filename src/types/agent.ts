@@ -33,6 +33,11 @@ export interface Agent {
   /** null = not read yet, or the read failed — rendered "—", never 0. */
   reportCount: number | null
   stakerCount: number
+  /**
+   * The score envelope's parts (REST detail) for the collapsed Details (Etap 5b). `measured` is
+   * `scoreBasis === 'measured'`: false = the 50 prior at zero stake — every part renders "—".
+   */
+  scoreParts?: { trustScore: number; qualityScore: number | null; objectScore: number | null; measured: boolean }
 }
 
 export type AgentPlatform =

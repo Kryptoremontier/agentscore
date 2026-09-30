@@ -10,13 +10,16 @@ import { calculateTrustScoreFromStakes } from '@/lib/trust-score-engine'
 import { readSharesWei, hasMeasuredScore, measuredScore, noScoreTooltip, stakeReadingOf } from '@/lib/score-basis'
 
 import { APP_CONFIG } from '@/lib/app-config'
-import { AGENTSCORE_CLAIMS_WHERE_STR, AGENT_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
+import { AGENTSCORE_CLAIMS_WHERE_STR, SKILL_WHERE_STR, AGENT_PREFIX, SKILL_PREFIX } from '@/lib/gql-filters'
 import { cleanAtomName } from '@/types/claim'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import { effectiveLabel } from '@/lib/api-data'
-import { filterAgents } from '@/lib/agent-junk-filter'
 import { fetchVaultPositions } from '@/lib/vault-positions'
-import { annotateVaultReads } from '@/lib/agent-list'
+import { annotateVaultReads, cardAttestationView, attesterLineOf, orderAgents, listEntryOf, corpusTotals, type CardAttestationView } from '@/lib/agent-list'
+import { DEFAULT_SORT } from '@/lib/agent-list-sort'
+import { fetchAgentsPage } from '@/lib/agents-page-client'
+import { agentsPageView } from '@/lib/agents-page-types'
+import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchFeaturedTotal, featuredBadgeText, type FeaturedTotal } from '@/lib/featured-counts'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
@@ -76,15 +79,48 @@ export function FeaturedAgents() {
   const [corpusTotal, setCorpusTotal] = useState<FeaturedTotal | null>(null)
   // A failed row read is not "none registered" — it gets its own state.
   const [rowsFailed, setRowsFailed] = useState(false)
+  // Agents tab: who vouches, per agent (the /agents list's read). undefined = not read.
+  const [agentViews, setAgentViews] = useState<ReadonlyMap<string, CardAttestationView> | null | undefined>(undefined)
 
   const fetchItems = async (tab: Tab, isCancelled: () => boolean) => {
     setLoading(true)
     setCorpusTotal(null)
     setRowsFailed(false)
-    fetchFeaturedTotal(tab, { graphqlUrl: GRAPHQL_URL, skillWhere: SKILL_WHERE_STR, claimWhere: CLAIM_WHERE })
-      .then(t => { if (!isCancelled()) setCorpusTotal(t) })
+    // Agents: the total comes with the list's own read below.
+    if (tab !== 'agents') {
+      fetchFeaturedTotal(tab, { graphqlUrl: GRAPHQL_URL, skillWhere: SKILL_WHERE_STR, claimWhere: CLAIM_WHERE })
+        .then(t => { if (!isCancelled()) setCorpusTotal(t) })
+    }
     try {
-      if (tab === 'claims') {
+      if (tab === 'agents') {
+        // The /agents list's own read (our API, both corpora) in its default order — "Most
+        // vouched" — so the carousel shows the list's first rows (lib/agent-list.ts orderAgents).
+        const view = agentsPageView(await fetchAgentsPage())
+        if (isCancelled()) return
+        if (view.unreachable) throw new Error('agents read failed')
+        const rows: FeaturedItem[] = [
+          ...(view.agentScore.status === 'ok' ? (view.agentScore.rows as FeaturedItem[]) : []),
+          ...(view.cohort.status === 'ok'
+            ? view.cohort.agents.map((c): FeaturedItem => ({ term_id: c.termId, label: c.label, created_at: c.createdAt }))
+            : []),
+        ]
+        const views = view.attestations
+          ? new Map([...view.attestations].map(([id, e]) => [id, cardAttestationView(e)] as const))
+          : null
+        setAgentViews(views)
+        setItems(orderAgents(rows.map(listEntryOf), views, DEFAULT_SORT).slice(0, 8).map((e) => e.agent))
+        // The badge: the list's "All" total (lib/agent-list.ts corpusTotals — the /agents header's).
+        const all = corpusTotals({
+          agentScore: view.agentScore.status === 'ok'
+            ? { status: 'ok', kept: view.agentScore.rows.length, junk: view.agentScore.junk, fetched: view.agentScore.fetched, total: view.agentScore.total, truncated: view.agentScore.truncated }
+            : { status: 'error', kept: 0, junk: 0, fetched: 0, total: null, truncated: null },
+          cohort: view.cohort.status === 'ok'
+            ? { status: 'ok', count: view.cohort.agents.length, total: view.cohort.total, truncated: view.cohort.truncated }
+            : { status: 'error', count: 0, total: null, truncated: null },
+        }).all
+        setCorpusTotal(all != null ? { total: all, truncated: false } : null)
+        setClaims([])
+      } else if (tab === 'claims') {
         const whereClause = CLAIM_WHERE
         const res = await fetch(GRAPHQL_URL, {
           method: 'POST',
@@ -109,7 +145,7 @@ export function FeaturedAgents() {
         setClaims(d.data.triples || [])
         setItems([])
       } else {
-        const whereStr = tab === 'agents' ? AGENT_WHERE_STR : SKILL_WHERE_STR
+        const whereStr = SKILL_WHERE_STR
         const res = await fetch(GRAPHQL_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -141,22 +177,10 @@ export function FeaturedAgents() {
           // The same annotation as /agents (lib/agent-list.ts): a failed read leaves oppose and
           // stakers unknown (null) — never 0, never a score computed on 0 oppose.
           const positions = await fetchVaultPositions([...atoms.map(a => a.term_id), ...counterTermIds]).catch(() => null)
-          annotateVaultReads(atoms, positions, { stakers: tab === 'agents' })
+          annotateVaultReads(atoms, positions, { stakers: false })
         }
         if (isCancelled()) return
-        // Agents: the same junk filter as /agents and /api/v1/agents, fed the RAW label
-        // (REPO_MAP §7 rule 4) — the badge total is post-junk, so the rows must be too.
-        const shown = tab === 'agents'
-          ? filterAgents(atoms.map(a => ({
-              termId: a.term_id,
-              label: effectiveLabel(a),
-              stakerCount: a.liveStakerCount ?? 0,
-              totalStake: Number(a.positions_aggregate?.aggregate?.sum?.shares || '0') / 1e18,
-              createdAt: a.created_at,
-              original: a,
-            }))).kept
-          : atoms
-        setItems(shown)
+        setItems(atoms)
         setClaims([])
       }
     } catch { if (!isCancelled()) { setItems([]); setClaims([]); setRowsFailed(true) } }
@@ -376,7 +400,8 @@ export function FeaturedAgents() {
                         // Agents: live stakers only (null = unread → not printed). Skills keep their own count.
                         const stakers = activeTab === 'agents' ? item.liveStakerCount : (item.positions_aggregate?.aggregate?.count || 0)
                         const sharesWei = readSharesWei(item.positions_aggregate)
-                        const totalStaked = Number(sharesWei ?? 0n) / 1e18
+                        // null = the stake was never read (ERC-8004 cohort rows): no stake line at all.
+                        const totalStaked = sharesWei == null ? null : Number(sharesWei) / 1e18
                         // null = the oppose read failed: unknown, never 0 (which would inflate the score).
                         const reading = stakeReadingOf(item)
                         const { opposeWei } = reading
@@ -386,6 +411,9 @@ export function FeaturedAgents() {
                         const score = measuredScore(calculateTrustScoreFromStakes(sharesWei ?? 0n, opposeWei ?? 0n), measured)
                         const scoreColor = score == null ? '#7A838D' : score >= 70 ? '#2ECC71' : score >= 50 ? '#EAB308' : '#EF4444'
                         const IconComp = cfg.icon
+                        const isAgent = activeTab === 'agents'
+                        // Agents: the /agents card's people line (who vouches) is the headline (Etap 5b).
+                        const peopleLine = isAgent ? attesterLineOf(agentViews, item.term_id) : null
                         return (
                           <motion.div key={item.term_id}
                             className="flex-shrink-0 w-[280px]"
@@ -393,7 +421,7 @@ export function FeaturedAgents() {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.06 }}
                           >
-                            <Link href={`/${activeTab}`}>
+                            <Link href={isAgent ? `/agents?open=${item.term_id}` : `/${activeTab}`}>
                               <div className="group relative p-5 rounded-2xl h-full cursor-pointer transition-all duration-300 hover:-translate-y-1"
                                 style={{
                                   background: 'linear-gradient(135deg,#171A1D,#1E2229)',
@@ -402,7 +430,10 @@ export function FeaturedAgents() {
                                 onMouseEnter={e => (e.currentTarget.style.borderColor = `rgba(${cfg.accentRgb},0.35)`)}
                                 onMouseLeave={e => (e.currentTarget.style.borderColor = `rgba(${cfg.accentRgb},0.12)`)}
                               >
-                                {/* Score */}
+                                {/* Agents: the backing score, small and neutral (Etap 5b). Skills: their score. */}
+                                {isAgent ? (
+                                  <BackingScore value={score} tip={noScoreTooltip(reading)} className="absolute top-5 right-4" />
+                                ) : (
                                 <div className="absolute top-4 right-4 text-right">
                                   {score != null ? (
                                     <span className="text-2xl font-bold font-mono" style={{ color: scoreColor }}>{score}</span>
@@ -411,6 +442,7 @@ export function FeaturedAgents() {
                                   )}
                                   <span className="block text-[10px] text-[#4A5260]">Score</span>
                                 </div>
+                                )}
 
                                 {/* Icon */}
                                 <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
@@ -421,6 +453,11 @@ export function FeaturedAgents() {
                                 <h4 className="font-semibold text-white group-hover:text-[#C8963C] transition-colors mb-1 pr-14 truncate text-sm">
                                   {name}
                                 </h4>
+                                {peopleLine && (
+                                  <p className={`text-sm leading-5 min-h-[20px] mb-1.5 ${peopleLine.kind === 'some' ? 'text-[#C8963C] font-medium' : 'text-[#7A838D]'}`} data-testid="featured-people-line">
+                                    {peopleLine.claim}
+                                  </p>
+                                )}
                                 {description
                                   ? <p className="text-xs text-[#6B7480] mb-3 line-clamp-2">{description}</p>
                                   : item.creator?.label
@@ -428,17 +465,21 @@ export function FeaturedAgents() {
                                     : <div className="mb-3" />
                                 }
 
-                                <div className="flex items-center gap-3 text-xs text-[#7A838D] mb-2.5">
-                                  {stakers != null && <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {stakers} staker{stakers !== 1 ? 's' : ''}</span>}
-                                  <span>{totalStaked > 0 ? `${totalStaked.toFixed(4)} tTRUST` : 'No stakes'}</span>
-                                </div>
+                                {totalStaked != null && (
+                                  <div className="flex items-center gap-3 text-xs text-[#7A838D] mb-2.5">
+                                    {stakers != null && <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {stakers} staker{stakers !== 1 ? 's' : ''}</span>}
+                                    <span>{totalStaked > 0 ? `${totalStaked.toFixed(4)} tTRUST` : 'No stakes'}</span>
+                                  </div>
+                                )}
 
-                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                  {score != null && (
-                                    <div className="h-full rounded-full transition-all"
-                                      style={{ width: `${score}%`, backgroundColor: scoreColor }} />
-                                  )}
-                                </div>
+                                {!isAgent && (
+                                  <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                    {score != null && (
+                                      <div className="h-full rounded-full transition-all"
+                                        style={{ width: `${score}%`, backgroundColor: scoreColor }} />
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </Link>
                           </motion.div>

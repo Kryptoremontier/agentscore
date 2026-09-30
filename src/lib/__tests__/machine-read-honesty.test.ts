@@ -259,11 +259,15 @@ describe('landing stats (Hero / Stats / CTA) — /api/v1/stats only', () => {
       expect(landingStatItems(state).map((i) => i.value)).toEqual([null, null, null, null])
     }
   })
-  it('the tiles: Registered Agents, Attesters (not "Attestations"), Total Staked, Active Stakers', () => {
+  it('the tiles: Registered Agents, people vouching (not "Attestations"), Total Staked, Active Stakers — labels agree with the number', () => {
     const items = landingStatItems({ status: 'ok', stats: parseLandingStats(ok)! })
     expect(items.map((i) => [i.label, i.value])).toEqual([
-      ['Registered Agents', 9], ['Attesters', 1], ['Total Staked', 0.8274], ['Active Stakers', 5],
+      ['Registered Agents', 9], ['Person vouching', 1], ['Total Staked', 0.8274], ['Active Stakers', 5],
     ])
+    // Etap 5b: "1 Attesters" was the live landing; one of each is singular, unknown reads plural.
+    const one = landingStatItems({ status: 'ok', stats: { ...parseLandingStats(ok)!, agents: 1, attesters: 2, activeStakers: 1 } })
+    expect(one.map((i) => i.label)).toEqual(['Registered Agent', 'People vouching', 'Total Staked', 'Active Staker'])
+    expect(landingStatItems({ status: 'loading' }).map((i) => i.label)).toEqual(['Registered Agents', 'People vouching', 'Total Staked', 'Active Stakers'])
   })
   it('Hero, Stats and CTA mounting together share one request; a 500 → null', async () => {
     const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ success: false }) }))
@@ -571,13 +575,16 @@ describe('the components use those lib decisions (source guards — no DOM in th
   })
   it('/agents and Featured read oppose through stakeReadingOf; the card uses attesterLineOf (→ cardViewFor) / attestScrollStep; DeclaredDomains uses declaredDomainsView', () => {
     const page = src('src/app/agents/page.tsx')
-    expect(page).toContain('stakeReadingOf(')
+    // Etap 5b: the list's rows go through listEntryOf (→ stakeReadingOf), shared with the carousel.
+    expect(page).toContain('listEntryOf(')
+    expect(src('src/lib/agent-list.ts')).toContain('const reading = stakeReadingOf(agent)')
     expect(page).toContain('attesterLineOf(attestationViewBySubject')
     expect(page).toContain('attestScrollStep(')
     expect(page).not.toMatch(/__opposeWei \?\? 0n/)
     const featured = src('src/components/landing/FeaturedAgents.tsx')
     expect(featured).toContain('annotateVaultReads(')
     expect(featured).toContain('stakeReadingOf(')
+    expect(featured).toContain('orderAgents(rows.map(listEntryOf), views, DEFAULT_SORT)')
     expect(featured).not.toMatch(/__opposeWei \?\? 0n/)
     expect(src('src/components/agents/CardAttesterLine.tsx')).toMatch(/stopPropagation\(\)/)
     expect(src('src/components/profile/DeclaredDomains.tsx')).toContain('declaredDomainsView(')

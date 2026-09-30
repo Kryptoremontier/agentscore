@@ -682,6 +682,13 @@ function TabScoring() {
           attestation triples) and tTRUST attested on those triples. Backing on the agent&apos;s atom vault never changes
           its tier, and a single wallet can never lift an agent above Unverified.
         </p>
+        <p className="text-[#9BA5B0] text-xs leading-relaxed mb-4" data-testid="glossary">
+          <span className="text-white font-semibold">Glossary:</span> vouch (UI) = attestation (protocol). The app says
+          &ldquo;vouch&rdquo; and &ldquo;people who vouch&rdquo;; REST, MCP, <code>llms.txt</code> and SKILL.md keep{' '}
+          <code>attest</code>, <code>attesters</code> and <code>trustScore</code>. Backing score (UI) ={' '}
+          <code>score.trustScore</code> (support vs oppose on the agent&apos;s own vault), printed only when{' '}
+          <code>scoreBasis</code> is <code>measured</code>; Composite and Hybrid (<code>objectScore</code>) sit under Details.
+        </p>
         <div className="rounded-xl overflow-hidden mb-5"
           style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
           <table className="w-full text-xs">

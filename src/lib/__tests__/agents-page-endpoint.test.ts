@@ -304,7 +304,7 @@ describe('/agents in each indexer state — what a visitor sees (Etap 4c)', () =
       cohort: { status: 'error', count: 0, total: null, truncated: null },
     })
     expect(tabs).toEqual({ all: null, agentscore: null, erc8004: null }) // printed "—"
-    expect(qualityOptions(null).map(qualityOptionText)[0]).toBe('All quality') // no count
+    expect(qualityOptions(null).map(qualityOptionText)[0]).toBe('All backing levels') // no count
     // Our own API unreachable altogether (offline) → the same.
     expect(agentsPageView(null)).toMatchObject({ unreachable: true, agentScore: { status: 'error' }, cohort: { status: 'error' }, attestations: null })
   })

@@ -13,9 +13,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
-import { truncateWallet } from '@/lib/attestation-reader'
 import { formatTTrust, formatDate } from '@/lib/format'
 import type { AgentReport } from '@/lib/agent-profile'
+import { PersonName } from '@/components/shared/PersonName'
 
 interface ReportsSectionProps {
   /** null = the read failed — never shown as "No reports on-chain". */
@@ -79,8 +79,8 @@ export function ReportsSection({ reports, loading, className }: ReportsSectionPr
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-bold uppercase text-[10px]" style={{ color: '#f97316' }}>{r.category}</span>
                 <span className="text-[#30363d]">·</span>
-                <Link href={`/profile/${r.reporter}`} className="font-mono text-[#C8963C] hover:underline" title={r.reporter}>
-                  by {r.reporterLabel?.includes('.eth') ? r.reporterLabel : truncateWallet(r.reporter)}
+                <Link href={`/profile/${r.reporter}`} className="font-mono text-[#C8963C] hover:underline">
+                  by <PersonName wallet={r.reporter} label={r.reporterLabel} />
                 </Link>
                 <span className="text-[#30363d]">·</span>
                 <span className="text-[#7A838D]">{formatDate(r.createdAt)}</span>

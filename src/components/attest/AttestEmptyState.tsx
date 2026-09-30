@@ -11,6 +11,7 @@
 import { ShieldQuestion } from 'lucide-react'
 import { AttestButton } from './AttestButton'
 import { useMediaQuery, DESKTOP_QUERY } from '@/hooks/useMediaQuery'
+import { EMPTY_VOUCH_TITLE, EMPTY_VOUCH_BODY } from '@/lib/people-copy'
 
 interface AttestEmptyStateProps {
   agentId: string
@@ -33,13 +34,8 @@ export function AttestEmptyState({ agentId, agentName, className }: AttestEmptyS
           <ShieldQuestion className="w-5 h-5" style={{ color: '#8B5CF6' }} />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-white mb-0.5">
-            Unverified — no attestations yet
-          </p>
-          <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
-            Nobody has attested this agent&apos;s competence in any domain.
-            Be the first — your stake becomes its first on-chain trust signal.
-          </p>
+          <p className="text-sm font-semibold text-white mb-0.5">{EMPTY_VOUCH_TITLE}</p>
+          <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>{EMPTY_VOUCH_BODY}</p>
         </div>
       </div>
       {/* Desktop only — on a phone the page's one attest CTA is the AttestStickyBar;

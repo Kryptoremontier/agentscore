@@ -21,6 +21,10 @@ import { summarizeAttesters } from './agent-profile'
 import { calculateAgentTier, type AgentTierResult, type AgentTierDisplay } from './agent-tier'
 import type { AttestedEntry } from './attestation-reader'
 import type { QualityBucket } from './score-basis'
+import { NOBODY_VOUCHES, peopleLine, ERC8004_TAB_TITLE, ALL_BACKING_LEVELS } from './people-copy'
+import { stakeReadingOf, hasMeasuredScore } from './score-basis'
+import { calculateTrustScoreFromStakes } from './trust-score-engine'
+import { compareAgentEntries, parseSort, type AgentListSortBy, type SortableAgentEntry, type VouchCount } from './agent-list-sort'
 
 /** Row shape as the /agents page consumes it (indexer fields + client annotations). */
 export interface AgentListAtom {
@@ -159,10 +163,8 @@ export function listOpposeWei(row: Pick<AgentListAtom, '__vaultPositions' | '__o
 
 // ─── Numbers the page prints ────────────────────────────────────────────────
 
-/** "1 agent" / "273 agents". */
-export function pluralize(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`
-}
+/** "1 agent" / "273 agents" — lib/plural.ts, re-exported for the list's callers. */
+export { pluralize } from './plural'
 
 /** One search rule for both corpora: case-insensitive substring of any given field. */
 export function matchesAgentSearch(term: string, fields: ReadonlyArray<string | null | undefined>): boolean {
@@ -243,10 +245,10 @@ export type QualityFilter = 'all' | QualityBucket
 export const ORIGIN_TABS: ReadonlyArray<{ id: OriginFilter; label: string; title: string }> = [
   { id: 'all', label: 'All', title: 'All agents' },
   { id: 'agentscore', label: 'AgentScore', title: 'Agents registered via AgentScore' },
-  { id: 'erc8004', label: 'ERC-8004', title: 'Real agents from the ERC-8004 registry cohort — self-declared, not yet attested' },
+  { id: 'erc8004', label: 'ERC-8004', title: ERC8004_TAB_TITLE },
 ]
 
-/** The quality buckets, best first; "Unrated" = no measured score (lib/score-basis.ts qualityBucket). */
+/** The backing-level buckets (the backing score's; were "quality"), best first; "Unrated" = no measured score (lib/score-basis.ts qualityBucket). */
 export const QUALITY_LEVELS: ReadonlyArray<{ id: QualityBucket; label: string }> = [
   { id: 'excellent', label: 'Excellent' },
   { id: 'good', label: 'Good' },
@@ -280,14 +282,14 @@ export interface QualityOption {
 }
 
 /**
- * The quality dropdown: "All" plus every bucket, always. Counts are over the rows the list
+ * The backing-level dropdown (was "quality"): "All" plus every bucket, always. Counts are over the rows the list
  * would show with no quality filter (origin and search applied), so each option says how
  * many rows choosing it leaves. `buckets`: one entry per such row; null while loading.
  */
 export function qualityOptions(buckets: readonly QualityBucket[] | null): QualityOption[] {
   const count = (id: QualityBucket) => (buckets ? buckets.filter((b) => b === id).length : null)
   return [
-    { id: 'all', label: 'All quality', count: buckets ? buckets.length : null, disabled: false },
+    { id: 'all', label: ALL_BACKING_LEVELS, count: buckets ? buckets.length : null, disabled: false },
     ...QUALITY_LEVELS.map(({ id, label }) => {
       const n = count(id)
       return { id, label, count: n, disabled: n === 0 }
@@ -302,29 +304,35 @@ export function qualityOptionText(o: QualityOption): string {
 const ORIGIN_IDS = new Set<string>(ORIGIN_TABS.map((o) => o.id))
 const QUALITY_IDS = new Set<string>(['all', ...QUALITY_LEVELS.map((l) => l.id)])
 
-/** `?origin=erc8004&quality=unrated` → the list's filters; anything unknown → 'all'. */
-export function parseListFilters(params: { get(name: string): string | null }): { origin: OriginFilter; quality: QualityFilter } {
+/**
+ * `?origin=erc8004&quality=unrated&sort=newest` → the list's filters; an unknown filter → 'all',
+ * a missing or unknown sort → "Most vouched" (lib/agent-list-sort.ts parseSort).
+ */
+export function parseListFilters(params: { get(name: string): string | null }): { origin: OriginFilter; quality: QualityFilter; sort: AgentListSortBy } {
   const origin = params.get('origin')
   const quality = params.get('quality')
   return {
     origin: origin && ORIGIN_IDS.has(origin) ? (origin as OriginFilter) : 'all',
     quality: quality && QUALITY_IDS.has(quality) ? (quality as QualityFilter) : 'all',
+    sort: parseSort(params.get('sort')),
   }
 }
 
 /**
  * The query string for a filter change, from the current one: `origin` / `quality` set, or
- * removed at their 'all' default; other params kept — except `open`: a filter changes only
- * with the modal closed, and a stale `?open=` would reopen it on the next URL update.
- * Returns '' or a string starting with '?'.
+ * removed at their 'all' default; `sort` set when given — the default too, so a chosen
+ * "Most vouched" stays in the URL (`?sort=vouched`) — and kept as it is otherwise; other params
+ * kept — except `open`: a filter changes only with the modal closed, and a stale `?open=` would
+ * reopen it on the next URL update. Returns '' or a string starting with '?'.
  */
-export function listFiltersSearch(current: string, f: { origin: OriginFilter; quality: QualityFilter }): string {
+export function listFiltersSearch(current: string, f: { origin: OriginFilter; quality: QualityFilter; sort?: AgentListSortBy }): string {
   const params = new URLSearchParams(current)
   params.delete('open')
   if (f.origin === 'all') params.delete('origin')
   else params.set('origin', f.origin)
   if (f.quality === 'all') params.delete('quality')
   else params.set('quality', f.quality)
+  if (f.sort) params.set('sort', f.sort)
   const out = params.toString()
   return out ? `?${out}` : ''
 }
@@ -351,12 +359,22 @@ export function agentResultsLine(shown: number, of: number): { shown: number; of
 export interface CardAttestationView {
   attesters: number
   domains: number
+  /** The attested domains' labels, in read order — the line names the area when there is one. */
+  areas: string[]
+  /** tTRUST (wei) behind the vouches: support stake across every attested domain — the stat row's. */
+  stakeWei: bigint
   tier: AgentTierResult
 }
 
 export function cardAttestationView(entries: readonly AttestedEntry[]): CardAttestationView {
   const summary = summarizeAttesters(entries)
-  return { attesters: summary.length, domains: entries.length, tier: calculateAgentTier(summary) }
+  return {
+    attesters: summary.length,
+    domains: entries.length,
+    areas: entries.map((e) => e.domain.label),
+    stakeWei: entries.reduce((sum, e) => sum + e.totalStake, 0n),
+    tier: calculateAgentTier(summary),
+  }
 }
 
 /**
@@ -366,8 +384,9 @@ export function cardAttestationView(entries: readonly AttestedEntry[]): CardAtte
  *   height with a fixed-height skeleton (CardAttesterLine), so nothing moves when
  *   the read answers.
  * - `unread`: the read failed → no claim at all, the Attest CTA only.
- * - `none`: the read succeeded and found no live attester → "No attestations yet · Attest".
- * - `some`: "{n} attester(s) · {k} domain(s)".
+ * - `none`: the read succeeded and found no live attester → "Nobody vouches yet · Vouch".
+ * - `some`: "1 person vouches · for Knowledge / Productivity" — the area named when there is
+ *   one, "for 2 areas" when more (lib/people-copy.ts peopleLine).
  */
 export type CardAttesterLine =
   | { kind: 'loading'; claim: null; cta: false }
@@ -375,12 +394,12 @@ export type CardAttesterLine =
   | { kind: 'none'; claim: string; cta: true }
   | { kind: 'some'; claim: string; cta: false; attesters: number; domains: number }
 
-export const CARD_NO_ATTESTATIONS = 'No attestations yet'
+export const CARD_NO_ATTESTATIONS = NOBODY_VOUCHES
 
 /**
  * One card's view out of the page's bulk-read state: undefined = the read is in flight,
  * null = it failed. A completed read with no entry for this id makes no claim either
- * (null → CTA only) — never an endless loading line, never "No attestations yet".
+ * (null → CTA only) — never an endless loading line, never "Nobody vouches yet".
  */
 export function cardViewFor(
   views: ReadonlyMap<string, CardAttestationView> | null | undefined,
@@ -398,7 +417,7 @@ export function cardAttesterLine(view: CardAttestationView | null | undefined): 
   if (view.attesters === 0) return { kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true }
   return {
     kind: 'some',
-    claim: `${pluralize(view.attesters, 'attester')} · ${pluralize(view.domains, 'domain')}`,
+    claim: peopleLine(view.attesters, view.areas),
     cta: false,
     attesters: view.attesters,
     domains: view.domains,
@@ -454,5 +473,38 @@ export function isCompactCard(input: { vaultRead: boolean }): boolean {
 export function attestScrollStep(s: { modalOpen: boolean; requested: boolean; profileLoaded: boolean }): 'idle' | 'wait' | 'scroll' {
   if (!s.modalOpen || !s.requested) return 'idle'
   return s.profileLoaded ? 'scroll' : 'wait'
+}
+
+// ─── Order (Etap 5b: people first) ──────────────────────────────────────────
+
+/** Who vouches for one row, for the sort: null = not read (or nobody) — sorts as nobody. */
+export function vouchOf(views: ReadonlyMap<string, CardAttestationView> | null | undefined, termId: string): VouchCount | null {
+  const v = views?.get(termId)
+  return v ? { people: v.attesters, stakeWei: v.stakeWei } : null
+}
+
+/** One row's stake reading and backing score as the list derives them (lib/score-basis.ts). */
+export function listEntryOf<A extends { term_id: string; positions_aggregate?: AgentListAtom['positions_aggregate']; __opposeWei?: bigint | null }>(agent: A) {
+  // supportWei null = the vault was never read (cohort rows); opposeWei null = the
+  // oppose read failed — both unknown, never 0 (lib/score-basis.ts stakeReadingOf).
+  const reading = stakeReadingOf(agent)
+  const measured = hasMeasuredScore(reading)
+  // Computed for every row (sort/filter plumbing), displayed only when measured.
+  const trust = calculateTrustScoreFromStakes(reading.supportWei ?? 0n, reading.opposeWei ?? 0n)
+  return { agent, trust, measured, reading }
+}
+
+/**
+ * The list's order — /agents and the landing carousel both call this with the same default
+ * (lib/agent-list-sort.ts DEFAULT_SORT), so the carousel shows the list's first rows.
+ */
+export function orderAgents<E extends SortableAgentEntry & { agent: { term_id: string } }>(
+  entries: readonly E[],
+  views: ReadonlyMap<string, CardAttestationView> | null | undefined,
+  sortBy: AgentListSortBy,
+): Array<E & { vouch: VouchCount | null }> {
+  return entries
+    .map((e) => ({ ...e, vouch: vouchOf(views, e.agent.term_id) }))
+    .sort((a, b) => compareAgentEntries(a, b, sortBy))
 }
 

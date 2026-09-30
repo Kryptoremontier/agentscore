@@ -20,11 +20,14 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, Share, Flag } from 'lucide-react'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { AgentHeader } from '@/components/agents/AgentHeader'
-import { AgentStats } from '@/components/agents/AgentStats'
 import { AgentTabs } from '@/components/agents/AgentTabs'
 import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
-import { AtomIdLine } from '@/components/profile/AtomIdLine'
+import { AgentDetails } from '@/components/profile/AgentDetails'
+import { ScoreParts, type ScorePartsView } from '@/components/profile/ScoreParts'
+import { BackingScore } from '@/components/agents/BackingScore'
+import { NO_STAKE_TOOLTIP } from '@/lib/score-basis'
+import { ERC8004_ABOUT, NOT_SCORED_TIP } from '@/lib/people-copy'
 import { fetchAgentModalData } from '@/lib/agents-page-client'
 import { MODAL_HEADER_PARTS, type AgentModalPayload } from '@/lib/agents-page-types'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
@@ -203,18 +206,14 @@ export default function AgentDetailPage() {
                 </div>
                 <p className="text-text-muted text-sm">
                   {cohortMatch
-                    ? 'Real agent from the ERC-8004 registry cohort — self-declared, not scored by AgentScore.'
+                    ? ERC8004_ABOUT
                     : cohortFailed
                       ? 'Not in the scored AgentScore corpus. Couldn’t read its ERC-8004 identity right now — this is not a “no”.'
                       : 'Not in the scored AgentScore corpus — shown because it has on-chain claims. No score is computed for it.'}
                 </p>
-                {cohortMatch && (
-                  <p className="text-xs text-text-muted font-mono break-all opacity-60 mt-1">{cohortMatch.caipIdentity}</p>
-                )}
               </div>
 
-              <AtomIdLine termId={agentId} />
-              <ProfileStatRow view={statRow} />
+              <ProfileStatRow view={statRow} backing={<BackingScore variant="line" value={null} tip={NOT_SCORED_TIP} />} />
 
               {/* ATTESTED > DECLARED > REPORTS (thesis §5 hierarchy) */}
               <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agentId} agentName={name} />
@@ -223,6 +222,9 @@ export default function AgentDetailPage() {
 
               {/* A cohort agent has an atom vault the /agents modal can back (it lists the cohort). */}
               {cohortMatch && <BackWithTTrust agentId={agentId} />}
+
+              {/* Atom ID and the ERC-8004 id — collapsed; not the story a person reads first (Etap 5b). */}
+              <AgentDetails termId={agentId} caipIdentity={cohortMatch?.caipIdentity} />
 
               <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
             </motion.div>
@@ -271,6 +273,9 @@ export default function AgentDetailPage() {
   }
 
   // ── Scored tier ──
+  // The one backing score (Etap 5b): the card's and the modal's number — the envelope's trustScore
+  // (support vs oppose on the atom vault) — only when it is a measurement (scoreBasis 'measured').
+  const backingScore = agent.scoreParts?.measured ? Math.round(agent.scoreParts.trustScore) : null
   return (
     <PageBackground image="hero" opacity={0.35}>
       {/* pb-40 on mobile clears the sticky attest bar + bottom nav */}
@@ -290,12 +295,11 @@ export default function AgentDetailPage() {
             Back to Explorer
           </Link>
 
+          {/* Share only — the inert flag button is gone (Etap 5b): reports are filed from the
+              /agents modal's report flow. */}
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleShare}>
+            <Button variant="ghost" size="icon" onClick={handleShare} aria-label="Copy this page's link">
               <Share className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <Flag className="w-5 h-5" />
             </Button>
           </div>
         </motion.div>
@@ -307,7 +311,7 @@ export default function AgentDetailPage() {
             agent={agent}
             tier={agentTier}
             tierLoading={profileLoading}
-            stats={<ProfileStatRow view={statRow} />}
+            stats={<ProfileStatRow view={statRow} backing={<BackingScore variant="line" value={backingScore} tip={NO_STAKE_TOOLTIP} />} />}
           />
 
           {/* ETAP 3 — profile hierarchy (thesis §5): ATTESTED (headline) >
@@ -321,8 +325,11 @@ export default function AgentDetailPage() {
               "Trust Agent" / "Report Issue" pair here never transacted (a 2 s timeout, then closed). */}
           <BackWithTTrust agentId={agent.id} />
 
-          {/* Score context — below the canonical sections */}
-          <AgentStats agent={agent} />
+          {/* Details — collapsed: the Atom ID and the backing score's parts (Etap 5b). The old
+              "Trust Score" card and its Stake Breakdown live here now, as the modal's do. */}
+          <AgentDetails termId={agent.id}>
+            <ScoreParts view={scorePartsOf(agent)} />
+          </AgentDetails>
 
           <AgentTabs
             agent={agent}
@@ -358,4 +365,19 @@ function BackWithTTrust({ agentId }: { agentId: string }) {
       <p className="text-[#7A838D] text-[11px] mt-2">Opens this agent&apos;s Buy / Sell panel.</p>
     </BackThisAgentSection>
   )
+}
+
+/** The REST detail's envelope as the Details' rows — "—" throughout unless it is a measurement. */
+function scorePartsOf(agent: Agent): ScorePartsView {
+  const p = agent.scoreParts
+  const m = p?.measured === true
+  const total = agent.positiveStake + agent.negativeStake
+  return {
+    trustScore: m ? p!.trustScore : null,
+    composite: m ? p!.qualityScore : null,
+    hybrid: m ? p!.objectScore : null,
+    supportWei: agent.positiveStake,
+    opposeWei: agent.negativeStake,
+    supportPct: m && total > 0n ? Number((agent.positiveStake * 1000n) / total) / 10 : null,
+  }
 }

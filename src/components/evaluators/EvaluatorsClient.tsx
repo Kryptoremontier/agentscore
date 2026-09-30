@@ -10,10 +10,7 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { EvaluatorBadge } from '@/components/shared/EvaluatorBadge'
 import { cn } from '@/lib/cn'
 import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile, type EvaluatorTier } from '@/lib/evaluator-score'
-
-function shortAddr(addr: string) {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
+import { PersonName } from '@/components/shared/PersonName'
 
 const TIER_ICONS: Record<EvaluatorTier, React.ElementType> = {
   newcomer: Shield,
@@ -293,7 +290,7 @@ export function EvaluatorsClient({ initialData: data }: { initialData: Evaluator
                           isMe ? 'text-[#C8963C] font-semibold' : 'text-[#B5BDC6] hover:text-white',
                         )}
                       >
-                        {shortAddr(e.address)}
+                        <PersonName wallet={e.address} />
                       </Link>
 
                       {isMe && (

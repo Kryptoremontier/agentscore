@@ -10,6 +10,7 @@ import { PROJECT_STAGE_DOT_COLORS } from '@/lib/forge/constants'
 import { PROJECT_STAGE_LABELS } from '@/lib/forge/types'
 import type { ForgeProject } from '@/lib/forge/types'
 import { OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
+import { pluralize } from '@/lib/plural'
 
 // null = the score is unknown (oppose read failed): neutral grey, never a level.
 function scoreColor(score: number | null): string {
@@ -133,7 +134,7 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
 
       {/* Stakers */}
       <div className="flex items-center justify-between text-xs text-white/30">
-        <span>{project.stakerCount} stakers · {project.totalStaked.toFixed(2)} tTRUST</span>
+        <span>{pluralize(project.stakerCount, 'staker')} · {project.totalStaked.toFixed(2)} tTRUST</span>
       </div>
 
       {/* Profile Completeness */}

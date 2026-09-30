@@ -20,6 +20,7 @@ import { BadgeDisplay } from '@/components/profile/BadgeDisplay'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { cn } from '@/lib/cn'
+import { pluralize } from '@/lib/plural'
 
 export default function PublicProfilePage() {
   const params = useParams()
@@ -318,7 +319,7 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
             </span>
             <span className="flex items-center gap-1">
               <Zap className="w-3 h-3" />
-              {profile.stats.totalSignals} signals
+              {pluralize(profile.stats.totalSignals, 'signal')}
             </span>
           </div>
         </div>

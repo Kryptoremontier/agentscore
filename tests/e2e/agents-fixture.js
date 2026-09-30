@@ -282,7 +282,7 @@ async function shot(browser, vp, name, url, opts = {}) {
     await page.waitForTimeout(2500)
     const file = path.join(__dirname, '../../screenshots', new Date().toISOString().slice(0, 10), LABEL, vp, `${name}.png`)
     if (opts.modal) {
-      const m = page.locator('div.fixed.inset-0.overflow-y-auto').filter({ hasText: 'Atom ID:' }).first()
+      const m = page.locator('div.fixed.inset-0.overflow-y-auto').filter({ has: page.getByTestId('agent-details') }).first()
       await m.waitFor({ timeout: 30000 })
       await page.waitForTimeout(3000)
       await m.evaluate((el) => {

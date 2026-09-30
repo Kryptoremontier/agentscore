@@ -1,13 +1,14 @@
 'use client'
 
 /**
- * "Atom ID: 0x82d87d9517b6...24802c5a" + copy — the agent's term id as the modal shows it, on both
- * agent surfaces (Etap 5a). Shortened hex; the button copies the full id. The profile used to print
+ * "Atom ID: 0x82d87d9517b6...24802c5a" + copy — the agent's term id, inside the collapsed Details on
+ * both agent surfaces (Etap 5b). Shortened hex; the button copies the full id. The profile used to print
  * BigInt(term_id).toString(): a 78-digit decimal that pushed a phone's page to 742 px wide.
  */
 
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
+import { DETAILS_ATOM_ID } from '@/lib/people-copy'
 
 export function shortTermId(termId: string): string {
   return termId.length > 24 ? `${termId.slice(0, 14)}...${termId.slice(-8)}` : termId
@@ -22,7 +23,7 @@ export function AtomIdLine({ termId, className }: { termId: string; className?: 
   }, [copied])
   return (
     <div className={`flex items-center gap-2 text-sm ${className ?? ''}`} data-testid="atom-id">
-      <span className="text-[#B5BDC6] w-16 flex-shrink-0">Atom ID:</span>
+      <span className="text-[#B5BDC6] w-16 flex-shrink-0">{DETAILS_ATOM_ID}:</span>
       <code className="text-[#B5BDC6] text-xs font-mono" title={termId}>{shortTermId(termId)}</code>
       <button
         type="button"

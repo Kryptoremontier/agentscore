@@ -2,16 +2,15 @@
 
 /**
  * "Back this agent" — backing (a tTRUST stake on the agent's atom vault) as a secondary, collapsed
- * section under the attestation unit (thesis §4/§6). One component, two surfaces: the /agents
+ * section under the people who vouch (thesis §4/§6). One component, two surfaces: the /agents
  * modal puts its Buy/Sell panel inside; the /agents/[id] profile links to that panel ("Back with
- * tTRUST"). Backing is not attesting — it never changes the tier, and it is never called "trust"
+ * tTRUST"). Backing is not vouching — it never changes the tier, and it is never called "trust"
  * (the profile's old gold "Trust Agent" button was a stake that never happened: a 2 s timeout).
  */
 
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-
-export const BACKING_IS_NOT_ATTESTING = "Stake tTRUST on this agent's atom vault. Backing is not attesting — it does not change the tier."
+import { BACKING_IS_NOT_VOUCHING } from '@/lib/people-copy'
 
 interface BackThisAgentSectionProps {
   /** Controlled (the modal collapses it per agent); uncontrolled when omitted. */
@@ -33,7 +32,7 @@ export function BackThisAgentSection({ open, onToggle, children, className }: Ba
       </button>
       {isOpen && (
         <>
-          <p className="text-[#7A838D] text-xs mt-2 mb-3">{BACKING_IS_NOT_ATTESTING}</p>
+          <p className="text-[#7A838D] text-xs mt-2 mb-3">{BACKING_IS_NOT_VOUCHING}</p>
           {children}
         </>
       )}

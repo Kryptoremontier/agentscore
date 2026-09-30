@@ -14,6 +14,9 @@
  * Loading and failure are their own states — never a 0 (REPO_MAP §7 rule 5).
  */
 
+import { plural } from './plural'
+import { STAT_PEOPLE } from './people-copy'
+
 export interface LandingStats {
   /** Post-junk AgentScore agents (= /api/v1/agents meta.total). */
   agents: number
@@ -85,10 +88,12 @@ export function landingStatItems(state: LandingStatsState): LandingStatItem[] {
   const s = state.status === 'ok' ? state.stats : null
   const failed = state.status === 'error' ? UNAVAILABLE : null
   return [
-    { key: 'agents', label: 'Registered Agents', value: s?.agents ?? null, decimals: 0, suffix: s ? agentCountSuffix(s) : '', unavailable: failed },
+    // Labels agree with their number (lib/plural.ts): "1 Person vouching", never "1 Attesters". An
+    // unknown value ("—") reads as plural. `attesters` = people who vouch (Etap 5b vocabulary).
+    { key: 'agents', label: plural(s?.agents ?? 0, 'Registered Agent', 'Registered Agents'), value: s?.agents ?? null, decimals: 0, suffix: s ? agentCountSuffix(s) : '', unavailable: failed },
     // The stats answered but the attestation read inside it failed: say so, not a silent "—".
-    { key: 'attesters', label: 'Attesters', value: s?.attesters ?? null, decimals: 0, suffix: '', unavailable: failed ?? (s && s.attesters == null ? 'Couldn’t read attestations' : null) },
+    { key: 'attesters', label: STAT_PEOPLE(s?.attesters), value: s?.attesters ?? null, decimals: 0, suffix: '', unavailable: failed ?? (s && s.attesters == null ? 'Couldn’t read who vouches' : null) },
     { key: 'totalStaked', label: 'Total Staked', value: s?.totalStaked ?? null, decimals: 4, suffix: ' tTRUST', unavailable: failed },
-    { key: 'activeStakers', label: 'Active Stakers', value: s?.activeStakers ?? null, decimals: 0, suffix: '', unavailable: failed },
+    { key: 'activeStakers', label: plural(s?.activeStakers ?? 0, 'Active Staker', 'Active Stakers'), value: s?.activeStakers ?? null, decimals: 0, suffix: '', unavailable: failed },
   ]
 }

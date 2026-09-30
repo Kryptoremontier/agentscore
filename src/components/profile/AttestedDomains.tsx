@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * ATTESTED DOMAINS — the profile headline (thesis §5): what this agent is
- * attested as good at, according to whom, with how much stake. Rows come
+ * WHO VOUCHES, AND FOR WHAT — the profile headline (thesis §5): what people
+ * vouch this agent is good at, who they are, with how much stake. Rows come
  * from the canonical unit ([agent] is skilled in [canonical domain] +
  * positions), never from legacy skill predicates.
  *
@@ -14,14 +14,16 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
+import type { AttestedEntry } from '@/lib/attestation-reader'
 import { summarizeAttesters } from '@/lib/agent-profile'
+import { WHO_VOUCHES_HEADING, WHO_VOUCHES_UNREAD, WHO, peopleLine, people } from '@/lib/people-copy'
 import { AttestEmptyState } from '@/components/attest/AttestEmptyState'
 import { AttestButton } from '@/components/attest/AttestButton'
 import { useMediaQuery, DESKTOP_QUERY } from '@/hooks/useMediaQuery'
+import { PersonName } from '@/components/shared/PersonName'
 
 interface AttestedDomainsProps {
-  /** null = the read failed — shown as unavailable, never as "no attestations yet". */
+  /** null = the read failed — shown as unavailable, never as "nobody vouches yet". */
   entries: AttestedEntry[] | null
   loading: boolean
   agentId: string
@@ -34,7 +36,7 @@ const fmt = (wei: bigint) => (Number(wei) / 1e18).toFixed(4)
 /**
  * The page's ONE primary attest CTA on desktop (Etap 5a) — on a phone it is the
  * AttestStickyBar, and this renders nothing (not merely hidden: one CTA in the DOM).
- * Disconnected too — the click opens the wallet-connect modal and then the attest
+ * Disconnected too — the click opens the wallet-connect modal and then the vouch
  * flow; it used to be an inert "Connect wallet to attest" label with nowhere to go.
  */
 function AttestCta({ agentId, agentName }: { agentId: string; agentName: string }) {
@@ -56,8 +58,8 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
   if (entries == null) {
     return (
       <div className={`rounded-2xl px-5 py-4 ${className ?? ''}`} style={{ background: 'rgba(46,204,113,0.03)', border: '1px solid rgba(46,204,113,0.15)' }} data-testid="attested-failed">
-        <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#2ECC71' }}>Attested Domains</p>
-        <p className="text-xs text-[#7A838D]">Couldn&apos;t read attestations right now — this is not an empty record.</p>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#2ECC71' }}>{WHO_VOUCHES_HEADING}</p>
+        <p className="text-xs text-[#7A838D]">{WHO_VOUCHES_UNREAD}</p>
       </div>
     )
   }
@@ -75,15 +77,13 @@ export function AttestedDomains({ entries, loading, agentId, agentName, classNam
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#2ECC71' }} />
           <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#2ECC71' }}>
-            Attested Domains
+            {WHO_VOUCHES_HEADING}
           </p>
-          <span className="text-[10px] text-[#7A838D] hidden sm:inline">— staked on-chain claims with visible authors</span>
         </div>
         <AttestCta agentId={agentId} agentName={agentName} />
       </div>
-      <p className="text-[11px] text-[#7A838D] mb-3">
-        {entries.length} domain{entries.length !== 1 ? 's' : ''} · attested by{' '}
-        {attesterCount} distinct wallet{attesterCount !== 1 ? 's' : ''}
+      <p className="text-[11px] text-[#7A838D] mb-3" data-testid="who-vouches-line">
+        {peopleLine(attesterCount, entries.map((e) => e.domain.label))}
       </p>
       <div className="space-y-2">
         {entries.map((e) => (
@@ -113,15 +113,13 @@ function AttestedRow({ entry }: { entry: AttestedEntry }) {
           <span className="text-sm font-semibold text-white leading-5 break-words min-w-0">{entry.domain.label}</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs pl-7 sm:pl-0 sm:flex-shrink-0">
-          <span className="text-white">
-            {entry.distinctAttesters} attester{entry.distinctAttesters !== 1 ? 's' : ''}
-          </span>
+          <span className="text-white">{people(entry.distinctAttesters)}</span>
           <span className="text-[#B5BDC6] font-mono">{fmt(entry.totalStake)} tTRUST</span>
           {entry.opposeStake > 0n && (
             <span className="font-mono" style={{ color: '#EF4444' }}>−{fmt(entry.opposeStake)} opposed</span>
           )}
           <span className="text-[#8B5CF6] flex items-center gap-0.5">
-            attested by {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {WHO} {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </span>
         </div>
       </button>
@@ -129,8 +127,8 @@ function AttestedRow({ entry }: { entry: AttestedEntry }) {
         <div className="px-3.5 pb-3 pt-1 border-t border-white/[0.06] space-y-1">
           {entry.attesterStakes.map((a) => (
             <div key={a.wallet.toLowerCase()} className="flex items-center justify-between text-xs">
-              <Link href={`/profile/${a.wallet}`} className="font-mono text-[#C8963C] hover:underline" title={a.wallet}>
-                {truncateWallet(a.wallet)}
+              <Link href={`/profile/${a.wallet}`} className="font-mono text-[#C8963C] hover:underline">
+                <PersonName wallet={a.wallet} />
               </Link>
               <span className="font-mono text-[#B5BDC6]">{fmt(a.shares)} tTRUST</span>
             </div>

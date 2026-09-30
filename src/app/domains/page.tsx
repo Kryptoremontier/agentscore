@@ -21,13 +21,15 @@ import {
   UNCATEGORIZED,
   type SkillBucketStatus,
 } from '@/lib/skill-domain-map'
-import { fetchAttestations, truncateWallet, type AttestedEntry } from '@/lib/attestation-reader'
+import { fetchAttestations, type AttestedEntry } from '@/lib/attestation-reader'
 import { fetchVaultPositions, vaultStakeStats } from '@/lib/vault-positions'
 import { fetchAllRows, SERVER_ROW_CAP } from '@/lib/gql-pager'
 
 // Our ceiling on the domain-claim triples read (the pager reports it; live 2026-09-26: 75).
 const DOMAIN_TRIPLES_MAX = 5_000
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
+import { PersonName } from '@/components/shared/PersonName'
+import { pluralize } from '@/lib/plural'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -197,9 +199,8 @@ function AttestedEntryRow({ entry }: { entry: AttestedEntry }) {
               key={wallet}
               className="text-xs font-mono px-2 py-0.5 rounded-md"
               style={{ background: 'rgba(139,92,246,0.10)', color: 'rgba(255,255,255,0.6)' }}
-              title={wallet}
             >
-              {truncateWallet(wallet)}
+              <PersonName wallet={wallet} />
             </span>
           ))}
           {entry.opposeStake > 0n && (
@@ -344,7 +345,7 @@ function DomainCard({
         <div className="mt-2 space-y-1.5">
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
             {domain.agentCount} {domain.agentCount === 1 ? 'agent' : 'agents'}
-            {domain.totalStakers > 0 && ` · ${domain.totalStakers} stakers`}
+            {domain.totalStakers > 0 && ` · ${pluralize(domain.totalStakers, 'staker')}`}
           </p>
           {domain.topAgent && (
             <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
@@ -429,7 +430,7 @@ function AgentRankRow({ agent, index }: { agent: DomainAgent; index: number }) {
           {/* stats */}
           {hasStats && (
             <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              {agent.stakerCount > 0 && <span>{agent.stakerCount} stakers</span>}
+              {agent.stakerCount > 0 && <span>{pluralize(agent.stakerCount, 'staker')}</span>}
               {agent.stakerCount > 0 && agent.supportShares > 0n && <span>·</span>}
               {agent.supportShares > 0n && (
                 <span>
@@ -767,7 +768,7 @@ function DomainsPageContent() {
                       </div>
                       <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
                         {selectedDomain.agentCount} {selectedDomain.agentCount === 1 ? 'agent' : 'agents'} ranked
-                        {selectedDomain.totalStakers > 0 && ` · ${selectedDomain.totalStakers} stakers`}
+                        {selectedDomain.totalStakers > 0 && ` · ${pluralize(selectedDomain.totalStakers, 'staker')}`}
                       </p>
                     </div>
                   </div>

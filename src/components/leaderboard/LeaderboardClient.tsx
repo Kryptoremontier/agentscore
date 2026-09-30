@@ -11,6 +11,7 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { cn } from '@/lib/cn'
 import type { LeaderboardEntry } from '@/lib/leaderboard-data'
 import { dataAgeLabel } from '@/lib/data-age'
+import { PersonName } from '@/components/shared/PersonName'
 
 type SortKey = 'score' | 'entities' | 'staked' | 'signals'
 
@@ -87,10 +88,6 @@ const GRID_TEMPLATES: Record<SortKey, string> = {
   entities: 'grid-cols-[40px_1fr_80px_80px_80px_90px]',
   staked:   'grid-cols-[40px_1fr_120px_120px]',
   signals:  'grid-cols-[40px_1fr_120px_120px]',
-}
-
-function shortAddr(addr: string) {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
 function RankBadge({ rank }: { rank: number }) {
@@ -244,7 +241,7 @@ export function LeaderboardClient({ initialData: data, dataAgeSeconds }: { initi
                           isMe ? 'text-[#C8963C] font-semibold' : 'text-[#B5BDC6] hover:text-white'
                         )}
                       >
-                        {shortAddr(e.address)}
+                        <PersonName wallet={e.address} />
                         {isMe && <span className="ml-2 text-[10px] font-sans font-normal opacity-60">you</span>}
                       </Link>
                     </div>
