@@ -326,7 +326,7 @@ async function attestClickOpensConnectModal(page: Page) {
 }
 
 function modalLocator(page: Page) {
-  return page.locator('div.fixed.inset-0.overflow-y-auto').filter({ hasText: 'Atom ID:' }).first()
+  return page.locator('div.fixed.inset-0.overflow-y-auto').filter({ has: page.getByTestId('agent-details') }).first()
 }
 
 /**

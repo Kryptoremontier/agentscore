@@ -23,7 +23,7 @@ async function listReady(page: Page) {
   await page.getByText(/^\d+( of \d+)? agents?/).or(page.getByTestId('feed-unreachable')).first().waitFor({ timeout: 60_000 })
   await expect(page.locator('[data-testid="card-attester-line"][data-state="loading"]')).toHaveCount(0, { timeout: 30_000 })
 }
-const modal = (page: Page) => page.locator('div.fixed.inset-0.overflow-y-auto').filter({ hasText: 'Atom ID:' }).first()
+const modal = (page: Page) => page.locator('div.fixed.inset-0.overflow-y-auto').filter({ has: page.getByTestId('agent-details') }).first()
 
 test('dead indexer, warm cache: /agents looks normal apart from its age line', async ({ browser }) => {
   test.skip(!FLAG, 'needs DEAD_INDEXER_FLAG and a server started with tests/e2e/dead-indexer.cjs')
@@ -35,7 +35,7 @@ test('dead indexer, warm cache: /agents looks normal apart from its age line', a
   await listReady(warm)
   for (const id of Object.values(AGENTS)) {
     await warm.goto(`${ROUTES.agents}?open=${id}`)
-    await expect(modal(warm).getByText(/^Backers: \d/)).toBeVisible({ timeout: 60_000 })
+    await expect(modal(warm).getByTestId('backers-line').filter({ hasText: /^(Backed with \d|No tTRUST backing yet)/ })).toBeVisible({ timeout: 60_000 })
   }
   await warm.close()
 
@@ -61,7 +61,7 @@ test('dead indexer, warm cache: /agents looks normal apart from its age line', a
       await page.screenshot({ path: path.join(OUT, name, 'agents-list.png') })
 
       await page.goto(`${ROUTES.agents}?open=${AGENTS.openclaw}`)
-      await expect(modal(page).getByText(/^Backers: \d/)).toBeVisible({ timeout: 30_000 })
+      await expect(modal(page).getByTestId('backers-line').filter({ hasText: /^(Backed with \d|No tTRUST backing yet)/ })).toBeVisible({ timeout: 30_000 })
       await expect(modal(page).getByTestId('agent-tier-chip').getByText(/\d+\/\d+ attesters|Verified/).first()).toBeVisible()
       // The modal covers the header on a phone: it says the age itself.
       await expect(modal(page).getByTestId('modal-age')).toHaveText(/^Updated \d+ min ago$/)
