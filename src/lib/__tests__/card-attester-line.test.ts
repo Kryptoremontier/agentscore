@@ -116,7 +116,7 @@ describe('Captain Dackie — the first cohort attestation', () => {
     expect(isCompactCard({ vaultRead: false })).toBe(true)
     // Only the line changes — loading → "1 person vouches · for Crypto / Onchain" — inside its reserved height.
     expect(attesterLineOf(undefined, DACKIE).kind).toBe('loading')
-    const after = new Map([[DACKIE, { attesters: 1, domains: 1, areas: ['Crypto / Onchain'], tier: calculateAgentTier([]) }]])
+    const after = new Map([[DACKIE, { attesters: 1, domains: 1, areas: ['Crypto / Onchain'], stakeWei: 0n, tier: calculateAgentTier([]) }]])
     expect(attesterLineOf(after, DACKIE).claim).toBe('1 person vouches · for Crypto / Onchain')
   })
 
@@ -162,7 +162,7 @@ describe('isCompactCard — only rows whose vault the list never read, decided a
   it('the attestation read cannot reshape a card: the rule takes no attestation input', () => {
     expect(isCompactCard.length).toBe(1)
     // @ts-expect-error — the attester line is not an input any more
-    expect(isCompactCard({ vaultRead: false, line: cardAttesterLine({ attesters: 1, domains: 1, areas: ['Social'], tier: calculateAgentTier([]) }) })).toBe(true)
+    expect(isCompactCard({ vaultRead: false, line: cardAttesterLine({ attesters: 1, domains: 1, areas: ['Social'], stakeWei: 0n, tier: calculateAgentTier([]) }) })).toBe(true)
   })
 })
 
@@ -212,7 +212,7 @@ describe('the attester line keeps its height while loading (no layout shift, no 
   it('loading: no text, a skeleton bar shorter than the line; every state: the same 18 px line box', () => {
     const states: CardAttesterLine[] = [
       cardAttesterLine(undefined), cardAttesterLine(null), cardAttesterLine(cardAttestationView([])),
-      cardAttesterLine({ attesters: 3, domains: 2, areas: ['Social', 'Energy'], tier: calculateAgentTier([]) }),
+      cardAttesterLine({ attesters: 3, domains: 2, areas: ['Social', 'Energy'], stakeWei: 0n, tier: calculateAgentTier([]) }),
     ]
     const html = states.map((line) => renderToStaticMarkup(createElement(CardAttesterLineView, { line, agentName: 'x', onAttest: () => {} })))
     expect(printed(states[0])).toBe('')

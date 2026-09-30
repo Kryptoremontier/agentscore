@@ -502,7 +502,7 @@ export function orderAgents<E extends SortableAgentEntry & { agent: { term_id: s
   entries: readonly E[],
   views: ReadonlyMap<string, CardAttestationView> | null | undefined,
   sortBy: AgentListSortBy,
-): E[] {
+): Array<E & { vouch: VouchCount | null }> {
   return entries
     .map((e) => ({ ...e, vouch: vouchOf(views, e.agent.term_id) }))
     .sort((a, b) => compareAgentEntries(a, b, sortBy))
