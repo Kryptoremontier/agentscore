@@ -7,7 +7,7 @@ import {
   publishedAgentScore, hasMeasuredScore, noScoreTooltip, supportPercent, OPPOSE_UNREAD_TOOLTIP, NO_STAKE_TOOLTIP,
 } from '../score-basis'
 import { rankComparison, comparedOverall, comparedBySkill } from '../agent-compare'
-import { parseLandingStats, landingStatItems, fetchLandingStats } from '../landing-stats'
+import { parseLandingStats, landingPeopleNumber, fetchLandingStats } from '../landing-stats'
 
 /**
  * Commit 6 — no invented numbers on machine-read surfaces. REST and MCP are
@@ -252,24 +252,22 @@ describe('landing stats (Hero / Stats / CTA) — /api/v1/stats only', () => {
     expect(parseLandingStats(ok)).toEqual({ agents: 9, agentsTruncated: false, attesters: 1, totalStaked: 0.8274, activeStakers: 5 })
     expect(parseLandingStats({ ...ok, data: { ...ok.data, attesters: null } })?.attesters).toBeNull()
   })
-  it('a failed or incomplete answer → null (the tiles print "—"), never zeros', () => {
+  it('a failed or incomplete answer → null (the number prints "—"), never zeros', () => {
     expect(parseLandingStats({ success: false, error: 'Internal server error' })).toBeNull()
     expect(parseLandingStats({ success: true, data: { agents: 9 } })).toBeNull()
     for (const state of [{ status: 'loading' } as const, { status: 'error' } as const]) {
-      expect(landingStatItems(state).map((i) => i.value)).toEqual([null, null, null, null])
+      expect(landingPeopleNumber(state).value).toBeNull()
     }
   })
-  it('the tiles: Registered Agents, people vouching (not "Attestations"), Total Staked, Active Stakers — labels agree with the number', () => {
-    const items = landingStatItems({ status: 'ok', stats: parseLandingStats(ok)! })
-    expect(items.map((i) => [i.label, i.value])).toEqual([
-      ['Registered Agents', 9], ['Person vouching', 1], ['Total Staked', 0.8274], ['Active Stakers', 5],
-    ])
-    // Etap 5b: "1 Attesters" was the live landing; one of each is singular, unknown reads plural.
-    const one = landingStatItems({ status: 'ok', stats: { ...parseLandingStats(ok)!, agents: 1, attesters: 2, activeStakers: 1 } })
-    expect(one.map((i) => i.label)).toEqual(['Registered Agent', 'People vouching', 'Total Staked', 'Active Staker'])
-    expect(landingStatItems({ status: 'loading' }).map((i) => i.label)).toEqual(['Registered Agents', 'People vouching', 'Total Staked', 'Active Stakers'])
+  it('the one number (Etap 5b Run 2): distinct live people who vouch — "1 person vouches for agents here"', async () => {
+    const { peopleVouchHere } = await import('../people-copy')
+    const n = landingPeopleNumber({ status: 'ok', stats: parseLandingStats(ok)! })
+    expect(n).toEqual({ value: 1, unavailable: null })
+    expect(peopleVouchHere(n.value)).toBe('1 person vouches for agents here')
+    expect(peopleVouchHere(3)).toBe('3 people vouch for agents here')
+    expect(peopleVouchHere(null)).toBe('— people vouch for agents here')
   })
-  it('Hero, Stats and CTA mounting together share one request; a 500 → null', async () => {
+  it('landing readers mounting together share one request; a 500 → null', async () => {
     const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ success: false }) }))
     vi.stubGlobal('fetch', fetchMock)
     const results = await Promise.all([fetchLandingStats(), fetchLandingStats(), fetchLandingStats()])
@@ -391,20 +389,12 @@ describe('comparedBySkill — a staked match beats an unstaked one', () => {
   })
 })
 
-describe('landing: unknown truncation is a lower bound; a failed attesters read says so', () => {
-  const base = { agents: 500, attesters: null, totalStaked: 1, activeStakers: 2 }
-  it('agentsTruncated false → exact; true or null (unknown) → "500+"', async () => {
-    const { agentCountSuffix } = await import('../landing-stats')
-    expect(agentCountSuffix({ agentsTruncated: false })).toBe('')
-    expect(agentCountSuffix({ agentsTruncated: true })).toBe('+')
-    expect(agentCountSuffix({ agentsTruncated: null })).toBe('+')
-    const [agents, attesters] = landingStatItems({ status: 'ok', stats: { ...base, agentsTruncated: null } })
-    expect(agents.suffix).toBe('+')
-    expect(attesters).toMatchObject({ value: null, unavailable: expect.stringMatching(/couldn.t read/i) })
-  })
-  it('loading carries no failure reason; a failed read does', () => {
-    expect(landingStatItems({ status: 'loading' }).map((i) => i.unavailable)).toEqual([null, null, null, null])
-    expect(landingStatItems({ status: 'error' }).every((i) => i.unavailable)).toBe(true)
+describe('landing: a failed attesters read says so; loading makes no claim', () => {
+  it('stats answered but attesters unread → "—" with the reason; a failed read → the reason; loading → none', () => {
+    const base = { agents: 500, agentsTruncated: null, attesters: null, totalStaked: 1, activeStakers: 2 }
+    expect(landingPeopleNumber({ status: 'ok', stats: base })).toEqual({ value: null, unavailable: expect.stringMatching(/couldn.t read/i) })
+    expect(landingPeopleNumber({ status: 'error' }).unavailable).toMatch(/couldn.t read/i)
+    expect(landingPeopleNumber({ status: 'loading' }).unavailable).toBeNull()
   })
 })
 
@@ -565,13 +555,14 @@ describe('declaredDomainsView — a failed classification read is an error state
 
 describe('the components use those lib decisions (source guards — no DOM in this env)', () => {
   const src = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8')
-  it('Hero, Stats and CTA read only /api/v1/stats (fetchLandingStats), never their own GraphQL counts', () => {
-    for (const f of ['Hero', 'Stats', 'CTA']) {
-      const s = src(`src/components/landing/${f}.tsx`)
-      expect(s, f).toContain('fetchLandingStats(')
-      expect(s, f).not.toMatch(/GRAPHQL_URL|AGENT_WHERE_STR|triples_aggregate|positions_aggregate|'Attestations'/)
-    }
-    for (const f of ['Hero', 'Stats']) expect(src(`src/components/landing/${f}.tsx`), f).toContain('landingStatItems(')
+  it('the Hero reads its number only from /api/v1/stats (fetchLandingStats) and its example from our page API — never its own GraphQL counts', () => {
+    const s = src('src/components/landing/Hero.tsx')
+    expect(s).toContain('fetchLandingStats(')
+    expect(s).toContain('landingPeopleNumber(statsState)')
+    expect(s).toContain('mostVouched(view, 1)')
+    expect(s).not.toMatch(/GRAPHQL_URL|AGENT_WHERE_STR|triples_aggregate|positions_aggregate|'Attestations'/)
+    // The closing call prints no numbers any more (Etap 5b Run 2).
+    expect(src('src/components/landing/CTA.tsx')).not.toMatch(/fetchLandingStats|stats\./)
   })
   it('/agents and Featured read oppose through stakeReadingOf; the card uses attesterLineOf (→ cardViewFor) / attestScrollStep; DeclaredDomains uses declaredDomainsView', () => {
     const page = src('src/app/agents/page.tsx')
@@ -584,7 +575,8 @@ describe('the components use those lib decisions (source guards — no DOM in th
     const featured = src('src/components/landing/FeaturedAgents.tsx')
     expect(featured).toContain('annotateVaultReads(')
     expect(featured).toContain('stakeReadingOf(')
-    expect(featured).toContain('orderAgents(rows.map(listEntryOf), views, DEFAULT_SORT)')
+    expect(featured).toContain('mostVouched(view, 8)')
+    expect(src('src/lib/most-vouched.ts')).toContain('orderAgents(rows.map(listEntryOf), views, DEFAULT_SORT)')
     expect(featured).not.toMatch(/__opposeWei \?\? 0n/)
     expect(src('src/components/agents/CardAttesterLine.tsx')).toMatch(/stopPropagation\(\)/)
     expect(src('src/components/profile/DeclaredDomains.tsx')).toContain('declaredDomainsView(')

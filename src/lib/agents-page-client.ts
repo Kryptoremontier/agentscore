@@ -17,8 +17,14 @@ async function readApi<T>(path: string): Promise<T | null> {
   }
 }
 
+// Readers mounting together (the landing's example card and its carousel) share one request.
+let pageInflight: Promise<AgentsPagePayload | null> | null = null
+
 export function fetchAgentsPage(): Promise<AgentsPagePayload | null> {
-  return readApi<AgentsPagePayload>('/api/v1/agents/page')
+  if (!pageInflight) {
+    pageInflight = readApi<AgentsPagePayload>('/api/v1/agents/page').finally(() => { pageInflight = null })
+  }
+  return pageInflight
 }
 
 /** Every part, or only `parts` (e.g. MODAL_HEADER_PARTS — the header never waits on the slow ones). */

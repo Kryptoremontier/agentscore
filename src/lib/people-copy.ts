@@ -151,3 +151,26 @@ export const SCORE_PART_TRUST = 'Trust Score — the backing score'
 export const SCORE_PART_COMPOSITE = 'Composite (quality)'
 export const SCORE_PART_HYBRID = 'Hybrid — 60% Trust Score + 40% Composite'
 export const BACKING_TREND = 'Backing trend'
+
+// ─── The landing: the story on one phone screen (Etap 5b Run 2) ───────────────
+
+export const LIVE_ON_TESTNET = 'Live on Intuition Testnet'
+export const LANDING_TITLE = ['Trust Layer for', 'AI Agents'] as const
+export const LANDING_SUB = 'Real people vouch for AI agents, on-chain. One wallet can never do it alone.'
+export const LANDING_STEPS = ['Find an agent', 'See who vouches, and for what', 'Vouch for one you know'] as const
+/** "1 person vouches for agents here" — distinct live people who vouch (/api/v1/stats attesters). */
+export const peopleVouchHere = (n: number | null) => {
+  const p = peopleVouchHereParts(n)
+  return `${p.count} ${p.rest}`
+}
+/** The number and the words after it, for a number set apart: "1" · "person vouches for agents here". */
+export function peopleVouchHereParts(n: number | null): { count: string; rest: string } {
+  if (n == null) return { count: '—', rest: 'people vouch for agents here' }
+  return { count: String(n), rest: `${plural(n, 'person', 'people')} ${plural(n, 'vouches', 'vouch')} for agents here` }
+}
+export const PEOPLE_HERE_UNREAD = 'Couldn’t read who vouches right now'
+export const LANDING_CTA_VOUCH = 'Vouch for an agent'
+export const LANDING_CTA_DEVELOPERS = 'For developers & agents (MCP / REST)'
+export const EXAMPLE_HEADING = 'Most vouched right now'
+export const EXAMPLE_UNREAD = 'Couldn’t load an example right now — the list is one tap away.'
+export const WHO_PREFIX = 'by'

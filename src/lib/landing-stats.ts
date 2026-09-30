@@ -1,5 +1,5 @@
 /**
- * Landing numbers (Hero, Stats, CTA) — one source: /api/v1/stats, i.e. the
+ * Landing numbers — one source: /api/v1/stats, i.e. the
  * shared post-junk corpus loader (api-data getPlatformStats → loadAgentCorpus),
  * the same numbers /api/v1/agents meta.total and MCP platform_stats give.
  * Client components go through the API route (CLAUDE.md).
@@ -14,8 +14,7 @@
  * Loading and failure are their own states — never a 0 (REPO_MAP §7 rule 5).
  */
 
-import { plural } from './plural'
-import { STAT_PEOPLE } from './people-copy'
+import { PEOPLE_HERE_UNREAD } from './people-copy'
 
 export interface LandingStats {
   /** Post-junk AgentScore agents (= /api/v1/agents meta.total). */
@@ -51,7 +50,7 @@ export function parseLandingStats(body: unknown): LandingStats | null {
   }
 }
 
-// Hero, Stats and CTA mount together: one request between them, not three.
+// Every landing reader mounting at once shares one request.
 let inflight: Promise<LandingStats | null> | null = null
 
 /** null = the read failed (network, non-2xx, or an incomplete body). */
@@ -65,35 +64,12 @@ export function fetchLandingStats(apiBase = ''): Promise<LandingStats | null> {
   return inflight
 }
 
-export interface LandingStatItem {
-  key: 'agents' | 'attesters' | 'totalStaked' | 'activeStakers'
-  label: string
-  /** null = loading or unknown → the tile prints "—", never 0. */
-  value: number | null
-  decimals: number
-  suffix: string
-  /** Why the tile shows "—" when it isn't just loading (the read failed), for its title. */
-  unavailable: string | null
-}
-
-/** "500+" unless the read is known complete: a count whose truncation is unknown is a lower bound. */
-export function agentCountSuffix(stats: Pick<LandingStats, 'agentsTruncated'>): string {
-  return stats.agentsTruncated === false ? '' : '+'
-}
-
-const UNAVAILABLE = 'Couldn’t read platform stats'
-
-/** The four landing tiles, from one state. */
-export function landingStatItems(state: LandingStatsState): LandingStatItem[] {
-  const s = state.status === 'ok' ? state.stats : null
-  const failed = state.status === 'error' ? UNAVAILABLE : null
-  return [
-    // Labels agree with their number (lib/plural.ts): "1 Person vouching", never "1 Attesters". An
-    // unknown value ("—") reads as plural. `attesters` = people who vouch (Etap 5b vocabulary).
-    { key: 'agents', label: plural(s?.agents ?? 0, 'Registered Agent', 'Registered Agents'), value: s?.agents ?? null, decimals: 0, suffix: s ? agentCountSuffix(s) : '', unavailable: failed },
-    // The stats answered but the attestation read inside it failed: say so, not a silent "—".
-    { key: 'attesters', label: STAT_PEOPLE(s?.attesters), value: s?.attesters ?? null, decimals: 0, suffix: '', unavailable: failed ?? (s && s.attesters == null ? 'Couldn’t read who vouches' : null) },
-    { key: 'totalStaked', label: 'Total Staked', value: s?.totalStaked ?? null, decimals: 4, suffix: ' tTRUST', unavailable: failed },
-    { key: 'activeStakers', label: plural(s?.activeStakers ?? 0, 'Active Staker', 'Active Stakers'), value: s?.activeStakers ?? null, decimals: 0, suffix: '', unavailable: failed },
-  ]
+/**
+ * The landing's one number (Etap 5b Run 2): distinct live people who vouch, from /api/v1/stats.
+ * null while loading or when unknown — "—", never 0; `unavailable` says why when the read failed.
+ */
+export function landingPeopleNumber(state: LandingStatsState): { value: number | null; unavailable: string | null } {
+  if (state.status === 'error') return { value: null, unavailable: PEOPLE_HERE_UNREAD }
+  if (state.status === 'loading') return { value: null, unavailable: null }
+  return { value: state.stats.attesters, unavailable: state.stats.attesters == null ? PEOPLE_HERE_UNREAD : null }
 }
