@@ -131,6 +131,7 @@ describe('Captain Dackie — the first cohort attestation', () => {
 describe('cardAttesterLine — states (REPO_MAP §7 rule 5: failed ≠ empty)', () => {
   const entry = (domain: string, wallets: Array<[string, bigint]>) => ({
     domain: { label: domain }, attesterStakes: wallets.map(([wallet, shares]) => ({ wallet, shares })),
+    totalStake: wallets.reduce((sum, [, shares]) => sum + shares, 0n),
   }) as unknown as AttestedEntry
 
   it('not read yet → no text claim at all (a skeleton holds the line), no CTA', () => {

@@ -571,13 +571,16 @@ describe('the components use those lib decisions (source guards — no DOM in th
   })
   it('/agents and Featured read oppose through stakeReadingOf; the card uses attesterLineOf (→ cardViewFor) / attestScrollStep; DeclaredDomains uses declaredDomainsView', () => {
     const page = src('src/app/agents/page.tsx')
-    expect(page).toContain('stakeReadingOf(')
+    // Etap 5b: the list's rows go through listEntryOf (→ stakeReadingOf), shared with the carousel.
+    expect(page).toContain('listEntryOf(')
+    expect(src('src/lib/agent-list.ts')).toContain('const reading = stakeReadingOf(agent)')
     expect(page).toContain('attesterLineOf(attestationViewBySubject')
     expect(page).toContain('attestScrollStep(')
     expect(page).not.toMatch(/__opposeWei \?\? 0n/)
     const featured = src('src/components/landing/FeaturedAgents.tsx')
     expect(featured).toContain('annotateVaultReads(')
     expect(featured).toContain('stakeReadingOf(')
+    expect(featured).toContain('orderAgents(rows.map(listEntryOf), views, DEFAULT_SORT)')
     expect(featured).not.toMatch(/__opposeWei \?\? 0n/)
     expect(src('src/components/agents/CardAttesterLine.tsx')).toMatch(/stopPropagation\(\)/)
     expect(src('src/components/profile/DeclaredDomains.tsx')).toContain('declaredDomainsView(')

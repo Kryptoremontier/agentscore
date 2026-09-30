@@ -60,10 +60,10 @@ import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionW
 import { startVisiblePoll } from '@/lib/visible-poll'
 import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-positions'
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
-import { compareAgentEntries } from '@/lib/agent-list-sort'
+import { SORT_OPTIONS, parseSort, type AgentListSortBy } from '@/lib/agent-list-sort'
 import {
   matchesAgentSearch, agentListHeaderSegments, LIVE_FEED_LABEL, agentResultsLine, type FeedStatus,
-  cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, type CardAttestationView,
+  cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, orderAgents, listEntryOf, type CardAttestationView,
   listTrustTriple, listVaultSnapshot, listOpposeWei, withLiveVault,
   ORIGIN_TABS, QUALITY_LEVELS, corpusTotals, qualityOptions, qualityOptionText, parseListFilters, listFiltersSearch,
   type OriginFilter, type QualityFilter, type AgentScoreCorpusCounts, type CohortCorpusCounts,
@@ -78,7 +78,6 @@ import { fetchAgentModalData, fetchAgentsPage } from '@/lib/agents-page-client'
 import { readAgentSignals } from '@/lib/agent-signals'
 import {
   readSharesWei, hasMeasuredScore, measuredScore, qualityBucket, supportPercent, noScoreTooltip,
-  stakeReadingOf,
 } from '@/lib/score-basis'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 
@@ -184,7 +183,8 @@ function AgentsPageContent() {
   // Origin tab + quality filter live in the URL (?origin=erc8004&quality=unrated) so a filtered
   // view is shareable; unknown values fall back to 'all' (lib/agent-list.ts parseListFilters).
   const [qualityFilter, setQualityFilter] = useState<QualityFilter>(() => parseListFilters(searchParams).quality)
-  const [sortBy, setSortBy] = useState<'newest' | 'score_desc' | 'score_asc' | 'stakers' | 'stake'>('newest')
+  // Sort in the URL too (?sort=vouched|newest|backing); missing = "Most vouched" (Etap 5b).
+  const [sortBy, setSortBy] = useState<AgentListSortBy>(() => parseListFilters(searchParams).sort)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
   const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>([])
@@ -205,6 +205,7 @@ function AgentsPageContent() {
     const f = parseListFilters(searchParams)
     setOriginFilter(f.origin)
     setQualityFilter(f.quality)
+    setSortBy(f.sort)
   }, [searchParams])
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   // The open modal's agent, for async results that must not land on another agent's modal.
@@ -1427,10 +1428,11 @@ function AgentsPageContent() {
   // ── List state ────────────────────────────────────────────────────────────
   // A filter change updates state and the URL. Next's router follows history.replaceState,
   // so useSearchParams stays in step without a server round-trip.
-  const setListFilters = (next: { origin?: OriginFilter; quality?: QualityFilter }) => {
-    const f = { origin: next.origin ?? originFilter, quality: next.quality ?? qualityFilter }
+  const setListFilters = (next: { origin?: OriginFilter; quality?: QualityFilter; sort?: AgentListSortBy }) => {
+    const f = { origin: next.origin ?? originFilter, quality: next.quality ?? qualityFilter, sort: next.sort }
     setOriginFilter(f.origin)
     setQualityFilter(f.quality)
+    if (f.sort) setSortBy(f.sort)
     const search = listFiltersSearch(window.location.search, f)
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`)
   }
@@ -1468,15 +1470,10 @@ function AgentsPageContent() {
     const searchedAgents = searchTerm
       ? sourceAgents.filter(a => matchesAgentSearch(searchTerm, [getAgentNameFromAtom(a), effectiveLabel(a)]))
       : sourceAgents
-    const enriched = searchedAgents.map(agent => {
-      // supportWei null = the vault was never read (cohort rows); opposeWei null = the
-      // oppose read failed — both unknown, never 0 (lib/score-basis.ts stakeReadingOf).
-      const reading = stakeReadingOf(agent as any)
-      const { supportWei, opposeWei } = reading
-      const measured = hasMeasuredScore(reading)
-      // Computed for every row (sort/filter plumbing), displayed only when measured.
-      const cardTrust = calculateTrustScoreFromStakes(supportWei ?? 0n, opposeWei ?? 0n)
-      return { agent, trust: cardTrust, measured, noScoreTip: noScoreTooltip(reading), bucket: qualityBucket(cardTrust, measured) }
+    const enriched = searchedAgents.map(a => {
+      // The list's one derivation (lib/agent-list.ts listEntryOf) — the landing carousel's too.
+      const { agent, trust, measured, reading } = listEntryOf(a as GraphQLAgent & { __opposeWei?: bigint | null })
+      return { agent, trust, measured, noScoreTip: noScoreTooltip(reading), bucket: qualityBucket(trust, measured) }
     })
     return { sourceCount: sourceAgents.length, enriched }
     // getAgentNameFromAtom is a pure per-render closure over effectiveLabel.
@@ -1610,14 +1607,10 @@ function AgentsPageContent() {
               <select
                 aria-label="Sort"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setListFilters({ sort: parseSort(e.target.value) })}
                 className="flex-none bg-[#191C21] border border-white/12 rounded-lg px-2 sm:px-3 py-1.5 text-xs text-[#B5BDC6] focus:border-[#C8963C]/50 outline-none cursor-pointer"
               >
-                <option value="newest">Newest First</option>
-                <option value="score_desc">Highest Score</option>
-                <option value="score_asc">Lowest Score</option>
-                <option value="stakers">Most Stakers</option>
-                <option value="stake">Most Stake</option>
+                {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
 
               {/* Backing level: every bucket listed; an empty one is disabled with its 0, never hidden. */}
@@ -1706,7 +1699,8 @@ function AgentsPageContent() {
 
             // Honesty gate (thesis §6): see lib/agent-list-sort.ts — a row without a measured
             // score (zero stake, or never read) must never rank among measured scores by its prior.
-            const sorted = [...filtered].sort((a, b) => compareAgentEntries(a, b, sortBy))
+            // People first by default (lib/agent-list.ts orderAgents — the landing carousel's order).
+            const sorted = orderAgents(filtered, attestationViewBySubject, sortBy)
             const qualityLabel = QUALITY_LEVELS.find(l => l.id === qualityFilter)?.label
 
             return (

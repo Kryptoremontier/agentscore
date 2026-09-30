@@ -47,7 +47,7 @@ interface Shot {
 
 const SHOTS: Shot[] = [
   { name: 'landing', url: ROUTES.landing, prepare: landingStatsReady },
-  { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady },
+  { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: mostVouchedFirst },
   // The first screen, as a visitor sees it: at 390×844 the first card must be on it.
   { name: 'agents-list-fold', url: ROUTES.agents, prepare: agentsListReady, firstScreen: true, check: firstCardAboveFold },
   {
@@ -296,6 +296,22 @@ async function statRowMatchesModal(page: Page, key: keyof typeof AGENTS) {
   await modalReady(page)
   const modal = await rowOf(modalLocator(page).getByTestId('stat-row'))
   expect(profile, `${key}: the profile's stat row = the modal's`).toEqual(modal)
+}
+
+/**
+ * Etap 5b: the list opens on "Most vouched" — people first. The first cards are the agents people
+ * vouch for, most people first; the top five are logged for the report.
+ */
+async function mostVouchedFirst(page: Page) {
+  await expect(page.getByRole('combobox', { name: 'Sort' })).toHaveValue('vouched')
+  const top = await page.locator('[data-term-id]').evaluateAll((cards) => cards.slice(0, 5).map((c) => ({
+    name: (c.querySelector('h3, p.font-semibold') as HTMLElement | null)?.innerText.trim() ?? '',
+    line: (c.querySelector('[data-testid="card-attester-line"]') as HTMLElement | null)?.innerText.trim() ?? '',
+  })))
+  console.log(`most vouched, top 5: ${JSON.stringify(top)}`)
+  // Whoever people vouch for comes before anyone nobody vouches for.
+  const vouched = top.map((t) => /vouch(es)? · for /.test(t.line))
+  expect(vouched.indexOf(false) === -1 || !vouched.slice(vouched.indexOf(false)).includes(true), 'a vouched agent after an unvouched one').toBe(true)
 }
 
 /** Wallet disconnected: the visible Attest CTA opens the connect modal; no native dialog fires. */

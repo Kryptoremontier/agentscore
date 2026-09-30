@@ -22,6 +22,9 @@ import { calculateAgentTier, type AgentTierResult, type AgentTierDisplay } from 
 import type { AttestedEntry } from './attestation-reader'
 import type { QualityBucket } from './score-basis'
 import { NOBODY_VOUCHES, peopleLine, ERC8004_TAB_TITLE, ALL_BACKING_LEVELS } from './people-copy'
+import { stakeReadingOf, hasMeasuredScore } from './score-basis'
+import { calculateTrustScoreFromStakes } from './trust-score-engine'
+import { compareAgentEntries, parseSort, type AgentListSortBy, type SortableAgentEntry, type VouchCount } from './agent-list-sort'
 
 /** Row shape as the /agents page consumes it (indexer fields + client annotations). */
 export interface AgentListAtom {
@@ -303,29 +306,35 @@ export function qualityOptionText(o: QualityOption): string {
 const ORIGIN_IDS = new Set<string>(ORIGIN_TABS.map((o) => o.id))
 const QUALITY_IDS = new Set<string>(['all', ...QUALITY_LEVELS.map((l) => l.id)])
 
-/** `?origin=erc8004&quality=unrated` → the list's filters; anything unknown → 'all'. */
-export function parseListFilters(params: { get(name: string): string | null }): { origin: OriginFilter; quality: QualityFilter } {
+/**
+ * `?origin=erc8004&quality=unrated&sort=newest` → the list's filters; an unknown filter → 'all',
+ * a missing or unknown sort → "Most vouched" (lib/agent-list-sort.ts parseSort).
+ */
+export function parseListFilters(params: { get(name: string): string | null }): { origin: OriginFilter; quality: QualityFilter; sort: AgentListSortBy } {
   const origin = params.get('origin')
   const quality = params.get('quality')
   return {
     origin: origin && ORIGIN_IDS.has(origin) ? (origin as OriginFilter) : 'all',
     quality: quality && QUALITY_IDS.has(quality) ? (quality as QualityFilter) : 'all',
+    sort: parseSort(params.get('sort')),
   }
 }
 
 /**
  * The query string for a filter change, from the current one: `origin` / `quality` set, or
- * removed at their 'all' default; other params kept — except `open`: a filter changes only
- * with the modal closed, and a stale `?open=` would reopen it on the next URL update.
- * Returns '' or a string starting with '?'.
+ * removed at their 'all' default; `sort` set when given — the default too, so a chosen
+ * "Most vouched" stays in the URL (`?sort=vouched`) — and kept as it is otherwise; other params
+ * kept — except `open`: a filter changes only with the modal closed, and a stale `?open=` would
+ * reopen it on the next URL update. Returns '' or a string starting with '?'.
  */
-export function listFiltersSearch(current: string, f: { origin: OriginFilter; quality: QualityFilter }): string {
+export function listFiltersSearch(current: string, f: { origin: OriginFilter; quality: QualityFilter; sort?: AgentListSortBy }): string {
   const params = new URLSearchParams(current)
   params.delete('open')
   if (f.origin === 'all') params.delete('origin')
   else params.set('origin', f.origin)
   if (f.quality === 'all') params.delete('quality')
   else params.set('quality', f.quality)
+  if (f.sort) params.set('sort', f.sort)
   const out = params.toString()
   return out ? `?${out}` : ''
 }
@@ -354,12 +363,20 @@ export interface CardAttestationView {
   domains: number
   /** The attested domains' labels, in read order — the line names the area when there is one. */
   areas: string[]
+  /** tTRUST (wei) behind the vouches: support stake across every attested domain — the stat row's. */
+  stakeWei: bigint
   tier: AgentTierResult
 }
 
 export function cardAttestationView(entries: readonly AttestedEntry[]): CardAttestationView {
   const summary = summarizeAttesters(entries)
-  return { attesters: summary.length, domains: entries.length, areas: entries.map((e) => e.domain.label), tier: calculateAgentTier(summary) }
+  return {
+    attesters: summary.length,
+    domains: entries.length,
+    areas: entries.map((e) => e.domain.label),
+    stakeWei: entries.reduce((sum, e) => sum + e.totalStake, 0n),
+    tier: calculateAgentTier(summary),
+  }
 }
 
 /**
@@ -458,5 +475,38 @@ export function isCompactCard(input: { vaultRead: boolean }): boolean {
 export function attestScrollStep(s: { modalOpen: boolean; requested: boolean; profileLoaded: boolean }): 'idle' | 'wait' | 'scroll' {
   if (!s.modalOpen || !s.requested) return 'idle'
   return s.profileLoaded ? 'scroll' : 'wait'
+}
+
+// ─── Order (Etap 5b: people first) ──────────────────────────────────────────
+
+/** Who vouches for one row, for the sort: null = not read (or nobody) — sorts as nobody. */
+export function vouchOf(views: ReadonlyMap<string, CardAttestationView> | null | undefined, termId: string): VouchCount | null {
+  const v = views?.get(termId)
+  return v ? { people: v.attesters, stakeWei: v.stakeWei } : null
+}
+
+/** One row's stake reading and backing score as the list derives them (lib/score-basis.ts). */
+export function listEntryOf<A extends { term_id: string; positions_aggregate?: AgentListAtom['positions_aggregate']; __opposeWei?: bigint | null }>(agent: A) {
+  // supportWei null = the vault was never read (cohort rows); opposeWei null = the
+  // oppose read failed — both unknown, never 0 (lib/score-basis.ts stakeReadingOf).
+  const reading = stakeReadingOf(agent)
+  const measured = hasMeasuredScore(reading)
+  // Computed for every row (sort/filter plumbing), displayed only when measured.
+  const trust = calculateTrustScoreFromStakes(reading.supportWei ?? 0n, reading.opposeWei ?? 0n)
+  return { agent, trust, measured, reading }
+}
+
+/**
+ * The list's order — /agents and the landing carousel both call this with the same default
+ * (lib/agent-list-sort.ts DEFAULT_SORT), so the carousel shows the list's first rows.
+ */
+export function orderAgents<E extends SortableAgentEntry & { agent: { term_id: string } }>(
+  entries: readonly E[],
+  views: ReadonlyMap<string, CardAttestationView> | null | undefined,
+  sortBy: AgentListSortBy,
+): E[] {
+  return entries
+    .map((e) => ({ ...e, vouch: vouchOf(views, e.agent.term_id) }))
+    .sort((a, b) => compareAgentEntries(a, b, sortBy))
 }
 
