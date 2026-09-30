@@ -7,6 +7,7 @@ import { fetchForgeProjectsWithJunkInfo } from '@/lib/forge/data'
 import type { ForgeStats, ForgeProject } from '@/lib/forge/types'
 import { ForgeCategory } from '@/lib/forge/types'
 import { compareForgeScoreDesc, meanKnownForgeScore } from '@/lib/forge/scoring'
+import { pluralize } from '@/lib/plural'
 
 // Dynamic. A `revalidate = 60` here was inert — the forge reads are `no-store`, so every request
 // rendered live anyway (docs/audit/rate-limit.md) — while it looked like a one-minute cache.
@@ -145,7 +146,7 @@ export default async function IntuforgePage() {
             style={{ borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.2)' }}
           >
             <span className="text-xs">
-              {stats.totalProjects} Listed · {stats.totalStakers} Stakers · {stats.totalEvaluators} Evaluators · Avg Score: {stats.avgTrustScore ?? '—'}
+              {stats.totalProjects} Listed · {pluralize(stats.totalStakers, 'Staker')} · {pluralize(stats.totalEvaluators, 'Evaluator')} · Avg Score: {stats.avgTrustScore ?? '—'}
             </span>
           </div>
         </>

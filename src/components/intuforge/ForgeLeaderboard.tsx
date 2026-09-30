@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Crown, Shield, Award, Trophy } from 'lucide-react'
 import type { ForgeProject } from '@/lib/forge/types'
 import { OPPOSE_UNREAD_TOOLTIP } from '@/lib/score-basis'
+import { pluralize } from '@/lib/plural'
 
 const RANK_CONFIG = [
   {
@@ -89,7 +90,7 @@ export function ForgeLeaderboard({ projects }: ForgeLeaderboardProps) {
               </div>
 
               <span className="text-[11px] shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                {project.stakerCount} stakers
+                {pluralize(project.stakerCount, 'staker')}
               </span>
             </div>
           )

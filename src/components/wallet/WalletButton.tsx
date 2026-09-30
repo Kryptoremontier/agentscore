@@ -87,39 +87,51 @@ export function WalletButton() {
           </>
         ) : (
           <>
-            <AlertTriangle className="w-4 h-4 mr-2" />
-            Switch to Intuition Testnet
+            <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+            {/* The long label pushed a 390 px header off the screen (Etap 5b). */}
+            <span className="sm:hidden">Switch network</span>
+            <span className="hidden sm:inline">Switch to Intuition Testnet</span>
           </>
         )}
       </Button>
     )
   }
 
-  // Connected on correct chain
+  const balanceText = balance ? `${parseFloat(balance.formatted).toFixed(3)} ${balance.symbol}` : null
+
+  // Connected on correct chain. On a phone the trigger is the identicon and a short address only —
+  // address + balance overflowed a 390 px header (Etap 5b); the balance is the menu's first row.
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="glass flex items-center gap-2 px-4 py-2 rounded-xl border border-[#C8963C]/20 hover:bg-[#C8963C]/8 hover:border-[#C8963C]/40 transition-all duration-200">
+        <button
+          className="glass flex items-center gap-2 px-2.5 sm:px-4 py-2 rounded-xl border border-[#C8963C]/20 hover:bg-[#C8963C]/8 hover:border-[#C8963C]/40 transition-all duration-200 min-w-0 max-w-[10.5rem] sm:max-w-none"
+          data-testid="wallet-button"
+        >
           {/* Identicon */}
-          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-[#C8963C] to-[#A87820]" />
+          <span className="w-6 h-6 rounded-full bg-gradient-to-br from-[#C8963C] to-[#A87820] flex-shrink-0" />
 
           {/* Address */}
-          <span className="font-mono text-sm">
-            {address?.slice(0, 6)}...{address?.slice(-4)}
+          <span className="font-mono text-sm truncate min-w-0">
+            {address?.slice(0, 6)}…{address?.slice(-4)}
           </span>
 
-          {/* Balance */}
-          {balance && (
-            <span className="text-text-secondary text-sm">
-              {parseFloat(balance.formatted).toFixed(3)} {balance.symbol}
-            </span>
+          {/* Balance — from sm up; in the menu on a phone */}
+          {balanceText && (
+            <span className="hidden sm:inline text-text-secondary text-sm whitespace-nowrap">{balanceText}</span>
           )}
 
-          <ChevronDown className="w-4 h-4 text-slate-400" />
+          <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0 hidden sm:block" />
         </button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="glass w-56">
+        {balanceText && (
+          <>
+            <div className="px-2 py-1.5 text-sm text-text-secondary" data-testid="wallet-balance">{balanceText}</div>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem asChild>
           <Link href="/profile" className="flex items-center">
             <User className="w-4 h-4 mr-2" />

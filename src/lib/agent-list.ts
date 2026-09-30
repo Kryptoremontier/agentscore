@@ -163,10 +163,8 @@ export function listOpposeWei(row: Pick<AgentListAtom, '__vaultPositions' | '__o
 
 // ─── Numbers the page prints ────────────────────────────────────────────────
 
-/** "1 agent" / "273 agents". */
-export function pluralize(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`
-}
+/** "1 agent" / "273 agents" — lib/plural.ts, re-exported for the list's callers. */
+export { pluralize } from './plural'
 
 /** One search rule for both corpora: case-insensitive substring of any given field. */
 export function matchesAgentSearch(term: string, fields: ReadonlyArray<string | null | undefined>): boolean {

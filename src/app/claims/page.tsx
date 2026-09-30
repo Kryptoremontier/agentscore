@@ -72,6 +72,7 @@ import { APP_CONFIG } from '@/lib/app-config'
 import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { useNotice } from '@/components/shared/NoticeProvider'
+import { pluralize } from '@/lib/plural'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -1841,7 +1842,7 @@ function ClaimsPageContent() {
                           </div>
                           <div className="flex justify-between text-[10px]">
                             <span className="text-[#7A838D]">Raw: {weightedTrust.rawRatio.toFixed(1)}%{weightedTrust.decayImpact !== 0 && <span style={{ color: weightedTrust.decayImpact > 0 ? '#22c55e' : '#ef4444', marginLeft: '4px' }}>({weightedTrust.decayImpact > 0 ? '+' : ''}{weightedTrust.decayImpact.toFixed(1)}% freshness)</span>}</span>
-                            <span className="text-[#7A838D]">{weightedTrust.freshSignalsCount} fresh / {weightedTrust.totalSignalsCount} signals</span>
+                            <span className="text-[#7A838D]">{weightedTrust.freshSignalsCount} fresh / {pluralize(weightedTrust.totalSignalsCount, 'signal')}</span>
                           </div>
                         </div>
                       )}

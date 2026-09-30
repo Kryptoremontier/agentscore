@@ -12,8 +12,7 @@
  */
 
 import { formatTTrust } from './format'
-
-const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+import { plural, pluralize as count } from './plural'
 
 /** "1 person" / "2 people". */
 export const people = (n: number) => count(n, 'person', 'people')
@@ -44,7 +43,7 @@ export const VOUCHED_FOR = 'You vouched for'
 // ─── Who vouches: the count and the areas ────────────────────────────────────
 
 /** "1 person vouches" / "2 people vouch". */
-export const peopleVouch = (n: number) => `${people(n)} ${n === 1 ? 'vouches' : 'vouch'}`
+export const peopleVouch = (n: number) => `${people(n)} ${plural(n, 'vouches', 'vouch')}`
 
 /** "for Knowledge / Productivity" when one area, "for 2 areas" when more. */
 export const forAreas = (areaLabels: readonly string[]) =>
@@ -100,8 +99,8 @@ export const LEGACY_CLAIMS_NOTE =
 
 // ─── The stat row and its backing line ───────────────────────────────────────
 
-export const STAT_PEOPLE = (n: number | undefined) => (n === 1 ? 'Person vouching' : 'People vouching')
-export const STAT_AREAS = (n: number | undefined) => (n === 1 ? 'Area' : 'Areas')
+export const STAT_PEOPLE = (n: number | null | undefined) => plural(n ?? 0, 'Person vouching', 'People vouching')
+export const STAT_AREAS = (n: number | null | undefined) => plural(n ?? 0, 'Area', 'Areas')
 export const STAT_STAKE = 'tTRUST behind vouches'
 export const STAT_REPORTS = 'Reports'
 export const STAT_ROW_TOOLTIP =

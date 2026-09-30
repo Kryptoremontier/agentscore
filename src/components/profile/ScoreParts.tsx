@@ -11,6 +11,7 @@ import { formatTTrust } from '@/lib/format'
 import {
   SCORE_PARTS_HEADING, SCORE_PART_TRUST, SCORE_PART_COMPOSITE, SCORE_PART_HYBRID,
 } from '@/lib/people-copy'
+import { pluralize } from '@/lib/plural'
 
 export interface ScorePartsView {
   trustScore: number | null
@@ -53,7 +54,7 @@ export function ScoreParts({ view }: { view: ScorePartsView }) {
         <>
           <div className="h-px bg-white/[0.06]" />
           <Row label="Time-weighted support" value={`${view.weighted.ratio.toFixed(1)}%`} />
-          <Row label="Raw support" value={`${view.weighted.raw.toFixed(1)}% · ${view.weighted.fresh} fresh / ${view.weighted.total} signals`} />
+          <Row label="Raw support" value={`${view.weighted.raw.toFixed(1)}% · ${view.weighted.fresh} fresh / ${pluralize(view.weighted.total, 'signal')}`} />
         </>
       )}
       {view.pillars && view.pillars.length > 0 && (

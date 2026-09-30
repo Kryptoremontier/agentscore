@@ -1663,12 +1663,12 @@ function AgentsPageContent() {
                 </p>
                 <p className="text-sm text-text-muted mb-8">
                   Agents are loaded from Intuition testnet via GraphQL.
-                  Register some real AI agents to get started.
+                  The docs show how to register one — from the app, REST or MCP.
                 </p>
                 <Button size="lg" asChild>
-                  <a href="/test-intuition">
-                    Register Agents →
-                  </a>
+                  <Link href="/docs">
+                    How to register an agent →
+                  </Link>
                 </Button>
               </div>
             </motion.div>

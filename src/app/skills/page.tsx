@@ -41,6 +41,7 @@ import { gqlRequest } from '@/lib/gql-pager'
 import { OpposeUnreadNotice } from '@/components/shared/OpposeUnreadNotice'
 import { useNotice } from '@/components/shared/NoticeProvider'
 import { txFailureNotice } from '@/lib/user-notice'
+import { pluralize } from '@/lib/plural'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -2275,7 +2276,7 @@ function SkillsPageContent() {
                             )}
                           </span>
                           <span className="text-[#7A838D]">
-                            {weightedTrust.freshSignalsCount} fresh / {weightedTrust.totalSignalsCount} signals
+                            {weightedTrust.freshSignalsCount} fresh / {pluralize(weightedTrust.totalSignalsCount, 'signal')}
                           </span>
                         </div>
                       </div>

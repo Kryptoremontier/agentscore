@@ -259,11 +259,15 @@ describe('landing stats (Hero / Stats / CTA) — /api/v1/stats only', () => {
       expect(landingStatItems(state).map((i) => i.value)).toEqual([null, null, null, null])
     }
   })
-  it('the tiles: Registered Agents, Attesters (not "Attestations"), Total Staked, Active Stakers', () => {
+  it('the tiles: Registered Agents, people vouching (not "Attestations"), Total Staked, Active Stakers — labels agree with the number', () => {
     const items = landingStatItems({ status: 'ok', stats: parseLandingStats(ok)! })
     expect(items.map((i) => [i.label, i.value])).toEqual([
-      ['Registered Agents', 9], ['Attesters', 1], ['Total Staked', 0.8274], ['Active Stakers', 5],
+      ['Registered Agents', 9], ['Person vouching', 1], ['Total Staked', 0.8274], ['Active Stakers', 5],
     ])
+    // Etap 5b: "1 Attesters" was the live landing; one of each is singular, unknown reads plural.
+    const one = landingStatItems({ status: 'ok', stats: { ...parseLandingStats(ok)!, agents: 1, attesters: 2, activeStakers: 1 } })
+    expect(one.map((i) => i.label)).toEqual(['Registered Agent', 'People vouching', 'Total Staked', 'Active Staker'])
+    expect(landingStatItems({ status: 'loading' }).map((i) => i.label)).toEqual(['Registered Agents', 'People vouching', 'Total Staked', 'Active Stakers'])
   })
   it('Hero, Stats and CTA mounting together share one request; a 500 → null', async () => {
     const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ success: false }) }))

@@ -295,12 +295,11 @@ export default function AgentDetailPage() {
             Back to Explorer
           </Link>
 
+          {/* Share only — the inert flag button is gone (Etap 5b): reports are filed from the
+              /agents modal's report flow. */}
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleShare}>
+            <Button variant="ghost" size="icon" onClick={handleShare} aria-label="Copy this page's link">
               <Share className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <Flag className="w-5 h-5" />
             </Button>
           </div>
         </motion.div>

@@ -29,6 +29,7 @@ import { fetchAllRows, SERVER_ROW_CAP } from '@/lib/gql-pager'
 const DOMAIN_TRIPLES_MAX = 5_000
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 import { PersonName } from '@/components/shared/PersonName'
+import { pluralize } from '@/lib/plural'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -344,7 +345,7 @@ function DomainCard({
         <div className="mt-2 space-y-1.5">
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
             {domain.agentCount} {domain.agentCount === 1 ? 'agent' : 'agents'}
-            {domain.totalStakers > 0 && ` · ${domain.totalStakers} stakers`}
+            {domain.totalStakers > 0 && ` · ${pluralize(domain.totalStakers, 'staker')}`}
           </p>
           {domain.topAgent && (
             <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
@@ -429,7 +430,7 @@ function AgentRankRow({ agent, index }: { agent: DomainAgent; index: number }) {
           {/* stats */}
           {hasStats && (
             <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              {agent.stakerCount > 0 && <span>{agent.stakerCount} stakers</span>}
+              {agent.stakerCount > 0 && <span>{pluralize(agent.stakerCount, 'staker')}</span>}
               {agent.stakerCount > 0 && agent.supportShares > 0n && <span>·</span>}
               {agent.supportShares > 0n && (
                 <span>
@@ -767,7 +768,7 @@ function DomainsPageContent() {
                       </div>
                       <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
                         {selectedDomain.agentCount} {selectedDomain.agentCount === 1 ? 'agent' : 'agents'} ranked
-                        {selectedDomain.totalStakers > 0 && ` · ${selectedDomain.totalStakers} stakers`}
+                        {selectedDomain.totalStakers > 0 && ` · ${pluralize(selectedDomain.totalStakers, 'staker')}`}
                       </p>
                     </div>
                   </div>
