@@ -53,7 +53,7 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
-import { LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
+import { AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
 import { ScoreParts } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
@@ -1508,19 +1508,12 @@ function AgentsPageContent() {
               </span>
             </div>
 
-            {/* Title */}
+            {/* Title and subtitle — plain words, no staking pitch (lib/people-copy.ts) */}
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-3 leading-tight">
-              AI Agent
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] to-[#C9A84C]">
-                {" "}Intelligence Registry
-              </span>
+              {AGENTS_PAGE_TITLE}
             </h1>
-
-            {/* Description */}
             <p className="text-[#7A838D] text-lg max-w-2xl leading-relaxed">
-              Decentralized trust verification for AI agents.
-              Stake <span className="text-[#B5BDC6] font-medium">tTRUST</span> to signal
-              confidence — every vote is transparent, on-chain, and permanent.
+              {AGENTS_PAGE_SUB}
             </p>
 
             {/* Live indicator */}

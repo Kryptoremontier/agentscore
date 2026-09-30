@@ -75,12 +75,24 @@ describe('one copy module — the old words are gone from the agent surfaces, th
   })
 
   it('the new strings are written only in lib/people-copy.ts', () => {
-    const NEW = ['Vouch for this agent', 'Nobody vouches yet', 'Who vouches, and for what', 'people needed to verify', 'Backed with', 'Says it does', 'Listed in the ERC-8004 agent registry']
+    const NEW = ['Vouch for this agent', 'Nobody vouches yet', 'Who vouches, and for what', 'people needed to verify', 'Backed with', 'Says it does', 'Listed in the ERC-8004 agent registry', 'Find an AI agent and see who vouches']
     const hits = files(SRC).filter((f) => !f.endsWith(path.join('lib', 'people-copy.ts'))).flatMap((f) => {
       const src = code(f)
       return NEW.filter((s) => src.includes(s)).map((s) => `${rel(f)}: ${s}`)
     })
     expect(hits).toEqual([])
+  })
+})
+
+describe('the /agents header: plain words, no staking pitch', () => {
+  it('"Agents" and "Find an AI agent and see who vouches for it, and for what."', async () => {
+    const { AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB } = await import('../people-copy')
+    expect(AGENTS_PAGE_TITLE).toBe('Agents')
+    expect(AGENTS_PAGE_SUB).toBe('Find an AI agent and see who vouches for it, and for what.')
+    const page = code(path.join(SRC, 'app/agents/page.tsx'))
+    expect(page).toMatch(/<h1[^>]*>\s*\{AGENTS_PAGE_TITLE\}\s*<\/h1>/)
+    expect(page).toMatch(/\{AGENTS_PAGE_SUB\}/)
+    expect(page).not.toMatch(/Intelligence Registry|to signal\s+confidence|Decentralized trust verification/)
   })
 })
 
