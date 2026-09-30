@@ -24,7 +24,7 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://agentscore-gilt.vercel.app'),
   title: 'AgentScore | Trust Layer for AI Agents',
-  description: 'On-chain reputation marketplace for AI Agents. Stake on agents you trust, earn when others follow. Decentralized quality consensus built on Intuition Protocol.',
+  description: 'Real people vouch for AI agents, on-chain — by name, for something specific. One wallet can never do it alone. Built on Intuition.',
   icons: {
     icon: [
       { url: '/favicon.png', type: 'image/png' },
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
   openGraph: {
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'On-chain reputation marketplace for AI Agents. Stake on agents you trust, earn when others follow. Decentralized quality consensus built on Intuition Protocol.',
+    description: 'Real people vouch for AI agents, on-chain — by name, for something specific. One wallet can never do it alone. Built on Intuition.',
     url: 'https://agentscore-gilt.vercel.app',
     siteName: 'AgentScore',
     images: [
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'On-chain reputation marketplace for AI Agents. Stake on agents you trust, earn when others follow.',
+    description: 'Real people vouch for AI agents, on-chain — by name, for something specific. One wallet can never do it alone. Built on Intuition.',
     images: ['https://agentscore-gilt.vercel.app/images/brand/gold/og-image.png'],
     creator: '@AgentScoreApp',
   },

@@ -151,3 +151,48 @@ export const SCORE_PART_TRUST = 'Trust Score — the backing score'
 export const SCORE_PART_COMPOSITE = 'Composite (quality)'
 export const SCORE_PART_HYBRID = 'Hybrid — 60% Trust Score + 40% Composite'
 export const BACKING_TREND = 'Backing trend'
+
+// ─── The landing: the story on one phone screen (Etap 5b Run 2) ───────────────
+
+export const LIVE_ON_TESTNET = 'Live on Intuition Testnet'
+export const LANDING_TITLE = ['Trust Layer for', 'AI Agents'] as const
+export const LANDING_SUB = 'Real people vouch for AI agents, on-chain. One wallet can never do it alone.'
+export const LANDING_STEPS = ['Find an agent', 'See who vouches, and for what', 'Vouch for one you know'] as const
+/** "1 person vouches for agents here" — distinct live people who vouch (/api/v1/stats attesters). */
+export const peopleVouchHere = (n: number | null) => {
+  const p = peopleVouchHereParts(n)
+  return `${p.count} ${p.rest}`
+}
+/** The number and the words after it, for a number set apart: "1" · "person vouches for agents here". */
+export function peopleVouchHereParts(n: number | null): { count: string; rest: string } {
+  if (n == null) return { count: '—', rest: 'people vouch for agents here' }
+  return { count: String(n), rest: `${plural(n, 'person', 'people')} ${plural(n, 'vouches', 'vouch')} for agents here` }
+}
+export const PEOPLE_HERE_UNREAD = 'Couldn’t read who vouches right now'
+export const LANDING_CTA_VOUCH = 'Vouch for an agent'
+export const LANDING_CTA_DEVELOPERS = 'For developers & agents (MCP / REST)'
+export const EXAMPLE_HEADING = 'Most vouched right now'
+export const EXAMPLE_UNREAD = 'Couldn’t load an example right now — the list is one tap away.'
+export const WHO_PREFIX = 'by'
+
+// ─── /domains (Etap 5b Run 2) ─────────────────────────────────────────────────
+
+export const DOMAINS_INTRO = 'Areas people vouch for agents in. Below them, topics agents tag themselves with — not vouched for.'
+export const DOMAINS_VOUCHED_HEADING = 'Vouched for, by area'
+export const DOMAINS_VOUCHED_NOTE = 'Each row: an agent, how many people vouch for it in that area, and the tTRUST behind them.'
+export const DOMAINS_NOBODY_YET = 'Nobody has vouched for an agent in this area yet —'
+export const DOMAINS_TAGS_HEADING = 'Topics agents tag themselves with'
+export const DOMAINS_TAGS_NOTE = '— self-declared, not vouched for'
+
+// ─── /evaluators (Etap 5b Run 2) ──────────────────────────────────────────────
+
+export const EVALUATOR_VOUCHED_COLUMN = 'Vouched'
+export const EVALUATOR_VOUCHED_COLUMN_TIP = 'A weight above 1.0× counts only once at least one person vouches for this evaluator'
+export const evaluatorCappedTip = (earned: number) => `Capped at 1.0× — needs 1 person to vouch for this evaluator to unlock ${earned.toFixed(2)}×`
+export const evaluatorVouchedTip = (n: number) => `${people(n)} ${plural(n, 'vouches', 'vouch')} for this evaluator`
+export const EVALUATOR_NOT_NEEDED_TIP = 'Nothing to unlock at this weight'
+export const EVALUATOR_LEGEND = {
+  struck: 'the weight this evaluator earned, capped at 1.0× until someone vouches for them.',
+  lock: 'people vouching for this evaluator / needed to unlock a weight above 1.0×.',
+  check: 'vouched for — the full weight counts.',
+} as const

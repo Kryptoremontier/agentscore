@@ -46,7 +46,7 @@ interface Shot {
 }
 
 const SHOTS: Shot[] = [
-  { name: 'landing', url: ROUTES.landing, prepare: landingStatsReady },
+  { name: 'landing', url: ROUTES.landing, prepare: landingStatsReady, check: landingStoryOnOneScreen },
   { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: mostVouchedFirst },
   // The first screen, as a visitor sees it: at 390×844 the first card must be on it.
   { name: 'agents-list-fold', url: ROUTES.agents, prepare: agentsListReady, firstScreen: true, check: firstCardAboveFold },
@@ -216,8 +216,29 @@ async function agentsListReady(page: Page) {
 }
 
 /** Landing Hero/Stats tiles print "—" while /api/v1/stats loads (lib/landing-stats.ts); wait for the answer. */
+/** The landing's number and its live example answered (Etap 5b Run 2): no "loading" left. */
 async function landingStatsReady(page: Page) {
-  await expect(page.locator('[data-testid="landing-stat"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
+  await expect(page.locator('[data-testid="people-vouching"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
+  await expect(page.locator('[data-testid="example-agent"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
+}
+
+/**
+ * Etap 5b Run 2: at 390×844 the whole story — what it is, a live example, three steps, one number,
+ * the two ways in — is on the first screen, above the bottom nav, without scrolling.
+ */
+async function landingStoryOnOneScreen(page: Page, project: string) {
+  if (project !== 'mobile') return
+  const parts = await page.evaluate(() => {
+    window.scrollTo(0, 0)
+    const nav = document.querySelector('nav.fixed.bottom-0') as HTMLElement | null
+    const floor = nav ? nav.getBoundingClientRect().top : window.innerHeight
+    return [...document.querySelectorAll<HTMLElement>('[data-story]')].map((e) => {
+      const r = e.getBoundingClientRect()
+      return { part: e.dataset.story, bottom: Math.round(r.bottom), floor: Math.round(floor), fits: r.top >= 0 && r.bottom <= floor }
+    })
+  })
+  expect(parts.map((p) => p.part), 'the five story parts, in order').toEqual(['1', '2', '3', '4', '5'])
+  expect(parts.filter((p) => !p.fits), 'story parts below the first screen').toEqual([])
 }
 
 // Etap 5b copy (lib/people-copy.ts), spelled out here so the harness checks the words a person reads.

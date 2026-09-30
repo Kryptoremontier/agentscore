@@ -122,11 +122,11 @@ describe('source guards — no native dialogs, one Hub URL, the disconnected cli
     expect(calls).toEqual([])
   })
 
-  it('the Intuition Hub URL is written once (lib/intuition-links.ts); the banner and the attest path use it', () => {
+  it('the Intuition Hub URL is written once (lib/intuition-links.ts); the landing\'s closing call and the attest path use it', () => {
     const copies = all.filter(({ s }) => s.includes('testnet.hub.intuition.systems')).map(({ f }) => f)
     expect(copies).toEqual([path.join('lib', 'intuition-links.ts')])
-    const banner = all.find(({ f }) => f.endsWith('AlphaTestnetBanner.tsx'))!.s
-    expect(banner).toMatch(/href=\{INTUITION_HUB_URL\}/)
+    const cta = all.find(({ f }) => f.endsWith(path.join('landing', 'CTA.tsx')))!.s
+    expect(cta).toMatch(/href=\{INTUITION_HUB_URL\}/)
     const attest = all.find(({ f }) => f.endsWith(path.join('attest', 'AttestButton.tsx')))!.s
     expect(attest).toMatch(/href=\{INTUITION_HUB_URL\}/)
     expect(attest).toContain('You need a little testnet tTRUST to vouch — it&apos;s free.')

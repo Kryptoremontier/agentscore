@@ -1,68 +1,60 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Layers, TrendingUp, GitBranch, Award, Zap, Trophy } from 'lucide-react'
+import { Layers, GitBranch, Award, Zap, Trophy } from 'lucide-react'
 
+// Etap 5b Run 2: people vouching, in plain words. The "Bonding Curve Market" card (buy and sell
+// positions) is gone — backing an agent is a detail of its page, not a pitch.
 const features = [
   {
     num: '01',
     icon: Layers,
-    title: 'Contextual Trust Scoring',
-    description: 'Trust isn\'t one number. Each agent is scored per skill domain. "Trusted for code: 85" vs "Trusted for medical: 31" — same agent, different context.',
-    tag: 'Context-Aware',
+    title: 'Vouches per area',
+    description: 'An agent is not good at everything. People vouch for it in one area at a time — Crypto / Onchain, Knowledge / Productivity — and you see which.',
+    tag: 'Context',
     iconColor: '#8B5CF6',
     glowRgb: '139,92,246',
     accentColor: '#8B5CF6',
   },
   {
     num: '02',
-    icon: TrendingUp,
-    title: 'Bonding Curve Market',
-    description: 'Support or Oppose agents via bonding curves. Buy and sell positions as market sentiment evolves.',
-    tag: 'DeFi',
-    iconColor: '#38B6FF',
-    glowRgb: '56,182,255',
-    accentColor: '#38B6FF',
-  },
-  {
-    num: '03',
     icon: GitBranch,
-    title: 'On-chain Attestations',
-    description: 'Every Support, Oppose and Report creates permanent, verifiable attestations on-chain.',
+    title: 'On-chain, with names',
+    description: 'Every vouch and every report is an on-chain claim with the wallet behind it — its ENS name when it has one. Nothing is anonymous, nothing is edited later.',
     tag: 'Provenance',
     iconColor: '#C8963C',
     glowRgb: '200,150,60',
     accentColor: '#C8963C',
   },
   {
-    num: '04',
+    num: '03',
     icon: Award,
-    title: 'Evaluator System',
-    description: 'Your track record as a staker determines your influence. Consistently back winners → your votes carry up to 1.5x weight. Meritocratic trust, not just capital.',
-    tag: 'Meritocratic',
+    title: 'A track record counts',
+    description: 'People whose vouches hold up count for more, up to 1.5×; newcomers start at 0.5×. Weight comes from a record, not only from tTRUST.',
+    tag: 'Evaluators',
     iconColor: '#F59E0B',
     glowRgb: '245,158,11',
     accentColor: '#F59E0B',
   },
   {
-    num: '05',
-    icon: Zap,
-    title: 'Intuition Protocol',
-    description: 'Built on Intuition\'s L3 with minimal gas fees and near-instant transaction finality.',
-    tag: 'Infrastructure',
-    iconColor: '#2EE6D6',
-    glowRgb: '46,230,214',
-    accentColor: '#2EE6D6',
-  },
-  {
-    num: '06',
+    num: '04',
     icon: Trophy,
-    title: 'Domain Leaderboards',
-    description: 'Who\'s the best agent for this skill? Domain rankings show top agents per expertise area — backed by real economic stakes.',
+    title: 'Who is best at what',
+    description: 'Each area ranks the agents people vouch for in it, so you can start from the job you need done.',
     tag: 'Discovery',
     iconColor: '#2ECC71',
     glowRgb: '46,204,113',
     accentColor: '#2ECC71',
+  },
+  {
+    num: '05',
+    icon: Zap,
+    title: 'Built on Intuition',
+    description: 'Vouches live on Intuition\'s network: low fees, fast finality, and open data any agent or app can read.',
+    tag: 'Infrastructure',
+    iconColor: '#2EE6D6',
+    glowRgb: '46,230,214',
+    accentColor: '#2EE6D6',
   },
 ]
 
@@ -103,8 +95,8 @@ export function Features() {
             Why <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] via-[#E8B84B] to-[#C9A84C]">AgentScore</span>?
           </h2>
           <p className="mt-5 text-lg text-[#7A838D] max-w-xl mx-auto leading-relaxed">
-            The trust infrastructure the AI economy needs.
-            <span className="text-[#B5BDC6]"> Verify, stake, earn.</span>
+            Trust in an AI agent, the way people give it:
+            <span className="text-[#B5BDC6]"> by name, for something specific.</span>
           </p>
         </motion.div>
 

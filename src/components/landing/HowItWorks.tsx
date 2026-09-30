@@ -1,47 +1,48 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Layers, TrendingUp, ScanLine } from 'lucide-react'
+import { Search, Users, BadgeCheck } from 'lucide-react'
 
+// Etap 5b Run 2: how it works is about people vouching — the landing's three steps, told in full.
 const steps = [
   {
     num: '01',
-    icon: Layers,
-    title: 'Register on Chain',
-    description: 'Create permanent on-chain identities for AI Agents and Skills as Intuition Atoms. Define relationships between them as verifiable Claims (triples).',
+    icon: Search,
+    title: 'Find an agent',
+    description: 'Browse AI agents registered on Intuition — from AgentScore and from the ERC-8004 agent registry. Each card says who vouches for it, and for what.',
     accentRgb: '200,150,60',
     accentHex: '#C8963C',
     brightHex: '#E8B84B',
-    label: 'Registry',
-    bullets: ['Agents', 'Skills', 'Claims'],
+    label: 'Find',
+    bullets: ['AgentScore', 'ERC-8004', 'Most vouched first'],
   },
   {
     num: '02',
-    icon: TrendingUp,
-    title: 'Stake & Signal',
-    description: 'Back your conviction with tTRUST. Support entities you trust or Oppose those you deem risky — bonding curves make every position transparent and tradeable.',
+    icon: Users,
+    title: 'See who vouches, and for what',
+    description: 'A vouch is one person putting a little tTRUST behind one claim: this agent is good at this area. You see every name and every area. One wallet can never lift an agent alone — Verified takes three people.',
     accentRgb: '46,204,113',
     accentHex: '#2ECC71',
     brightHex: '#4AE685',
-    label: 'Staking',
-    bullets: ['Support', 'Oppose', 'Trade'],
+    label: 'Who vouches',
+    bullets: ['Names', 'Areas', 'Tier'],
   },
   {
     num: '03',
-    icon: ScanLine,
-    title: 'Verify & Decide',
-    description: 'Query live trust scores derived entirely from on-chain stakes. Make informed decisions before deploying or integrating any AI agent or skill.',
+    icon: BadgeCheck,
+    title: 'Vouch for one you know',
+    description: 'Used an agent and it delivered? Vouch for it in the area it is good at. It is on-chain, with your wallet on it, and it counts toward the agent\'s tier. Testnet tTRUST is free.',
     accentRgb: '56,182,255',
     accentHex: '#38B6FF',
     brightHex: '#5AC8FF',
-    label: 'Verification',
-    bullets: ['Trust Score', 'History', 'Attestations'],
+    label: 'Vouch',
+    bullets: ['Pick an area', 'Put tTRUST behind it', 'On-chain'],
   },
 ]
 
 export function HowItWorks() {
   return (
-    <section className="relative py-32 overflow-hidden">
+    <section id="how-it-works" className="relative py-24 sm:py-32 overflow-hidden scroll-mt-20">
       {/* Background */}
       <div className="absolute inset-0"
         style={{
@@ -74,7 +75,7 @@ export function HowItWorks() {
             How It <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] via-[#E8B84B] to-[#2ECC71]">Works</span>
           </h2>
           <p className="mt-5 text-lg text-[#7A838D] max-w-xl mx-auto">
-            Three steps to build trust in the AI agent ecosystem
+            Real people vouch for AI agents — one area at a time, with their names on it
           </p>
         </motion.div>
 

@@ -59,10 +59,12 @@ describe('one order for /agents and the landing carousel (source guards)', () =>
     expect(page).toMatch(/\{SORT_OPTIONS\.map\(o => <option key=\{o\.id\} value=\{o\.id\}>\{o\.label\}<\/option>\)\}/)
     expect(page).toMatch(/onChange=\{\(e\) => setListFilters\(\{ sort: parseSort\(e\.target\.value\) \}\)\}/)
   })
-  it('the carousel: the same read (our API), the same rows, the same default — its first 8', () => {
+  it('the carousel and the first screen\'s example: the same read (our API), the same rows, the same default', () => {
     const featured = read('components/landing/FeaturedAgents.tsx')
     expect(featured).toMatch(/agentsPageView\(await fetchAgentsPage\(\)\)/)
-    expect(featured).toMatch(/orderAgents\(rows\.map\(listEntryOf\), views, DEFAULT_SORT\)\.slice\(0, 8\)/)
+    expect(featured).toMatch(/mostVouched\(view, 8\)/)
+    expect(read('components/landing/Hero.tsx')).toMatch(/mostVouched\(view, 1\)/)
+    expect(read('lib/most-vouched.ts')).toMatch(/orderAgents\(rows\.map\(listEntryOf\), views, DEFAULT_SORT\)\.slice\(0, n\)/)
     // No second, newest-first GraphQL read of AgentScore atoms for the agents tab.
     expect(featured).not.toMatch(/AGENT_WHERE_STR/)
   })

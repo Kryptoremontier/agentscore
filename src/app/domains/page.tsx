@@ -30,6 +30,10 @@ const DOMAIN_TRIPLES_MAX = 5_000
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 import { PersonName } from '@/components/shared/PersonName'
 import { pluralize } from '@/lib/plural'
+import {
+  DOMAINS_INTRO, DOMAINS_VOUCHED_HEADING, DOMAINS_VOUCHED_NOTE, DOMAINS_NOBODY_YET, DOMAINS_TAGS_HEADING, DOMAINS_TAGS_NOTE,
+  WHO, WHO_VOUCHES_UNREAD, people,
+} from '@/lib/people-copy'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 
@@ -178,7 +182,7 @@ function AttestedEntryRow({ entry }: { entry: AttestedEntry }) {
         </Link>
         <div className="flex-1" />
         <span className="text-xs tabular-nums flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          {entry.distinctAttesters} {entry.distinctAttesters === 1 ? 'attester' : 'attesters'}
+          {people(entry.distinctAttesters)}
         </span>
         <span className="text-xs tabular-nums flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>
           {formatStake(entry.totalStake)} tTRUST
@@ -188,7 +192,7 @@ function AttestedEntryRow({ entry }: { entry: AttestedEntry }) {
           className="flex items-center gap-1 text-xs font-medium flex-shrink-0 transition-colors"
           style={{ color: '#8B5CF6' }}
         >
-          attested by
+          {WHO}
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </button>
       </div>
@@ -214,7 +218,7 @@ function AttestedEntryRow({ entry }: { entry: AttestedEntry }) {
   )
 }
 
-/** `entries` null = the attestation read failed — shown as unavailable, never as "no attested agents". */
+/** `entries` null = the attestation read failed — shown as unavailable, never as "nobody vouched". */
 function AttestedSection({ entries, loading }: { entries: AttestedEntry[] | null; loading: boolean }) {
   const byDomain = useMemo(() => {
     const m = new Map<string, AttestedEntry[]>()
@@ -240,11 +244,9 @@ function AttestedSection({ entries, loading }: { entries: AttestedEntry[] | null
       <div className="mb-6 rounded-2xl p-5" style={{ background: 'rgba(16,185,129,0.02)', border: '1px solid rgba(16,185,129,0.1)' }} data-testid="attested-failed">
         <div className="flex items-center gap-2 mb-1">
           <BadgeCheck className="w-5 h-5" style={{ color: '#10b981' }} />
-          <h2 className="text-base font-bold text-white">Attested</h2>
+          <h2 className="text-base font-bold text-white">{DOMAINS_VOUCHED_HEADING}</h2>
         </div>
-        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          Couldn&apos;t read attestations right now — this is not an empty record.
-        </p>
+        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{WHO_VOUCHES_UNREAD}</p>
       </div>
     )
   }
@@ -256,11 +258,9 @@ function AttestedSection({ entries, loading }: { entries: AttestedEntry[] | null
     >
       <div className="flex items-center gap-2 mb-1">
         <BadgeCheck className="w-5 h-5" style={{ color: '#10b981' }} />
-        <h2 className="text-base font-bold text-white">Attested</h2>
+        <h2 className="text-base font-bold text-white">{DOMAINS_VOUCHED_HEADING}</h2>
       </div>
-      <p className="text-xs mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
-        Community attestations: staked on-chain claims with visible authors.
-      </p>
+      <p className="text-xs mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>{DOMAINS_VOUCHED_NOTE}</p>
 
       <div className="space-y-3">
         {CANONICAL_DOMAINS_REGISTRY.map(domain => {
@@ -286,7 +286,7 @@ function AttestedSection({ entries, loading }: { entries: AttestedEntry[] | null
                 </div>
               ) : (
                 <p className="text-xs px-1" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                  No attested agents yet —{' '}
+                  {DOMAINS_NOBODY_YET}{' '}
                   <Link href="/agents" className="underline" style={{ color: '#8B5CF6' }}>
                     be the first
                   </Link>
@@ -586,36 +586,11 @@ function DomainsPageContent() {
                 {loading ? 'Loading...' : 'Refresh'}
               </button>
             </div>
-            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              Attested = staked on-chain claims with visible authors · Signals = unweighted ecosystem tags.
+            {/* Etap 5b Run 2: a plain intro instead of jargon counts (active domains, ranked agents,
+                total stakers, "N attested · N skills shown · N junk filtered"). */}
+            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.5)' }} data-testid="domains-intro">
+              {DOMAINS_INTRO}
             </p>
-
-            {/* Stats row */}
-            {!loading && allDomains.length > 0 && (
-              <div className="mt-4 flex items-center gap-6">
-                <div>
-                  <p className="text-xl font-bold text-white">{allDomains.length}</p>
-                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Active Domains</p>
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-white">
-                    {new Set(allTriples.map(t => t.agentId)).size}
-                  </p>
-                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Ranked Agents</p>
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-white">
-                    {allTriples.reduce((s, t) => s + t.supportPositionCount + t.opposePositionCount, 0)}
-                  </p>
-                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>Total Stakers</p>
-                </div>
-              </div>
-            )}
-            {!loading && (allDomains.length > 0 || junkCount > 0 || (attested?.length ?? 0) > 0) && (
-              <p className="mt-2 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                {attested ? attested.length : '—'} attested · {allDomains.length} {allDomains.length === 1 ? 'skill' : 'skills'} shown · {junkCount} junk filtered
-              </p>
-            )}
           </div>
 
           {/* ── Attested tier (ETAP 2a) ── */}
@@ -633,8 +608,9 @@ function DomainsPageContent() {
           <div className="flex items-center gap-2 mb-2">
             <Layers className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.35)' }} />
             <h2 className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              Ecosystem signals
+              {DOMAINS_TAGS_HEADING}
             </h2>
+            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{DOMAINS_TAGS_NOTE}</span>
           </div>
 
           {/* Two-column layout */}

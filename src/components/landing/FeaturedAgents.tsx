@@ -15,8 +15,8 @@ import { cleanAtomName } from '@/types/claim'
 import { formatPredicateLabel } from '@/lib/predicate-display'
 import { effectiveLabel } from '@/lib/api-data'
 import { fetchVaultPositions } from '@/lib/vault-positions'
-import { annotateVaultReads, cardAttestationView, attesterLineOf, orderAgents, listEntryOf, corpusTotals, type CardAttestationView } from '@/lib/agent-list'
-import { DEFAULT_SORT } from '@/lib/agent-list-sort'
+import { annotateVaultReads, attesterLineOf, type CardAttestationView } from '@/lib/agent-list'
+import { mostVouched } from '@/lib/most-vouched'
 import { fetchAgentsPage } from '@/lib/agents-page-client'
 import { agentsPageView } from '@/lib/agents-page-types'
 import { BackingScore } from '@/components/agents/BackingScore'
@@ -94,31 +94,16 @@ export function FeaturedAgents() {
     try {
       if (tab === 'agents') {
         // The /agents list's own read (our API, both corpora) in its default order — "Most
-        // vouched" — so the carousel shows the list's first rows (lib/agent-list.ts orderAgents).
+        // vouched" — so the carousel shows the list's first rows (lib/most-vouched.ts, shared with
+        // the first screen's example card; one request between them).
         const view = agentsPageView(await fetchAgentsPage())
         if (isCancelled()) return
         if (view.unreachable) throw new Error('agents read failed')
-        const rows: FeaturedItem[] = [
-          ...(view.agentScore.status === 'ok' ? (view.agentScore.rows as FeaturedItem[]) : []),
-          ...(view.cohort.status === 'ok'
-            ? view.cohort.agents.map((c): FeaturedItem => ({ term_id: c.termId, label: c.label, created_at: c.createdAt }))
-            : []),
-        ]
-        const views = view.attestations
-          ? new Map([...view.attestations].map(([id, e]) => [id, cardAttestationView(e)] as const))
-          : null
-        setAgentViews(views)
-        setItems(orderAgents(rows.map(listEntryOf), views, DEFAULT_SORT).slice(0, 8).map((e) => e.agent))
-        // The badge: the list's "All" total (lib/agent-list.ts corpusTotals — the /agents header's).
-        const all = corpusTotals({
-          agentScore: view.agentScore.status === 'ok'
-            ? { status: 'ok', kept: view.agentScore.rows.length, junk: view.agentScore.junk, fetched: view.agentScore.fetched, total: view.agentScore.total, truncated: view.agentScore.truncated }
-            : { status: 'error', kept: 0, junk: 0, fetched: 0, total: null, truncated: null },
-          cohort: view.cohort.status === 'ok'
-            ? { status: 'ok', count: view.cohort.agents.length, total: view.cohort.total, truncated: view.cohort.truncated }
-            : { status: 'error', count: 0, total: null, truncated: null },
-        }).all
-        setCorpusTotal(all != null ? { total: all, truncated: false } : null)
+        const top = mostVouched(view, 8)
+        setAgentViews(top.views)
+        setItems(top.entries.map((e) => e.agent as FeaturedItem))
+        // The badge: the list's "All" total, as the /agents header prints it.
+        setCorpusTotal(top.total != null ? { total: top.total, truncated: false } : null)
         setClaims([])
       } else if (tab === 'claims') {
         const whereClause = CLAIM_WHERE
