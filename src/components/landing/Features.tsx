@@ -87,11 +87,7 @@ export function Features() {
           viewport={{ once: true }}
           className="text-center mb-20"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6 eyebrow"
-            style={{ background: 'rgba(200,150,60,0.10)', border: '1px solid rgba(200,150,60,0.25)', color: '#C8963C' }}>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#C8963C] animate-pulse" />
-            Platform Features
-          </div>
+          <p className="eyebrow eyebrow-slash text-accent mb-6">Platform Features</p>
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-display leading-display">
             Why AgentScore?
           </h2>

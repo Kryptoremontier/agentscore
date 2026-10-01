@@ -55,7 +55,7 @@ function withExplainer(text: string, word: string, term: ExplainerTerm) {
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="relative py-24 sm:py-32 overflow-hidden scroll-mt-20">
+    <section id="how-it-works" className="relative pt-12 pb-24 sm:pt-16 sm:pb-32 overflow-hidden scroll-mt-20">
       {/* Background */}
       <div className="absolute inset-0"
         style={{
@@ -79,11 +79,7 @@ export function HowItWorks() {
           viewport={{ once: true }}
           className="text-center mb-20"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6 eyebrow"
-            style={{ background: 'rgba(46,204,113,0.08)', border: '1px solid rgba(46,204,113,0.2)', color: '#2ECC71' }}>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#2ECC71] animate-pulse" />
-            Getting Started
-          </div>
+          <p className="eyebrow eyebrow-slash text-accent mb-6">Getting Started</p>
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-display leading-display">
             {/* The landing's one section accent word (Etap 6b) */}
             How It <AccentWord>Works</AccentWord>

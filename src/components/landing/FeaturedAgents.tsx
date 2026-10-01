@@ -205,11 +205,7 @@ export function FeaturedAgents() {
         >
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-4 eyebrow"
-                style={{ background: `rgba(${tabCfg.accentRgb},0.08)`, border: `1px solid rgba(${tabCfg.accentRgb},0.2)`, color: tabCfg.accentHex }}>
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: tabCfg.accentHex }} />
-                Live on Intuition Testnet
-              </div>
+              <p className="eyebrow eyebrow-slash text-accent mb-4">Live on Intuition Testnet</p>
               <h2 className="text-4xl sm:text-5xl font-extrabold tracking-display leading-display">
                 Explore the Registry
               </h2>

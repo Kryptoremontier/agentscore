@@ -14,6 +14,12 @@
  *      with its seals — beside the hero on desktop, below it on a phone.
  * The three steps are told in full right below, in How it works. Each part carries data-story="n"
  * so the harness can check it is inside a 390×844 first screen.
+ *
+ * The page background (app/layout.tsx: a fixed image, its horizon glow about halfway down) shows
+ * through this section's two overlays. On desktop the section keeps the height it had before 6b —
+ * 759px at every width from 1024 to 1920 (153dcb7) — so the glow lands inside it, under the same
+ * overlays, exactly as it did; the 6b content, shorter, sits centred in it. The card's top meets
+ * the headline's.
  */
 
 import { useEffect, useState } from 'react'
@@ -80,12 +86,13 @@ export function Hero() {
   const invitation = invitationLine(people.value)
 
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative overflow-hidden lg:min-h-[759px] lg:flex lg:flex-col lg:justify-center">
       {/* Gradient overlays on top of the fixed page background */}
       <div className="absolute inset-0 bg-gradient-to-b from-[rgb(10,10,15)]/70 via-transparent to-[rgb(10,10,15)]/80" />
       <div className="absolute inset-0 shadow-[inset_0_0_200px_rgba(0,0,0,0.7)]" />
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-10 lg:pt-24 lg:pb-20 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-x-12 gap-y-5 lg:items-center text-left">
+      {/* pt clears the fixed header (64px): lg:pt-24 = lg:pb-8 + 64, so the content centres in what shows */}
+      <div className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-10 lg:pt-24 lg:pb-8 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-x-12 gap-y-5 lg:items-start text-left">
         <div>
           {/* 1 — what this is */}
           <div data-story="1">
@@ -136,8 +143,9 @@ export function Hero() {
           </ul>
         </div>
 
-        {/* 5 — a live example: the most vouched agent right now, with its seals */}
-        <div data-story="5">
+        {/* 5 — a live example: the most vouched agent right now, with its seals. On desktop its top
+            meets the headline's: lg:pt-7 = the eyebrow's line (1rem) + the headline's mt-3. */}
+        <div data-story="5" className="lg:pt-7">
           <ExampleAgentCard agent={example} />
         </div>
       </div>
