@@ -16,7 +16,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowRight, Code2 } from 'lucide-react'
-import { cn } from '@/lib/cn'
 import { fetchLandingStats, landingPeopleNumber, type LandingStatsState } from '@/lib/landing-stats'
 import { fetchAgentsPage } from '@/lib/agents-page-client'
 import { agentsPageView } from '@/lib/agents-page-types'
@@ -153,21 +152,11 @@ export function Hero() {
 
         {/* 5 — two ways in */}
         <div data-story="5" className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
-          <Link
-            href="/agents"
-            className={cn(
-              'group w-full sm:w-auto max-w-md flex items-center justify-center gap-2 px-6 py-3 rounded-xl',
-              'bg-gradient-to-r from-[#C8963C] to-[#A87820] text-[#0F1113] font-bold',
-              'shadow-lg shadow-[#C8963C]/25 hover:shadow-xl hover:shadow-[#C8963C]/40 transition-all',
-            )}
-          >
+          <Link href="/agents" className="btn-primary group w-full sm:w-auto max-w-md">
             {LANDING_CTA_VOUCH}
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>
-          <Link
-            href="/docs"
-            className="w-full sm:w-auto max-w-md flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-sm font-medium text-slate-200 transition-colors"
-          >
+          <Link href="/docs" className="btn-secondary w-full sm:w-auto max-w-md">
             <Code2 className="w-4 h-4" />
             {LANDING_CTA_DEVELOPERS}
           </Link>

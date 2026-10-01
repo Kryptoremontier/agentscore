@@ -48,6 +48,10 @@ const config: Config = {
           critical: '#FF4D4F',      // 0-29 Risk red
         },
 
+        // Buttons (Etap 6b): paper fill, ink text (globals.css --paper / --ink)
+        paper: 'rgb(var(--paper) / <alpha-value>)',
+        ink: 'rgb(var(--ink) / <alpha-value>)',
+
         // Text colors
         text: {
           primary: '#FFFFFF',
@@ -163,6 +167,7 @@ const config: Config = {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        button: 'var(--radius-button)', // Etap 6b: sharp buttons (globals.css --radius-button)
       },
 
       backgroundImage: {

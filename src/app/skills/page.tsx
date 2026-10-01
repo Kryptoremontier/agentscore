@@ -1298,7 +1298,7 @@ function SkillsPageContent() {
               <p className="text-text-secondary mb-6">Try a different search term</p>
               <button
                 onClick={() => setSearchTerm('')}
-                className="px-4 py-2 bg-[#C8963C] rounded-lg text-white font-semibold hover:bg-[#C8963C]-hover transition-colors"
+                className="btn-primary"
               >
                 Clear search
               </button>

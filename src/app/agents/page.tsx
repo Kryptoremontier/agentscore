@@ -1703,7 +1703,7 @@ function AgentsPageContent() {
               <p className="text-text-secondary mb-6">Try a different search term</p>
               <button
                 onClick={() => setSearchTerm('')}
-                className="px-4 py-2 bg-[#C8963C] rounded-lg text-white font-semibold hover:bg-[#C8963C]-hover transition-colors"
+                className="btn-primary"
               >
                 Clear search
               </button>
@@ -2404,7 +2404,7 @@ function AgentsPageContent() {
                           return shares <= 0 || shares > maxOwned || maxOwned <= 0
                         })())
                       }
-                      className="w-full py-3 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#2d7a5f] hover:bg-[#34a872]"
+                      className="btn-primary w-full"
                     >
                       {tradeAction === 'buy'
                         ? `Buy Shares${Number(voteAmount) > 0 && buyPreviewOC.sharesFloat > 0 ? ` · get ~${buyPreviewOC.sharesFloat.toFixed(3)}` : ''}`
