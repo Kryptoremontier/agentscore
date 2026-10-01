@@ -1,21 +1,25 @@
 'use client'
 
 /**
- * The landing's first screen — the whole story on one phone screen (Etap 5b Run 2), in order:
- *   1. "Trust Layer for AI Agents" and what it means: real people vouch, one wallet never can alone.
- *   2. A live example: the first agent of the /agents list in its default order (Most vouched).
- *   3. Three steps: find an agent · see who vouches, and for what · vouch for one you know.
- *   4. One number: how many people vouch for agents here (/api/v1/stats — distinct live attesters),
- *      and an invitation under it (Etap 6): "Be the second." when it is one person, else "Add yours."
- *   5. Two ways in: vouch for an agent (/agents), or build on it (/docs: MCP / REST).
- * "Live on Intuition Testnet" stays as a small badge. Each part carries data-story="n" so the
- * harness can check it is inside a 390×844 first screen.
+ * The landing's first screen (Etap 6b: the hero in the new type) — left-aligned over the page's
+ * background, the whole story on one phone screen, in order:
+ *   1. The eyebrow ("// TRUST LAYER · LIVE ON INTUITION TESTNET", mono, amber), the headline
+ *      ("Trust layer for" / the accent word "AI agents." with its swash) and the subtitle
+ *      (LANDING_SUB: real people vouch, one wallet never can alone).
+ *   2. In the sentence after it, the one number — "1 person" in the accent, live from
+ *      /api/v1/stats (distinct live attesters) — and the invitation: "Be the second." / "Add yours."
+ *   3. Two ways in: vouch for an agent (/agents, the primary), developers & agents (/docs).
+ *   4. The check row (mono): testnet tTRUST is free · every vouch is on-chain · one wallet can't.
+ *   5. A live example: the first agent of the /agents list in its default order (Most vouched),
+ *      with its seals — beside the hero on desktop, below it on a phone.
+ * The three steps are told in full right below, in How it works. Each part carries data-story="n"
+ * so the harness can check it is inside a 390×844 first screen.
  */
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { ArrowRight, Code2 } from 'lucide-react'
+import { ArrowRight, Check, Code2 } from 'lucide-react'
 import { fetchLandingStats, landingPeopleNumber, type LandingStatsState } from '@/lib/landing-stats'
 import { fetchAgentsPage } from '@/lib/agents-page-client'
 import { agentsPageView } from '@/lib/agents-page-types'
@@ -26,31 +30,13 @@ import { measuredScore, noScoreTooltip } from '@/lib/score-basis'
 import { effectiveLabel } from '@/lib/api-data'
 import { cleanAtomName } from '@/types/claim'
 import {
-  LIVE_ON_TESTNET, LANDING_TITLE, LANDING_SUB, LANDING_STEPS, peopleVouchHereParts,
-  LANDING_CTA_VOUCH, LANDING_CTA_DEVELOPERS, invitationLine,
+  HERO_EYEBROW, LANDING_TITLE, LANDING_SUB, LANDING_CHECKS, LANDING_CTA_VOUCH, DEV_HEADING,
+  peopleHereLead, invitationLine,
 } from '@/lib/people-copy'
 import { ExampleAgentCard, type ExampleAgent } from './ExampleAgentCard'
 import { Explainer } from '@/components/shared/Explainer'
 import { setHeroAgent } from './hero-agent'
 import { AccentWord } from '@/components/shared/AccentWord'
-
-function WaveText({ text, className }: { text: string; className?: string }) {
-  return (
-    <span className={className}>
-      {text.split('').map((char, i) => (
-        <motion.span
-          key={i}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: i * 0.03, ease: [0.22, 1, 0.36, 1] }}
-          className="inline-block"
-        >
-          {char === ' ' ? ' ' : char}
-        </motion.span>
-      ))}
-    </span>
-  )
-}
 
 export function Hero() {
   // One source per number: /api/v1/stats (lib/landing-stats.ts) and the list's own read
@@ -90,7 +76,7 @@ export function Hero() {
   }, [])
 
   const people = landingPeopleNumber(statsState)
-  const peopleHere = peopleVouchHereParts(people.value)
+  const here = peopleHereLead(people.value)
   const invitation = invitationLine(people.value)
 
   return (
@@ -99,67 +85,60 @@ export function Hero() {
       <div className="absolute inset-0 bg-gradient-to-b from-[rgb(10,10,15)]/70 via-transparent to-[rgb(10,10,15)]/80" />
       <div className="absolute inset-0 shadow-[inset_0_0_200px_rgba(0,0,0,0.7)]" />
 
-      <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 pt-20 pb-12 lg:pt-28 lg:pb-20 text-center">
-        {/* The small testnet badge */}
-        <Link
-          href="/agents"
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 text-xs font-medium transition-colors"
-        >
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-          </span>
-          {LIVE_ON_TESTNET}
-        </Link>
-
-        {/* 1 — what this is */}
-        <div data-story="1" className="mt-4">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-display leading-display">
-            <WaveText text={LANDING_TITLE[0]} className="block text-white drop-shadow-2xl" />
-            {/* The headline's one accent word (Etap 6b): the italic accent face and its swash */}
-            <AccentWord><WaveText text={LANDING_TITLE[1]} className="drop-shadow-2xl" /></AccentWord>
-          </h1>
-          <p className="mt-3 text-base sm:text-lg text-slate-300 max-w-xl mx-auto">
-            {LANDING_SUB} <Explainer term="vouch" className="-mt-0.5" />
-          </p>
-        </div>
-
-        {/* 2 — a live example: the most vouched agent right now */}
-        <div data-story="2" className="mt-5">
-          <ExampleAgentCard agent={example} />
-        </div>
-
-        {/* 3 — three steps */}
-        <ol data-story="3" className="mt-5 grid grid-cols-3 gap-2 sm:gap-4 max-w-xl mx-auto text-left">
-          {LANDING_STEPS.map((step, i) => (
-            <li key={step} className="flex items-start gap-1.5 sm:gap-2">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#C8963C]/15 border border-[#C8963C]/40 text-[#C8963C] text-[11px] font-bold flex items-center justify-center">
-                {i + 1}
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-10 lg:pt-24 lg:pb-20 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-x-12 gap-y-5 lg:items-center text-left">
+        <div>
+          {/* 1 — what this is */}
+          <div data-story="1">
+            <p className="eyebrow eyebrow-slash text-accent">{HERO_EYEBROW}</p>
+            <motion.h1
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-3 text-[2.75rem] sm:text-6xl lg:text-7xl font-extrabold tracking-display leading-display text-white"
+            >
+              <span className="block">{LANDING_TITLE[0]}</span>
+              {/* The headline's one accent word: the italic accent face and its swash */}
+              <AccentWord>{LANDING_TITLE[1]}</AccentWord>
+            </motion.h1>
+            <p className="mt-4 text-base sm:text-lg text-slate-300 max-w-xl leading-relaxed">
+              {LANDING_SUB} <Explainer term="vouch" className="-mt-0.5" />{' '}
+              {/* 2 — the one number, in the sentence that follows (never hard-coded: /api/v1/stats) */}
+              <span data-story="2">
+                <span data-testid="people-vouching" data-state={statsState.status}>
+                  <span className="text-accent font-semibold tabular-nums" title={people.unavailable ?? undefined}>{here.lead}</span>{' '}
+                  {here.rest}
+                </span>
+                {invitation && <>{' '}<span className="text-accent font-medium" data-testid="invitation">{invitation}</span></>}
               </span>
-              <span className="text-xs sm:text-sm text-slate-200 leading-snug">{step}</span>
-            </li>
-          ))}
-        </ol>
+            </p>
+          </div>
 
-        {/* 4 — one number, and the invitation under it (never hard-coded: /api/v1/stats) */}
-        <div data-story="4" className="mt-5">
-          <p className="text-base sm:text-lg text-white font-semibold" data-testid="people-vouching" data-state={statsState.status}>
-            <span className="text-accent tabular-nums" title={people.unavailable ?? undefined}>{peopleHere.count}</span>{' '}
-            {peopleHere.rest}
-          </p>
-          {invitation && <p className="mt-0.5 text-sm sm:text-base text-accent font-medium" data-testid="invitation">{invitation}</p>}
+          {/* 3 — two ways in */}
+          <div data-story="3" className="mt-6 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+            <Link href="/agents" className="btn-primary group w-full sm:w-auto">
+              {LANDING_CTA_VOUCH}
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+            <Link href="/docs" className="btn-secondary w-full sm:w-auto">
+              <Code2 className="w-4 h-4" />
+              {DEV_HEADING}
+            </Link>
+          </div>
+
+          {/* 4 — the check row */}
+          <ul data-story="4" className="mt-5 flex flex-wrap gap-x-4 gap-y-1.5 font-mono text-[11px] leading-4 tracking-wide text-[#B5BDC6]" data-testid="hero-checks">
+            {LANDING_CHECKS.map((c) => (
+              <li key={c} className="inline-flex items-center gap-1.5">
+                <Check aria-hidden className="w-3.5 h-3.5 text-accent" strokeWidth={3} />
+                {c}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        {/* 5 — two ways in */}
-        <div data-story="5" className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3">
-          <Link href="/agents" className="btn-primary group w-full sm:w-auto max-w-md">
-            {LANDING_CTA_VOUCH}
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </Link>
-          <Link href="/docs" className="btn-secondary w-full sm:w-auto max-w-md">
-            <Code2 className="w-4 h-4" />
-            {LANDING_CTA_DEVELOPERS}
-          </Link>
+        {/* 5 — a live example: the most vouched agent right now, with its seals */}
+        <div data-story="5">
+          <ExampleAgentCard agent={example} />
         </div>
       </div>
     </section>

@@ -46,7 +46,7 @@ describe('where the accent is', () => {
 
   it('numbers highlighted inside a sentence (the landing\'s one number) and the invitation under it', () => {
     const hero = read('components/landing/Hero.tsx')
-    expect(hero).toMatch(/text-accent tabular-nums/)
+    expect(hero).toMatch(/text-accent font-semibold tabular-nums/)
     expect(hero).toMatch(/text-accent[^"]*" data-testid="invitation"/)
   })
 

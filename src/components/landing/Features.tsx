@@ -93,7 +93,7 @@ export function Features() {
             Platform Features
           </div>
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-display leading-display">
-            Why <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] via-[#E8B84B] to-[#C9A84C]">AgentScore</span>?
+            Why AgentScore?
           </h2>
           <p className="mt-5 text-lg text-[#7A838D] max-w-xl mx-auto leading-relaxed">
             Trust in an AI agent, the way people give it:

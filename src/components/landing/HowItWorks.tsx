@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Search, Users, BadgeCheck } from 'lucide-react'
 import { LANDING_TIERS_LINE, type ExplainerTerm } from '@/lib/people-copy'
 import { Explainer } from '@/components/shared/Explainer'
+import { AccentWord } from '@/components/shared/AccentWord'
 
 // Etap 5b Run 2: how it works is about people vouching — the landing's three steps, told in full.
 const steps = [
@@ -84,7 +85,8 @@ export function HowItWorks() {
             Getting Started
           </div>
           <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-display leading-display">
-            How It <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] via-[#E8B84B] to-[#2ECC71]">Works</span>
+            {/* The landing's one section accent word (Etap 6b) */}
+            How It <AccentWord>Works</AccentWord>
           </h2>
           <p className="mt-5 text-lg text-[#7A838D] max-w-xl mx-auto">
             Real people vouch for AI agents — one area at a time, with their names on it

@@ -211,11 +211,7 @@ export function FeaturedAgents() {
                 Live on Intuition Testnet
               </div>
               <h2 className="text-4xl sm:text-5xl font-extrabold tracking-display leading-display">
-                Explore the{' '}
-                <span className="text-transparent bg-clip-text"
-                  style={{ backgroundImage: `linear-gradient(90deg, ${tabCfg.accentHex}, ${tabCfg.accentHex}aa)` }}>
-                  Registry
-                </span>
+                Explore the Registry
               </h2>
               <p className="mt-2 text-[#7A838D] text-lg">
                 Real on-chain data from Intuition Testnet — click any card to explore

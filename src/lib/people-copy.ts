@@ -156,7 +156,7 @@ export const BACKING_TREND = 'Backing trend'
 // ─── The landing: the story on one phone screen (Etap 5b Run 2) ───────────────
 
 export const LIVE_ON_TESTNET = 'Live on Intuition Testnet'
-export const LANDING_TITLE = ['Trust Layer for', 'AI Agents'] as const
+export const LANDING_TITLE = ['Trust layer for', 'AI agents.'] as const
 export const LANDING_SUB = 'Real people vouch for AI agents, on-chain. One wallet can never do it alone.'
 export const LANDING_STEPS = ['Find an agent', 'See who vouches, and for what', 'Vouch for one you know'] as const
 /** "1 person vouches for agents here" — distinct live people who vouch (/api/v1/stats attesters). */
@@ -276,3 +276,18 @@ export const hiddenNote = (n: number) =>
   `${n} hidden: test fixtures and duplicate registrations of the same agent — counted here, not shown in the list.`
 /** The timeline's pre-canonical skill claim: "Skill added: watch"; the raw predicate stays in its details. */
 export const skillAdded = (skillName: string) => `Skill added: ${skillName}`
+
+// ─── The hero in the new type (Etap 6b) ───────────────────────────────────────
+
+/** The hero's eyebrow — mono, amber, uppercase via .eyebrow, "//" via .eyebrow-slash. */
+export const HERO_EYEBROW = `Trust layer · ${LIVE_ON_TESTNET}`
+/**
+ * The sentence after the subtitle, its lead in the accent: "1 person" · "vouches for agents here."
+ * The live N from /api/v1/stats (null = not read → "—", never a 0).
+ */
+export function peopleHereLead(n: number | null): { lead: string; rest: string } {
+  if (n == null) return { lead: '—', rest: 'people vouch for agents here.' }
+  return { lead: `${n} ${plural(n, 'person', 'people')}`, rest: `${plural(n, 'vouches', 'vouch')} for agents here.` }
+}
+/** The check row under the hero's buttons (mono, small). tTRUST keeps its lowercase t. */
+export const LANDING_CHECKS = ['TESTNET tTRUST IS FREE', 'EVERY VOUCH IS ON-CHAIN', 'ONE WALLET CAN NEVER DO IT ALONE'] as const
