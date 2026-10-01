@@ -145,10 +145,10 @@ export function Hero() {
         {/* 4 — one number, and the invitation under it (never hard-coded: /api/v1/stats) */}
         <div data-story="4" className="mt-5">
           <p className="text-base sm:text-lg text-white font-semibold" data-testid="people-vouching" data-state={statsState.status}>
-            <span className="text-[#C8963C] tabular-nums" title={people.unavailable ?? undefined}>{peopleHere.count}</span>{' '}
+            <span className="text-accent tabular-nums" title={people.unavailable ?? undefined}>{peopleHere.count}</span>{' '}
             {peopleHere.rest}
           </p>
-          {invitation && <p className="mt-0.5 text-sm sm:text-base text-[#C8963C] font-medium" data-testid="invitation">{invitation}</p>}
+          {invitation && <p className="mt-0.5 text-sm sm:text-base text-accent font-medium" data-testid="invitation">{invitation}</p>}
         </div>
 
         {/* 5 — two ways in */}

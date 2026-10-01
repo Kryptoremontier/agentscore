@@ -824,7 +824,7 @@ function ClaimsPageContent() {
           {/* Header */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <div className="flex items-center gap-2 mb-4">
-              <span className="eyebrow eyebrow-slash text-[#C8963C]">
+              <span className="eyebrow eyebrow-slash text-accent">
                 Live on Intuition Testnet
               </span>
             </div>

@@ -9,7 +9,7 @@ import type { ReactNode } from 'react'
 
 export function AccentWord({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <span className={`relative inline-block font-accent italic font-normal tracking-normal text-[#C8963C] pr-[0.06em] ${className}`} data-accent-word>
+    <span className={`relative inline-block font-accent italic font-normal tracking-normal text-accent pr-[0.06em] ${className}`} data-accent-word>
       {children}
       <svg
         aria-hidden

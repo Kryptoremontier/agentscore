@@ -1134,7 +1134,7 @@ function SkillsPageContent() {
             className="mb-10"
           >
             <div className="flex items-center gap-2 mb-4">
-              <span className="eyebrow eyebrow-slash text-[#C8963C]">
+              <span className="eyebrow eyebrow-slash text-accent">
                 Live on Intuition Testnet
               </span>
             </div>

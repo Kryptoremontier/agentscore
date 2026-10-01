@@ -63,7 +63,7 @@ export function AgentsStatusLine(i: AgentsStatusInput) {
         nameFromContent
         button={agentsStatusText(i)}
         testId="agents-status-button"
-        buttonClassName="text-xs text-[#7A838D] underline decoration-dotted decoration-[#7A838D]/60 underline-offset-4 hover:text-[#B5BDC6] cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C8963C]/60 rounded"
+        buttonClassName="text-xs text-[#7A838D] underline decoration-dotted decoration-[#7A838D]/60 underline-offset-4 hover:text-[#B5BDC6] cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 rounded"
       >
         {agentsStatusDetails(i).map((line) => <p key={line} className="[&+p]:mt-1.5">{line}</p>)}
       </InfoPopover>

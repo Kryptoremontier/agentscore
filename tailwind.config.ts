@@ -32,6 +32,7 @@ const config: Config = {
         },
 
         accent: {
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)', // Etap 6b amber #F5A524 (globals.css --accent)
           gold: '#B8860B',          // Energy Glow gold
           amber: '#A87820',         // Deep amber
           teal: '#2EE6D6',          // AI Tech Accent teal

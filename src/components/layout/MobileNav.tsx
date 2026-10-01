@@ -8,7 +8,7 @@ import { User, Menu, X, Bug } from 'lucide-react'
 import { WalletButton } from '@/components/wallet/WalletButton'
 import { cn } from '@/lib/cn'
 import { BugReportModal } from '@/components/shared/BugReportModal'
-import { PRIMARY_NAV, MORE_NAV, MORE_LABEL, isNavActive, type NavItem } from './nav-items'
+import { PRIMARY_NAV, MORE_NAV, MORE_LABEL, ACCENT, isNavActive, type NavItem } from './nav-items'
 
 // Etap 5b Run 2: the phone's bottom nav is Agents · How it works · More. "For developers" opens the
 // More sheet, above everything else under More (components/layout/nav-items.ts — the sidebar's model).
@@ -52,11 +52,11 @@ export function MobileBottomNav() {
               >
                 <tab.icon
                   className="w-5 h-5 transition-colors"
-                  style={{ color: active ? tab.color : 'rgba(255,255,255,0.3)' }}
+                  style={{ color: active ? ACCENT : 'rgba(255,255,255,0.3)' }}
                 />
                 <span
                   className="text-[10px] font-medium transition-colors"
-                  style={{ color: active ? tab.color : 'rgba(255,255,255,0.3)' }}
+                  style={{ color: active ? ACCENT : 'rgba(255,255,255,0.3)' }}
                 >
                   {tab.label}
                 </span>
@@ -71,11 +71,11 @@ export function MobileBottomNav() {
           >
             <Menu
               className="w-5 h-5"
-              style={{ color: menuOpen ? '#C8963C' : 'rgba(255,255,255,0.3)' }}
+              style={{ color: menuOpen ? ACCENT : 'rgba(255,255,255,0.3)' }}
             />
             <span
               className="text-[10px] font-medium"
-              style={{ color: menuOpen ? '#C8963C' : 'rgba(255,255,255,0.3)' }}
+              style={{ color: menuOpen ? ACCENT : 'rgba(255,255,255,0.3)' }}
             >
               {MORE_LABEL}
             </span>
