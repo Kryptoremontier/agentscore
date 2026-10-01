@@ -13,6 +13,15 @@
   --accent-gold: 184 134 11;     /* #B8860B Dark Goldenrod */
   --accent-amber: 168 120 32;    /* #A87820 Deep Amber */
   --accent-teal: 46 230 214;     /* #2EE6D6 AI Tech Teal */
+
+  /* Type (Etap 6b). Families come from next/font (app/layout.tsx): --font-inter (body/UI),
+     --font-display (Inter Tight: h1/h2), --font-accent (Instrument Serif italic: one accent word
+     per headline), --font-mono (JetBrains Mono: eyebrows and the landing's check row only). */
+  /* ≈ −0.04em in a standard grotesk: Inter Tight is already spaced tighter, so −0.03em on it
+     reads the same without letters touching ("Agents" at 48 px). */
+  --tracking-display: -0.03em;
+  --leading-display: 0.95;
+  --tracking-eyebrow: 0.16em;
 }
 
 /* ============================================
@@ -26,6 +35,32 @@ html {
 body {
   @apply bg-[rgb(var(--background))] text-white antialiased;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Every h1/h2 is set in the display grotesk. The large ones (page and section titles) also take
+   the display rhythm — heavy, tracking-display, leading-display — on the element itself. */
+@layer base {
+  h1, h2 {
+    font-family: var(--font-display), var(--font-inter), system-ui, sans-serif;
+  }
+}
+
+/* Eyebrows — the small label over a title: mono, uppercase, open tracking (Etap 6b). Mono is for
+   eyebrows and the landing's check row only, never for data labels. */
+@layer components {
+  .eyebrow {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+  }
+  /* "// LABEL" — the slashes are decoration: read as nothing where the alt syntax is supported. */
+  .eyebrow-slash::before {
+    content: "// ";
+    content: "// " / "";
+  }
 }
 
 /* Tight letter spacing for headlines */

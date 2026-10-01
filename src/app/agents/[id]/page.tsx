@@ -202,7 +202,7 @@ export default function AgentDetailPage() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-2xl p-8 space-y-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <h1 className="text-2xl font-bold">{name}</h1>
+                  <h1 className="text-2xl font-extrabold tracking-display leading-display">{name}</h1>
                   {cohortMatch && <span className="text-xs text-[#8B5CF6] bg-[#8B5CF6]/10 px-2 py-0.5 rounded-full">ERC-8004</span>}
                   <AgentTierChip tier={agentTier} loading={profileLoading} />
                   <Explainer term="tiers" />
@@ -256,7 +256,7 @@ export default function AgentDetailPage() {
                 <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
                   <Flag className="w-8 h-8 text-red-500" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Agent Not Found</h2>
+                <h2 className="text-2xl mb-2 font-extrabold tracking-display leading-display">Agent Not Found</h2>
                 <p className="text-text-muted mb-6">
                   {error || 'The agent you are looking for could not be found. It may not exist yet or the data is still being indexed.'}
                 </p>

@@ -883,7 +883,7 @@ export default function PredicatesAdminPage() {
               <ChevronRight className="w-3 h-3" />
               <span className="text-[#C8963C]">Predicates</span>
             </div>
-            <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
+            <h1 className="text-3xl mb-2 flex items-center gap-3 font-extrabold tracking-display leading-display">
               <ShieldAlert className="w-7 h-7 text-[#C8963C]" />
               Canonical Predicates Registry
             </h1>

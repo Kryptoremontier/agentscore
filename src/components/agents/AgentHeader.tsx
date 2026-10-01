@@ -49,7 +49,7 @@ export function AgentHeader({ agent, action, stats, tier, tierLoading }: AgentHe
                 tier chip beside it pushed the page 187 px past the screen (Etap 5a). */}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
-                <h1 className="text-2xl sm:text-3xl font-bold break-words min-w-0">{agent.name}</h1>
+                <h1 className="text-2xl sm:text-3xl break-words min-w-0 font-extrabold tracking-display leading-display">{agent.name}</h1>
                 {/* Was a "Verified" badge on every scored agent (verificationLevel is hardcoded
                     'wallet'). The tier comes only from attestations (thesis §6). */}
                 <span className="inline-flex items-center gap-1.5">

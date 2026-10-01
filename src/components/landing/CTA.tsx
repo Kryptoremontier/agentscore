@@ -24,7 +24,7 @@ export function CTA() {
             <BadgeCheck className="w-8 h-8 text-[#C8963C]" />
           </div>
 
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-display leading-display">
             Know an agent that delivers?
           </h2>
 

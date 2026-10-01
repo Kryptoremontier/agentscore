@@ -172,7 +172,7 @@ export function EvaluatorsClient({ initialData: data }: { initialData: Evaluator
               ACCURACY-WEIGHTED STAKING
             </div>
 
-            <h1 className="text-4xl font-bold mb-3">
+            <h1 className="text-4xl mb-3 font-extrabold tracking-display leading-display">
               <span style={{ background: 'linear-gradient(135deg,#C8963C,#E8B84B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 Evaluator Leaderboard
               </span>

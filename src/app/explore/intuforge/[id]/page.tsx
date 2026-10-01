@@ -210,7 +210,7 @@ export default async function ProjectProfilePage({ params, searchParams: _search
           {/* Header */}
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <h1 className="text-2xl font-bold text-white">{project.name}</h1>
+              <h1 className="text-2xl text-white font-extrabold tracking-display leading-display">{project.name}</h1>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: stageColor }} />
                 <span className={`text-xs font-medium ${PROJECT_STAGE_COLORS[project.stage]}`}>

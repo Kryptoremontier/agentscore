@@ -1466,7 +1466,7 @@ export default function DocsPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-[#C8963C] animate-pulse" />
               Platform Documentation
             </div>
-            <h1 className="text-5xl font-bold text-white mb-4 leading-tight">
+            <h1 className="text-5xl text-white mb-4 font-extrabold tracking-display leading-display">
               How{' '}
               <span className="text-transparent bg-clip-text"
                 style={{ backgroundImage: 'linear-gradient(90deg,#C8963C,#E8B84B)' }}>

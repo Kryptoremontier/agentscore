@@ -55,7 +55,7 @@ function RegisterContent() {
                 <CheckCircle className="w-10 h-10 text-trust-good" />
               </motion.div>
 
-              <h1 className="text-3xl font-bold mb-2">{isSkill ? 'Skill Registered!' : 'Agent Registered!'}</h1>
+              <h1 className="text-3xl mb-2 font-extrabold tracking-display leading-display">{isSkill ? 'Skill Registered!' : 'Agent Registered!'}</h1>
               <p className="text-text-secondary mb-8">
                 Successfully created on the Intuition Protocol.
               </p>
@@ -153,7 +153,7 @@ function RegisterContent() {
           >
             <Sparkles className="w-8 h-8" style={{ color: '#C8963C', filter: 'drop-shadow(0 0 8px rgba(200,150,60,0.8))' }} />
           </div>
-          <h1 className="text-4xl font-bold mb-4">Register on AgentScore</h1>
+          <h1 className="text-4xl mb-4 font-extrabold tracking-display leading-display">Register on AgentScore</h1>
           <p className="text-xl text-text-secondary max-w-2xl mx-auto">
             Create an on-chain identity and join the trust network.
             Build reputation through community attestations.

@@ -87,12 +87,12 @@ export function Features() {
           viewport={{ once: true }}
           className="text-center mb-20"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6 text-xs font-semibold uppercase tracking-widest"
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6 eyebrow"
             style={{ background: 'rgba(200,150,60,0.10)', border: '1px solid rgba(200,150,60,0.25)', color: '#C8963C' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-[#C8963C] animate-pulse" />
             Platform Features
           </div>
-          <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-none">
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-display leading-display">
             Why <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] via-[#E8B84B] to-[#C9A84C]">AgentScore</span>?
           </h2>
           <p className="mt-5 text-lg text-[#7A838D] max-w-xl mx-auto leading-relaxed">

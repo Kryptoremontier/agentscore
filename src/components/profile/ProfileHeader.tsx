@@ -120,7 +120,7 @@ export function ProfileHeader({ profile, onUpdate }: ProfileHeaderProps) {
           ) : (
             <>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-bold text-white leading-tight">
+                <h1 className="text-lg text-white font-extrabold tracking-display leading-display">
                   {profile.name || 'Anonymous User'}
                 </h1>
                 {/* Expert level — inline with name */}

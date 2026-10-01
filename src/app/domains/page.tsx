@@ -573,7 +573,7 @@ function DomainsPageContent() {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-3">
                 <Layers className="w-6 h-6" style={{ color: '#8B5CF6' }} />
-                <h1 className="text-2xl font-bold text-white">Agent Domains</h1>
+                <h1 className="text-2xl text-white font-extrabold tracking-display leading-display">Agent Domains</h1>
               </div>
               <button
                 onClick={load}
@@ -740,7 +740,7 @@ function DomainsPageContent() {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <Layers className="w-5 h-5" style={{ color: '#8B5CF6' }} />
-                        <h2 className="text-2xl font-bold text-white">{selectedDomain.name}</h2>
+                        <h2 className="text-2xl text-white font-extrabold tracking-display leading-display">{selectedDomain.name}</h2>
                       </div>
                       <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
                         {selectedDomain.agentCount} {selectedDomain.agentCount === 1 ? 'agent' : 'agents'} ranked

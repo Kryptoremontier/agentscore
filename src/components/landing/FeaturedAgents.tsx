@@ -205,12 +205,12 @@ export function FeaturedAgents() {
         >
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-4 text-xs font-semibold uppercase tracking-widest"
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-4 eyebrow"
                 style={{ background: `rgba(${tabCfg.accentRgb},0.08)`, border: `1px solid rgba(${tabCfg.accentRgb},0.2)`, color: tabCfg.accentHex }}>
                 <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: tabCfg.accentHex }} />
                 Live on Intuition Testnet
               </div>
-              <h2 className="text-4xl sm:text-5xl font-bold leading-tight">
+              <h2 className="text-4xl sm:text-5xl font-extrabold tracking-display leading-display">
                 Explore the{' '}
                 <span className="text-transparent bg-clip-text"
                   style={{ backgroundImage: `linear-gradient(90deg, ${tabCfg.accentHex}, ${tabCfg.accentHex}aa)` }}>

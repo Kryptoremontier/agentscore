@@ -824,14 +824,13 @@ function ClaimsPageContent() {
           {/* Header */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-1 h-5 bg-[#C8963C] rounded-full" />
-              <span className="text-xs font-semibold text-[#C8963C] uppercase tracking-widest">
+              <span className="eyebrow eyebrow-slash text-[#C8963C]">
                 Live on Intuition Testnet
               </span>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-3 leading-tight">
+                <h1 className="text-4xl md:text-5xl text-white mb-3 font-extrabold tracking-display leading-display">
                   Claims
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8963C] to-[#C9A84C]">
                     {' '}Registry

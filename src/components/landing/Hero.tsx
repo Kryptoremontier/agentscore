@@ -33,6 +33,7 @@ import {
 import { ExampleAgentCard, type ExampleAgent } from './ExampleAgentCard'
 import { Explainer } from '@/components/shared/Explainer'
 import { setHeroAgent } from './hero-agent'
+import { AccentWord } from '@/components/shared/AccentWord'
 
 function WaveText({ text, className }: { text: string; className?: string }) {
   return (
@@ -114,12 +115,10 @@ export function Hero() {
 
         {/* 1 — what this is */}
         <div data-story="1" className="mt-4">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tighter leading-[1.1]">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-display leading-display">
             <WaveText text={LANDING_TITLE[0]} className="block text-white drop-shadow-2xl" />
-            <WaveText
-              text={LANDING_TITLE[1]}
-              className="block bg-gradient-to-r from-[#C9A84C] via-[#C8963C] to-[#A87820] bg-clip-text text-transparent drop-shadow-2xl"
-            />
+            {/* The headline's one accent word (Etap 6b): the italic accent face and its swash */}
+            <AccentWord><WaveText text={LANDING_TITLE[1]} className="drop-shadow-2xl" /></AccentWord>
           </h1>
           <p className="mt-3 text-base sm:text-lg text-slate-300 max-w-xl mx-auto">
             {LANDING_SUB} <Explainer term="vouch" className="-mt-0.5" />

@@ -79,9 +79,19 @@ const config: Config = {
         },
       },
 
+      // Type tokens (Etap 6b) — the values live in globals.css :root; these name them.
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'var(--font-inter)', 'system-ui', 'sans-serif'],
+        accent: ['var(--font-accent)', 'Georgia', 'serif'],
         mono: ['var(--font-mono)', 'monospace'],
+      },
+      letterSpacing: {
+        display: 'var(--tracking-display)',
+        eyebrow: 'var(--tracking-eyebrow)',
+      },
+      lineHeight: {
+        display: 'var(--leading-display)',
       },
 
       fontSize: {

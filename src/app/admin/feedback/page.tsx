@@ -20,7 +20,7 @@ export default function FeedbackAdminPage() {
 
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
+            <h1 className="text-3xl mb-2 flex items-center gap-3 font-extrabold tracking-display leading-display">
               <Bug className="w-7 h-7" style={{ color: '#EF4444' }} />
               Bug Reports
             </h1>
