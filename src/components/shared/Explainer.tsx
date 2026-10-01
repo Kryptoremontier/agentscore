@@ -152,7 +152,7 @@ export function Explainer({ term, className = '' }: { term: ExplainerTerm; class
       button="?"
       testId="explainer"
       term={term}
-      buttonClassName={`${/\b(absolute|fixed)\b/.test(className) ? '' : 'relative'} z-10 inline-flex items-center justify-center w-4 h-4 flex-shrink-0 rounded-full border border-[#C8963C]/40 text-[#C8963C] text-[10px] font-bold leading-none align-middle hover:bg-[#C8963C]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C8963C]/60 ${className}`}
+      buttonClassName={`${/\b(absolute|fixed)\b/.test(className) ? '' : 'relative'} z-10 inline-flex items-center justify-center w-4 h-4 flex-shrink-0 rounded-full border border-[#C8963C]/40 text-[#C8963C] text-[10px] font-bold leading-none align-middle hover:bg-[#C8963C]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 ${className}`}
     >
       {before}
       {e.link && (

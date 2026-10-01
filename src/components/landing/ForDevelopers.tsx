@@ -62,7 +62,7 @@ export function ForDevelopers({ className = '' }: { className?: string }) {
           >
             <Code2 className="w-6 h-6 text-[#C8963C]" />
           </div>
-          <h3 className="text-lg font-bold text-white mb-2.5 leading-snug">{DEV_HEADING}</h3>
+          <h3 className="font-display text-2xl sm:text-3xl font-extrabold tracking-display leading-display text-white mb-3">{DEV_HEADING}</h3>
           <p className="text-[#B5BDC6] leading-relaxed text-sm mb-5">{DEV_LINE}</p>
           <Link href="/docs" className="group inline-flex items-center gap-1.5 text-sm font-medium text-[#C8963C] hover:text-[#E8B84B]">
             {LANDING_CTA_DEVELOPERS}

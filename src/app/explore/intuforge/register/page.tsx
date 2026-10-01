@@ -21,7 +21,7 @@ export default function RegisterProjectPage() {
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <span className="text-2xl">🏗️</span>
-          <h1 className="text-xl font-bold text-white">List Your Project on IntuForge</h1>
+          <h1 className="text-xl text-white font-extrabold tracking-display leading-display">List Your Project on IntuForge</h1>
         </div>
         <p className="text-sm text-white/40 leading-relaxed">
           Registration is <span className="text-emerald-400 font-medium">free</span> — only protocol gas.

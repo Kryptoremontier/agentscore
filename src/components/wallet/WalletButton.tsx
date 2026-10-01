@@ -62,10 +62,8 @@ export function WalletButton() {
 
   if (!isConnected) {
     return (
-      <Button
-        onClick={() => openConnectModal()}
-        className="bg-gradient-to-r from-[#C8963C] to-[#A87820] text-[#0F1113] font-bold hover:shadow-lg hover:shadow-[#C8963C]/25 border-0"
-      >
+      // The one primary style; on a phone it sits in the 390 px header next to search: tighter sides.
+      <Button onClick={() => openConnectModal()} className="px-3 sm:px-6">
         <Wallet className="w-4 h-4 mr-2" />
         Connect Wallet
       </Button>

@@ -806,11 +806,7 @@ export function RegisterAgentForm({ onSuccess }: RegisterAgentFormProps) {
             <button
               onClick={handleSubmit}
               disabled={loading || !cardData.name.trim()}
-              className={cn(
-                'w-full py-3 rounded-xl text-sm font-bold transition-all',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                'bg-gradient-to-r from-[#C8963C] to-[#E8B84B] text-black hover:opacity-90',
-              )}
+              className="btn-primary w-full"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

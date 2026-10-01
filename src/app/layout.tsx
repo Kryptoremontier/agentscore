@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Inter, Inter_Tight, Instrument_Serif, JetBrains_Mono } from 'next/font/google'
 import { Providers } from './providers'
 import { Navbar } from '@/components/layout/Navbar'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -18,6 +18,23 @@ const inter = Inter({
 const jetbrains = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
+  display: 'swap',
+})
+
+// Etap 6b type system (tokens: globals.css :root + tailwind.config.ts). Display: a heavy, tight
+// grotesk for h1/h2. Accent: an italic display face for one accent word per headline
+// (components/shared/AccentWord). Both free (OFL, Google Fonts).
+const interTight = Inter_Tight({
+  subsets: ['latin'],
+  variable: '--font-display',
+  display: 'swap',
+})
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  style: 'italic',
+  variable: '--font-accent',
   display: 'swap',
 })
 
@@ -65,7 +82,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jetbrains.variable} font-sans antialiased`}
+        className={`${inter.variable} ${interTight.variable} ${instrumentSerif.variable} ${jetbrains.variable} font-sans antialiased`}
         style={{
           backgroundImage: "url('/images/brand/gold/background.png')",
           backgroundSize: 'cover',

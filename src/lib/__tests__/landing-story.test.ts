@@ -30,11 +30,11 @@ describe('the first screen: five parts, in order', () => {
     expect(LIVE_ON_TESTNET).toBe('Live on Intuition Testnet')
     expect(peopleVouchHereParts(1)).toEqual({ count: '1', rest: 'person vouches for agents here' })
   })
-  it('the CTAs: vouch → /agents (primary), developers → /docs', () => {
-    const cta = hero.slice(hero.indexOf('data-story="5"'))
+  it('the CTAs: vouch → /agents (primary), developers → /docs (Etap 6b: story part 3)', () => {
+    const cta = hero.slice(hero.indexOf('data-story="3"'), hero.indexOf('data-story="4"'))
     expect(cta.indexOf('href="/agents"')).toBeLessThan(cta.indexOf('href="/docs"'))
     expect(cta).toMatch(/\{LANDING_CTA_VOUCH\}/)
-    expect(cta).toMatch(/\{LANDING_CTA_DEVELOPERS\}/)
+    expect(cta).toMatch(/\{DEV_HEADING\}/)
   })
   it('the example is the list\'s first row in its default order; the number is distinct live attesters', () => {
     expect(hero).toMatch(/mostVouched\(view, 1\)/)

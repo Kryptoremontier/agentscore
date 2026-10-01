@@ -109,7 +109,7 @@ export function ReportModal({
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold flex items-center gap-2">
+                <h2 className="text-2xl flex items-center gap-2 font-extrabold tracking-display leading-display">
                   <AlertTriangle className="w-6 h-6 text-trust-critical" />
                   Report Agent
                 </h2>

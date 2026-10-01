@@ -59,7 +59,7 @@ export default async function DomainScorePocPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 text-zinc-100">
-      <h1 className="mb-1 text-2xl font-bold">Domain-Scoped Trust — PoC</h1>
+      <h1 className="mb-1 text-2xl font-extrabold tracking-display leading-display">Domain-Scoped Trust — PoC</h1>
       <p className="mb-4 text-sm text-zinc-400">
         Live mainnet · {entities.length} entities · {scored.reduce((n, s) => n + s.result.totalAttestations, 0)}{' '}
         <code>has category</code> attestations

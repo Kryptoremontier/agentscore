@@ -20,6 +20,9 @@ export interface NavItem {
 
 export const HOW_IT_WORKS_HREF = '/#how-it-works'
 
+/** The active item's colour — the accent (Etap 6b, globals.css --accent), whatever the item's own colour. */
+export const ACCENT = 'rgb(var(--accent))'
+
 export const PRIMARY_NAV: readonly NavItem[] = [
   { href: '/agents', label: 'Agents', icon: Bot, color: '#C8963C' },
   { href: HOW_IT_WORKS_HREF, label: 'How it works', icon: BookOpenCheck, color: '#2ECC71' },

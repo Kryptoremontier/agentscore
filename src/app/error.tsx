@@ -22,7 +22,7 @@ export default function Error({
         <div className="w-16 h-16 rounded-full bg-[#ef4444]/10 flex items-center justify-center mx-auto mb-6">
           <AlertTriangle className="w-8 h-8 text-[#ef4444]" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">Something went wrong</h2>
+        <h2 className="text-2xl text-white mb-2 font-extrabold tracking-display leading-display">Something went wrong</h2>
         <p className="text-[#B5BDC6] mb-4">
           An unexpected error occurred. Please try refreshing the page.
         </p>

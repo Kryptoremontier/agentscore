@@ -46,7 +46,7 @@ export default function PublicProfilePage() {
       <PageBackground image="wave" opacity={0.25}>
         <div className="pt-24 pb-16">
           <div className="max-w-6xl mx-auto px-4 text-center py-20">
-            <h1 className="text-2xl font-bold mb-3">Invalid Address</h1>
+            <h1 className="text-2xl mb-3 font-extrabold tracking-display leading-display">Invalid Address</h1>
             <p className="text-[#7A838D] mb-6">The wallet address provided is not valid.</p>
             <Link href="/agents" className="text-primary hover:text-primary/80 transition-colors">
               Back to Explorer
@@ -229,7 +229,7 @@ function PublicHeader({ profile }: { profile: ReturnType<typeof useUserProfile>[
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold truncate">
+          <h1 className="text-2xl truncate font-extrabold tracking-display leading-display">
             {profile.name || 'Anonymous User'}
           </h1>
 

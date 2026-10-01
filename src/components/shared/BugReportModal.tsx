@@ -132,7 +132,7 @@ export function BugReportModal({ open, onClose }: BugReportModalProps) {
                     <Bug className="h-3.5 w-3.5" />
                     Report Bug
                   </div>
-                  <h2 className="text-2xl font-bold tracking-tight text-white">
+                  <h2 className="text-2xl text-white font-extrabold tracking-display leading-display">
                     Help improve <span className="bg-gradient-to-r from-[#C9A84C] via-[#C8963C] to-[#A87820] bg-clip-text text-transparent">AgentScore</span>
                   </h2>
                   <p className="mt-1 text-sm text-slate-400">

@@ -13,6 +13,24 @@
   --accent-gold: 184 134 11;     /* #B8860B Dark Goldenrod */
   --accent-amber: 168 120 32;    /* #A87820 Deep Amber */
   --accent-teal: 46 230 214;     /* #2EE6D6 AI Tech Teal */
+  /* The accent (Etap 6b): a brighter amber, for the headline's accent word, numbers highlighted
+     in a sentence, eyebrows, seals, the focus ring and the active nav item. #F5A524 on the dark
+     ground is 9.2:1. The background image keeps its own colours. */
+  --accent: 245 165 36;          /* #F5A524 */
+  /* Buttons (Etap 6b): one primary style everywhere — paper-white fill, near-black text, sharp
+     2px corners — and one outline secondary in the same shape. Ink on paper is 18:1. */
+  --paper: 244 241 234;          /* #F4F1EA */
+  --ink: 11 12 14;               /* #0B0C0E */
+  --radius-button: 2px;
+
+  /* Type (Etap 6b). Families come from next/font (app/layout.tsx): --font-inter (body/UI),
+     --font-display (Inter Tight: h1/h2), --font-accent (Instrument Serif italic: one accent word
+     per headline), --font-mono (JetBrains Mono: eyebrows and the landing's check row only). */
+  /* ≈ −0.04em in a standard grotesk: Inter Tight is already spaced tighter, so −0.03em on it
+     reads the same without letters touching ("Agents" at 48 px). */
+  --tracking-display: -0.03em;
+  --leading-display: 0.95;
+  --tracking-eyebrow: 0.16em;
 }
 
 /* ============================================
@@ -26,6 +44,85 @@ html {
 body {
   @apply bg-[rgb(var(--background))] text-white antialiased;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Every h1/h2 is set in the display grotesk. The large ones (page and section titles) also take
+   the display rhythm — heavy, tracking-display, leading-display — on the element itself. */
+@layer base {
+  h1, h2 {
+    font-family: var(--font-display), var(--font-inter), system-ui, sans-serif;
+  }
+}
+
+/* Keyboard focus: one visible ring in the accent wherever an element doesn't draw its own. */
+@layer base {
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 2px;
+  }
+}
+
+/* Eyebrows — the small label over a title: mono, uppercase, open tracking (Etap 6b). Mono is for
+   eyebrows and the landing's check row only, never for data labels. */
+@layer components {
+  .eyebrow {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+  }
+  /* Buttons: ≥ 44px tall, generous padding, a visible accent focus ring. Chips and tags keep
+     their own shapes. */
+  .btn-primary,
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-button);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+    transition: background-color 150ms, border-color 150ms, color 150ms;
+  }
+  .btn-primary {
+    background-color: rgb(var(--paper));
+    color: rgb(var(--ink));
+    border: 1px solid rgb(var(--paper));
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #ffffff;
+    border-color: #ffffff;
+  }
+  .btn-secondary {
+    background-color: transparent;
+    color: rgb(var(--paper));
+    border: 1px solid rgb(var(--paper) / 0.35);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: rgb(var(--paper) / 0.06);
+    border-color: rgb(var(--paper) / 0.7);
+  }
+  .btn-primary:focus-visible,
+  .btn-secondary:focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 2px;
+  }
+  .btn-primary:disabled,
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* "// LABEL" — the slashes are decoration: read as nothing where the alt syntax is supported. */
+  .eyebrow-slash::before {
+    content: "// ";
+    content: "// " / "";
+  }
 }
 
 /* Tight letter spacing for headlines */

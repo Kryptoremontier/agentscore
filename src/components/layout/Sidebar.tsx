@@ -8,7 +8,7 @@ import { User, ChevronDown, Bug, ShieldAlert, MoreHorizontal } from 'lucide-reac
 import { cn } from '@/lib/cn'
 import { isAdminWallet } from '@/lib/constants'
 import { BugReportModal } from '@/components/shared/BugReportModal'
-import { PRIMARY_NAV, MORE_NAV, MORE_LABEL, isNavActive, isUnderMore } from './nav-items'
+import { PRIMARY_NAV, MORE_NAV, MORE_LABEL, ACCENT, isNavActive, isUnderMore } from './nav-items'
 
 function GroupLabel({ label, first = false }: { label: string; first?: boolean }) {
   return (
@@ -21,7 +21,8 @@ function GroupLabel({ label, first = false }: { label: string; first?: boolean }
   )
 }
 
-function NavLink({ href, label, icon: Icon, color, active, badge }: { href: string; label: string; icon: React.ElementType; color: string; active: boolean; badge?: string }) {
+// `color` is the item's own colour (the More sheet's icons); the active state is always the accent.
+function NavLink({ href, label, icon: Icon, active, badge }: { href: string; label: string; icon: React.ElementType; color?: string; active: boolean; badge?: string }) {
 
   return (
     <Link
@@ -34,13 +35,12 @@ function NavLink({ href, label, icon: Icon, color, active, badge }: { href: stri
     >
       {active && (
         <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
-          style={{ background: color }}
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-accent"
         />
       )}
       <Icon
         className="w-5 h-5 shrink-0 transition-colors duration-150"
-        style={{ color: active ? color : 'rgba(255,255,255,0.32)' }}
+        style={{ color: active ? ACCENT : 'rgba(255,255,255,0.32)' }}
       />
       <span className={cn(
         'flex-1 text-sm font-medium whitespace-nowrap transition-colors duration-150 leading-none',
@@ -159,7 +159,7 @@ export function Sidebar() {
             >
               <User
                 className="w-5 h-5 shrink-0"
-                style={{ color: isNavActive('/profile', pathname) ? '#C8963C' : 'rgba(255,255,255,0.32)' }}
+                style={{ color: isNavActive('/profile', pathname) ? ACCENT : 'rgba(255,255,255,0.32)' }}
               />
               <span className="text-xs font-mono text-white/40 group-hover:text-white/60 transition-colors truncate">
                 {address.slice(0, 6)}…{address.slice(-4)}

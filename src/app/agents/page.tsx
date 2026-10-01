@@ -1537,14 +1537,13 @@ function AgentsPageContent() {
           >
             {/* Label */}
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-1 h-5 bg-[#C8963C] rounded-full" />
-              <span className="text-xs font-semibold text-[#C8963C] uppercase tracking-widest">
+              <span className="eyebrow eyebrow-slash text-accent">
                 Live on Intuition Testnet
               </span>
             </div>
 
             {/* Title and subtitle — plain words, no staking pitch (lib/people-copy.ts) */}
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-3 leading-tight">
+            <h1 className="text-4xl md:text-5xl text-white mb-3 font-extrabold tracking-display leading-display">
               {AGENTS_PAGE_TITLE}
             </h1>
             <p className="text-[#7A838D] text-lg max-w-2xl leading-relaxed">
@@ -1704,7 +1703,7 @@ function AgentsPageContent() {
               <p className="text-text-secondary mb-6">Try a different search term</p>
               <button
                 onClick={() => setSearchTerm('')}
-                className="px-4 py-2 bg-[#C8963C] rounded-lg text-white font-semibold hover:bg-[#C8963C]-hover transition-colors"
+                className="btn-primary"
               >
                 Clear search
               </button>
@@ -2405,7 +2404,7 @@ function AgentsPageContent() {
                           return shares <= 0 || shares > maxOwned || maxOwned <= 0
                         })())
                       }
-                      className="w-full py-3 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#2d7a5f] hover:bg-[#34a872]"
+                      className="btn-primary w-full"
                     >
                       {tradeAction === 'buy'
                         ? `Buy Shares${Number(voteAmount) > 0 && buyPreviewOC.sharesFloat > 0 ? ` · get ~${buyPreviewOC.sharesFloat.toFixed(3)}` : ''}`

@@ -70,7 +70,7 @@ export function ExampleAgentCard({ agent }: { agent: ExampleAgent }) {
       <div className="flex items-center gap-1.5 min-w-0">
         <Link
           href={`/agents?open=${agent.termId}`}
-          className="font-bold text-white text-base leading-tight truncate outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-[#C8963C]/60"
+          className="font-bold text-white text-base leading-tight truncate outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-accent/70"
         >
           {agent.name}
         </Link>

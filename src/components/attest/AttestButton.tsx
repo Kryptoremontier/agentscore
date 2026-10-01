@@ -20,7 +20,7 @@
  * get it free (the Hub link the landing uses). It used to end in a native browser dialog.
  */
 
-import { useState, useEffect, useMemo, type CSSProperties } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Award, Loader2, Check, AlertTriangle, ExternalLink, Wallet, Droplets } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient, useBalance, useSwitchChain } from 'wagmi'
@@ -60,23 +60,13 @@ interface AttestButtonProps {
   variant?: 'hero' | 'inline' | 'bar' | 'card'
 }
 
-const TRIGGER_STYLES: Record<NonNullable<AttestButtonProps['variant']>, { className: string; style: CSSProperties }> = {
-  hero: {
-    className: 'w-full py-3 rounded-xl text-sm md:text-base font-semibold transition-all hover:scale-[1.01] hover:brightness-110 flex items-center justify-center gap-2',
-    style: { background: '#8B5CF6', color: '#FFFFFF', boxShadow: '0 4px 20px rgba(139,92,246,0.35)' },
-  },
-  inline: {
-    className: 'px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:brightness-110 inline-flex items-center justify-center gap-2 whitespace-nowrap',
-    style: { background: '#8B5CF6', color: '#FFFFFF', boxShadow: '0 2px 12px rgba(139,92,246,0.3)' },
-  },
-  bar: {
-    className: 'w-full py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2',
-    style: { background: '#8B5CF6', color: '#FFFFFF', boxShadow: '0 2px 12px rgba(139,92,246,0.4)' },
-  },
-  card: {
-    className: 'w-full py-2.5 rounded-xl text-sm font-medium transition-all hover:scale-[1.01] flex items-center justify-center gap-2',
-    style: { background: 'rgba(139,92,246,0.10)', border: '1px solid rgba(139,92,246,0.25)', color: '#8B5CF6' },
-  },
+// Etap 6b: the one primary style (globals.css .btn-primary — paper fill, ink text, 2px corners,
+// ≥ 44px) for the vouch action wherever it appears; the card's subtle trigger is the secondary.
+const TRIGGER_STYLES: Record<NonNullable<AttestButtonProps['variant']>, { className: string }> = {
+  hero: { className: 'btn-primary w-full md:text-base' },
+  inline: { className: 'btn-primary whitespace-nowrap' },
+  bar: { className: 'btn-primary w-full' },
+  card: { className: 'btn-secondary w-full' },
 }
 
 type Status = 'pick' | 'preview' | 'pending' | 'success' | 'error'
@@ -204,7 +194,6 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
         }}
         data-testid="attest-cta"
         className={TRIGGER_STYLES[variant].className}
-        style={TRIGGER_STYLES[variant].style}
       >
         <Award className="w-4 h-4" />
         {VOUCH_CTA}
@@ -404,8 +393,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
                       <button
                         onClick={execute}
                         disabled={!domain || !stakeWei || !preview || wrongNetwork}
-                        className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-                        style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.35)', color: '#8B5CF6' }}
+                        className="btn-primary w-full"
                       >
                         {domain ? vouchIn(domain.label) : VOUCH_PICK_AREA}
                       </button>
@@ -426,14 +414,13 @@ function AttestStepPanel({ step, agentName }: { step: Exclude<AttestStep, 'ready
   const { openConnectModal } = useConnectModal()
   const { switchChain, isPending: switching, isError: switchFailed } = useSwitchChain()
   const box = 'rounded-xl p-4 space-y-3 text-sm'
-  const primary = 'w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50'
-  const primaryStyle = { background: '#8B5CF6', color: '#FFFFFF' }
+  const primary = 'btn-primary w-full'
 
   if (step === 'disconnected') {
     return (
       <div className={box} style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)' }} data-testid="attest-step" data-step={step}>
         <p className="text-white">{connectToVouch(agentName)}</p>
-        <button className={primary} style={primaryStyle} onClick={() => openConnectModal({ reason: connectToVouch(agentName) })}>
+        <button className={primary} onClick={() => openConnectModal({ reason: connectToVouch(agentName) })}>
           <Wallet className="w-4 h-4" /> Connect wallet
         </button>
       </div>
@@ -443,7 +430,7 @@ function AttestStepPanel({ step, agentName }: { step: Exclude<AttestStep, 'ready
     return (
       <div className={box} style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }} data-testid="attest-step" data-step={step}>
         <p className="text-white">{VOUCH_WRONG_NETWORK}</p>
-        <button className={primary} style={primaryStyle} disabled={switching} onClick={() => switchChain({ chainId: ATTEST_CHAIN_ID })}>
+        <button className={primary} disabled={switching} onClick={() => switchChain({ chainId: ATTEST_CHAIN_ID })}>
           {switching ? <><Loader2 className="w-4 h-4 animate-spin" /> Switching…</> : 'Switch to Intuition Testnet'}
         </button>
         {switchFailed && (
@@ -464,7 +451,7 @@ function AttestStepPanel({ step, agentName }: { step: Exclude<AttestStep, 'ready
   return (
     <div className={box} style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.25)' }} data-testid="attest-step" data-step={step}>
       <p className="text-white">You need a little testnet tTRUST to vouch — it&apos;s free.</p>
-      <a href={INTUITION_HUB_URL} target="_blank" rel="noopener noreferrer" className={primary} style={primaryStyle}>
+      <a href={INTUITION_HUB_URL} target="_blank" rel="noopener noreferrer" className={primary}>
         <Droplets className="w-4 h-4" /> Get free tTRUST from Intuition Hub <ExternalLink className="w-3.5 h-3.5" />
       </a>
       <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>This moves on by itself once the tTRUST arrives.</p>

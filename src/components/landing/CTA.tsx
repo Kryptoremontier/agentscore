@@ -8,7 +8,6 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowRight, Code2, BadgeCheck } from 'lucide-react'
-import { cn } from '@/lib/cn'
 import { LANDING_CTA_VOUCH, LANDING_CTA_DEVELOPERS } from '@/lib/people-copy'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 
@@ -24,7 +23,7 @@ export function CTA() {
             <BadgeCheck className="w-8 h-8 text-[#C8963C]" />
           </div>
 
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-display leading-display">
             Know an agent that delivers?
           </h2>
 
@@ -38,21 +37,11 @@ export function CTA() {
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/agents"
-              className={cn(
-                'group flex items-center gap-2 px-8 py-4 rounded-xl',
-                'bg-gradient-to-r from-[#C8963C] to-[#A87820] text-[#0F1113] font-bold',
-                'hover:shadow-xl hover:shadow-[#C8963C]/30 transition-all duration-300',
-              )}
-            >
+            <Link href="/agents" className="btn-primary group px-8">
               {LANDING_CTA_VOUCH}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <Link
-              href="/docs"
-              className="flex items-center gap-2 px-6 py-4 rounded-xl bg-white/5 border border-[#C8963C]/30 hover:bg-[#C8963C]/10 hover:border-[#C8963C]/50 font-semibold text-white transition-all duration-300"
-            >
+            <Link href="/docs" className="btn-secondary">
               <Code2 className="w-5 h-5" />
               {LANDING_CTA_DEVELOPERS}
             </Link>

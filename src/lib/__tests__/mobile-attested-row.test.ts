@@ -33,7 +33,8 @@ describe('the profile header on a phone', () => {
   it('the name block can shrink and wrap (a long name + the tier chip pushed OPEN CLAW\'s page to 577 px)', () => {
     const header = read('components/agents/AgentHeader.tsx')
     expect(header).toMatch(/<div className="min-w-0 flex-1">\s*<div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">/)
-    expect(header).toMatch(/<h1 className="text-2xl sm:text-3xl font-bold break-words min-w-0">/)
+    // Etap 6b: the display rhythm on the h1 (font-extrabold tracking-display leading-display) — still wraps.
+    expect(header).toMatch(/<h1 className="text-2xl sm:text-3xl break-words min-w-0 font-extrabold tracking-display leading-display">/)
   })
 })
 

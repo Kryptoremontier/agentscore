@@ -32,6 +32,7 @@ const config: Config = {
         },
 
         accent: {
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)', // Etap 6b amber #F5A524 (globals.css --accent)
           gold: '#B8860B',          // Energy Glow gold
           amber: '#A87820',         // Deep amber
           teal: '#2EE6D6',          // AI Tech Accent teal
@@ -46,6 +47,10 @@ const config: Config = {
           low: '#FF8000',           // 30-49 (orange)
           critical: '#FF4D4F',      // 0-29 Risk red
         },
+
+        // Buttons (Etap 6b): paper fill, ink text (globals.css --paper / --ink)
+        paper: 'rgb(var(--paper) / <alpha-value>)',
+        ink: 'rgb(var(--ink) / <alpha-value>)',
 
         // Text colors
         text: {
@@ -79,9 +84,19 @@ const config: Config = {
         },
       },
 
+      // Type tokens (Etap 6b) — the values live in globals.css :root; these name them.
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'var(--font-inter)', 'system-ui', 'sans-serif'],
+        accent: ['var(--font-accent)', 'Georgia', 'serif'],
         mono: ['var(--font-mono)', 'monospace'],
+      },
+      letterSpacing: {
+        display: 'var(--tracking-display)',
+        eyebrow: 'var(--tracking-eyebrow)',
+      },
+      lineHeight: {
+        display: 'var(--leading-display)',
       },
 
       fontSize: {
@@ -152,6 +167,7 @@ const config: Config = {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        button: 'var(--radius-button)', // Etap 6b: sharp buttons (globals.css --radius-button)
       },
 
       backgroundImage: {

@@ -97,7 +97,7 @@ export default function TestIntuitionPage() {
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">
+          <h1 className="text-4xl mb-4 font-extrabold tracking-display leading-display">
             🧪 Intuition Protocol Test Lab
           </h1>
           <p className="text-text-secondary">
@@ -746,7 +746,7 @@ export default function TestIntuitionPage() {
                 <div className="text-5xl mb-3">
                   {pendingVote.type === 'trust' ? '👍' : '👎'}
                 </div>
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className="text-2xl text-white font-extrabold tracking-display leading-display">
                   Confirm {pendingVote.type === 'trust' ? 'TRUST' : 'DISTRUST'}
                 </h2>
                 <p className="text-text-secondary text-sm mt-1">

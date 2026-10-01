@@ -30,10 +30,10 @@ const RING: Record<Size, { box: string; icon: string }> = {
 function Ring({ size, kind }: { size: Size; kind: 'filled' | 'open' | 'loading' }) {
   const box = `${RING[size].box} flex-shrink-0 rounded-full`
   if (kind === 'loading') return <span aria-hidden className={`${box} inline-block bg-white/[0.08] animate-pulse`} />
-  if (kind === 'open') return <span aria-hidden className={`${box} inline-block border border-dashed border-[#C8963C]/35`} />
+  if (kind === 'open') return <span aria-hidden className={`${box} inline-block border border-dashed border-accent/40`} />
   return (
-    <span aria-hidden className={`${box} inline-flex items-center justify-center bg-[#C8963C]/15 border border-[#C8963C]/60`}>
-      <Check className={`${RING[size].icon} text-[#C8963C]`} strokeWidth={3} />
+    <span aria-hidden className={`${box} inline-flex items-center justify-center bg-accent/15 border border-accent/70`}>
+      <Check className={`${RING[size].icon} text-accent`} strokeWidth={3} />
     </span>
   )
 }
@@ -55,7 +55,7 @@ export function SealRow({ attesters, size, className = '' }: {
       return (
         <div {...common} aria-busy className={`grid grid-cols-3 gap-2 ${className}`}>
           {rings.map((r, i) => (
-            <div key={i} className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl px-2 py-2.5 flex flex-col items-center gap-1.5">
+            <div key={i} className="bg-[#171A1D] border border-accent/15 rounded-xl px-2 py-2.5 flex flex-col items-center gap-1.5">
               {r}
               <span aria-hidden className="h-3.5 w-16 rounded bg-white/[0.06] animate-pulse" />
               <span aria-hidden className="h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
@@ -115,14 +115,14 @@ export function SealRow({ attesters, size, className = '' }: {
     <div {...common} className={className}>
       <ul aria-label={label} className="grid grid-cols-3 gap-2">
         {slots.filled.map((a) => (
-          <li key={a.wallet} data-seal="filled" className="bg-[#171A1D] border border-[#C8963C]/12 rounded-xl px-2 py-2.5 flex flex-col items-center text-center min-w-0">
+          <li key={a.wallet} data-seal="filled" className="bg-[#171A1D] border border-accent/15 rounded-xl px-2 py-2.5 flex flex-col items-center text-center min-w-0">
             <Ring size="lg" kind="filled" />
             <PersonName wallet={a.wallet} className="mt-1.5 block max-w-full truncate font-mono text-xs text-white" />
             <span className="block max-w-full truncate text-[10px] text-[#7A838D]" title={sealAreas(a.domains)}>{sealAreas(a.domains)}</span>
           </li>
         ))}
         {open.map((i) => (
-          <li key={`open-${i}`} data-seal="open" className="border border-dashed border-[#C8963C]/20 rounded-xl px-2 py-2.5 flex flex-col items-center text-center">
+          <li key={`open-${i}`} data-seal="open" className="border border-dashed border-accent/25 rounded-xl px-2 py-2.5 flex flex-col items-center text-center">
             <Ring size="lg" kind="open" />
             <span className="mt-1.5 text-xs text-[#7A838D]">{SEAL_OPEN}</span>
             <span aria-hidden className="text-[10px]">&nbsp;</span>

@@ -30,12 +30,12 @@ describe('the invitation under the one number', () => {
     expect(invitationLine(null)).toBeNull()
   })
 
-  it('N comes from /api/v1/stats (the number printed above it), never hard-coded — inside story part 4', () => {
+  it('N comes from /api/v1/stats (the number printed before it), never hard-coded — inside story part 2 (Etap 6b)', () => {
     const hero = code('components/landing/Hero.tsx')
     expect(hero).toMatch(/const invitation = invitationLine\(people\.value\)/)
-    const part4 = hero.slice(hero.indexOf('data-story="4"'), hero.indexOf('data-story="5"'))
-    expect(part4).toContain('data-testid="people-vouching"')
-    expect(part4).toContain('{invitation}')
+    const part2 = hero.slice(hero.indexOf('data-story="2"'), hero.indexOf('data-story="3"'))
+    expect(part2).toContain('data-testid="people-vouching"')
+    expect(part2).toContain('{invitation}')
     expect(hero).not.toMatch(/Be the second|Add yours/)
   })
 })

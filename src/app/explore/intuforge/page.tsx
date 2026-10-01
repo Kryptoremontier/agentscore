@@ -56,7 +56,7 @@ export default async function IntuforgePage() {
             >
               <Hammer className="w-4.5 h-4.5 text-[#C8963C]" />
             </div>
-            <h1 className="text-2xl font-bold text-white">IntuForge</h1>
+            <h1 className="text-2xl text-white font-extrabold tracking-display leading-display">IntuForge</h1>
             <span
               className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider"
               style={{ background: 'rgba(200,150,60,0.12)', color: '#C8963C', border: '1px solid rgba(200,150,60,0.25)' }}
