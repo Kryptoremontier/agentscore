@@ -113,8 +113,10 @@ describe('mono for eyebrows (and the landing check row) — not for data labels'
     for (const f of ['app/agents/page.tsx', 'app/skills/page.tsx', 'app/claims/page.tsx']) {
       expect(read(f), f).toMatch(/className="eyebrow eyebrow-slash /)
     }
+    // The landing's section eyebrows too (6b polish): the same mono amber "// …" line, no pill.
     for (const f of ['components/landing/HowItWorks.tsx', 'components/landing/Features.tsx', 'components/landing/FeaturedAgents.tsx']) {
-      expect(read(f), f).toMatch(/rounded-full mb-\d eyebrow"/)
+      expect(read(f), f).toMatch(/<p className="eyebrow eyebrow-slash text-accent mb-\d">/)
+      expect(read(f), f).not.toMatch(/rounded-full mb-\d eyebrow"/)
     }
   })
 })

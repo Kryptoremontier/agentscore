@@ -101,10 +101,11 @@ describe('<SealRow> — the same slots at three sizes', () => {
     expect(html).toContain(`title="${NO_ENS}"`)
   })
 
-  it('lg names the area under the person; md and sm carry it on hover', () => {
+  it('lg and md name the area under the person; sm carries it on hover', () => {
     const p = { wallet: NO_ENS, domains: ['Crypto / Onchain', 'Knowledge / Productivity'], totalStake: T }
     expect(render([p], 'lg')).toContain('>Crypto / Onchain · Knowledge / Productivity<')
-    expect(render([p], 'md')).toContain('title="Crypto / Onchain · Knowledge / Productivity"')
+    expect(render([p], 'md')).toContain('>Crypto / Onchain · Knowledge / Productivity<')
+    expect(render([p], 'sm')).not.toContain('>Crypto / Onchain · Knowledge / Productivity<')
     expect(render([p], 'sm')).toContain('title="Crypto / Onchain · Knowledge / Productivity"')
   })
 })

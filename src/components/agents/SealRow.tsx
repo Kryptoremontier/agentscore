@@ -9,8 +9,8 @@
  *
  * The words stay: the row is the picture beside the people line, never instead of it.
  * sm — the /agents card and list row: rings only; the names for screen readers, the area on hover.
- * md — the landing's example card: ring and name on one line.
- * lg — the modal and the profile, under the stat row: ring, name and area per slot.
+ * md — the landing's example card: a column per slot — ring, then name and area under it.
+ * lg — the modal and the profile, under the stat row: the same columns, in tiles, a larger ring.
  */
 
 import { Check } from 'lucide-react'
@@ -23,7 +23,7 @@ type Size = 'sm' | 'md' | 'lg'
 
 const RING: Record<Size, { box: string; icon: string }> = {
   sm: { box: 'w-3.5 h-3.5', icon: 'w-2 h-2' },
-  md: { box: 'w-4 h-4', icon: 'w-2.5 h-2.5' },
+  md: { box: 'w-5 h-5', icon: 'w-3 h-3' },
   lg: { box: 'w-7 h-7', icon: 'w-3.5 h-3.5' },
 }
 
@@ -51,14 +51,18 @@ export function SealRow({ attesters, size, className = '' }: {
 
   if (slots.state === 'loading') {
     const rings = Array.from({ length: SEAL_SLOTS }, (_, i) => <Ring key={i} size={size} kind="loading" />)
-    if (size === 'lg') {
+    if (size !== 'sm') {
+      // The columns' own height while loading, so nothing moves when the read answers.
+      const cell = size === 'lg'
+        ? 'bg-[#171A1D] border border-accent/15 rounded-xl px-2 py-2.5 flex flex-col items-center gap-1.5'
+        : 'flex flex-col items-center gap-1 py-0.5'
       return (
-        <div {...common} aria-busy className={`grid grid-cols-3 gap-2 ${className}`}>
+        <div {...common} aria-busy className={`grid grid-cols-3 ${size === 'lg' ? 'gap-2' : 'gap-1.5'} ${className}`}>
           {rings.map((r, i) => (
-            <div key={i} className="bg-[#171A1D] border border-accent/15 rounded-xl px-2 py-2.5 flex flex-col items-center gap-1.5">
+            <div key={i} className={cell}>
               {r}
-              <span aria-hidden className="h-3.5 w-16 rounded bg-white/[0.06] animate-pulse" />
-              <span aria-hidden className="h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
+              <span aria-hidden className="h-3.5 w-16 max-w-full rounded bg-white/[0.06] animate-pulse" />
+              <span aria-hidden className="h-3 w-12 max-w-full rounded bg-white/[0.04] animate-pulse" />
             </div>
           ))}
         </div>
@@ -93,21 +97,25 @@ export function SealRow({ attesters, size, className = '' }: {
 
   if (size === 'md') {
     return (
-      <ul {...common} aria-label={label} className={`flex items-center gap-3 min-w-0 text-xs leading-4 ${className}`}>
-        {slots.filled.map((a) => (
-          <li key={a.wallet} data-seal="filled" className="flex items-center gap-1 min-w-0" title={sealAreas(a.domains)}>
-            <Ring size="md" kind="filled" />
-            <PersonName wallet={a.wallet} className="truncate font-mono text-[#B5BDC6]" />
-          </li>
-        ))}
-        {open.map((i) => (
-          <li key={`open-${i}`} data-seal="open" className="flex items-center gap-1 flex-shrink-0 text-[#7A838D]">
-            <Ring size="md" kind="open" />
-            {SEAL_OPEN}
-          </li>
-        ))}
-        {slots.more > 0 && <li data-seal="more" className="flex-shrink-0 text-[#7A838D]">{sealsMore(slots.more)}</li>}
-      </ul>
+      <div {...common} className={className}>
+        <ul aria-label={label} className="grid grid-cols-3 gap-1.5">
+          {slots.filled.map((a) => (
+            <li key={a.wallet} data-seal="filled" className="flex flex-col items-center text-center min-w-0 py-0.5">
+              <Ring size="md" kind="filled" />
+              <PersonName wallet={a.wallet} className="mt-1 block max-w-full truncate font-mono text-[11px] leading-4 text-[#B5BDC6]" />
+              <span className="block max-w-full truncate text-[10px] leading-[14px] text-[#7A838D]" title={sealAreas(a.domains)}>{sealAreas(a.domains)}</span>
+            </li>
+          ))}
+          {open.map((i) => (
+            <li key={`open-${i}`} data-seal="open" className="flex flex-col items-center text-center py-0.5">
+              <Ring size="md" kind="open" />
+              <span className="mt-1 text-xs leading-4 text-[#7A838D]">{SEAL_OPEN}</span>
+              <span aria-hidden className="text-[10px] leading-[14px]">&nbsp;</span>
+            </li>
+          ))}
+        </ul>
+        {slots.more > 0 && <p className="mt-1 text-right text-xs text-[#7A838D]" data-seal="more">{sealsMore(slots.more)}</p>}
+      </div>
     )
   }
 

@@ -65,11 +65,11 @@ describe('the hero, in order', () => {
 
   it('5: the live example card with its seals — its own column beside the hero on desktop, below on a phone', () => {
     expect(part(5)).toMatch(/<ExampleAgentCard agent=\{example\} \/>/)
-    expect(hero).toMatch(/grid grid-cols-\[minmax\(0,1fr\)\] lg:grid-cols-\[minmax\(0,1\.3fr\)_minmax\(0,1fr\)\]/)
+    expect(hero).toMatch(/grid grid-cols-\[minmax\(0,1fr\)\] lg:grid-cols-\[minmax\(0,1\.2fr\)_minmax\(0,1fr\)\]/)
   })
 
   it('left-aligned, over the existing background (its overlays kept)', () => {
-    expect(hero).toMatch(/lg:items-center text-left"/)
+    expect(hero).toMatch(/lg:items-start text-left"/)
     expect(hero).not.toMatch(/text-center|mx-auto text-center/)
     expect(hero).toMatch(/bg-gradient-to-b from-\[rgb\(10,10,15\)\]\/70 via-transparent to-\[rgb\(10,10,15\)\]\/80/)
   })
