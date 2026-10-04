@@ -1461,11 +1461,7 @@ export default function DocsPage() {
 
           {/* Hero header */}
           <div className="mb-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-5 text-xs font-semibold uppercase tracking-widest"
-              style={{ background: 'rgba(200,150,60,0.08)', border: '1px solid rgba(200,150,60,0.2)', color: '#C8963C' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#C8963C] animate-pulse" />
-              Platform Documentation
-            </div>
+            <p className="eyebrow eyebrow-slash text-accent mb-5">Platform Documentation</p>
             <h1 className="text-5xl text-white mb-4 font-extrabold tracking-display leading-display">
               How{' '}
               <span className="text-transparent bg-clip-text"

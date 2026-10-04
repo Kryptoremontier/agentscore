@@ -110,9 +110,12 @@ describe('mono for eyebrows (and the landing check row) — not for data labels'
     expect(css).toMatch(/\.eyebrow-slash::before \{\s*content: "\/\/ ";\s*content: "\/\/ " \/ "";/)
   })
   it('the page and section eyebrows use it', () => {
-    for (const f of ['app/agents/page.tsx', 'app/skills/page.tsx', 'app/claims/page.tsx']) {
+    for (const f of ['app/agents/page.tsx', 'app/skills/page.tsx', 'app/claims/page.tsx', 'app/docs/page.tsx']) {
       expect(read(f), f).toMatch(/className="eyebrow eyebrow-slash /)
     }
+    // /docs: "Platform Documentation" in the same mono amber line, no pill left.
+    expect(read('app/docs/page.tsx')).toMatch(/<p className="eyebrow eyebrow-slash text-accent mb-5">Platform Documentation<\/p>/)
+    expect(read('app/docs/page.tsx')).not.toMatch(/rounded-full mb-5 text-xs font-semibold uppercase tracking-widest/)
     // The landing's section eyebrows too (6b polish): the same mono amber "// …" line, no pill.
     for (const f of ['components/landing/HowItWorks.tsx', 'components/landing/Features.tsx', 'components/landing/FeaturedAgents.tsx']) {
       expect(read(f), f).toMatch(/<p className="eyebrow eyebrow-slash text-accent mb-\d">/)
