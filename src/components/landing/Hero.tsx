@@ -120,13 +120,15 @@ export function Hero() {
             </p>
           </div>
 
-          {/* 3 — two ways in */}
-          <div data-story="3" className="mt-6 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
-            <Link href="/agents" className="btn-primary group w-full sm:w-auto">
+          {/* 3 — two ways in. 1024–1279px (lg) is the one width where they share a narrow column
+              (375px at 1024 against 471px at full size): tighter padding and 12px text there keep
+              each label on one line. */}
+          <div data-story="3" className="mt-6 flex flex-col sm:flex-row gap-2.5 sm:gap-3 lg:max-xl:gap-2">
+            <Link href="/agents" className="btn-primary group w-full sm:w-auto lg:max-xl:px-3 lg:max-xl:gap-1.5 lg:max-xl:text-xs">
               {LANDING_CTA_VOUCH}
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
-            <Link href="/docs" className="btn-secondary w-full sm:w-auto">
+            <Link href="/docs" className="btn-secondary w-full sm:w-auto lg:max-xl:px-3 lg:max-xl:gap-1.5 lg:max-xl:text-xs">
               <Code2 className="w-4 h-4" />
               {DEV_HEADING}
             </Link>
