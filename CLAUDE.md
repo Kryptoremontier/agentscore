@@ -139,13 +139,16 @@ npm run dev:fresh    # kill ports 3000-3002 + clear .next + start (nuclear optio
 - `NEXT_PUBLIC_INTUITION_GRAPHQL_URL` — Hasura endpoint
 - `NEXT_PUBLIC_WC_PROJECT_ID` — WalletConnect project ID
 
-## MCP Server (11 tools at `/api/mcp`)
+## MCP Server (12 tools at `/api/mcp`)
 
 Tools: `search_agents`, `get_agent_trust`, `get_domain_ranking`, `list_domains`,
 `trust_query`, `get_evaluator`, `top_evaluators`, `compare_agents`,
-`register_agent`, `platform_stats`, `get_agent_timeline`
+`register_agent`, `platform_stats`, `get_agent_timeline`, `should_i_trust`
 
-## REST API (13 endpoints at `/api/v1`)
+`should_i_trust` = the trust gate (`src/lib/trust-gate.ts`, REST `GET /api/v1/agents/:id/gate`):
+allow / deny / unknown under the caller's policy. No new scoring; fails closed (`unknown` = do not pay).
+
+## REST API (14 endpoints at `/api/v1`)
 
 Index: `GET /api/v1` — lists all routes with descriptions.
 

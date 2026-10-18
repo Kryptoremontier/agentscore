@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "shots": "playwright test -c tests/e2e/playwright.config.ts",
-    "shots:dead-indexer": "playwright test -c tests/e2e/resilience.config.ts"
+    "shots:dead-indexer": "playwright test -c tests/e2e/resilience.config.ts",
+    "demo:gate": "node --experimental-strip-types --no-warnings scripts/demo-trust-gate.ts"
   },
   "dependencies": {
     "@0xintuition/protocol": "^2.0.2",

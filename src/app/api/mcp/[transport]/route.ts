@@ -12,7 +12,9 @@ import {
   getEvaluatorProfile,
   trustQuery,
   getPlatformStats,
+  trustGate,
 } from '@/lib/api-data'
+import { GATE_AREAS, parseGatePolicy } from '@/lib/trust-gate'
 import { fetchTimelineDataCached as fetchTimelineData } from '@/lib/timeline-data'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
 import { publishedAgentScore } from '@/lib/score-basis'
@@ -670,6 +672,42 @@ const handler = createMcpHandler(
         } catch (error) {
           return { content: [{ type: 'text' as const, text: `Error: ${error}` }] }
         }
+      }
+    )
+
+    // ═══════════════════════════════════════════
+    // TOOL 12: should_i_trust
+    // ═══════════════════════════════════════════
+    server.registerTool(
+      'should_i_trust',
+      {
+        title: 'Should I Trust This Agent? (trust gate)',
+        description:
+          'Call this BEFORE you pay or delegate a task to another AI agent. ' +
+          'Returns decision "allow" | "deny" | "unknown" under YOUR policy, a one-sentence reason, ' +
+          'who vouches and for what (peopleVouching = distinct people; areas = per area: people and tTRUST vouched), ' +
+          'the agent tier, and how old the data is (meta.dataAgeSeconds). ' +
+          'Policy: minTier "trusted" (the default — at least 2 distinct people and 0.05 tTRUST vouched) or "verified" ' +
+          '(at least 3 and 0.1); or minPeople N — at least N distinct people vouching, optionally only in one area. ' +
+          '"unknown" means the data could not be read right now: treat it as NO — do not pay or delegate; ask again later. ' +
+          '"deny" with "Not found in AgentScore or the ERC-8004 registry" means the id is not a known agent. ' +
+          'A vouch is an on-chain attestation (agent — is skilled in — area) by a distinct wallet; money staked on the agent ' +
+          'itself never counts, and no parameter or payment can change a decision.',
+        inputSchema: {
+          agentId: z.string().describe("The agent's term ID (from search_agents)"),
+          minTier: z.enum(['trusted', 'verified']).optional()
+            .describe('Minimum tier. Default "trusted". Use either minTier or minPeople, not both.'),
+          minPeople: z.number().int().min(1).optional()
+            .describe('Minimum distinct people vouching (in `area` when given).'),
+          area: z.enum(GATE_AREAS as [string, ...string[]]).optional()
+            .describe('Only count vouches in this area (needs minPeople).'),
+        },
+      },
+      async ({ agentId, minTier, minPeople, area }) => {
+        const parsed = parseGatePolicy({ minTier, minPeople, area })
+        if (!parsed.ok) return { isError: true, content: [{ type: 'text' as const, text: parsed.error }] }
+        const decision = await trustGate(agentId, parsed.policy)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(decision, null, 2) }] }
       }
     )
   },
