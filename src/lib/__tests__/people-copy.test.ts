@@ -136,7 +136,15 @@ describe('machine surfaces do not change', () => {
   it('llms.txt and SKILL.md keep attest / attesters / trustScore', () => {
     const skill = readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8')
     expect(skill).toMatch(/trustScore/)
-    expect(skill).not.toMatch(/\bvouch/i)
+    // Etap 7: the trust gate is new and speaks its own fields (`peopleVouching`, "N people vouch …");
+    // everything SKILL.md said before it keeps its words.
+    const gate = /## Before you pay or delegate: the trust gate[\s\S]*?(?=\n## )/
+    expect(skill).toMatch(gate)
+    expect(skill.replace(gate, '')).not.toMatch(/\bvouch/i)
+  })
+
+  it('the trust gate (REST, MCP) phrases its own reasons — it never imports the UI copy', () => {
+    expect(readFileSync(path.join(SRC, 'lib/trust-gate.ts'), 'utf8')).not.toMatch(/people-copy/)
   })
 
   it('/docs says it once: vouch (UI) = attestation (protocol)', () => {

@@ -280,7 +280,7 @@ AgentScore is self-describing for AI agents in three standards:
 | `public/.well-known/agent.json` | Google A2A | Auto-discovery manifest |
 | `CLAUDE.md` | Claude Code / Cursor | AI coding agent working notes |
 
-- **MCP Server**: `/api/mcp` (11 tools)
+- **MCP Server**: `/api/mcp` (12 tools)
 - **REST API**: `/api/v1` (13+ endpoints, all return `ScoreEnvelope`)
 - **A2A Cards**: `/api/v1/agents/:id/card`
 

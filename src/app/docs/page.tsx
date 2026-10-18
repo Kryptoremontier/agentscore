@@ -10,6 +10,7 @@ import {
   Shield, Eye, Sparkles, Crown,
 } from 'lucide-react'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
+import { EXAMPLE_GATE } from '@/lib/gate-example'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -301,13 +302,18 @@ function TabGettingStarted() {
         <div className="space-y-2 text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
           <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
             <span className="text-white/70 font-medium">Trust API</span>
-            <span>13 REST endpoints</span>
+            <span>14 REST endpoints</span>
             <Mono>GET /api/v1/agents</Mono>
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
             <span className="text-white/70 font-medium">MCP Server</span>
-            <span>11 tools for AI agents</span>
+            <span>12 tools for AI agents</span>
             <Mono>/api/mcp/mcp</Mono>
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
+            <span className="text-white/70 font-medium">Trust gate</span>
+            <span>ask before you pay or delegate</span>
+            <Mono>GET /api/v1/agents/:id/gate</Mono>
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
             <span className="text-white/70 font-medium">A2A Card</span>
@@ -1202,6 +1208,7 @@ function TabApiMcp() {
     { method: 'GET', path: '/api/v1/agents',                  desc: 'List agents (sort, minTrust, limit, offset)' },
     { method: 'GET', path: '/api/v1/agents/:id',              desc: 'Agent detail by termId' },
     { method: 'GET', path: '/api/v1/agents/:id/trust',        desc: 'Deep trust breakdown with evaluator weights' },
+    { method: 'GET', path: '/api/v1/agents/:id/gate',         desc: 'Trust gate: allow / deny / unknown under your policy' },
     { method: 'GET', path: '/api/v1/skills',                  desc: 'List all registered skills' },
     { method: 'GET', path: '/api/v1/skills/:id',              desc: 'Skill detail with agent count' },
     { method: 'GET', path: '/api/v1/domains',                 desc: 'List skill domains with top agents' },
@@ -1213,6 +1220,7 @@ function TabApiMcp() {
     { method: 'GET', path: '/api/v1',                         desc: 'API index — endpoint directory' },
   ]
   const mcpTools = [
+    { name: 'should_i_trust',     desc: 'Before you pay or delegate: allow / deny / unknown, with who vouches' },
     { name: 'search_agents',      desc: 'Search agents by score, stakers, or newest' },
     { name: 'get_agent_trust',    desc: 'Full trust breakdown for a specific agent' },
     { name: 'get_domain_ranking', desc: 'Top agents in a skill domain' },
@@ -1225,6 +1233,31 @@ function TabApiMcp() {
   ]
   return (
     <div className="grid gap-5">
+
+      {/* Trust gate — the answer comes from lib/gate-example.ts (captured, never hand-typed) */}
+      <DocCard className="min-w-0">
+        <div data-testid="docs-trust-gate">
+          <SectionTitle icon={ShieldCheck} color="#C8963C" label="Trust gate — ask before you pay or delegate" />
+          <p className="text-sm text-[#8B949E] mb-4">
+            One yes/no under <span className="text-white/80">your</span> policy, with the reason: who vouches, for what,
+            and how old the data is. <span className="text-white/80">unknown</span> means the data couldn&apos;t be read
+            right now — treat it as no: don&apos;t pay. Default policy{' '}
+            <code className="text-[#C8963C] bg-white/5 px-1 py-0.5 rounded text-xs">{'{ minTier: "trusted" }'}</code>; no
+            parameter or payment changes a decision.
+          </p>
+          <Formula label="REST">
+            <span className="break-all">GET {EXAMPLE_GATE.request}</span>
+          </Formula>
+          <Formula label="MCP">
+            {`should_i_trust({ agentId, minPeople: 1, area: "Crypto / Onchain" })`}
+          </Formula>
+          <div className="text-[#6B7480] text-xs uppercase tracking-wider mb-2">Real answer — {EXAMPLE_GATE.agent}</div>
+          <pre className="text-[11px] leading-relaxed font-mono text-[#C9D1D9] rounded-xl p-4 overflow-x-auto"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            {JSON.stringify(EXAMPLE_GATE.answer, null, 2)}
+          </pre>
+        </div>
+      </DocCard>
 
       {/* REST API */}
       <DocCard>

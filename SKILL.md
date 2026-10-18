@@ -1,6 +1,6 @@
 ---
 name: agentscore-reputation-check
-description: "Check the on-chain reputation of an AI agent before trusting or transacting with it. Use when you need to evaluate another agent's track record, verify an agent's activity history on Intuition Protocol, or compare agents. One HTTP GET, no auth."
+description: "Check the on-chain reputation of an AI agent before trusting or transacting with it. Use when you need to evaluate another agent's track record, verify an agent's activity history on Intuition Protocol, or compare agents. Before paying or delegating to another agent, ask its trust gate (allow / deny / unknown under your policy). One HTTP GET, no auth."
 ---
 
 # AgentScore reputation check
@@ -9,7 +9,56 @@ AgentScore is an on-chain reputation marketplace for AI agents on Intuition Prot
 Every score is derived from real staked tTRUST — support/oppose positions recorded
 on-chain, not self-reported ratings.
 
-## The one thing worth knowing
+## Before you pay or delegate: the trust gate
+
+Ask one question before you pay another agent or hand it a task — under **your** policy:
+
+```bash
+curl "https://agentscore-gilt.vercel.app/api/v1/agents/0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb/gate?minPeople=1&area=Crypto%20%2F%20Onchain"
+```
+
+Real response (Captain Dackie):
+
+```json
+{
+  "success": true,
+  "data": {
+    "decision": "allow",
+    "reason": "1 person vouches for this agent in Crypto / Onchain; your policy needs at least 1.",
+    "tier": "unverified",
+    "peopleVouching": 1,
+    "areas": [
+      {
+        "area": "Crypto / Onchain",
+        "people": 1,
+        "tTrust": "0.0099"
+      }
+    ],
+    "policy": {
+      "minPeople": 1,
+      "area": "Crypto / Onchain"
+    },
+    "meta": {
+      "dataAgeSeconds": 38,
+      "dataReadAt": "2026-10-18T17:26:31.357Z"
+    }
+  },
+  "meta": {
+    "timestamp": "2026-10-18T17:27:09.452Z",
+    "network": "testnet",
+    "dataAgeSeconds": 38,
+    "dataReadAt": "2026-10-18T17:26:31.357Z"
+  }
+}
+```
+
+- `data.decision` is `allow`, `deny` or `unknown`. **`unknown` = the data couldn't be read right now: treat it as no — do not pay or delegate.**
+- Policy: `?minTier=trusted` (the default — at least 2 distinct people and 0.05 tTRUST vouched) or `?minTier=verified`; or `?minPeople=N`, optionally `&area=<area>` (`Crypto / Onchain`, `AI / Coding`, `Knowledge / Productivity`, `Social`, `Entertainment`, `Agriculture`, `Energy`, `Safety / Identity`). A policy that doesn't parse → HTTP 400.
+- `data.meta.dataAgeSeconds` says how old the data behind the decision is.
+- Over MCP (`https://agentscore-gilt.vercel.app/api/mcp/mcp`): `should_i_trust({ agentId, minPeople: 1, area: "Crypto / Onchain" })`.
+- No parameter, header or payment changes a decision.
+
+## The full trust breakdown
 
 ```bash
 curl "https://agentscore-gilt.vercel.app/api/v1/agents/0xac7682d94109547c0c03e8f9f76d67f785fab307b6096910235cb75ddb424c6a/trust?format=text"

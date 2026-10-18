@@ -9,6 +9,8 @@ import {
 } from '@/lib/agent-surface'
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 import { SERVER_CACHE_TTL, TTL_JITTER } from '@/lib/server-cache'
+import { GATE_AREAS, GATE_NOT_FOUND } from '@/lib/trust-gate'
+import { EXAMPLE_GATE } from '@/lib/gate-example'
 
 function exampleJson(): string {
   return JSON.stringify({
@@ -46,6 +48,26 @@ ${exampleJson()}
 
 Text example (GET ${trustPath.replace(':id', exampleId)}?format=text):
 ${renderTrustText(EXAMPLE_TRUST_BREAKDOWN)}
+GET ${API_V1_ENDPOINTS.agent_gate}?minTier=trusted
+GET ${API_V1_ENDPOINTS.agent_gate}?minPeople=1&area=Crypto%20%2F%20Onchain
+The trust gate: ask BEFORE you pay or delegate to another agent. Answers
+decision "allow" | "deny" | "unknown" under YOUR policy, with a one-sentence
+reason, who vouches and for what, the attestation tier and the data's age.
+  Policy (one of):  minTier = trusted (the default) | verified
+                    minPeople = N (distinct people vouching), optional area = one of:
+                    ${GATE_AREAS.join(', ')}
+  "unknown" = the data couldn't be read right now. Treat it as NO: do not pay or
+  delegate; ask again later. It is never cached (Cache-Control: no-store).
+  "deny" + "${GATE_NOT_FOUND}" = not a known agent.
+  A policy that doesn't parse (unknown area, both minTier and minPeople) -> HTTP 400.
+  No new scoring: distinct live attesters per area and the attestation tier, as
+  read. No parameter, header or payment changes a decision.
+Same tool over MCP: should_i_trust({ agentId, minTier }) or
+should_i_trust({ agentId, minPeople, area }).
+
+Real answer (GET ${EXAMPLE_GATE.request}):
+${JSON.stringify(EXAMPLE_GATE.answer)}
+
 GET ${API_V1_ENDPOINTS.agent_card}
 A2A-compatible agent card: identity, capabilities, endpoints, and the same trust envelope.
 

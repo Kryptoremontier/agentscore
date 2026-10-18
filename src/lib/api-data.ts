@@ -38,8 +38,10 @@ import { filterAgents, type AgentJunkReason } from './agent-junk-filter'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP, type GqlRequest, type PagedRows } from './gql-pager'
 import { fetchVaultPositions, sortPositions, sumSharesByVault, vaultStakeStats, type VaultPosition, type VaultPositionWithMeta } from './vault-positions'
 import { countLiveStakers, liveStakerWallets } from './live-position'
+import { decideTrustGate, type GateDecision, type GatePolicy, type GateSubject } from './trust-gate'
 import {
   completeReadCache,
+  currentFreshness,
   SERVER_CACHE_CEILING,
   recordLiveRead,
   unknownOnFailure,
@@ -848,6 +850,36 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
       requirements: tierRequirements,
     },
   }
+}
+
+// ─── Trust gate ───────────────────────────────────────────────────────────────
+
+/**
+ * What the trust gate reads for one id (Etap 7, lib/trust-gate.ts) — the same readers as the
+ * agent detail: the cached AgentScore corpus first, then the ERC-8004 cohort and that agent's
+ * attestations. Only the attestations are read; nothing the gate doesn't decide on.
+ * `not-found` only from reads that ran to the end; any failed lookup is `unread` (→ `unknown`),
+ * never "not found" and never `allow`.
+ */
+export async function getGateSubject(termId: string): Promise<GateSubject> {
+  try {
+    const snap = await agentSnapshot(termId)
+    if (snap) return { status: 'found', attested: snap.attested }
+    const cohort = await cohortAgentOf(termId)
+    if (!cohort) return { status: 'not-found' }
+    return { status: 'found', attested: await unknownOnFailure('agent-attestations', loadSubjectAttestations(termId)) }
+  } catch (err) {
+    console.warn('[trust-gate] lookup failed:', err instanceof Error ? err.message : err)
+    recordLiveRead('gate-lookup', false)
+    return { status: 'unread' }
+  }
+}
+
+/** The gate's answer for one id under the caller's policy, with the age of what it read. */
+export async function trustGate(termId: string, policy: GatePolicy): Promise<GateDecision> {
+  const subject = await getGateSubject(/^0x[0-9a-fA-F]{64}$/.test(termId) ? termId.toLowerCase() : termId)
+  const { dataAgeSeconds, dataReadAt } = currentFreshness()
+  return decideTrustGate(subject, policy, { dataAgeSeconds, dataReadAt })
 }
 
 // ─── Skills ───────────────────────────────────────────────────────────────────
