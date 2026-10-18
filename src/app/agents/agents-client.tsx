@@ -51,7 +51,7 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
-import { showMoreAgents, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
+import { showMoreAgents, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND, ORIGIN_LABEL } from '@/lib/people-copy'
 import { ScoreParts } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
@@ -198,7 +198,7 @@ function OriginChip({ origin, tab }: { origin?: 'agentscore' | 'erc8004'; tab: O
     <span className={`text-xs px-2 py-0.5 rounded inline-block flex-shrink-0 ${
       origin === 'erc8004' ? 'text-[#8B5CF6] bg-[#8B5CF6]/10' : 'text-[#7A838D] bg-[#1e2028]'
     }`}>
-      {origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
+      {ORIGIN_LABEL[origin === 'erc8004' ? 'erc8004' : 'agentscore']}
     </span>
   )
 }
@@ -2107,7 +2107,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                       <span className={`px-2 py-0.5 rounded text-xs ${
                         selectedAgent.origin === 'erc8004' ? 'bg-[#8B5CF6]/10 text-[#8B5CF6]' : 'bg-[#1E2229] text-[#7A838D]'
                       }`}>
-                        {selectedAgent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}
+                        {ORIGIN_LABEL[selectedAgent.origin === 'erc8004' ? 'erc8004' : 'agentscore']}
                       </span>
                       <span>·</span>
                       <span>Registered {formatDate(selectedAgent.created_at)}</span>

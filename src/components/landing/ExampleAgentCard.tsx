@@ -15,7 +15,7 @@ import Link from 'next/link'
 import type { CardAttesterLine } from '@/lib/agent-list'
 import type { AgentTierDisplay } from '@/lib/agent-tier'
 import type { AttesterSummary } from '@/lib/agent-profile'
-import { EXAMPLE_HEADING, EXAMPLE_UNREAD } from '@/lib/people-copy'
+import { EXAMPLE_HEADING, EXAMPLE_UNREAD, ORIGIN_LABEL } from '@/lib/people-copy'
 import { TrustTierBadge } from '@/components/agents/TrustTierBadge'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { SealRow } from '@/components/agents/SealRow'
@@ -77,7 +77,7 @@ export function ExampleAgentCard({ agent }: { agent: ExampleAgent }) {
           {agent.name}
         </Link>
         {agent.tier && <TrustTierBadge tier={agent.tier} size="sm" />}
-        <span className="text-[10px] text-[#7A838D] flex-shrink-0">{agent.origin === 'erc8004' ? 'ERC-8004' : 'via AgentScore'}</span>
+        <span className="text-[10px] text-[#7A838D] flex-shrink-0">{ORIGIN_LABEL[agent.origin]}</span>
       </div>
       <div className="flex items-center gap-1.5 mt-1 min-w-0">
         <p className={`text-sm lg:text-base leading-5 lg:leading-6 truncate ${agent.line.kind === 'some' ? 'text-[#C8963C] font-medium' : 'text-[#7A838D]'}`}>
