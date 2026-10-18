@@ -68,10 +68,10 @@ describe('used everywhere a primary action is', () => {
     expect(attest).not.toMatch(/background: '#8B5CF6'|primaryStyle|style=\{TRIGGER_STYLES/)
   })
 
-  it('the landing: "Vouch for an agent" primary, developers secondary — first screen and closing call', () => {
-    for (const f of ['components/landing/Hero.tsx', 'components/landing/CTA.tsx']) {
+  it('the landing: a primary (Check an agent first screen, Etap 7 Run B; Vouch for an agent closing call), developers secondary', () => {
+    for (const [f, primary] of [['components/landing/Hero.tsx', '/check'], ['components/landing/CTA.tsx', '/agents']] as const) {
       const src = read(f)
-      expect(src, f).toMatch(/<Link href="\/agents" className="btn-primary/)
+      expect(src, f).toMatch(new RegExp(`<Link href="${primary.replace('/', '\\/')}" className="btn-primary`))
       expect(src, f).toMatch(/<Link href="\/docs" className="btn-secondary/)
       expect(src, f).not.toMatch(/from-\[#C8963C\] to-\[#A87820\]/)
     }

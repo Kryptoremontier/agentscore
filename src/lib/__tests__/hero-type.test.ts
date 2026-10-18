@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { HERO_EYEBROW, LANDING_TITLE, LANDING_CHECKS, LANDING_CTA_VOUCH, DEV_HEADING, peopleHereLead, invitationLine } from '../people-copy'
+import { HERO_EYEBROW, LANDING_TITLE, LANDING_CHECKS, LANDING_CTA_CHECK, DEV_HEADING, peopleHereLead, invitationLine } from '../people-copy'
 
 const SRC = path.join(__dirname, '..', '..')
 const code = (f: string) => readFileSync(path.join(SRC, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
@@ -19,7 +19,7 @@ describe('the copy', () => {
   it('eyebrow, headline, buttons, check row — from the spec', () => {
     expect(HERO_EYEBROW).toBe('Trust layer · Live on Intuition Testnet') // shown "// TRUST LAYER · LIVE ON INTUITION TESTNET"
     expect(LANDING_TITLE).toEqual(['Trust layer for', 'AI agents.'])
-    expect(LANDING_CTA_VOUCH).toBe('Vouch for an agent')
+    expect(LANDING_CTA_CHECK).toBe('Check an agent') // Etap 7 Run B: the primary goes to /check
     expect(DEV_HEADING).toBe('For developers & agents')
     expect(LANDING_CHECKS).toEqual(['TESTNET tTRUST IS FREE', 'EVERY VOUCH IS ON-CHAIN', 'ONE WALLET CAN NEVER DO IT ALONE'])
   })
@@ -50,9 +50,9 @@ describe('the hero, in order', () => {
     expect(hero).toMatch(/const here = peopleHereLead\(people\.value\)/)
   })
 
-  it('3: primary "Vouch for an agent", secondary "For developers & agents"', () => {
+  it('3: primary "Check an agent" → /check (Etap 7 Run B), secondary "For developers & agents"', () => {
     const p3 = part(3)
-    expect(p3).toMatch(/<Link href="\/agents" className="btn-primary[^"]*">\s*\{LANDING_CTA_VOUCH\}/)
+    expect(p3).toMatch(/<Link href="\/check" className="btn-primary[^"]*">\s*\{LANDING_CTA_CHECK\}/)
     expect(p3).toMatch(/<Link href="\/docs" className="btn-secondary[^"]*">[\s\S]*?\{DEV_HEADING\}/)
   })
 

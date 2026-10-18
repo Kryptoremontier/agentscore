@@ -171,6 +171,8 @@ export function peopleVouchHereParts(n: number | null): { count: string; rest: s
 }
 export const PEOPLE_HERE_UNREAD = 'Couldn’t read who vouches right now'
 export const LANDING_CTA_VOUCH = 'Vouch for an agent'
+/** The landing's primary action (Etap 7 Run B: the Beta shape) — the /check page. */
+export const LANDING_CTA_CHECK = 'Check an agent'
 
 // ── Check an agent (Etap 7 Run B, app/check) ──
 export const CHECK_TITLE = 'Check an agent'

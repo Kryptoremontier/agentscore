@@ -1,7 +1,8 @@
 /**
- * Etap 5b Run 2 commit 2 — three places: Agents · How it works · For developers; everything else
- * under More; Create Claim and Register leave the top bar; the phone's bottom nav is Agents · How
- * it works · More. No route is removed — every page the old nav reached is still reachable.
+ * The nav. Etap 7 Run B (the Beta shape): three places — Check an agent · Vouch · For developers;
+ * everything else under More, How it works included; the phone's bottom nav is Check an agent ·
+ * Vouch · More. Etap 5b Run 2 before it: Create Claim and Register left the top bar. No route is
+ * removed — every page the old nav reached is still reachable.
  */
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
@@ -12,15 +13,20 @@ const SRC = path.join(__dirname, '..', '..')
 const code = (f: string) => readFileSync(path.join(SRC, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 
 describe('the nav model', () => {
-  it('three primary places, in order', () => {
+  it('three primary places, in order: Check an agent · Vouch · For developers', () => {
     expect(PRIMARY_NAV.map((i) => [i.label, i.href])).toEqual([
-      ['Agents', '/agents'], ['How it works', '/#how-it-works'], ['For developers', '/docs'],
+      ['Check an agent', '/check'], ['Vouch', '/agents'], ['For developers', '/docs'],
     ])
+  })
+
+  it('How it works moved under More; Skills, Claims, Domains, Evaluators, Leaderboard, IntuForge stay there', () => {
+    const more = MORE_NAV.flatMap((g) => g.items).map((i) => i.label)
+    expect(more).toEqual(expect.arrayContaining(['How it works', 'Skills', 'Claims', 'Domains', 'Evaluators', 'Leaderboard', 'IntuForge']))
   })
 
   it('no route removed: every page the old nav linked is still in the nav (primary, More, or the profile link)', () => {
     const inNav = new Set([...PRIMARY_NAV, ...MORE_NAV.flatMap((g) => g.items)].map((i) => i.href))
-    const OLD = ['/agents', '/skills', '/domains', '/claims', '/explore/intuforge', '/evaluators', '/leaderboard', '/docs', '/register', '/register?tab=skill', '/claims?create=true']
+    const OLD = ['/agents', HOW_IT_WORKS_HREF, '/skills', '/domains', '/claims', '/explore/intuforge', '/evaluators', '/leaderboard', '/docs', '/register', '/register?tab=skill', '/claims?create=true']
     expect(OLD.filter((h) => !inNav.has(h))).toEqual([])
     expect(code('components/layout/Sidebar.tsx')).toMatch(/href="\/profile"/)
     expect(code('components/layout/MobileNav.tsx')).toMatch(/href: '\/profile'/)
@@ -41,6 +47,8 @@ describe('the nav model', () => {
     expect(isNavActive(HOW_IT_WORKS_HREF, '/agents')).toBe(false)
     expect(isUnderMore('/domains')).toBe(true)
     expect(isUnderMore('/agents')).toBe(false)
+    expect(isUnderMore('/')).toBe(false) // How it works is a landing section: the landing doesn't open More
+    expect(isNavActive('/check', '/check/0xabc')).toBe(true)
   })
 })
 
@@ -58,7 +66,7 @@ describe('the three surfaces render it', () => {
     expect(side).toMatch(/\{isAdmin && \(/)
     expect(side).toMatch(/const isAdmin = mounted && isAdminWallet\(address\)/)
   })
-  it('phone: Agents · How it works · More; "For developers" first in the More sheet', () => {
+  it('phone: Check an agent · Vouch · More; "For developers" first in the More sheet', () => {
     const mobile = code('components/layout/MobileNav.tsx')
     expect(mobile).toMatch(/const BOTTOM_TABS = PRIMARY_NAV\.filter\(item => item\.href !== '\/docs'\)/)
     expect(mobile).toMatch(/grid grid-cols-3 h-16/)

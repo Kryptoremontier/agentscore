@@ -36,7 +36,7 @@ import { measuredScore, noScoreTooltip } from '@/lib/score-basis'
 import { effectiveLabel } from '@/lib/api-data'
 import { cleanAtomName } from '@/types/claim'
 import {
-  HERO_EYEBROW, LANDING_TITLE, LANDING_SUB, LANDING_CHECKS, LANDING_CTA_VOUCH, DEV_HEADING,
+  HERO_EYEBROW, LANDING_TITLE, LANDING_SUB, LANDING_CHECKS, LANDING_CTA_CHECK, DEV_HEADING,
   peopleHereLead, invitationLine,
 } from '@/lib/people-copy'
 import { ExampleAgentCard, type ExampleAgent } from './ExampleAgentCard'
@@ -124,8 +124,8 @@ export function Hero() {
               (375px at 1024 against 471px at full size): tighter padding and 12px text there keep
               each label on one line. */}
           <div data-story="3" className="mt-6 flex flex-col sm:flex-row gap-2.5 sm:gap-3 lg:max-xl:gap-2">
-            <Link href="/agents" className="btn-primary group w-full sm:w-auto lg:max-xl:px-3 lg:max-xl:gap-1.5 lg:max-xl:text-xs">
-              {LANDING_CTA_VOUCH}
+            <Link href="/check" className="btn-primary group w-full sm:w-auto lg:max-xl:px-3 lg:max-xl:gap-1.5 lg:max-xl:text-xs">
+              {LANDING_CTA_CHECK}
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
             <Link href="/docs" className="btn-secondary w-full sm:w-auto lg:max-xl:px-3 lg:max-xl:gap-1.5 lg:max-xl:text-xs">

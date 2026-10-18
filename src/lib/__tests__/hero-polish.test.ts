@@ -106,7 +106,7 @@ describe('4 — section eyebrows', () => {
 describe('5 — the hero buttons at 1024–1279px', () => {
   it('lg only (1024–1279px), where they share a 375–514px column: 12px text, 12px side padding, tighter gaps — one line each', () => {
     const TIGHT = 'lg:max-xl:px-3 lg:max-xl:gap-1.5 lg:max-xl:text-xs'
-    expect(hero).toContain(`<Link href="/agents" className="btn-primary group w-full sm:w-auto ${TIGHT}">`)
+    expect(hero).toContain(`<Link href="/check" className="btn-primary group w-full sm:w-auto ${TIGHT}">`)
     expect(hero).toContain(`<Link href="/docs" className="btn-secondary w-full sm:w-auto ${TIGHT}">`)
     expect(hero).toMatch(/<div data-story="3" className="mt-6 flex flex-col sm:flex-row gap-2\.5 sm:gap-3 lg:max-xl:gap-2">/)
     // Every other width keeps the full-size buttons: only lg:max-xl: overrides, nothing unprefixed.
