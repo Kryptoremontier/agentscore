@@ -79,7 +79,7 @@ describe('where the accent is', () => {
   })
 
   it('the eyebrows', () => {
-    for (const f of ['app/agents/page.tsx', 'app/skills/page.tsx', 'app/claims/page.tsx']) {
+    for (const f of ['app/agents/agents-client.tsx', 'app/skills/page.tsx', 'app/claims/page.tsx']) {
       expect(read(f), f).toMatch(/className="eyebrow eyebrow-slash text-accent"/)
     }
   })

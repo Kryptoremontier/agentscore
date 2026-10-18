@@ -15,7 +15,7 @@ import { NO_STAKE_TOOLTIP } from '../score-basis'
 const SRC = path.join(__dirname, '..', '..')
 const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/\{\s*\}/g, '')
 const code = (f: string) => strip(readFileSync(path.join(SRC, f), 'utf8'))
-const PAGE_RAW = readFileSync(path.join(SRC, 'app/agents/page.tsx'), 'utf8')
+const PAGE_RAW = readFileSync(path.join(SRC, 'app/agents/agents-client.tsx'), 'utf8')
 const PAGE = strip(PAGE_RAW)
 const PROFILE = code('app/agents/[id]/page.tsx')
 /** The score colours the card and modal used: excellent/good(gold)/moderate/low/critical and the greens. */

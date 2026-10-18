@@ -83,7 +83,7 @@ describe('every surface that shows a person goes through <PersonName> (source gu
     ['components/leaderboard/LeaderboardClient.tsx', 1],
     ['components/evaluators/EvaluatorsClient.tsx', 1],
     ['app/domains/page.tsx', 1],
-    ['app/agents/page.tsx', 3], // the modal's People tab backers, its backers table, its activity
+    ['app/agents/agents-client.tsx', 3], // the modal's People tab backers, its backers table, its activity
   ] as const)('%s', (f, n) => {
     const src = code(f)
     expect(src.match(/<PersonName wallet=/g)?.length).toBe(n)

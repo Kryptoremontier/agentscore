@@ -161,6 +161,13 @@ export function listOpposeWei(row: Pick<AgentListAtom, '__vaultPositions' | '__o
   return row.__opposeWei ?? 0n
 }
 
+/**
+ * Rows the /agents list draws before "Show N more" (Etap 7a): 263 cards were all rendered at once
+ * (and, with the list in the first HTML, all sent in it). The default order puts the agents people
+ * vouch for first, so none of them sits past the first page; the counts stay the full totals.
+ */
+export const LIST_PAGE_SIZE = 48
+
 // ─── Numbers the page prints ────────────────────────────────────────────────
 
 /** "1 agent" / "273 agents" — lib/plural.ts, re-exported for the list's callers. */

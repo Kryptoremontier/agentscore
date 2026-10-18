@@ -53,7 +53,7 @@ describe('one order for /agents and the landing carousel (source guards)', () =>
   const SRC = path.join(__dirname, '..', '..')
   const read = (f: string) => readFileSync(path.join(SRC, f), 'utf8')
   it('/agents: sort from the URL (default "Most vouched"), rows through listEntryOf, ordered by orderAgents', () => {
-    const page = read('app/agents/page.tsx')
+    const page = read('app/agents/agents-client.tsx')
     expect(page).toMatch(/useState<AgentListSortBy>\(\(\) => parseListFilters\(searchParams\)\.sort\)/)
     expect(page).toMatch(/const sorted = orderAgents\(filtered, attestationViewBySubject, sortBy\)/)
     expect(page).toMatch(/\{SORT_OPTIONS\.map\(o => <option key=\{o\.id\} value=\{o\.id\}>\{o\.label\}<\/option>\)\}/)

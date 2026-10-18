@@ -40,6 +40,7 @@ import { fetchVaultPositions, sortPositions, sumSharesByVault, vaultStakeStats, 
 import { countLiveStakers, liveStakerWallets } from './live-position'
 import {
   completeReadCache,
+  SERVER_CACHE_CEILING,
   recordLiveRead,
   unknownOnFailure,
   SERVER_CACHE_TTL,
@@ -306,6 +307,7 @@ export interface AgentCorpus {
  */
 export const loadAgentCorpus = completeReadCache('agent-corpus', readAgentCorpus, {
   revalidate: SERVER_CACHE_TTL.agentCorpus,
+  hardCeilingSeconds: SERVER_CACHE_CEILING.agentCorpus,
   tags: () => [],
 })
 
@@ -607,7 +609,7 @@ export const loadErc8004Cohort = completeReadCache(
       && cohort.agents.every(a => a.declaredDomains !== null && a.declaredSkills !== null)
     return { value: cohort, complete }
   },
-  { revalidate: SERVER_CACHE_TTL.erc8004Cohort, tags: () => [] },
+  { revalidate: SERVER_CACHE_TTL.erc8004Cohort, hardCeilingSeconds: SERVER_CACHE_CEILING.erc8004Cohort, tags: () => [] },
 )
 
 /** One subject's attestations — what the cohort read doesn't hold. Per agent, SERVER_CACHE_TTL.agentDetail seconds. */

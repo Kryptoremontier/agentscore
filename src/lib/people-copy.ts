@@ -291,3 +291,6 @@ export function peopleHereLead(n: number | null): { lead: string; rest: string }
 }
 /** The check row under the hero's buttons (mono, small). tTRUST keeps its lowercase t. */
 export const LANDING_CHECKS = ['TESTNET tTRUST IS FREE', 'EVERY VOUCH IS ON-CHAIN', 'ONE WALLET CAN NEVER DO IT ALONE'] as const
+
+/** /agents (Etap 7a): the list draws its first rows, then this button adds the next ones. */
+export const showMoreAgents = (n: number) => `Show ${n} more`

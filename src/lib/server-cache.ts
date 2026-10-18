@@ -14,12 +14,15 @@
  *    into the request's read ledger (`runWithReadLedger`); `currentFreshness()` gives the
  *    answer's `dataAgeSeconds` (oldest read behind it; 0 when everything was read live) and
  *    `complete` (false → the response must not be cached downstream either).
- * 3. **Past twice its TTL a cached value is not served — unless the indexer is down.**
- *    `unstable_cache` serves a stale entry while it revalidates in the background; after a
- *    quiet hour that entry is an hour old. Past `maxStaleSeconds` (default 2 × TTL) the read
- *    runs live instead; when that live read fails, the last complete read is served with its
- *    real age (Etap 4c: a page never goes blank while we hold good data). No entry at all and
- *    a failed read → the failure.
+ * 3. **A visitor never waits for a refill (Etap 7a).** Any complete entry younger than its hard
+ *    ceiling (`hardCeilingSeconds`, default 1 h) is served at once with its real age; once it is
+ *    past its TTL `unstable_cache` refills it in the background (one read in flight per key —
+ *    rule below). Before Etap 7a an entry past 2 × TTL made the visitor wait for a full live
+ *    read — with little traffic, almost every visit (production: 6–12 s for /agents). Only with
+ *    no entry at all, or one past the ceiling, does the caller wait for a live read; when that
+ *    live read fails, the last complete read is served with its real age (Etap 4c: a page never
+ *    goes blank while we hold good data). No entry at all and a failed read → the failure. A
+ *    failed refill never replaces the entry: only complete reads are stored (rule 1).
  * 4. **Each entry's TTL is the configured one ±10 %,** drawn when the entry is read, so entries
  *    filled together don't refill together every TTL (`jitteredTtl`).
  *
@@ -214,13 +217,19 @@ export interface CompleteReadCacheOptions<A extends unknown[]> {
   revalidate: number
   /** Tags for `revalidateTag` (per call, e.g. `agent:<termId>`). */
   tags: (...args: A) => string[]
-  /** Past this age a cached value is not served; the read runs live. Default 2 × revalidate. */
-  maxStaleSeconds?: number
+  /**
+   * Past this age the caller waits for a live read instead of being served the entry (and
+   * refilling it in the background). Default HARD_CEILING_SECONDS (1 h).
+   */
+  hardCeilingSeconds?: number
   cache?: CacheImpl
   now?: () => number
   /** Tests only: the draw behind each entry's jittered TTL. */
   random?: () => number
 }
+
+/** Past this age an entry is not served while the indexer answers (Etap 7a): the caller waits for a live read. */
+export const HARD_CEILING_SECONDS = 3600
 
 /** Entries whose TTL one completeReadCache remembers (per argument list) before forgetting the oldest. */
 const TTL_MEMORY = 1000
@@ -233,8 +242,8 @@ export function completeReadCache<A extends unknown[], T>(
   // Late-bound: a clock captured at module load would outlive a swapped Date (fake timers).
   const now = options.now ?? (() => Date.now())
   const random = options.random ?? Math.random
-  // 2 × the configured TTL — above any entry's jittered TTL (at most 1.1 ×).
-  const maxStaleMs = (options.maxStaleSeconds ?? options.revalidate * 2) * 1000
+  // Above any entry's jittered TTL (at most 1.1 ×), so a fresh entry is never past it.
+  const ceilingMs = Math.max(options.hardCeilingSeconds ?? HARD_CEILING_SECONDS, options.revalidate * 2) * 1000
 
   // A read and everything it read in turn: complete only if all of it was; as old as its oldest part.
   const readFresh = async (...args: A): Promise<{ stamped: Stamped; complete: boolean }> => {
@@ -298,8 +307,9 @@ export function completeReadCache<A extends unknown[], T>(
       return decodeFromCache<T>(e.stamped.v)
     }
     const t = now()
-    if (t - stamped.readAt > maxStaleMs) {
-      // Too old to serve (a quiet spell): read live, returned as-is. The cache refreshes itself.
+    if (t - stamped.readAt > ceilingMs) {
+      // Past the hard ceiling (a long quiet spell or a long outage): read live, returned as-is.
+      // Under it, the entry was served below and `unstable_cache` refills it in the background.
       let live: { stamped: Stamped; complete: boolean }
       try {
         live = await readOnce(...args)
@@ -313,7 +323,9 @@ export function completeReadCache<A extends unknown[], T>(
       record({ key, readAt: live.stamped.readAt, cached: false, complete: live.complete })
       return decodeFromCache<T>(live.stamped.v)
     }
-    // A value this request stored itself was read live (age ≈ 0); one read earlier is cached.
+    // Served at once, whatever its age under the ceiling, with that age (stale-while-revalidate:
+    // past its TTL `unstable_cache` has already started the one background refill, through
+    // readOnce). A value this request stored itself was read live (age ≈ 0); one read earlier is cached.
     record({ key, readAt: stamped.readAt, cached: t - stamped.readAt >= 1000, complete: true })
     return decodeFromCache<T>(stamped.v)
   }
@@ -332,4 +344,15 @@ export const SERVER_CACHE_TTL = {
   erc8004Cohort: 300,
   /** Attestations on every ERC-8004 cohort agent — the /agents attester lines (AgentScore rows' come with the corpus). */
   cohortAttestations: 60,
+} as const
+
+/**
+ * Hard ceilings (seconds) where one is set per key (Etap 7a): under it a complete entry is served at
+ * once with its age and refilled in the background; past it the caller waits for a live read. The
+ * /agents list's three parts — the corpus, the cohort and its attestations — get one hour.
+ */
+export const SERVER_CACHE_CEILING = {
+  agentCorpus: 3600,
+  erc8004Cohort: 3600,
+  cohortAttestations: 3600,
 } as const

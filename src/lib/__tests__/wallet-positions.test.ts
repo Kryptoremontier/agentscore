@@ -75,7 +75,8 @@ describe('fetchWalletPositions — the user finds their own position whatever th
 describe('/agents, /skills and /claims all use the shared helpers (no page-local copies)', () => {
   it.each(['agents', 'skills', 'claims'])('/%s: user position, redeem shares and backers go through lib/wallet-positions.ts + lib/vault-positions.ts', async (page) => {
     const { readFileSync } = await import('node:fs')
-    const src = readFileSync(`src/app/${page}/page.tsx`, 'utf8')
+    // /agents' page is a server shell since Etap 7a; its client component holds the reads.
+    const src = readFileSync(page === 'agents' ? 'src/app/agents/agents-client.tsx' : `src/app/${page}/page.tsx`, 'utf8')
     const body = (name: string) => src.slice(src.indexOf(`const ${name} =`), src.indexOf('\n\n', src.indexOf(`const ${name} =`)))
     expect(body('fetchUserPosition')).toContain('fetchUserVaultPosition(')
     expect(body('fetchVaultSharesForUser')).toContain('fetchWalletShares(')

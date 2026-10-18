@@ -9,7 +9,7 @@ import path from 'node:path'
  * layout facts that assertion depends on.
  */
 
-const page = readFileSync(path.join(__dirname, '../../app/agents/page.tsx'), 'utf8')
+const page = readFileSync(path.join(__dirname, '../../app/agents/agents-client.tsx'), 'utf8')
 const timeline = readFileSync(path.join(__dirname, '../../components/agents/TrustTimeline.tsx'), 'utf8')
 
 describe('agent modal on a phone', () => {

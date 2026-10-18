@@ -64,7 +64,7 @@ describe('/agents status line: "272 agents, updated N min ago" (or "live" when f
   })
 
   it('the page renders it from the tabs\' own corpus counts', () => {
-    const page = code('app/agents/page.tsx')
+    const page = code('app/agents/agents-client.tsx')
     expect(page).toMatch(/<AgentsStatusLine \{\.\.\.corpusCounts\} freshness=\{pageView \? feedFreshnessLabel\(pageView\.parts, AGENTS_LIVE, nowTick\) : null\} \/>/)
     expect(page).not.toMatch(/GraphQL live feed|agentListHeaderSegments\(/)
   })
@@ -72,7 +72,7 @@ describe('/agents status line: "272 agents, updated N min ago" (or "live" when f
 
 describe('"via AgentScore" — only where it tells something', () => {
   it('not inside the AgentScore tab; the ERC-8004 chip stays; every card and row passes the tab', () => {
-    const page = code('app/agents/page.tsx')
+    const page = code('app/agents/agents-client.tsx')
     expect(page).toMatch(/if \(origin !== 'erc8004' && tab === 'agentscore'\) return null/)
     expect(page.match(/<OriginChip origin=\{agent\.origin\} tab=\{originFilter\} \/>/g)).toHaveLength(2)
     expect(page).not.toMatch(/<OriginChip origin=\{agent\.origin\} \/>/)
@@ -147,7 +147,7 @@ describe('the Agent Card\'s "Profile N% complete" bar — the connected owner on
   })
 
   it('the modal wraps the bar in it; the rest of the Agent Card stays for everyone', () => {
-    const page = code('app/agents/page.tsx')
+    const page = code('app/agents/agents-client.tsx')
     expect(page).toMatch(/\{viewerOwnsAgent && <div className="pt-1" data-testid="profile-completeness">/)
     expect(page).toMatch(/wallet: isConnected \? address : null/)
     expect(page).toMatch(/<h3 className="text-white font-bold text-sm mb-3">Agent Card<\/h3>/)

@@ -51,6 +51,7 @@ function part(vault: { trustTriple: { termId: string; counterTermId: string | nu
     skillTriples: ok([] as never),
     reports: ok(Array.from({ length: reports }) as never),
     stakerWeights: ok({}),
+    identity: ok(null),
   }
 }
 const ID = { dackie: DACKIE, luda: LUDA, openclaw: OPEN_CLAW } as const
@@ -66,7 +67,7 @@ function profileInput(key: keyof typeof ID): StatRowInput {
     signals: modal.signals.status === 'ok' ? modal.signals.value.totalCount : null,
   }
 }
-/** How the /agents modal builds it (app/agents/page.tsx): the positions it seeded from the same answer. */
+/** How the /agents modal builds it (app/agents/agents-client.tsx): the positions it seeded from the same answer. */
 function modalInput(key: keyof typeof ID): StatRowInput {
   const { attested, modal } = PARTS[key]
   const vault = modal.vault.status === 'ok' ? modal.vault.value : null
@@ -122,10 +123,11 @@ describe('source guards — same components on both surfaces, no tier-sounding s
   const code = (f: string) => read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/\{\s*\}/g, '')
 
   it('modal and profile render <ProfileStatRow view={statRow} …> from statRowView, and the Atom ID under a collapsed <AgentDetails>', () => {
-    const modal = code('app/agents/page.tsx')
+    const modal = code('app/agents/agents-client.tsx')
     expect(modal).toMatch(/const statRow = useMemo\(\(\) => statRowView\(\{/)
     expect(modal).toMatch(/<ProfileStatRow\s+view=\{statRow\}/)
-    expect(modal).toMatch(/<AgentDetails termId=\{selectedAgent\.term_id\} caipIdentity=\{selectedAgent\.caipIdentity\}/)
+    // Etap 7a: a cohort agent's identity link comes with its modal (part `identity`).
+    expect(modal).toMatch(/<AgentDetails termId=\{selectedAgent\.term_id\} caipIdentity=\{cohortIdentity\?\.caipIdentity\}/)
     expect(modal).not.toMatch(/<AtomIdLine /)
     const profile = code('app/agents/[id]/page.tsx')
     expect(profile).toMatch(/const statRow = statRowView\(\{/)

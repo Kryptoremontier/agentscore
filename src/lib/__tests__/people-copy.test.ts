@@ -26,7 +26,7 @@ const AGENT_SURFACES = [
   ...files(path.join(SRC, 'components/agents')),
   ...files(path.join(SRC, 'components/profile')),
   ...files(path.join(SRC, 'components/attest')),
-  path.join(SRC, 'app/agents/page.tsx'),
+  path.join(SRC, 'app/agents/agents-client.tsx'),
   path.join(SRC, 'app/agents/[id]/page.tsx'),
 ]
 
@@ -89,7 +89,7 @@ describe('the /agents header: plain words, no staking pitch', () => {
     const { AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB } = await import('../people-copy')
     expect(AGENTS_PAGE_TITLE).toBe('Agents')
     expect(AGENTS_PAGE_SUB).toBe('Find an AI agent and see who vouches for it, and for what.')
-    const page = code(path.join(SRC, 'app/agents/page.tsx'))
+    const page = code(path.join(SRC, 'app/agents/agents-client.tsx'))
     expect(page).toMatch(/<h1[^>]*>\s*\{AGENTS_PAGE_TITLE\}\s*<\/h1>/)
     expect(page).toMatch(/\{AGENTS_PAGE_SUB\}/)
     expect(page).not.toMatch(/Intelligence Registry|to signal\s+confidence|Decentralized trust verification/)

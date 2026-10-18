@@ -86,46 +86,46 @@ describe('completeReadCache — only complete reads are stored', () => {
     expect(cache.store.size).toBe(0)
   })
 
-  it('past 2 × TTL a cached value is not served: the read runs live', async () => {
+  it('past the hard ceiling (1 h) a cached value is not served: the read runs live', async () => {
     const cache = fakeNextCache(clock)
     let n = 0
     const read = vi.fn(async () => ({ value: ++n, complete: true }))
     const get = completeReadCache('k', read, { revalidate: 60, tags: () => [], cache: cache.impl, now })
     await get()
-    clock.t += 90_000 // stale (> 60 s), within 2 × TTL: served, revalidated in the background
+    clock.t += 90_000 // stale (> 60 s): served, revalidated in the background
     const stale = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
     expect(stale).toMatchObject({ v: 1, f: { dataAgeSeconds: 90 } })
     await cache.settle()
-    clock.t += 1_000_000 // an hour of silence
+    clock.t += 2 * 3_600_000 // two hours of silence: past the ceiling
     const live = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
     expect(live.f.dataAgeSeconds).toBe(0)
-    expect(live.v).toBeGreaterThan(2) // a fresh read, not the value from an hour ago
+    expect(live.v).toBeGreaterThan(2) // a fresh read, not the value from two hours ago
   })
 
-  it('past 2 × TTL with the indexer down → the last complete read, with its real age (Etap 4c); cold and down → the failure', async () => {
+  it('past the ceiling with the indexer down → the last complete read, with its real age (Etap 4c); cold and down → the failure', async () => {
     const cache = fakeNextCache(clock)
     let down = false
     const read = vi.fn(async () => { if (down) throw new Error('fetch failed'); return { value: { n: 7 }, complete: true } })
     const get = completeReadCache('k', read, { revalidate: 60, tags: () => [], cache: cache.impl, now })
     await get()
     down = true
-    clock.t += 10 * 60_000 // ten minutes of outage
+    clock.t += 2 * 3_600_000 // two hours of outage
     const served = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
     await cache.settle()
     expect(served.v).toEqual({ n: 7 })
-    expect(served.f).toMatchObject({ dataAgeSeconds: 600, complete: true })
+    expect(served.f).toMatchObject({ dataAgeSeconds: 7200, complete: true })
     expect(read).toHaveBeenCalledTimes(2) // the fill, then one attempt (the background refill and the live read share it)
 
     const cold = completeReadCache('k2', read, { revalidate: 60, tags: () => [], cache: fakeNextCache(clock).impl, now })
     await expect(cold()).rejects.toThrow('fetch failed')
   })
 
-  it('past 2 × TTL, a live read that answers wins over the old one', async () => {
+  it('past the ceiling, a live read that answers wins over the old one', async () => {
     const cache = fakeNextCache(clock)
     let n = 0
     const get = completeReadCache('k', async () => ({ value: ++n, complete: true }), { revalidate: 60, tags: () => [], cache: cache.impl, now })
     await get()
-    clock.t += 10 * 60_000
+    clock.t += 2 * 3_600_000
     const live = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
     expect(live.v).toBeGreaterThan(1)
     expect(live.f.dataAgeSeconds).toBe(0)
@@ -366,5 +366,129 @@ describe('each entry\'s TTL is the configured one ±10 % (Etap 4b-finish: 300 s 
     release()
     await cache.settle()
     expect(read).toHaveBeenCalledTimes(2) // the fill + one shared refill
+  })
+})
+
+/**
+ * Etap 7a — a visitor never waits for a refill. Production (2026-10-18): with little traffic the
+ * /agents cohort entry was usually past 2 × TTL, so the visitor waited for a full live read
+ * (6–12 s). Now any complete entry under its hard ceiling is served at once with its real age,
+ * and refilled in the background — one read; past the ceiling the caller waits; a failed refill
+ * never replaces the entry.
+ */
+describe('completeReadCache — stale-while-revalidate under a hard ceiling (Etap 7a)', () => {
+  const clock = { t: 5_000_000 }
+  const now = () => clock.t
+  beforeEach(() => { clock.t = 5_000_000 })
+
+  /** A read whose answers the test releases one at a time. */
+  function gatedRead() {
+    let n = 0
+    const gates: Array<() => void> = []
+    const read = vi.fn(() => new Promise<{ value: number; complete: boolean }>((resolve) => {
+      const v = ++n
+      gates.push(() => resolve({ value: v, complete: true }))
+    }))
+    return { read, release: () => gates.shift()?.() }
+  }
+
+  it('fresh → served from the cache, no read', async () => {
+    const cache = fakeNextCache(clock)
+    const read = vi.fn(async () => ({ value: 1, complete: true }))
+    const get = completeReadCache('k', read, { revalidate: 300, hardCeilingSeconds: 3600, tags: () => [], cache: cache.impl, now })
+    await get()
+    clock.t += 200_000
+    const r = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
+    await cache.settle()
+    expect(r).toMatchObject({ v: 1, f: { dataAgeSeconds: 200 } })
+    expect(read).toHaveBeenCalledTimes(1)
+  })
+
+  it('stale under the ceiling (15 min, past 2 × TTL) → the entry at once, with its real age, and exactly one background read', async () => {
+    const cache = fakeNextCache(clock)
+    const { read, release } = gatedRead()
+    const get = completeReadCache('k', read, { revalidate: 300, hardCeilingSeconds: 3600, tags: () => [], cache: cache.impl, now })
+    const fill = get(); release(); await fill
+    clock.t += 15 * 60_000
+
+    // Three visitors in a row: none waits for the refill (it is still held open).
+    for (let i = 0; i < 3; i++) {
+      const r = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
+      expect(r).toMatchObject({ v: 1, f: { dataAgeSeconds: 900, complete: true } })
+    }
+    expect(read).toHaveBeenCalledTimes(2) // the fill, and ONE background refill shared by all three
+
+    release(); await cache.settle()
+    clock.t += 1_000
+    const after = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
+    expect(after).toMatchObject({ v: 2, f: { dataAgeSeconds: 1 } }) // the refill landed
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('over the ceiling → the caller waits for a live read', async () => {
+    const cache = fakeNextCache(clock)
+    const { read, release } = gatedRead()
+    const get = completeReadCache('k', read, { revalidate: 300, hardCeilingSeconds: 3600, tags: () => [], cache: cache.impl, now })
+    const fill = get(); release(); await fill
+    clock.t += 3_601_000
+
+    let answered = false
+    const pending = runWithReadLedger(async () => { const v = await get(); answered = true; return { v, f: currentFreshness(clock.t) } })
+    await new Promise((r) => setTimeout(r, 10))
+    expect(answered).toBe(false) // waiting on the live read
+    release()
+    expect(await pending).toMatchObject({ v: 2, f: { dataAgeSeconds: 0 } })
+    expect(read).toHaveBeenCalledTimes(2) // the background refill and the live read share one read
+  })
+
+  it('a ceiling is per key; it is never below 2 × TTL', async () => {
+    const cache = fakeNextCache(clock)
+    const read = vi.fn(async () => ({ value: 1, complete: true }))
+    const short = completeReadCache('short', read, { revalidate: 60, hardCeilingSeconds: 600, tags: () => [], cache: cache.impl, now })
+    await short()
+    clock.t += 601_000
+    await runWithReadLedger(async () => { await short(); expect(currentFreshness(clock.t).dataAgeSeconds).toBe(0) })
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('a failed refill keeps the old entry — never replaced by a failure, served again with its real age', async () => {
+    const cache = fakeNextCache(clock)
+    let down = false
+    const read = vi.fn(async () => { if (down) throw new Error('GraphQL HTTP 504'); return { value: { n: 7 }, complete: true } })
+    const get = completeReadCache('k', read, { revalidate: 300, hardCeilingSeconds: 3600, tags: () => [], cache: cache.impl, now })
+    await get()
+    down = true
+    clock.t += 15 * 60_000
+    const first = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
+    await cache.settle() // the background refill failed
+    clock.t += 60_000
+    const second = await runWithReadLedger(async () => ({ v: await get(), f: currentFreshness(clock.t) }))
+    await cache.settle()
+    expect(first).toMatchObject({ v: { n: 7 }, f: { dataAgeSeconds: 900, complete: true } })
+    expect(second).toMatchObject({ v: { n: 7 }, f: { dataAgeSeconds: 960, complete: true } })
+    expect([...cache.store.values()].map((e) => JSON.parse(e.body).v)).toEqual([{ n: 7 }])
+  })
+
+  it('an incomplete refill keeps the old entry too (never stored)', async () => {
+    const cache = fakeNextCache(clock)
+    let partial = false
+    const read = vi.fn(async () => ({ value: partial ? { n: null } : { n: 7 }, complete: !partial }))
+    const get = completeReadCache('k', read, { revalidate: 300, hardCeilingSeconds: 3600, tags: () => [], cache: cache.impl, now })
+    await get()
+    partial = true
+    clock.t += 15 * 60_000
+    expect(await get()).toEqual({ n: 7 })
+    await cache.settle()
+    expect([...cache.store.values()].map((e) => JSON.parse(e.body).v)).toEqual([{ n: 7 }])
+  })
+
+  it('the /agents list parts get one hour', async () => {
+    const { SERVER_CACHE_CEILING, HARD_CEILING_SECONDS } = await import('../server-cache')
+    expect(HARD_CEILING_SECONDS).toBe(3600)
+    expect(SERVER_CACHE_CEILING).toEqual({ agentCorpus: 3600, erc8004Cohort: 3600, cohortAttestations: 3600 })
+    const src = (f: string) => readFileSync(path.join(__dirname, '..', f), 'utf8')
+    expect(src('api-data.ts')).toMatch(/hardCeilingSeconds: SERVER_CACHE_CEILING\.agentCorpus/)
+    expect(src('api-data.ts')).toMatch(/hardCeilingSeconds: SERVER_CACHE_CEILING\.erc8004Cohort/)
+    expect(src('agents-page-data.ts')).toMatch(/hardCeilingSeconds: SERVER_CACHE_CEILING\.cohortAttestations/)
   })
 })

@@ -168,7 +168,7 @@ describe('isCompactCard — only rows whose vault the list never read, decided a
 
 // ─── Grid ↔ list parity (Etap 4b-finish commit 4) ────────────────────────────
 
-const PAGE = readFileSync(path.join(__dirname, '../../app/agents/page.tsx'), 'utf8')
+const PAGE = readFileSync(path.join(__dirname, '../../app/agents/agents-client.tsx'), 'utf8')
 const GRID_VIEW = PAGE.slice(PAGE.indexOf('/* ── GRID VIEW ── */'), PAGE.indexOf('/* ── LIST VIEW ──'))
 const LIST_VIEW = PAGE.slice(PAGE.indexOf('/* ── LIST VIEW ──'), PAGE.indexOf('{/* Agent Detail Modal */}'))
 

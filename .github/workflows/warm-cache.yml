@@ -1,0 +1,49 @@
+name: Warm cache
+
+# Etap 7a: keep the shared server cache warm, so no visitor waits for a live indexer read.
+#
+# With little traffic, almost every /agents visit landed on a cold or expired cache entry and paid
+# for a full live read (6–12 s). Since "perf(cache): a visitor never waits for a refill" any complete
+# entry under its hard ceiling (1 h) is served at once and refilled in the background; this job makes
+# sure such an entry always exists. Every 5 minutes it calls, read-only, the three answers a visitor's
+# first screen needs. Each call serves the cached entries and starts the refills that are due — the
+# same reads one visitor would cause, never more (one read in flight per key).
+#
+# Why GitHub Actions and not Vercel Cron: on the Hobby plan Vercel Cron runs at most once a day (a
+# more frequent schedule fails the deploy); move this to vercel.json `crons` if the plan changes.
+# GitHub runs scheduled jobs on the default branch, on a best-effort schedule (often a few minutes
+# late), and pauses them after 60 days without repository activity.
+#
+# Indexer load: one cycle costs at most a full refill of these entries; per minute that is well
+# under the 4b-cache budget (≤ 20 req/min steady) — numbers in the Etap 7a PR.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: warm-cache
+  cancel-in-progress: false
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call the cached answers (read-only)
+        env:
+          BASE: https://agentscore-gilt.vercel.app
+        run: |
+          fail=0
+          for path in /api/v1/agents/page /api/v1/stats '/api/v1/agents?limit=1'; do
+            if ! out=$(curl -sS -o body.json -w '%{http_code} %{time_total}' --max-time 60 -H 'user-agent: agentscore-warm-cache' "$BASE$path"); then
+              echo "::warning::$path unreachable"; fail=1; continue
+            fi
+            code=${out%% *}; secs=${out#* }
+            age=$(python3 -c "import json; print(json.load(open('body.json')).get('meta', {}).get('dataAgeSeconds'))" 2>/dev/null || echo '?')
+            echo "$path → HTTP $code in ${secs}s, meta.dataAgeSeconds=$age"
+            if [ "$code" != 200 ]; then echo "::warning::$path answered HTTP $code"; fail=1; fi
+          done
+          exit $fail

@@ -107,7 +107,7 @@ describe('URL state — ?origin=erc8004&quality=unrated', () => {
 })
 
 describe('/agents wires them (source guards — no DOM in this env)', () => {
-  const page = readFileSync(path.join(__dirname, '../../app/agents/page.tsx'), 'utf8')
+  const page = readFileSync(path.join(__dirname, '../../app/agents/agents-client.tsx'), 'utf8')
 
   it('tabs and header read the same corpus counts object', () => {
     expect(page).toMatch(/const originTotals = corpusTotals\(corpusCounts\)/)
