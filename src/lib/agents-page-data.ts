@@ -16,7 +16,7 @@
  */
 
 import {
-  completeReadCache, readWithFreshness, recordLiveRead, SERVER_CACHE_TTL,
+  completeReadCache, readWithFreshness, recordLiveRead, SERVER_CACHE_CEILING, SERVER_CACHE_TTL,
 } from './server-cache'
 import { CDN_MAX_EXTRA_AGE_SECONDS } from './api-helpers'
 import { cachedAgentSkillTriples, loadAgentCorpus, loadErc8004Cohort, type AgentCorpus } from './api-data'
@@ -35,8 +35,10 @@ import { MODAL_PARTS, type AgentModalPayload, type AgentsPagePayload, type Modal
 const serverRequest: GqlRequest = (query, variables) => gqlRequest(query, variables, { cache: 'no-store' })
 
 /**
- * Past this age a part was not re-read when it should have been: twice its TTL (the most the
- * cache serves while the indexer answers) plus what a CDN hop can add.
+ * Past this age the page says how old a part is ("Updated N min ago") instead of calling it live:
+ * twice its TTL plus what a CDN hop can add. Since Etap 7a an older part is served at once (and
+ * refilled in the background) after a quiet spell, not only while the indexer fails — either
+ * way, the visitor sees its real age.
  */
 export function staleAfterSeconds(ttlSeconds: number): number {
   return 2 * ttlSeconds + CDN_MAX_EXTRA_AGE_SECONDS
@@ -81,7 +83,7 @@ const loadCohortAttestations = completeReadCache(
   'cohort-attestations',
   // Throws if any chunk fails: a partial map is never stored.
   async (ids: string[]) => ({ value: await fetchAttestationsForSubjects(ids), complete: true }),
-  { revalidate: SERVER_CACHE_TTL.cohortAttestations, tags: () => [] },
+  { revalidate: SERVER_CACHE_TTL.cohortAttestations, hardCeilingSeconds: SERVER_CACHE_CEILING.cohortAttestations, tags: () => [] },
 )
 
 export async function getAgentsPageData(): Promise<AgentsPagePayload> {
