@@ -11,6 +11,7 @@
 import type { AttestedEntry } from './attestation-reader'
 import type { AgentListAtom } from './agent-list'
 import type { CohortAgent } from './cohort-reader'
+import { decodeCohortAttestations, decodeCohortCard, type CohortCard, type CohortCardWire } from './cohort-wire'
 import type { VaultPositionWithMeta } from './vault-positions'
 import type { AgentSignals } from './agent-signals'
 import type { AgentReport } from './agent-profile'
@@ -45,9 +46,16 @@ export interface AgentsPagePayload {
     /** term_id → attestation entries for every corpus row; null = that read failed (tiers unknown). */
     attestations: Record<string, AttestedEntry[]> | null
   }>
-  /** The ERC-8004 cohort (identity links + declarations). */
-  cohort: PagePart<{ agents: CohortAgent[]; total: number | null; truncated: boolean | null }>
-  /** term_id → attestation entries for every cohort agent. Failed whenever the cohort is. */
+  /**
+   * The ERC-8004 cohort, as its cards show it (Etap 7a, lib/cohort-wire.ts): id, name, created —
+   * compact and lossless. The identity link and the declarations come with the modal (`identity`).
+   */
+  cohort: PagePart<{ cards: CohortCardWire[]; total: number | null; truncated: boolean | null }>
+  /**
+   * term_id → attestation entries, only for cohort agents that have any (Etap 7a): the read covers
+   * the whole cohort, so a cohort agent missing here has none (agentsPageView gives it []).
+   * Failed whenever the cohort is.
+   */
   cohortAttestations: PagePart<Record<string, AttestedEntry[]>>
 }
 
@@ -62,17 +70,22 @@ export interface AgentModalPayload {
   reports: PagePart<AgentReport[]>
   /** Evaluator weight (0.5x–1.5x) per staker wallet, lowercased; its first 20 live stakers. */
   stakerWeights: PagePart<Record<string, number>>
+  /** An ERC-8004 agent's identity link and declarations (the list carries only its card); null = not a cohort agent. */
+  identity: PagePart<CohortIdentity | null>
 }
 
+/** What the modal shows of a cohort agent beyond its card (lib/cohort-reader.ts CohortAgent). */
+export type CohortIdentity = Pick<CohortAgent, 'caipIdentity' | 'declaredDomains' | 'declaredSkills'>
+
 /** The modal answer's parts, and which of them the agent header (stat row + Backers line) needs. */
-export const MODAL_PARTS = ['vault', 'signals', 'skillTriples', 'reports', 'stakerWeights'] as const
+export const MODAL_PARTS = ['vault', 'signals', 'skillTriples', 'reports', 'stakerWeights', 'identity'] as const
 export type ModalPart = (typeof MODAL_PARTS)[number]
 /**
  * The header's parts — fast reads (vault, signals, reports: well under a second cold). Asked for on
  * their own (`?parts=`) so the header never waits on the slow ones (skill triples: ~5.5 s cold).
  */
 export const MODAL_HEADER_PARTS = ['vault', 'signals', 'reports'] as const satisfies readonly ModalPart[]
-export const MODAL_REST_PARTS = ['skillTriples', 'stakerWeights'] as const satisfies readonly ModalPart[]
+export const MODAL_REST_PARTS = ['skillTriples', 'stakerWeights', 'identity'] as const satisfies readonly ModalPart[]
 
 /** A part's age now, from its absolute read time (never negative). null when it failed. */
 export function partAgeSeconds(part: PagePart<unknown>, now: number = Date.now()): number | null {
@@ -128,7 +141,7 @@ export interface AgentsPageView {
   agentScore:
     | { status: 'ok'; rows: AgentListAtom[]; junk: number; fetched: number; total: number | null; truncated: boolean | null }
     | { status: 'error' }
-  cohort: { status: 'ok'; agents: CohortAgent[]; total: number | null; truncated: boolean | null } | { status: 'error' }
+  cohort: { status: 'ok'; agents: CohortCard[]; total: number | null; truncated: boolean | null } | { status: 'error' }
   attestations: Map<string, AttestedEntry[]> | null
   /** The parts that were served, for the freshness line. */
   parts: Array<PagePart<unknown>>
@@ -140,14 +153,15 @@ export function agentsPageView(payload: AgentsPagePayload | null): AgentsPageVie
   const a = payload?.agentScore ?? { status: 'failed' as const }
   const c = payload?.cohort ?? { status: 'failed' as const }
   const ca = payload?.cohortAttestations ?? { status: 'failed' as const }
+  const cohortAgents = c.status === 'ok' ? c.value.cards.map(decodeCohortCard) : null
   const read: Array<Record<string, AttestedEntry[]>> = []
   if (a.status === 'ok' && a.value.attestations) read.push(a.value.attestations)
-  if (ca.status === 'ok') read.push(ca.value)
+  if (ca.status === 'ok' && cohortAgents) read.push(decodeCohortAttestations(ca.value, cohortAgents.map((x) => x.termId)))
   return {
     agentScore: a.status === 'ok'
       ? { status: 'ok', rows: a.value.rows, junk: a.value.junk, fetched: a.value.fetched, total: a.value.total, truncated: a.value.truncated }
       : { status: 'error' },
-    cohort: c.status === 'ok' ? { status: 'ok', ...c.value } : { status: 'error' },
+    cohort: c.status === 'ok' && cohortAgents ? { status: 'ok', agents: cohortAgents, total: c.value.total, truncated: c.value.truncated } : { status: 'error' },
     attestations: read.length ? new Map(read.flatMap((r) => Object.entries(r))) : null,
     parts: [a, c, ca].filter((p) => p.status === 'ok'),
     unreachable: a.status !== 'ok' && c.status !== 'ok',

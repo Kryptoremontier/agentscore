@@ -112,7 +112,15 @@ describe('GET /api/v1/agents/page — the list in one answer, part by part', () 
     expect(a).toMatchObject({ junk: 0, fetched: 2, total: 2, truncated: false })
     expect(Object.keys(a!.attestations!)).toEqual(expect.arrayContaining([LUDA, OPEN_CLAW]))
     expect(body.cohort).toMatchObject({ status: 'ok', value: { total: 1, truncated: false } })
-    expect(body.cohortAttestations).toMatchObject({ status: 'ok', value: { [DACKIE]: [] } })
+    // Etap 7a: the cohort as its cards show it (lib/cohort-wire.ts) — no identity link or declarations.
+    expect(body.cohort.status === 'ok' && body.cohort.value.cards).toHaveLength(1)
+    expect(JSON.stringify(body.cohort)).not.toMatch(/caipIdentity|declaredDomains|declaredSkills/)
+    // Only cohort agents with attestations are sent; the decoder gives the others [] (never "unread").
+    expect(body.cohortAttestations).toMatchObject({ status: 'ok', value: {} })
+    const { agentsPageView } = await import('../agents-page-types')
+    const view = agentsPageView(body)
+    expect(view.cohort).toMatchObject({ status: 'ok', agents: [{ termId: DACKIE }] })
+    expect(view.attestations?.get(DACKIE)).toEqual([])
     expect(feedFreshnessLabel([body.agentScore, body.cohort, body.cohortAttestations], 'GraphQL live feed', clock.t)).toBe('GraphQL live feed')
   })
 
@@ -184,7 +192,11 @@ describe('GET /api/v1/agents/page/:id — the modal beyond the list', () => {
     indexer.down = true
     const { status, body } = await modal(OPEN_CLAW)
     expect(status).toBe(200)
-    expect(Object.values(body!).every((p) => p.status === 'failed')).toBe(true)
+    // Every part read for this agent failed. The identity part comes from the cohort read the list
+    // cached a moment ago: served with its real age (a stale entry's age shows, it is never fresh).
+    const { identity, ...rest } = body!
+    expect(Object.values(rest).every((p) => p.status === 'failed')).toBe(true)
+    expect(identity).toMatchObject({ status: 'ok', value: null })
   })
 })
 
@@ -204,7 +216,7 @@ describe('GET /api/v1/agents/page/:id?parts= — the header never waits on the s
   it('?parts=skillTriples → only that; no parts = every part (the 4c contract); an unknown part → 400', async () => {
     await page()
     expect(Object.keys((await modal(OPEN_CLAW, 'skillTriples')).body!)).toEqual(['skillTriples'])
-    expect(Object.keys((await modal(OPEN_CLAW)).body!).sort()).toEqual(['reports', 'signals', 'skillTriples', 'stakerWeights', 'vault'])
+    expect(Object.keys((await modal(OPEN_CLAW)).body!).sort()).toEqual(['identity', 'reports', 'signals', 'skillTriples', 'stakerWeights', 'vault'])
     expect((await modal(OPEN_CLAW, 'vault,bogus')).status).toBe(400)
     expect((await modal(OPEN_CLAW, '')).status).toBe(200) // empty = default: every part
   })

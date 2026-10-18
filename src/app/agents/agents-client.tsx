@@ -7,7 +7,7 @@ import { Layers, Globe, LayoutGrid, List, ExternalLink } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther } from 'viem'
 import Link from 'next/link'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts'
+import dynamic from 'next/dynamic'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { AgentsPageSkeleton } from '@/components/agents/AgentsPageSkeleton'
 import { decodeFromCache } from '@/lib/json-codec'
@@ -40,22 +40,18 @@ import { effectiveLabel } from '@/lib/api-data'
 import { SkillBreakdown } from '@/components/SkillBreakdown'
 import { TrustSparkline } from '@/components/TrustSparkline'
 import { AgentRadar } from '@/components/AgentRadar'
-import { TrustTimeline, ScoreTrajectoryChart } from '@/components/agents/TrustTimeline'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
-import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 import { useNotice } from '@/components/shared/NoticeProvider'
 import { useConnectModal } from '@/components/wallet/ConnectModal'
-import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
 import { intuitionTestnet } from '@0xintuition/protocol'
 import { txFailureNotice } from '@/lib/user-notice'
-import { AttestedDomains } from '@/components/profile/AttestedDomains'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
-import { AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
+import { showMoreAgents, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND } from '@/lib/people-copy'
 import { ScoreParts } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
@@ -67,7 +63,7 @@ import {
   matchesAgentSearch, agentResultsLine, type FeedStatus,
   cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, orderAgents, listEntryOf, type CardAttestationView,
   listTrustTriple, listVaultSnapshot, listOpposeWei, withLiveVault,
-  ORIGIN_TABS, QUALITY_LEVELS, corpusTotals, qualityOptions, qualityOptionText, parseListFilters, listFiltersSearch,
+  ORIGIN_TABS, QUALITY_LEVELS, LIST_PAGE_SIZE, corpusTotals, qualityOptions, qualityOptionText, parseListFilters, listFiltersSearch,
   type OriginFilter, type QualityFilter, type AgentScoreCorpusCounts, type CohortCorpusCounts,
 } from '@/lib/agent-list'
 import { CardAttesterLine } from '@/components/agents/CardAttesterLine'
@@ -121,6 +117,42 @@ interface GraphQLAgent {
   declaredSkills?: string[] | null
   caipIdentity?: string
 }
+
+// ── Modal-only, and heavy (Etap 7a): recharts with its dependencies (~330 kB of the ~660 kB only
+// /agents loaded), the attest flow and the Back/Sell panel load when a modal opens — or as soon as a
+// card is pointed at or focused (preloadModal) — never with the list. Each is drawn inside a box of
+// the same size while it loads.
+const loadTimeline = () => import('@/components/agents/TrustTimeline')
+const loadModalParts = () => Promise.all([
+  loadTimeline(),
+  import('@/components/agents/BondingCurveChart'),
+  import('@/components/profile/AttestedDomains'),
+  import('@/components/attest/AttestStickyBar'),
+  import('@/components/profile/BackThisAgentSection'),
+])
+let modalPartsRequested = false
+/** Start loading the modal's parts (once): on a card's pointer-enter / focus, and when a modal opens. */
+function preloadModal() {
+  if (modalPartsRequested) return
+  modalPartsRequested = true
+  loadModalParts().catch(() => { modalPartsRequested = false })
+}
+const FillWhileLoading = () => <div className="h-full w-full" aria-hidden />
+const BondingCurveChart = dynamic(() => import('@/components/agents/BondingCurveChart').then((m) => m.BondingCurveChart), { ssr: false, loading: FillWhileLoading })
+const ScoreTrajectoryChart = dynamic(() => loadTimeline().then((m) => m.ScoreTrajectoryChart), { ssr: false, loading: FillWhileLoading })
+const TrustTimeline = dynamic(() => loadTimeline().then((m) => m.TrustTimeline), {
+  ssr: false,
+  loading: () => <div className="h-64 rounded-xl bg-white/[0.03] animate-pulse" aria-hidden />,
+})
+const AttestedDomains = dynamic(() => import('@/components/profile/AttestedDomains').then((m) => m.AttestedDomains), {
+  ssr: false,
+  loading: () => <div className="mb-3 h-28 rounded-xl bg-white/[0.03] animate-pulse" aria-hidden />,
+})
+const AttestStickyBar = dynamic(() => import('@/components/attest/AttestStickyBar').then((m) => m.AttestStickyBar), { ssr: false })
+const BackThisAgentSection = dynamic(() => import('@/components/profile/BackThisAgentSection').then((m) => m.BackThisAgentSection), {
+  ssr: false,
+  loading: () => <div className="mb-3 h-14 rounded-xl bg-white/[0.03] animate-pulse" aria-hidden />,
+})
 
 /**
  * What the server read for the first HTML (Etap 7a, app/agents/page.tsx): the cached list answer,
@@ -192,9 +224,6 @@ function listStateOf(view: AgentsPageView) {
           type: 'Thing',
           created_at: c.createdAt,
           origin: 'erc8004',
-          declaredDomains: c.declaredDomains,
-          declaredSkills: c.declaredSkills,
-          caipIdentity: c.caipIdentity,
         }))
       : [],
     cohortTotal: cohort?.total ?? null,
@@ -233,6 +262,8 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   // Sort in the URL too (?sort=vouched|newest|backing); missing = "Most vouched" (Etap 5b).
   const [sortBy, setSortBy] = useState<AgentListSortBy>(() => parseListFilters(searchParams).sort)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  // How many rows of the current order are drawn (Etap 7a); back to one page when the view changes.
+  const [shownCount, setShownCount] = useState(LIST_PAGE_SIZE)
   // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
   const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>(init?.cohortAgents ?? [])
   const [cohortTotal, setCohortTotal] = useState<number | null>(init?.cohortTotal ?? null)
@@ -254,6 +285,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
     setQualityFilter(f.quality)
     setSortBy(f.sort)
   }, [searchParams])
+  useEffect(() => { setShownCount(LIST_PAGE_SIZE) }, [originFilter, qualityFilter, sortBy, searchTerm])
   const [selectedAgent, setSelectedAgent] = useState<GraphQLAgent | null>(null)
   // The open modal's agent, for async results that must not land on another agent's modal.
   const selectedAgentIdRef = useRef<string | null>(null)
@@ -365,6 +397,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   useEffect(() => {
     setModalData(null)
     if (!selectedAgent) return
+    preloadModal() // its heavy parts (charts, attest flow, Back/Sell), if no card was pointed at first
     const termId = selectedAgent.term_id
     let cancelled = false
     const merge = (parts: readonly ModalPart[]) => (d: Partial<AgentModalPayload> | null) => {
@@ -387,6 +420,15 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   const [liveUntil, setLiveUntil] = useState<Record<string, number>>({})
   const liveAgent = !!selectedAgent && isLiveAfterOwnTx(liveUntil, selectedAgent.term_id)
   const markLiveAfterOwnTx = (termId: string) => setLiveUntil((prev) => ({ ...prev, [termId]: Date.now() + OWN_TX_LIVE_MS }))
+
+  // A cohort agent's identity link and declarations come with its modal (Etap 7a: the list carries only
+  // its card). undefined while the part is on its way (nothing drawn yet); null when it failed (the
+  // "couldn't read" state, never "declares nothing").
+  const cohortIdentity = useMemo(() => {
+    const part = modalData?.identity
+    if (!part) return undefined
+    return part.status === 'ok' ? part.value : null
+  }, [modalData?.identity])
 
   // Evaluator weight per staker wallet (the cached evaluator leaderboard's). Unread → none applied.
   const evaluatorWeights = useMemo(
@@ -1750,6 +1792,9 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
             // score (zero stake, or never read) must never rank among measured scores by its prior.
             // People first by default (lib/agent-list.ts orderAgents — the landing carousel's order).
             const sorted = orderAgents(filtered, attestationViewBySubject, sortBy)
+            // The first LIST_PAGE_SIZE rows, then "Show N more" (Etap 7a): the default order puts the
+            // agents people vouch for first, so nothing that matters is hidden; the counts stay full.
+            const visible = sorted.slice(0, shownCount)
             const qualityLabel = QUALITY_LEVELS.find(l => l.id === qualityFilter)?.label
 
             return (
@@ -1824,7 +1869,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
               ) : viewMode === 'grid' ? (
               /* ── GRID VIEW ── */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }) => {
+                {visible.map(({ agent, trust: cardTrust, measured, noScoreTip }) => {
                   // The backing score (Etap 5b): the measured trust score from the atom vault's
                   // support vs oppose — the modal's and the profile's number too; small and neutral.
                   // At zero stake cardTrust.score is the formula's 50 prior: "—" (lib/score-basis.ts).
@@ -1863,6 +1908,8 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                         onClick={() => setSelectedAgent(agent)}
                         className={`${cardClass} p-4`}
                         data-card="compact"
+                        onPointerEnter={preloadModal}
+                        onFocus={preloadModal}
                       >
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
@@ -1889,6 +1936,8 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                       onClick={() => setSelectedAgent(agent)}
                       className={`${cardClass} p-5`}
                       data-card="full"
+                      onPointerEnter={preloadModal}
+                      onFocus={preloadModal}
                       data-term-id={agent.term_id}
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -1931,7 +1980,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                   <span className="hidden sm:block text-right">Stakers</span>
                   <span className="text-right">{BACKING_LABEL}</span>
                 </div>
-                {sorted.map(({ agent, trust: cardTrust, measured, noScoreTip }, i) => {
+                {visible.map(({ agent, trust: cardTrust, measured, noScoreTip }, i) => {
                   // The card's backing score, the same derivation (small, neutral — Etap 5b).
                   const displayScore = measuredScore(cardTrust, measured)
                   const stakers = agent.liveStakerCount
@@ -1945,6 +1994,8 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                     <motion.div
                       key={agent.term_id}
                       data-row="list"
+                      onPointerEnter={preloadModal}
+                      onFocus={preloadModal}
                       data-term-id={agent.term_id}
                       initial={enter({ opacity: 0, x: -10 })}
                       animate={{ opacity: 1, x: 0 }}
@@ -1999,6 +2050,18 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                   )
                 })}
               </div>
+              )}
+              {sorted.length > visible.length && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setShownCount((n) => n + LIST_PAGE_SIZE)}
+                    className="btn-secondary"
+                    data-testid="show-more-agents"
+                  >
+                    {showMoreAgents(Math.min(LIST_PAGE_SIZE, sorted.length - visible.length))}
+                  </button>
+                </div>
               )}
             </motion.div>
             )
@@ -2105,7 +2168,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                 />
               </div>
               {selectedAgent.origin === 'erc8004' && (
-                <DeclaredDomains declaredDomains={selectedAgent.declaredDomains} className="mb-3" />
+                <DeclaredDomains declaredDomains={cohortIdentity === undefined ? undefined : cohortIdentity === null ? null : cohortIdentity.declaredDomains} className="mb-3" />
               )}
               <ReportsSection reports={profileVector.reports} loading={!profileLoaded} className="mb-3 px-1" />
 
@@ -2513,7 +2576,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
               {/* === DETAILS — collapsed: the Atom ID, the ERC-8004 id and the backing score's parts
                   (Trust Score / Composite / Hybrid, the stake split, the time-weighted ratio and the
                   composite's pillars). Shared with /agents/[id]; none of it is the headline (Etap 5b). */}
-              <AgentDetails termId={selectedAgent.term_id} caipIdentity={selectedAgent.caipIdentity} className="mb-3">
+              <AgentDetails termId={selectedAgent.term_id} caipIdentity={cohortIdentity?.caipIdentity} className="mb-3">
                 <ScoreParts view={{
                   trustScore: measuredScore(agentTrust, modalMeasured),
                   composite: compositeTrust ? compositeTrust.score : null,
@@ -2826,38 +2889,13 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                       <div className="grid grid-cols-2 gap-4">
                         {/* Support curve */}
                         {(() => {
-                          const data = generateCurveData(supportSupply)
                           const localPrice = getCurrentPrice(supportSupply)
                           const chartPrice = onChainPrice ?? localPrice
                           return (
                             <div>
                               <p className="text-[#34a872] text-[10px] font-bold mb-2 uppercase">Support</p>
                               <div className="h-32">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <AreaChart data={data}>
-                                    <defs>
-                                      <linearGradient id="supportCurveGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#34a872" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#34a872" stopOpacity={0}/>
-                                      </linearGradient>
-                                    </defs>
-                                    <XAxis dataKey="supply" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} width={40} />
-                                    <Tooltip
-                                      contentStyle={{ backgroundColor: '#161b22', border: '1px solid #21262d', borderRadius: 8, fontSize: 11 }}
-                                      labelStyle={{ color: '#8b949e' }}
-                                      formatter={(value: any) => [`${Number(value).toFixed(4)} tTRUST`, 'Price']}
-                                      labelFormatter={(label: any) => `Supply: ${label}`}
-                                    />
-                                    <Area type="monotone" dataKey="price" stroke="#34a872" fillOpacity={1} fill="url(#supportCurveGrad)" strokeWidth={2} />
-                                    {supportSupply > 0 && (
-                                      <ReferenceDot x={parseFloat(supportSupply.toFixed(4))} y={parseFloat(localPrice.toFixed(6))} r={5} fill="#34a872" stroke="#fff" strokeWidth={2} />
-                                    )}
-                                    {onChainPrice && supportSupply > 0 && (
-                                      <ReferenceLine y={onChainPrice} stroke="#f59e0b" strokeDasharray="4 4" strokeWidth={1} label={{ value: 'On-chain', fill: '#f59e0b', fontSize: 9, position: 'right' }} />
-                                    )}
-                                  </AreaChart>
-                                </ResponsiveContainer>
+                                <BondingCurveChart supply={supportSupply} price={localPrice} color="#34a872" gradientId="supportCurveGrad" onChainPrice={onChainPrice} />
                               </div>
                               <p className="text-[#7A838D] text-[10px] mt-1">Supply: {supportSupply.toFixed(2)} · Price: {chartPrice.toFixed(4)}{onChainPrice ? ' (on-chain)' : ''}</p>
                             </div>
@@ -2876,34 +2914,12 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                               </div>
                             )
                           }
-                          const data = generateCurveData(opposeSupply)
                           const opposePrice = getCurrentPrice(opposeSupply)
                           return (
                             <div>
                               <p className="text-[#c45454] text-[10px] font-bold mb-2 uppercase">Oppose</p>
                               <div className="h-32">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <AreaChart data={data}>
-                                    <defs>
-                                      <linearGradient id="opposeCurveGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#c45454" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#c45454" stopOpacity={0}/>
-                                      </linearGradient>
-                                    </defs>
-                                    <XAxis dataKey="supply" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} width={40} />
-                                    <Tooltip
-                                      contentStyle={{ backgroundColor: '#161b22', border: '1px solid #21262d', borderRadius: 8, fontSize: 11 }}
-                                      labelStyle={{ color: '#8b949e' }}
-                                      formatter={(value: any) => [`${Number(value).toFixed(4)} tTRUST`, 'Price']}
-                                      labelFormatter={(label: any) => `Supply: ${label}`}
-                                    />
-                                    <Area type="monotone" dataKey="price" stroke="#c45454" fillOpacity={1} fill="url(#opposeCurveGrad)" strokeWidth={2} />
-                                    {opposeSupply > 0 && (
-                                      <ReferenceDot x={parseFloat(opposeSupply.toFixed(4))} y={parseFloat(opposePrice.toFixed(6))} r={5} fill="#c45454" stroke="#fff" strokeWidth={2} />
-                                    )}
-                                  </AreaChart>
-                                </ResponsiveContainer>
+                                <BondingCurveChart supply={opposeSupply} price={opposePrice} color="#c45454" gradientId="opposeCurveGrad" />
                               </div>
                               <p className="text-[#7A838D] text-[10px] mt-1">Supply: {opposeSupply.toFixed(2)} · Price: {opposePrice.toFixed(4)}</p>
                             </div>

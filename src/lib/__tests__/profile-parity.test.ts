@@ -51,6 +51,7 @@ function part(vault: { trustTriple: { termId: string; counterTermId: string | nu
     skillTriples: ok([] as never),
     reports: ok(Array.from({ length: reports }) as never),
     stakerWeights: ok({}),
+    identity: ok(null),
   }
 }
 const ID = { dackie: DACKIE, luda: LUDA, openclaw: OPEN_CLAW } as const
@@ -125,7 +126,8 @@ describe('source guards — same components on both surfaces, no tier-sounding s
     const modal = code('app/agents/agents-client.tsx')
     expect(modal).toMatch(/const statRow = useMemo\(\(\) => statRowView\(\{/)
     expect(modal).toMatch(/<ProfileStatRow\s+view=\{statRow\}/)
-    expect(modal).toMatch(/<AgentDetails termId=\{selectedAgent\.term_id\} caipIdentity=\{selectedAgent\.caipIdentity\}/)
+    // Etap 7a: a cohort agent's identity link comes with its modal (part `identity`).
+    expect(modal).toMatch(/<AgentDetails termId=\{selectedAgent\.term_id\} caipIdentity=\{cohortIdentity\?\.caipIdentity\}/)
     expect(modal).not.toMatch(/<AtomIdLine /)
     const profile = code('app/agents/[id]/page.tsx')
     expect(profile).toMatch(/const statRow = statRowView\(\{/)

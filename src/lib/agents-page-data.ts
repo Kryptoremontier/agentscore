@@ -29,7 +29,8 @@ import { fetchAgentReports } from './agent-profile'
 import { EVALUATOR_LEADERBOARD_MAX, fetchEvaluatorLeaderboard } from './evaluator-data'
 import { calculateEvaluatorScore, type EvaluatorProfile } from './evaluator-score'
 import { gqlRequest, type GqlRequest } from './gql-pager'
-import { MODAL_PARTS, type AgentModalPayload, type AgentsPagePayload, type ModalPart, type PagePart } from './agents-page-types'
+import { MODAL_PARTS, type AgentModalPayload, type AgentsPagePayload, type CohortIdentity, type ModalPart, type PagePart } from './agents-page-types'
+import { encodeCohortAttestations, encodeCohortCard } from './cohort-wire'
 
 /** Server reads bypass Next's fetch cache: the complete-reads cache decides what is kept. */
 const serverRequest: GqlRequest = (query, variables) => gqlRequest(query, variables, { cache: 'no-store' })
@@ -89,19 +90,25 @@ const loadCohortAttestations = completeReadCache(
 export async function getAgentsPageData(): Promise<AgentsPagePayload> {
   const [agentScoreRaw, cohort] = await Promise.all([
     pagePart('agent-corpus', SERVER_CACHE_TTL.agentCorpus, () => loadAgentCorpus()),
+    // What a cohort card shows, compact and lossless (lib/cohort-wire.ts); the identity link and the
+    // declarations come with the modal (getAgentModalParts, part `identity`).
     pagePart('erc8004-cohort', SERVER_CACHE_TTL.erc8004Cohort, async () => {
       const c = await loadErc8004Cohort()
-      return { agents: c.agents, total: c.total, truncated: c.truncated }
+      return { ids: c.agents.map((a) => a.termId), cards: c.agents.map(encodeCohortCard), total: c.total, truncated: c.truncated }
     }),
   ])
   const agentScore: AgentsPagePayload['agentScore'] = agentScoreRaw.status === 'ok'
     ? { ...agentScoreRaw, value: corpusForPage(agentScoreRaw.value, Date.parse(agentScoreRaw.dataReadAt)) }
     : FAILED
+  // Only the cohort agents that have attestations: the read covers the whole cohort, so the others have none.
   const cohortAttestations: AgentsPagePayload['cohortAttestations'] = cohort.status === 'ok'
     ? await pagePart('cohort-attestations', SERVER_CACHE_TTL.cohortAttestations, async () =>
-        Object.fromEntries(await loadCohortAttestations(cohort.value.agents.map((a) => a.termId).sort())) as Record<string, AttestedEntry[]>)
+        encodeCohortAttestations(Object.fromEntries(await loadCohortAttestations([...cohort.value.ids].sort())) as Record<string, AttestedEntry[]>))
     : FAILED
-  return { agentScore, cohort, cohortAttestations }
+  const cohortCards: AgentsPagePayload['cohort'] = cohort.status === 'ok'
+    ? { ...cohort, value: { cards: cohort.value.cards, total: cohort.value.total, truncated: cohort.value.truncated } }
+    : FAILED
+  return { agentScore, cohort: cohortCards, cohortAttestations }
 }
 
 // ─── One agent's modal ────────────────────────────────────────────────────────
@@ -178,7 +185,7 @@ export async function getAgentModalParts(termId: string, parts: readonly ModalPa
   // Signals and staker weights depend on the vault (which vaults to read; whose weights).
   const needVault = want.has('vault') || want.has('signals') || want.has('stakerWeights')
   const vault = needVault ? await pagePart('agent-vault', SERVER_CACHE_TTL.agentDetail, () => loadAgentVault(termId)) : FAILED
-  const [signals, skillTriples, reports, stakerWeights] = await Promise.all([
+  const [signals, skillTriples, reports, stakerWeights, identity] = await Promise.all([
     !want.has('signals') ? undefined
       // Which vaults to read depends on the trust triple: no vault read, no signals.
       : vault.status === 'ok'
@@ -192,6 +199,7 @@ export async function getAgentModalParts(termId: string, parts: readonly ModalPa
         ? pagePart('staker-weights', SERVER_CACHE_TTL.evaluatorLeaderboard, async () =>
             stakerWeightsFrom(await fetchEvaluatorLeaderboard(), stakerWalletsOf(vault.value.positions)))
         : FAILED,
+    want.has('identity') ? pagePart('erc8004-cohort', SERVER_CACHE_TTL.erc8004Cohort, () => cohortIdentityOf(termId)) : undefined,
   ])
   const out: Partial<AgentModalPayload> = {}
   if (want.has('vault')) out.vault = vault
@@ -199,7 +207,21 @@ export async function getAgentModalParts(termId: string, parts: readonly ModalPa
   if (skillTriples) out.skillTriples = skillTriples
   if (reports) out.reports = reports
   if (stakerWeights) out.stakerWeights = stakerWeights
+  if (identity) out.identity = identity
   return out
+}
+
+/**
+ * A cohort agent's identity link and declarations (Etap 7a: the list no longer carries them), from
+ * the same cached cohort read. null = not a cohort agent — known only from a cohort read to the
+ * end; a cut-off read can't rule it out, so it throws (the part fails, never "declares nothing").
+ */
+export async function cohortIdentityOf(termId: string): Promise<CohortIdentity | null> {
+  const c = await loadErc8004Cohort()
+  const a = c.agents.find((x) => x.termId === termId)
+  if (a) return { caipIdentity: a.caipIdentity, declaredDomains: a.declaredDomains, declaredSkills: a.declaredSkills }
+  if (c.truncated !== false) throw new Error('cohort read cut off: membership unknown')
+  return null
 }
 
 /**
