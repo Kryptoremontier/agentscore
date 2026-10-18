@@ -15,7 +15,7 @@
  * silently passed.
  *
  * Never `waitForLoadState('networkidle')`: the agent modal polls positions
- * every 15 s (src/app/agents/page.tsx), so the network is never idle there.
+ * every 15 s (src/app/agents/agents-client.tsx), so the network is never idle there.
  */
 import { test, expect, type Page, type Locator } from '@playwright/test'
 import path from 'node:path'
@@ -251,7 +251,7 @@ const BACKING_READ = /^(Backed with \d|No tTRUST backing yet)/
 /**
  * Modal is open and its own "—" loading placeholders resolved: the four
  * primary stat boxes and the backing line render "—" only while loading
- * (see the Etap 4b comments in src/app/agents/page.tsx), and the "Who vouches"
+ * (see the Etap 4b comments in src/app/agents/agents-client.tsx), and the "Who vouches"
  * section left its skeleton — either its heading (≥1 vouch) or the empty
  * state (nobody vouches, e.g. OPEN CLAW). Copy: lib/people-copy.ts (Etap 5b).
  */

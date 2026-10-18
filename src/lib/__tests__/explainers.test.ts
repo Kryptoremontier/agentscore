@@ -68,13 +68,13 @@ describe('where the "?" sits — next to the word, on the modal, the profile and
   })
 
   it('the tier names: beside the tier chip in the modal and both profile layouts', () => {
-    expect(code('app/agents/page.tsx')).toMatch(/<AgentTierChip tier=\{agentTier\} loading=\{!profileLoaded\} \/>\s*<Explainer term="tiers" \/>/)
+    expect(code('app/agents/agents-client.tsx')).toMatch(/<AgentTierChip tier=\{agentTier\} loading=\{!profileLoaded\} \/>\s*<Explainer term="tiers" \/>/)
     expect(code('components/agents/AgentHeader.tsx')).toMatch(/<AgentTierChip[^>]*\/>\s*<Explainer term="tiers" \/>/)
     expect(code('app/agents/[id]/page.tsx')).toMatch(/<AgentTierChip[^>]*\/>\s*<Explainer term="tiers" \/>/)
   })
 
   it('every surface explains all four', () => {
-    const modal = terms(['app/agents/page.tsx', 'components/profile/ProfileStatRow.tsx'])
+    const modal = terms(['app/agents/agents-client.tsx', 'components/profile/ProfileStatRow.tsx'])
     const profile = terms(['app/agents/[id]/page.tsx', 'components/agents/AgentHeader.tsx', 'components/profile/ProfileStatRow.tsx'])
     const landing = terms(['components/landing/Hero.tsx', 'components/landing/ExampleAgentCard.tsx', 'components/landing/HowItWorks.tsx'])
     for (const t of ['vouch', 'tiers', 'backing', 'ttrust']) {

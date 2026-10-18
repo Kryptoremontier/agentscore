@@ -110,7 +110,7 @@ describe('mono for eyebrows (and the landing check row) — not for data labels'
     expect(css).toMatch(/\.eyebrow-slash::before \{\s*content: "\/\/ ";\s*content: "\/\/ " \/ "";/)
   })
   it('the page and section eyebrows use it', () => {
-    for (const f of ['app/agents/page.tsx', 'app/skills/page.tsx', 'app/claims/page.tsx', 'app/docs/page.tsx']) {
+    for (const f of ['app/agents/agents-client.tsx', 'app/skills/page.tsx', 'app/claims/page.tsx', 'app/docs/page.tsx']) {
       expect(read(f), f).toMatch(/className="eyebrow eyebrow-slash /)
     }
     // /docs: "Platform Documentation" in the same mono amber line, no pill left.

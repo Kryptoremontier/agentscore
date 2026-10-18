@@ -9,6 +9,8 @@ import { parseEther } from 'viem'
 import Link from 'next/link'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from 'recharts'
 import { PageBackground } from '@/components/shared/PageBackground'
+import { AgentsPageSkeleton } from '@/components/agents/AgentsPageSkeleton'
+import { decodeFromCache } from '@/lib/json-codec'
 import { Button } from '@/components/ui/button'
 import { DecimalInput } from '@/components/ui/DecimalInput'
 // Categories unused — filter now uses trust levels directly
@@ -77,7 +79,7 @@ import { Explainer } from '@/components/shared/Explainer'
 import {
   agentsPageView, feedFreshnessLabel, modalFreshnessLabel, isLiveAfterOwnTx, FEED_UNREACHABLE, OWN_TX_LIVE_MS,
   MODAL_PARTS, MODAL_HEADER_PARTS, MODAL_REST_PARTS, type ModalPart,
-  type AgentModalPayload, type AgentsPageView,
+  type AgentModalPayload, type AgentsPagePayload, type AgentsPageView,
 } from '@/lib/agents-page-types'
 import { fetchAgentModalData, fetchAgentsPage } from '@/lib/agents-page-client'
 import { readAgentSignals } from '@/lib/agent-signals'
@@ -120,26 +122,20 @@ interface GraphQLAgent {
   caipIdentity?: string
 }
 
-export default function AgentsPage() {
+/**
+ * What the server read for the first HTML (Etap 7a, app/agents/page.tsx): the cached list answer,
+ * encoded as /api/v1/agents/page sends it, and when the server rendered it — the first render of the
+ * freshness line uses that instant on both sides, so the HTML and the hydrated page say the same.
+ */
+export interface AgentsInitialList {
+  payload: unknown
+  renderedAt: number
+}
+
+export function AgentsPageClient({ initial }: { initial: AgentsInitialList | null }) {
   return (
-    <Suspense fallback={
-      <PageBackground image="wave" opacity={0.3}>
-        <div className="pt-24 pb-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="animate-pulse space-y-4">
-              <div className="h-10 w-64 bg-white/10 rounded-lg" />
-              <div className="h-12 bg-white/5 rounded-xl" />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-                {[1,2,3,4,5,6].map(i => (
-                  <div key={i} className="glass-card h-48 bg-white/5" />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </PageBackground>
-    }>
-      <AgentsPageContent />
+    <Suspense fallback={<AgentsPageSkeleton />}>
+      <AgentsPageContent initial={initial} />
     </Suspense>
   )
 }
@@ -175,21 +171,61 @@ function OriginChip({ origin, tab }: { origin?: 'agentscore' | 'erc8004'; tab: O
   )
 }
 
-function AgentsPageContent() {
+/** The list's state from one answer — the first HTML's (Etap 7a) and every reload's alike. */
+function listStateOf(view: AgentsPageView) {
+  const scored = view.agentScore.status === 'ok' ? view.agentScore : null
+  // Post-junk rows: the server applied agent-junk-filter.ts to the raw labels (one rule, §7 rule 4).
+  const agents = scored ? (scored.rows as GraphQLAgent[]) : []
+  for (const row of agents) row.origin = 'agentscore'
+  const cohort = view.cohort.status === 'ok' ? view.cohort : null
+  return {
+    agents,
+    junk: scored?.junk ?? 0,
+    corpusMeta: scored
+      ? { fetched: scored.fetched, total: scored.total, truncated: scored.truncated }
+      : { fetched: 0, total: null as number | null, truncated: null as boolean | null },
+    error: scored ? null : FEED_UNREACHABLE,
+    cohortAgents: cohort
+      ? cohort.agents.map((c): GraphQLAgent => ({
+          term_id: c.termId,
+          label: c.label,
+          type: 'Thing',
+          created_at: c.createdAt,
+          origin: 'erc8004',
+          declaredDomains: c.declaredDomains,
+          declaredSkills: c.declaredSkills,
+          caipIdentity: c.caipIdentity,
+        }))
+      : [],
+    cohortTotal: cohort?.total ?? null,
+    cohortTruncated: cohort?.truncated ?? null,
+    cohortStatus: (cohort ? 'ok' : 'error') as FeedStatus,
+    // A subject whose part failed is absent: its card makes no claim (cardViewFor → unread).
+    attested: view.attestations,
+  }
+}
+
+function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   const searchParams = useSearchParams()
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
   const { connector } = useAccount()
 
-  const [agents, setAgents] = useState<GraphQLAgent[]>([])
-  const [agentJunkFilteredCount, setAgentJunkFilteredCount] = useState(0)
+  // The list the server put in the first HTML (Etap 7a): the page renders it at once and reads the
+  // API only when the server had none. Derived once, by the same rule as every reload (listStateOf).
+  const [initialView] = useState<AgentsPageView | null>(() =>
+    initial ? agentsPageView(decodeFromCache<AgentsPagePayload>(initial.payload)) : null)
+  const [init] = useState(() => (initialView ? listStateOf(initialView) : null))
+
+  const [agents, setAgents] = useState<GraphQLAgent[]>(init?.agents ?? [])
+  const [agentJunkFilteredCount, setAgentJunkFilteredCount] = useState(init?.junk ?? 0)
   // Raw fetched rows / corpus size / truncation for the header (REPO_MAP §7 rule 1).
   const [agentCorpusMeta, setAgentCorpusMeta] = useState<{ fetched: number; total: number | null; truncated: boolean | null }>(
-    { fetched: 0, total: null, truncated: null },
+    init?.corpusMeta ?? { fetched: 0, total: null, truncated: null },
   )
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(!init)
+  const [error, setError] = useState<string | null>(init?.error ?? null)
   const [searchTerm, setSearchTerm] = useState('')
   // Origin tab + quality filter live in the URL (?origin=erc8004&quality=unrated) so a filtered
   // view is shareable; unknown values fall back to 'all' (lib/agent-list.ts parseListFilters).
@@ -198,15 +234,15 @@ function AgentsPageContent() {
   const [sortBy, setSortBy] = useState<AgentListSortBy>(() => parseListFilters(searchParams).sort)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
-  const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>([])
-  const [cohortTotal, setCohortTotal] = useState<number | null>(null)
-  const [cohortTruncated, setCohortTruncated] = useState<boolean | null>(null)
-  const [cohortLoading, setCohortLoading] = useState(true)
+  const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>(init?.cohortAgents ?? [])
+  const [cohortTotal, setCohortTotal] = useState<number | null>(init?.cohortTotal ?? null)
+  const [cohortTruncated, setCohortTruncated] = useState<boolean | null>(init?.cohortTruncated ?? null)
+  const [cohortLoading, setCohortLoading] = useState(!init)
   // 'error' ≠ empty: a failed cohort read must never look like "0 ERC-8004".
-  const [cohortStatus, setCohortStatus] = useState<FeedStatus>('loading')
+  const [cohortStatus, setCohortStatus] = useState<FeedStatus>(init?.cohortStatus ?? 'loading')
   // Attestations for every listed agent (both corpora) — one bulk read, 2 paged requests per
   // 200 ids (lib/attestation-reader.ts). undefined = not read yet, null = the read failed.
-  const [attestedBySubject, setAttestedBySubject] = useState<Map<string, AttestedEntry[]> | null | undefined>(undefined)
+  const [attestedBySubject, setAttestedBySubject] = useState<Map<string, AttestedEntry[]> | null | undefined>(init ? init.attested : undefined)
   // The latest list read, for the modal to reuse at open without re-running on every list update.
   const attestedBySubjectRef = useRef(attestedBySubject)
   attestedBySubjectRef.current = attestedBySubject
@@ -388,7 +424,7 @@ function AgentsPageContent() {
   // modals) and went blank whenever that failed, while our server held a complete read. The list
   // now comes from /api/v1/agents/page (lib/agents-page-data.ts): every part served with its age,
   // the last complete read when the indexer is down, "failed" only when nothing can be shown.
-  const [pageView, setPageView] = useState<AgentsPageView | null>(null)
+  const [pageView, setPageView] = useState<AgentsPageView | null>(initialView)
   const loadPage = async (isCancelled: () => boolean = () => false) => {
     setLoading(true)
     setCohortLoading(true)
@@ -397,43 +433,24 @@ function AgentsPageContent() {
     const payload = await fetchAgentsPage()
     if (isCancelled()) return
     const view = agentsPageView(payload)
+    const next = listStateOf(view)
     setPageView(view)
-    if (view.agentScore.status === 'ok') {
-      // Post-junk rows: the server applied agent-junk-filter.ts to the raw labels (one rule, §7 rule 4).
-      const rows = view.agentScore.rows as GraphQLAgent[]
-      for (const row of rows) row.origin = 'agentscore'
-      setAgents(rows)
-      setAgentJunkFilteredCount(view.agentScore.junk)
-      setAgentCorpusMeta({ fetched: view.agentScore.fetched, total: view.agentScore.total, truncated: view.agentScore.truncated })
-    } else {
-      setAgents([])
-      setError(FEED_UNREACHABLE)
-    }
-    if (view.cohort.status === 'ok') {
-      setCohortAgents(view.cohort.agents.map((c): GraphQLAgent => ({
-        term_id: c.termId,
-        label: c.label,
-        type: 'Thing',
-        created_at: c.createdAt,
-        origin: 'erc8004',
-        declaredDomains: c.declaredDomains,
-        declaredSkills: c.declaredSkills,
-        caipIdentity: c.caipIdentity,
-      })))
-      setCohortTotal(view.cohort.total)
-      setCohortTruncated(view.cohort.truncated)
-      setCohortStatus('ok')
-    } else {
-      setCohortAgents([])
-      setCohortStatus('error')
-    }
-    // A subject whose part failed is absent: its card makes no claim (cardViewFor → unread).
-    setAttestedBySubject(view.attestations)
+    setAgents(next.agents)
+    setAgentJunkFilteredCount(next.junk)
+    setAgentCorpusMeta(next.corpusMeta)
+    setError(next.error)
+    setCohortAgents(next.cohortAgents)
+    setCohortTotal(next.cohortTotal)
+    setCohortTruncated(next.cohortTruncated)
+    setCohortStatus(next.cohortStatus)
+    setAttestedBySubject(next.attested)
     setLoading(false)
     setCohortLoading(false)
   }
 
   useEffect(() => {
+    // The server's first HTML already holds the list: no second read of the same answer.
+    if (init) return
     let cancelled = false
     loadPage(() => cancelled)
     return () => { cancelled = true }
@@ -1487,8 +1504,18 @@ function AgentsPageContent() {
   }
   const originTotals = corpusTotals(corpusCounts)
   // The header's "Updated N min ago" keeps counting while the page is open.
-  const [nowTick, setNowTick] = useState(() => Date.now())
+  // Entrance animations start from opacity 0: in the server's HTML that would hide the list until the
+  // JS has loaded and run. While the page hydrates a list that came with the first HTML, nothing
+  // animates in (framer-motion `initial={false}`); rows mounted later (a tab, a search) still do.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => { setHydrated(true) }, [])
+  const enter = <T,>(from: T): T | false => (init && !hydrated ? false : from)
+
+  // First render: the server's render instant (the HTML and the hydrated page print the same line),
+  // then the real clock at once.
+  const [nowTick, setNowTick] = useState(() => initial?.renderedAt ?? Date.now())
   useEffect(() => {
+    setNowTick(Date.now())
     const t = setInterval(() => setNowTick(Date.now()), 30_000)
     return () => clearInterval(t)
   }, [])
@@ -1531,7 +1558,7 @@ function AgentsPageContent() {
         <div className="container">
           {/* Page Header */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={enter({ opacity: 0, y: 20 })}
             animate={{ opacity: 1, y: 0 }}
             className="mb-6 md:mb-10"
           >
@@ -1557,7 +1584,7 @@ function AgentsPageContent() {
 
           {/* Search + Filter Bar */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={enter({ opacity: 0, y: 20 })}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="mb-4"
@@ -1672,7 +1699,7 @@ function AgentsPageContent() {
           {/* "None registered" only when BOTH corpora were actually read and are empty. */}
           {!loading && !error && cohortStatus === 'ok' && (agents.length + cohortAgents.length) === 0 && !searchTerm && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={enter({ opacity: 0, y: 20 })}
               animate={{ opacity: 1, y: 0 }}
               className="text-center py-20"
             >
@@ -1727,7 +1754,7 @@ function AgentsPageContent() {
 
             return (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={enter({ opacity: 0 })}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
             >
@@ -1830,7 +1857,7 @@ function AgentsPageContent() {
                       <motion.div
                         key={agent.term_id}
                         data-term-id={agent.term_id}
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={enter({ opacity: 0, y: 20 })}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.05 }}
                         onClick={() => setSelectedAgent(agent)}
@@ -1856,7 +1883,7 @@ function AgentsPageContent() {
                   return (
                     <motion.div
                       key={agent.term_id}
-                      initial={{ opacity: 0, y: 20 }}
+                      initial={enter({ opacity: 0, y: 20 })}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.05 }}
                       onClick={() => setSelectedAgent(agent)}
@@ -1919,7 +1946,7 @@ function AgentsPageContent() {
                       key={agent.term_id}
                       data-row="list"
                       data-term-id={agent.term_id}
-                      initial={{ opacity: 0, x: -10 }}
+                      initial={enter({ opacity: 0, x: -10 })}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.015 }}
                       onClick={() => setSelectedAgent(agent)}

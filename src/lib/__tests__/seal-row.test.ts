@@ -115,7 +115,7 @@ describe('where the seals are — beside the words, never instead of them (sourc
   const code = (f: string) => readFileSync(path.join(SRC, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/\{\s*\}/g, '')
 
   it('/agents: the grid card, the compact card and the list row (sm), next to the people line; the modal (lg)', () => {
-    const page = code('app/agents/page.tsx')
+    const page = code('app/agents/agents-client.tsx')
     expect(page.match(/<SealRow attesters=\{sealsOf\(agent\.term_id\)\} size="sm"/g)).toHaveLength(3)
     expect(page.match(/<CardAttesterLine line=\{attesterLine\}/g)).toHaveLength(3)
     expect(page).toMatch(/<ProfileStatRow[\s\S]*?\/>\s*<SealRow attesters=\{modalAttesters\} size="lg"/)

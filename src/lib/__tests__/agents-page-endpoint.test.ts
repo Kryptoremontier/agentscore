@@ -235,7 +235,7 @@ describe('stakerWeightsFrom — a wallet is weighed only when its weight is know
 // ─── Commit 3: what the page shows in each indexer state ─────────────────────
 
 describe('/agents in each indexer state — what a visitor sees (Etap 4c)', () => {
-  /** The header line exactly as the page builds it (app/agents/page.tsx: corpusCounts + freshness). */
+  /** The header line exactly as the page builds it (app/agents/agents-client.tsx: corpusCounts + freshness). */
   const headerOf = async (view: import('../agents-page-types').AgentsPageView) => {
     const { agentListHeaderSegments, LIVE_FEED_LABEL } = await import('../agent-list')
     const a = view.agentScore, c = view.cohort
@@ -355,7 +355,7 @@ describe('/agents in each indexer state — what a visitor sees (Etap 4c)', () =
   it('the page wires it so (source guards — no DOM here)', async () => {
     const { readFileSync } = await import('node:fs')
     const path = await import('node:path')
-    const src = readFileSync(path.join(__dirname, '../../app/agents/page.tsx'), 'utf8')
+    const src = readFileSync(path.join(__dirname, '../../app/agents/agents-client.tsx'), 'utf8')
     // No indexer read from the browser for the list: one API answer.
     expect(src).toMatch(/await fetchAgentsPage\(\)/)
     expect(src).not.toMatch(/fetchAgentListCorpus|fetchAttestationsForSubjects\(|fetchCohortAgents|useAgentStakerWeights/)

@@ -80,13 +80,13 @@ describe('used everywhere a primary action is', () => {
   it('Connect Wallet, register, clear search, back this agent', () => {
     expect(read('components/wallet/WalletButton.tsx')).toMatch(/<Button onClick=\{\(\) => openConnectModal\(\)\} className="px-3 sm:px-6">/)
     expect(read('components/agents/RegisterAgentForm.tsx')).toMatch(/className="btn-primary w-full"/)
-    const agents = read('app/agents/page.tsx')
+    const agents = read('app/agents/agents-client.tsx')
     expect(agents.match(/className="btn-primary(?: w-full)?"/g)?.length).toBeGreaterThanOrEqual(2)
     expect(read('app/skills/page.tsx')).toMatch(/className="btn-primary"/)
   })
 
   it('chips and tags keep their shapes', () => {
-    expect(read('app/agents/page.tsx')).toMatch(/function OriginChip[\s\S]*?text-xs px-2 py-0\.5 rounded inline-block/)
+    expect(read('app/agents/agents-client.tsx')).toMatch(/function OriginChip[\s\S]*?text-xs px-2 py-0\.5 rounded inline-block/)
     expect(read('components/agents/TrustTierBadge.tsx')).not.toMatch(/btn-primary|btn-secondary/)
   })
 })

@@ -29,7 +29,7 @@ describe('the /agents empty state links somewhere that exists', () => {
   it('no link to /test-intuition anywhere; the empty state points at /docs', () => {
     const hits = files(SRC).filter((f) => /\/test-intuition/.test(readFileSync(f, 'utf8')))
     expect(hits.map((f) => path.relative(SRC, f))).toEqual([])
-    expect(code('app/agents/page.tsx')).toMatch(/<Link href="\/docs">\s*How to register an agent →/)
+    expect(code('app/agents/agents-client.tsx')).toMatch(/<Link href="\/docs">\s*How to register an agent →/)
   })
 })
 
