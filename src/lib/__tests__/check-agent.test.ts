@@ -185,10 +185,12 @@ describe('checkCardOf — the /agents card\'s own derivations', () => {
 
 describe('the page', () => {
   const page = readFileSync('src/app/check/page.tsx', 'utf8')
-  it('a plain GET form named q (works before JS), the answer under a fixed-height skeleton', () => {
-    expect(page).toMatch(/<form action="\/check" method="get"/)
-    expect(page).toMatch(/name="q"/)
-    expect(page).toMatch(/<Suspense key=\{q\} fallback=\{<AnswerSkeleton \/>\}>/)
+  it('a plain GET form named q (works before JS), on /check and every permalink', () => {
+    const box = readFileSync('src/components/check/CheckBox.tsx', 'utf8')
+    expect(box).toMatch(/<form action="\/check" method="get"/)
+    expect(box).toMatch(/name="q"/)
+    expect(page).toMatch(/<CheckBox q=\{q\} \/>/)
+    expect(readFileSync('src/app/check/[id]/page.tsx', 'utf8')).toMatch(/<CheckBox \/>/)
   })
   it('reads only through lib/check-data (the /agents answer and the cached cohort)', () => {
     expect(page).toMatch(/import \{ checkLookup \} from '@\/lib\/check-data'/)

@@ -8,6 +8,7 @@ import { MobileBottomNav } from '@/components/layout/MobileNav'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { ScrollToTop } from '@/components/shared/ScrollToTop'
 import './globals.css'
+import { SITE_URL } from '@/lib/site'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -39,7 +40,7 @@ const instrumentSerif = Instrument_Serif({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://agentscore-gilt.vercel.app'),
+  metadataBase: new URL(SITE_URL),
   title: 'AgentScore | Trust Layer for AI Agents',
   description: 'Real people vouch for AI agents, on-chain — by name, for something specific. One wallet can never do it alone. Built on Intuition.',
   icons: {

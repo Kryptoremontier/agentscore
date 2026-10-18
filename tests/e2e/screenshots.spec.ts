@@ -47,6 +47,9 @@ interface Shot {
 
 const SHOTS: Shot[] = [
   { name: 'landing', url: ROUTES.landing, prepare: landingStatsReady, check: landingStoryOnOneScreen },
+  // Etap 7 Run B: "Check an agent" — the box, and one agent's card at its permalink.
+  { name: 'check', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
+  { name: 'check-dackie', url: ROUTES.checkCard(AGENTS.dackie), prepare: checkCardReady, check: checkCardChecks },
   { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: mostVouchedFirst },
   // The first screen, as a visitor sees it: at 390×844 the first card must be on it.
   { name: 'agents-list-fold', url: ROUTES.agents, prepare: agentsListReady, firstScreen: true, check: firstCardAboveFold },
@@ -294,6 +297,27 @@ async function profileReady(page: Page) {
  * Etap 5a: exactly one attest CTA in the DOM (not one visible and one hidden): inline in the
  * Attested section on desktop, the sticky bar on a phone — and it is visible.
  */
+/** Etap 7 Run B: the /check card answered — who vouches, the seals, how old the data is. */
+async function checkCardReady(page: Page) {
+  const card = page.getByTestId('check-result')
+  await card.waitFor({ timeout: WAIT_CAP })
+  await expect(card.getByTestId('check-people')).toHaveText(/vouch/i, { timeout: WAIT_CAP })
+  await expect(card.getByTestId('check-age')).toHaveText(/^Updated /, { timeout: WAIT_CAP })
+}
+
+/** Nothing on the page reaches past the viewport (no sideways scroll). */
+async function pageFitsViewport(page: Page) {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  expect(overflow, 'page wider than the viewport').toBeLessThanOrEqual(0)
+}
+
+/** The card: one vouch action, the share row, and it fits the viewport. */
+async function checkCardChecks(page: Page) {
+  await oneAttestCta(page)
+  await expect(page.getByTestId('share-x'), 'Share on X').toBeVisible()
+  await pageFitsViewport(page)
+}
+
 async function oneAttestCta(page: Page) {
   const ctas = page.locator('[data-testid="attest-cta"]')
   await expect(ctas, 'attest CTAs in the DOM').toHaveCount(1)

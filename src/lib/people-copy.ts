@@ -187,6 +187,13 @@ export const CHECK_WALLET_NOT_FOUND = 'No agent on AgentScore was registered by 
 export const CHECK_WALLET_PROFILE = 'See what this wallet vouched for'
 export const CHECK_BROWSE = 'Browse all agents'
 export const CHECK_UNREAD = 'Couldn’t read the agent list right now — this is not a “not found”. Try again in a minute.'
+export const CHECK_SHARE = 'Share on X'
+export const CHECK_PERMALINK = 'Link to this card'
+/** The post a person shares: "{name}: {N} people vouch on AgentScore. Who vouches for your agent?" */
+export const checkShareText = (name: string, n: number) => `${name}: ${people(n)} ${plural(n, 'vouches', 'vouch')} on AgentScore. Who vouches for your agent?`
+/** On the Open Graph image, under the card: the data's age, printed on the picture itself. */
+export const checkImageAge = (readAt: string, ageLabel: string) => `Data read ${readAt.slice(0, 16).replace('T', ' ')} UTC · ${ageLabel}`
+export const CHECK_IMAGE_UNREAD = 'Couldn’t read this agent right now — no numbers shown.'
 export const ORIGIN_LABEL: Record<'agentscore' | 'erc8004', string> = { agentscore: 'via AgentScore', erc8004: 'ERC-8004' }
 export const LANDING_CTA_DEVELOPERS = 'For developers & agents (MCP / REST)'
 export const EXAMPLE_HEADING = 'Most vouched right now'
