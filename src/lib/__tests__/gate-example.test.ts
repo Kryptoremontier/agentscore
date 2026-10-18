@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { EXAMPLE_GATE } from '../gate-example'
+import { EXAMPLE_GATE, GATE_SNIPPET } from '../gate-example'
 import { decideTrustGate, parseGatePolicy } from '../trust-gate'
 import { aggregateAttestations } from '../attestation-reader'
 
@@ -51,10 +51,16 @@ describe('every surface shows that answer', () => {
     expect(skill).toMatch(/treat it as no — do not pay or delegate/)
   })
 
-  it('/docs renders it from the module', () => {
+  it('/docs renders it from the module (and the snippet from the example file)', () => {
     const docs = readFileSync('src/app/docs/page.tsx', 'utf8')
-    expect(docs).toContain("import { EXAMPLE_GATE } from '@/lib/gate-example'")
+    expect(docs).toContain("import { EXAMPLE_GATE, GATE_SNIPPET } from '@/lib/gate-example'")
     expect(docs).toContain('{JSON.stringify(EXAMPLE_GATE.answer, null, 2)}')
+    expect(docs).toContain('{GATE_SNIPPET}')
   })
 })
 
+describe('the snippet on /docs is examples/trust-gate.ts, byte for byte', () => {
+  it('GATE_SNIPPET === examples/trust-gate.ts', () => {
+    expect(GATE_SNIPPET).toBe(readFileSync('examples/trust-gate.ts', 'utf8'))
+  })
+})

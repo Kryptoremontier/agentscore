@@ -10,7 +10,7 @@ import {
   Shield, Eye, Sparkles, Crown,
 } from 'lucide-react'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
-import { EXAMPLE_GATE } from '@/lib/gate-example'
+import { EXAMPLE_GATE, GATE_SNIPPET } from '@/lib/gate-example'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1234,7 +1234,7 @@ function TabApiMcp() {
   return (
     <div className="grid gap-5">
 
-      {/* Trust gate — the answer comes from lib/gate-example.ts (captured, never hand-typed) */}
+      {/* Trust gate — the answer and the snippet come from lib/gate-example.ts (captured, never hand-typed) */}
       <DocCard className="min-w-0">
         <div data-testid="docs-trust-gate">
           <SectionTitle icon={ShieldCheck} color="#C8963C" label="Trust gate — ask before you pay or delegate" />
@@ -1252,9 +1252,14 @@ function TabApiMcp() {
             {`should_i_trust({ agentId, minPeople: 1, area: "Crypto / Onchain" })`}
           </Formula>
           <div className="text-[#6B7480] text-xs uppercase tracking-wider mb-2">Real answer — {EXAMPLE_GATE.agent}</div>
-          <pre className="text-[11px] leading-relaxed font-mono text-[#C9D1D9] rounded-xl p-4 overflow-x-auto"
+          <pre className="text-[11px] leading-relaxed font-mono text-[#C9D1D9] rounded-xl p-4 mb-4 overflow-x-auto"
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {JSON.stringify(EXAMPLE_GATE.answer, null, 2)}
+          </pre>
+          <div className="text-[#6B7480] text-xs uppercase tracking-wider mb-2">Paste this — fetch only, no dependencies</div>
+          <pre className="text-[11px] leading-relaxed font-mono text-[#C9D1D9] rounded-xl p-4 overflow-x-auto"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            {GATE_SNIPPET}
           </pre>
         </div>
       </DocCard>

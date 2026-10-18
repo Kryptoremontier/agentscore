@@ -4,10 +4,12 @@ import { setDefaultCacheImplForTests } from '../server-cache'
 import { GATE_LOOKUP_UNREAD, GATE_NOT_FOUND, GATE_VOUCHES_UNREAD, type GateDecision } from '../trust-gate'
 import { fakeNextCache } from './fake-next-cache'
 import { installFakeHasura, type FakeTable } from './fake-hasura'
+import { trustGate as pastedTrustGate } from '../../../examples/trust-gate'
 
 /**
  * Etap 7 — the trust gate on its machine surfaces: REST GET /api/v1/agents/:id/gate and MCP
- * should_i_trust, both through the shared complete-reads cache. Fake indexer shaped like testnet
+ * should_i_trust, both through the shared complete-reads cache, and the paste-able snippet
+ * (examples/trust-gate.ts) run against the REST route. Fake indexer shaped like testnet
  * 2026-10-18: Luda 2 people (3 areas), Captain Dackie 1 person in Crypto / Onchain, OPEN CLAW none.
  */
 
@@ -241,3 +243,44 @@ describe('MCP should_i_trust — same inputs, same answer', () => {
   })
 })
 
+describe('the snippet to paste (examples/trust-gate.ts), against the REST route', () => {
+  const BASE = 'http://agentscore.test'
+  // Requests to AgentScore go to the route handler; everything else (the indexer) to the fake.
+  function routeAgentScore(opts: { unreachable?: boolean } = {}) {
+    const indexerFetch = globalThis.fetch
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = new URL(String(url))
+      if (u.origin !== BASE) return indexerFetch(url as string, init)
+      if (opts.unreachable) throw new TypeError('fetch failed')
+      const id = decodeURIComponent(u.pathname.split('/')[4])
+      const { GET } = await import('@/app/api/v1/agents/[id]/gate/route')
+      return GET(new NextRequest(u.toString()), { params: Promise.resolve({ id }) })
+    }))
+  }
+
+  it('allow / deny exactly as the route answers', async () => {
+    routeAgentScore()
+    const ok = await pastedTrustGate(DACKIE, { minPeople: 1, area: 'Crypto / Onchain' }, BASE)
+    expect(ok).toMatchObject({ decision: 'allow', peopleVouching: 1 })
+    const no = await pastedTrustGate(OPEN_CLAW, { minPeople: 1, area: 'Crypto / Onchain' }, BASE)
+    expect(no).toMatchObject({ decision: 'deny', reason: 'No one vouches for this agent in Crypto / Onchain; your policy needs at least 1.' })
+    expect(await pastedTrustGate(LUDA, undefined, BASE)).toMatchObject({ decision: 'deny', policy: { minTier: 'trusted' } })
+  })
+
+  it('a refused policy, a failed read and an unreachable AgentScore are all "unknown" — never allow', async () => {
+    routeAgentScore()
+    expect(await pastedTrustGate(DACKIE, { minPeople: 1, area: 'Crypto' }, BASE)).toMatchObject({ decision: 'unknown', reason: expect.stringMatching(/Unknown area/) })
+    indexer.down = true
+    expect(await pastedTrustGate(DACKIE, { minPeople: 1 }, BASE)).toMatchObject({ decision: 'unknown' })
+    routeAgentScore({ unreachable: true })
+    expect(await pastedTrustGate(DACKIE, { minPeople: 1 }, BASE)).toMatchObject({ decision: 'unknown', reason: 'AgentScore unreachable: fetch failed' })
+  })
+
+  it('stays paste-able: about 20 lines, fetch only, no imports', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync('examples/trust-gate.ts', 'utf8')
+    expect(src).not.toMatch(/^import /m)
+    expect(src).not.toMatch(/require\(/)
+    expect(src.trim().split('\n').length).toBeLessThanOrEqual(22)
+  })
+})
