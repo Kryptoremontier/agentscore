@@ -22,6 +22,8 @@ export const ROUTES = {
   claims: '/claims',
   skills: '/skills',
   intuforge: '/explore/intuforge',
+  check: '/check',
+  checkCard: (id: string) => `/check/${id}`,
 } as const
 
 /**
@@ -39,4 +41,6 @@ export const WARMUP_PATHS: string[] = [
   ROUTES.claims,
   ROUTES.skills,
   ROUTES.intuforge,
+  ROUTES.check,
+  ROUTES.checkCard(AGENTS.dackie),
 ]

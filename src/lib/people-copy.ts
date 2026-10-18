@@ -171,6 +171,33 @@ export function peopleVouchHereParts(n: number | null): { count: string; rest: s
 }
 export const PEOPLE_HERE_UNREAD = 'Couldn’t read who vouches right now'
 export const LANDING_CTA_VOUCH = 'Vouch for an agent'
+/** The landing's primary action (Etap 7 Run B: the Beta shape) — the /check page. */
+export const LANDING_CTA_CHECK = 'Check an agent'
+
+// ── Check an agent (Etap 7 Run B, app/check) ──
+export const CHECK_TITLE = 'Check an agent'
+export const CHECK_EYEBROW = 'Before you pay or delegate'
+export const CHECK_SUB = 'Who vouches for it, for what — and how old that is.'
+export const CHECK_LABEL = 'Agent name, AgentScore id, ERC-8004 id or wallet'
+export const CHECK_PLACEHOLDER = 'Luda, 8453:1380, 0x45078a…'
+export const CHECK_BUTTON = 'Check'
+export const CHECK_TRY = 'Try'
+export const CHECK_PICK = 'More than one agent fits. Which one?'
+export const checkPickMore = (n: number) => `${n} more — type more of the name`
+export const CHECK_NOT_FOUND = 'No agent by that name or id on AgentScore or in the ERC-8004 registry.'
+export const CHECK_WALLET_NOT_FOUND = 'No agent on AgentScore was registered by this wallet.'
+export const CHECK_WALLET_PROFILE = 'See what this wallet vouched for'
+export const CHECK_BROWSE = 'Browse all agents'
+export const CHECK_UNREAD = 'Couldn’t read the agent list right now — this is not a “not found”. Try again in a minute.'
+export const CHECK_SHARE = 'Share on X'
+export const CHECK_PERMALINK = 'Link to this card'
+/** The post a person shares: "{name}: {N} people vouch on AgentScore. Who vouches for your agent?" */
+export const checkShareText = (name: string, n: number) => `${name}: ${people(n)} ${plural(n, 'vouches', 'vouch')} on AgentScore. Who vouches for your agent?`
+/** On the Open Graph image, under the card: the data's age, printed on the picture itself. */
+export const checkImageAge = (readAt: string, ageLabel: string) => `Data read ${readAt.slice(0, 16).replace('T', ' ')} UTC · ${ageLabel}`
+export const CHECK_IMAGE_ALT = 'Who vouches for this agent on AgentScore'
+export const CHECK_IMAGE_UNREAD = 'Couldn’t read this agent right now — no numbers shown.'
+export const ORIGIN_LABEL: Record<'agentscore' | 'erc8004', string> = { agentscore: 'via AgentScore', erc8004: 'ERC-8004' }
 export const LANDING_CTA_DEVELOPERS = 'For developers & agents (MCP / REST)'
 export const EXAMPLE_HEADING = 'Most vouched right now'
 export const EXAMPLE_UNREAD = 'Couldn’t load an example right now — the list is one tap away.'
