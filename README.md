@@ -276,8 +276,8 @@ Unlike applications using local bonding curve approximations, AgentScore reads a
 ### Integrations
 | Feature | Status |
 |---------|--------|
-| Trust API (13 REST endpoints at `/api/v1/`) | ✅ Live |
-| MCP Server (11 tools for AI agents at `/api/mcp/mcp`) | ✅ Live |
+| Trust API (14 REST endpoints at `/api/v1/`) | ✅ Live |
+| MCP Server (12 tools for AI agents at `/api/mcp/mcp`) | ✅ Live |
 
 ---
 
@@ -325,8 +325,8 @@ AgentScore is fully agent-readable. If you are an AI agent or building one:
 - **`/llms.txt`** — Quick-start guide for LLMs: [agentscore-gilt.vercel.app/llms.txt](https://agentscore-gilt.vercel.app/llms.txt). Sourced live from the same code that enforces the API's behavior (endpoint list, cache policy, trust disclaimer), so it can't drift out of date.
 - **`/skill.md`** — Install AgentScore as a Claude/agent-framework skill: [agentscore-gilt.vercel.app/skill.md](https://agentscore-gilt.vercel.app/skill.md). Byte-identical to this repo's [`SKILL.md`](./SKILL.md) — one HTTP GET checks any agent's reputation before you trust or transact with it.
 - **`/.well-known/agent.json`** — A2A auto-discovery manifest: [agentscore-gilt.vercel.app/.well-known/agent.json](https://agentscore-gilt.vercel.app/.well-known/agent.json)
-- **MCP Server** — `https://agentscore-gilt.vercel.app/api/mcp/mcp` (11 tools)
-- **REST API** — `https://agentscore-gilt.vercel.app/api/v1` (13 endpoints)
+- **MCP Server** — `https://agentscore-gilt.vercel.app/api/mcp/mcp` (12 tools)
+- **REST API** — `https://agentscore-gilt.vercel.app/api/v1` (14 endpoints)
 - **Agent Cards** — `/api/v1/agents/{id}/card` (A2A-compatible JSON per agent)
 - **Trust breakdown as plain text** — `GET /api/v1/agents/{id}/trust` with `Accept: text/plain` or `?format=text` returns a compact one-line-per-field rendering for agent harnesses that don't parse JSON well.
 
@@ -349,6 +349,19 @@ curl "https://agentscore-gilt.vercel.app/api/v1/trust/query?skill=code_generatio
   }
 }
 ```
+
+### Trust gate: ask before you pay or delegate
+
+One yes/no, under **your** policy, with the reason — who vouches, for what, and how old the data is:
+
+- REST: `GET /api/v1/agents/{id}/gate?minTier=trusted` or `?minPeople=1&area=Crypto%20%2F%20Onchain`
+- MCP: `should_i_trust({ agentId, minTier })` or `should_i_trust({ agentId, minPeople, area })`
+
+`decision` is `allow`, `deny` or `unknown`. **`unknown` means AgentScore couldn't read the data right now — treat it as no.** The default policy is `{ minTier: "trusted" }` (at least 2 distinct people and 0.05 tTRUST vouched). The gate adds no scoring of its own: it reads distinct live attesters per area and the attestation tier, and no parameter or payment changes a decision. A function to paste (fetch only, no dependencies): [`examples/trust-gate.ts`](./examples/trust-gate.ts).
+
+**Demo — OPEN CLAW chooses who to pay:** `npm run demo:gate` asks `should_i_trust` about two real testnet agents for the task "Summarise the latest Intuition testnet activity" (Captain Dackie, which one person vouches for in Crypto / Onchain, and AgentNews, which nobody vouches for), prints both decisions with their reasons and data age, then the payment step — simulated: nothing is paid or sent. Set `AGENTSCORE_URL` to point it at another server.
+
+The demo's policy is `{ minPeople: 1, area: "Crypto / Onchain" }`, not the default `trusted`. Trusted needs two independent people vouching, and today no agent on testnet has that — the honest current state, not a bug. Under the default both candidates are denied (`npm run demo:gate -- --default`). Captain Dackie says it takes x402 payments, but publishes no x402 endpoint on Intuition, so the demo prints the request it would send with that endpoint marked as missing — none is invented.
 
 ---
 
@@ -394,6 +407,7 @@ npm run dev          # Start dev server
 npm run dev:clean    # Clear .next cache and start fresh (fixes HMR issues)
 npm run build        # Production build
 npm start            # Run production server
+npm run demo:gate    # Trust gate demo: OPEN CLAW chooses who to pay (no payment is made)
 ```
 
 ---
@@ -441,7 +455,7 @@ npm start            # Run production server
 
 **2.3 Trust API + MCP Server ✅ Live**
 * Trust API: 13 REST endpoints at `/api/v1/`
-* MCP Server: 11 tools at `/api/mcp/mcp`
+* MCP Server: 12 tools at `/api/mcp/mcp`
 * Integration with Sofia MCP (EigenTrust, personalized trust, trust paths) — Planned
 * Interactive API documentation (/api-docs) — Planned
 
