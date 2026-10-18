@@ -8,15 +8,16 @@ import { SEAL_SLOTS } from '@/components/agents/seal-slots'
 import { CHECK_TITLE, CHECK_NOT_FOUND, CHECK_IMAGE_UNREAD, ORIGIN_LABEL, checkImageAge, tierProgress, SEAL_OPEN } from '@/lib/people-copy'
 
 /**
- * The /check/[id] link preview (Etap 7 Run B): the same card, drawn from the same read as the page
- * (lib/check-data.ts checkCard) — name, seals, who vouches, tier — with the data's age printed on
- * the image, so a preview cached by a platform still says how old its numbers are. Rendered per
- * request; a failed read draws no numbers at all.
+ * GET /check/[id]/og — the /check/[id] link preview (Etap 7 Run B): the same card, drawn from the
+ * same read as the page (lib/check-data.ts checkCard) — name, seals, who vouches, tier — with the
+ * data's age printed on the image, so a preview a platform keeps still says how old its numbers
+ * are. Rendered per request and sent no-store: a route, not the opengraph-image file convention,
+ * which Next serves "immutable, max-age=31536000" (a year-old picture beside today's numbers).
+ * A failed read draws no numbers at all.
  */
 export const dynamic = 'force-dynamic'
-export const alt = 'Who vouches for this agent on AgentScore'
-export const size = { width: 1200, height: 630 }
-export const contentType = 'image/png'
+const size = { width: 1200, height: 630 }
+const headers = { 'cache-control': 'no-store' } // lowercase: replaces next/og's own "immutable" key (a capitalised one would be added beside it)
 
 const BG = '#0A0A0F'
 const ACCENT = '#F5A524'
@@ -37,12 +38,12 @@ function Frame({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default async function Image({ params }: { params: { id: string } }) {
+export async function GET(_request: Request, { params }: { params: { id: string } }) {
   const card = await checkCard(params.id)
   if (typeof card === 'string') {
     return new ImageResponse(
       <Frame><div style={{ display: 'flex', marginTop: 180, fontSize: 40, color: '#B5BDC6' }}>{card === 'not-found' ? CHECK_NOT_FOUND : CHECK_IMAGE_UNREAD}</div></Frame>,
-      size,
+      { ...size, headers },
     )
   }
 
@@ -93,6 +94,6 @@ export default async function Image({ params }: { params: { id: string } }) {
         <span style={{ color: MUTED, fontSize: 20 }}>{checkImageAge(card.dataReadAt, updatedAgoLabel(card.dataAgeSeconds))}</span>
       </div>
     </Frame>,
-    size,
+    { ...size, headers },
   )
 }

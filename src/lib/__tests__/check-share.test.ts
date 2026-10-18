@@ -58,9 +58,12 @@ describe('/check → the card\'s permalink', () => {
 
   it('the permalink page reads the same card as the image (lib/check-data checkCard)', () => {
     expect(readFileSync('src/app/check/[id]/page.tsx', 'utf8')).toMatch(/await checkCard\(params\.id\)/)
-    const og = readFileSync('src/app/check/[id]/opengraph-image.tsx', 'utf8')
+    const og = readFileSync('src/app/check/[id]/og/route.tsx', 'utf8')
     expect(og).toMatch(/await checkCard\(params\.id\)/)
     expect(og).toMatch(/export const dynamic = 'force-dynamic'/)
+    const page = readFileSync('src/app/check/[id]/page.tsx', 'utf8')
+    expect(page).toMatch(/url: `\/check\/\$\{card\.id\}\/og`/)
+    expect(page).toMatch(/openGraph: \{ title: card\.name, description, images \}/)
     expect(og).toMatch(/checkImageAge\(card\.dataReadAt, updatedAgoLabel\(card\.dataAgeSeconds\)\)/)
   })
 })
@@ -70,13 +73,13 @@ describe('the Open Graph image', () => {
     expect(checkImageAge('2026-10-18T18:01:12.000Z', 'Updated 7 min ago')).toBe('Data read 2026-10-18 18:01 UTC · Updated 7 min ago')
   })
 
-  it('renders a 1200×630 PNG for a card', async () => {
+  it('renders a 1200×630 PNG for a card, sent no-store (never a year-old picture beside today\'s numbers)', async () => {
     checkCard.mockResolvedValue(DACKIE_CARD)
-    const { default: Image, size, contentType } = await import('@/app/check/[id]/opengraph-image')
-    const res = await Image({ params: { id: DACKIE } })
+    const { GET } = await import('@/app/check/[id]/og/route')
+    const res = await GET(new Request('http://localhost/check/x/og'), { params: { id: DACKIE } })
     const png = Buffer.from(await res.arrayBuffer())
-    expect(size).toEqual({ width: 1200, height: 630 })
-    expect(contentType).toBe('image/png')
+    expect(res.headers.get('content-type')).toBe('image/png')
+    expect(res.headers.get('cache-control')).toBe('no-store')
     expect(png.subarray(1, 4).toString()).toBe('PNG')
     expect(png.readUInt32BE(16)).toBe(1200)
     expect(png.readUInt32BE(20)).toBe(630)
@@ -85,10 +88,11 @@ describe('the Open Graph image', () => {
 
   it('a failed read draws no numbers (and still renders)', async () => {
     checkCard.mockResolvedValue('unread')
-    const { default: Image } = await import('@/app/check/[id]/opengraph-image')
-    const res = await Image({ params: { id: DACKIE } })
+    const { GET } = await import('@/app/check/[id]/og/route')
+    const res = await GET(new Request('http://localhost/check/x/og'), { params: { id: DACKIE } })
     expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(1000)
-    const og = readFileSync('src/app/check/[id]/opengraph-image.tsx', 'utf8')
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    const og = readFileSync('src/app/check/[id]/og/route.tsx', 'utf8')
     expect(og).toMatch(/card === 'not-found' \? CHECK_NOT_FOUND : CHECK_IMAGE_UNREAD/)
   }, 60_000)
 })

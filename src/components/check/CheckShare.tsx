@@ -1,7 +1,7 @@
 /**
  * Under a /check card (Etap 7 Run B): the card's permalink and "Share on X" with the post prefilled —
  * "{name}: {N} people vouch on AgentScore. Who vouches for your agent?" + the link, whose Open Graph
- * image is the same card (app/check/[id]/opengraph-image.tsx). No number to share when who vouches
+ * image is the same card (app/check/[id]/og). No number to share when who vouches
  * couldn't be read: then only the link.
  */
 

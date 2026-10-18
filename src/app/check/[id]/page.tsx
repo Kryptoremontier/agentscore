@@ -6,12 +6,12 @@ import { CheckResultCard } from '@/components/check/CheckResultCard'
 import { CheckShare } from '@/components/check/CheckShare'
 import { checkCard } from '@/lib/check-data'
 import { encodeForCache } from '@/lib/json-codec'
-import { CHECK_TITLE, CHECK_NOT_FOUND, CHECK_BROWSE, CHECK_UNREAD, TIER_UNREAD } from '@/lib/people-copy'
+import { CHECK_TITLE, CHECK_NOT_FOUND, CHECK_BROWSE, CHECK_UNREAD, CHECK_IMAGE_ALT, TIER_UNREAD } from '@/lib/people-copy'
 
 /**
  * /check/[id] — one agent's card at an address a person can share (Etap 7 Run B). The same card as
  * /check, read the same way (lib/check-data.ts), with its permalink and "Share on X"; the link
- * previews as the same card (./opengraph-image.tsx — the same data, its age printed on it).
+ * previews as the same card (./og — the same data, its age printed on it).
  */
 export const dynamic = 'force-dynamic'
 
@@ -19,11 +19,13 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   const card = await checkCard(params.id)
   if (typeof card === 'string') return { title: `${CHECK_TITLE} · AgentScore` }
   const description = card.line.claim ?? TIER_UNREAD
+  // The preview is ./og (a no-store route): the same card, its data's age printed on it.
+  const images = [{ url: `/check/${card.id}/og`, width: 1200, height: 630, alt: CHECK_IMAGE_ALT }]
   return {
     title: `${card.name} · ${CHECK_TITLE} · AgentScore`,
     description,
-    openGraph: { title: card.name, description },
-    twitter: { card: 'summary_large_image', title: card.name, description },
+    openGraph: { title: card.name, description, images },
+    twitter: { card: 'summary_large_image', title: card.name, description, images },
   }
 }
 

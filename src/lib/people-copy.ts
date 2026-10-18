@@ -195,6 +195,7 @@ export const CHECK_PERMALINK = 'Link to this card'
 export const checkShareText = (name: string, n: number) => `${name}: ${people(n)} ${plural(n, 'vouches', 'vouch')} on AgentScore. Who vouches for your agent?`
 /** On the Open Graph image, under the card: the data's age, printed on the picture itself. */
 export const checkImageAge = (readAt: string, ageLabel: string) => `Data read ${readAt.slice(0, 16).replace('T', ' ')} UTC · ${ageLabel}`
+export const CHECK_IMAGE_ALT = 'Who vouches for this agent on AgentScore'
 export const CHECK_IMAGE_UNREAD = 'Couldn’t read this agent right now — no numbers shown.'
 export const ORIGIN_LABEL: Record<'agentscore' | 'erc8004', string> = { agentscore: 'via AgentScore', erc8004: 'ERC-8004' }
 export const LANDING_CTA_DEVELOPERS = 'For developers & agents (MCP / REST)'
