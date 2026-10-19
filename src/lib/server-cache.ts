@@ -15,7 +15,7 @@
  *    answer's `dataAgeSeconds` (oldest read behind it; 0 when everything was read live) and
  *    `complete` (false → the response must not be cached downstream either).
  * 3. **A visitor never waits for a refill (Etap 7a).** Any complete entry younger than its hard
- *    ceiling (`hardCeilingSeconds`, default 1 h) is served at once with its real age; once it is
+ *    ceiling (`hardCeilingSeconds`, default 1 h; 24 h for SERVER_CACHE_CEILING's keys) is served at once with its real age; once it is
  *    past its TTL `unstable_cache` refills it in the background (one read in flight per key —
  *    rule below). Before Etap 7a an entry past 2 × TTL made the visitor wait for a full live
  *    read — with little traffic, almost every visit (production: 6–12 s for /agents). Only with
@@ -349,10 +349,16 @@ export const SERVER_CACHE_TTL = {
 /**
  * Hard ceilings (seconds) where one is set per key (Etap 7a): under it a complete entry is served at
  * once with its age and refilled in the background; past it the caller waits for a live read. The
- * /agents list's three parts — the corpus, the cohort and its attestations — get one hour.
+ * shared, slow-changing reads — the /agents list's three parts (the corpus, the cohort and its
+ * attestations) and /stats' parts — get 24 h: every answer shows its age, and the warm-up job
+ * (warm-cache.yml) is best-effort, so a visitor waits for a live read only when there is no entry.
+ * Everything else keeps the default HARD_CEILING_SECONDS (1 h).
  */
 export const SERVER_CACHE_CEILING = {
-  agentCorpus: 3600,
-  erc8004Cohort: 3600,
-  cohortAttestations: 3600,
+  agentCorpus: 86_400,
+  erc8004Cohort: 86_400,
+  cohortAttestations: 86_400,
+  platformStats: 86_400,
+  domains: 86_400,
+  evaluatorLeaderboard: 86_400,
 } as const

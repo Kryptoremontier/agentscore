@@ -571,7 +571,8 @@ const handler = createMcpHandler(
           'attesters = distinct wallets with a live position on any attestation triple ' +
           '(is skilled in → canonical domain). claims = the claims AgentScore lists (subject and ' +
           'object both AgentScore agents or skills — the /claims page), not every triple on the network. ' +
-          'A count whose read failed is null, never 0. ' +
+          'A count whose read failed is null, never 0; parts says which reads answered ' +
+          "('failed' → that part's fields are null — agents, totalStaked, activeStakers and topAgent share the corpus). " +
           'Use this for a quick overview of the ecosystem.',
         inputSchema: {},
       },
