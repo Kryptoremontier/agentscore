@@ -482,13 +482,9 @@ describe('completeReadCache — stale-while-revalidate under a hard ceiling (Eta
     expect([...cache.store.values()].map((e) => JSON.parse(e.body).v)).toEqual([{ n: 7 }])
   })
 
-  it('the /agents list parts get one hour', async () => {
+  it('the shared slow-changing reads get 24 h; the default stays 1 h (cache-ceiling-24h.test.ts)', async () => {
     const { SERVER_CACHE_CEILING, HARD_CEILING_SECONDS } = await import('../server-cache')
     expect(HARD_CEILING_SECONDS).toBe(3600)
-    expect(SERVER_CACHE_CEILING).toEqual({ agentCorpus: 3600, erc8004Cohort: 3600, cohortAttestations: 3600 })
-    const src = (f: string) => readFileSync(path.join(__dirname, '..', f), 'utf8')
-    expect(src('api-data.ts')).toMatch(/hardCeilingSeconds: SERVER_CACHE_CEILING\.agentCorpus/)
-    expect(src('api-data.ts')).toMatch(/hardCeilingSeconds: SERVER_CACHE_CEILING\.erc8004Cohort/)
-    expect(src('agents-page-data.ts')).toMatch(/hardCeilingSeconds: SERVER_CACHE_CEILING\.cohortAttestations/)
+    expect(new Set(Object.values(SERVER_CACHE_CEILING))).toEqual(new Set([86_400]))
   })
 })

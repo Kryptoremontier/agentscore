@@ -918,7 +918,7 @@ interface DomainTriples {
 const fetchDomainTriplesInternal = completeReadCache(
   'domain-triples',
   async (): Promise<CompleteRead<DomainTriples>> => ({ value: await readDomainTriples(), complete: true }),
-  { revalidate: SERVER_CACHE_TTL.domains, tags: () => [] },
+  { revalidate: SERVER_CACHE_TTL.domains, hardCeilingSeconds: SERVER_CACHE_CEILING.domains, tags: () => [] },
 )
 
 async function readDomainTriples(): Promise<DomainTriples> {
@@ -1379,6 +1379,7 @@ interface StatsCounts {
 /** SERVER_CACHE_TTL.platformStats seconds — stored only when every count was read. */
 const loadStatsCounts = completeReadCache('platform-stats', readStatsCounts, {
   revalidate: SERVER_CACHE_TTL.platformStats,
+  hardCeilingSeconds: SERVER_CACHE_CEILING.platformStats,
   tags: () => [],
 })
 
@@ -1407,32 +1408,38 @@ async function readStatsCounts(): Promise<CompleteRead<StatsCounts>> {
   return { value: { skills, attesters, claims }, complete: skills !== null && attesters !== null && claims !== null }
 }
 
+/** Whether one part of /stats was read: 'failed' = no entry and the live read failed; its fields are null. */
+export type StatsPartStatus = 'ok' | 'failed'
+
 /**
  * Platform stats, composed from shared cached reads — each keeps its own entry and age, and the
  * answer is as old as its oldest part (lib/server-cache.ts; cached reads are never nested):
  * corpus (agents, stake, stakers) and domain triples 60 s, the counts and the evaluator
  * leaderboard 300 s.
+ *
+ * Every part settles on its own, like /api/v1/agents/page: a part with no entry whose live read
+ * failed is null in its fields (never 0) with `parts.<part>: 'failed'`, and the answer is
+ * incomplete (no-store) — never a whole-route 500 because one read failed.
  */
 export async function getPlatformStats() {
-  // The corpus is the one read the route can't answer without (agents, stake, stakers).
-  // Every other count settles on its own: a failed read is null for that field, never 0,
-  // and never takes the corpus numbers (the landing's tiles) down with it.
   const [corpus, counts, evaluators, domainTriples] = await Promise.all([
     // Same post-junk corpus as /api/v1/agents — `agents` here equals its meta.total whenever
     // both answer from the same corpus read (compare their meta.dataReadAt).
-    loadAgentCorpus(),
-    loadStatsCounts(),
+    unknownOnFailure('agent-corpus', loadAgentCorpus()),
+    unknownOnFailure('platform-stats', loadStatsCounts()),
     unknownOnFailure('evaluator-leaderboard', fetchEvaluatorLeaderboard().then(profiles => profiles.length)),
     unknownOnFailure('domain-triples', fetchDomainTriplesInternal().then(r => r.triples)),
   ])
-  const { skills, attesters, claims: claimCount } = counts
+  const skills = counts?.skills ?? null
+  const attesters = counts?.attesters ?? null
+  const claimCount = counts?.claims ?? null
 
   let totalStakedWei = 0n
   let topAgentScore = 0
   let topAgentName = ''
 
-  for (const item of corpus.kept) {
-    const row = corpus.rowsById.get(item.id)!
+  for (const item of corpus?.kept ?? []) {
+    const row = corpus!.rowsById.get(item.id)!
     totalStakedWei += parseBigInt(row.positions_aggregate?.aggregate?.sum?.shares)
 
     // List context: qualityScore=null (no signal history). Rank by trustScore.
@@ -1452,23 +1459,25 @@ export async function getPlatformStats() {
   // counter-vault — the same live rule as every per-agent staker count (lib/live-position.ts),
   // from the corpus's own paged positions read. Was the evaluator list (a GraphQL shares>0
   // filter, silently capped at 100 rows), else a per-agent row-count sum.
-  const keptVaults = corpus.kept.flatMap(item => {
-    const row = corpus.rowsById.get(item.id)!
-    return [row.term_id, row.as_subject_triples?.[0]?.counter_term_id]
-  })
-  const activeStakers = liveStakerWallets(corpus.positions, keptVaults).size
+  const activeStakers = corpus
+    ? liveStakerWallets(corpus.positions, corpus.kept.flatMap(item => {
+        const row = corpus.rowsById.get(item.id)!
+        return [row.term_id, row.as_subject_triples?.[0]?.counter_term_id]
+      })).size
+    : null
 
+  const status = (read: boolean): StatsPartStatus => (read ? 'ok' : 'failed')
   return {
     // Post-junk corpus total — identical to /api/v1/agents meta.total (same loadAgentCorpus).
-    agents: corpus.kept.length,
-    agentsTruncated: corpus.truncated,
-    // null = that read failed (REPO_MAP §7 rule 5).
+    // null = that read failed (REPO_MAP §7 rule 5), for every field below.
+    agents: corpus ? corpus.kept.length : null,
+    agentsTruncated: corpus ? corpus.truncated : null,
     skills,
     domains: domains ? domains.length : null,
     claims: claimCount,
     attesters,
     evaluators,
-    totalStaked: weiToFloat(totalStakedWei),
+    totalStaked: corpus ? weiToFloat(totalStakedWei) : null,
     activeStakers,
     topDomain: topDomain
       ? { name: topDomain.name, agentCount: topDomain.agentCount }
@@ -1476,5 +1485,14 @@ export async function getPlatformStats() {
     topAgent: topAgentName
       ? { name: topAgentName, trustScore: topAgentScore }
       : null,
+    /** Which reads answered (added Etap 7a follow-up): 'failed' → that part's fields are null. */
+    parts: {
+      corpus: status(corpus !== null),
+      skills: status(skills !== null),
+      attesters: status(attesters !== null),
+      claims: status(claimCount !== null),
+      evaluators: status(evaluators !== null),
+      domains: status(domains !== null),
+    },
   }
 }
