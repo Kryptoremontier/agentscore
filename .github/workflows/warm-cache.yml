@@ -18,6 +18,9 @@ name: Warm cache
 # can hold a cold route for up to a minute while the indexer is slow) is a ::warning::, not a
 # failure. The job fails only when all three calls fail — the site itself is down.
 #
+# Right after each production deploy, warm-after-deploy.yml does the same on the new deployment
+# (a deploy empties the Data Cache: the keys change with the build).
+#
 # Indexer load: one cycle costs at most a full refill of these entries; per minute that is well
 # under the 4b-cache budget (≤ 20 req/min steady) — numbers in the Etap 7a PR.
 on:
