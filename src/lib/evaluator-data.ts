@@ -17,7 +17,7 @@
 import { revalidateTag } from 'next/cache'
 import { AGENT_WHERE_STR } from './gql-filters'
 import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
-import { completeReadCache, SERVER_CACHE_CEILING, SERVER_CACHE_TTL, type CompleteRead } from './server-cache'
+import { completeReadCache, SERVER_CACHE_CEILING, SERVER_CACHE_TTL, SNAPSHOT_VERSION, type CompleteRead } from './server-cache'
 
 import { calculateEvaluatorScore, type StakerPosition, type EvaluatorProfile } from './evaluator-score'
 import { batchGetAttestationCounts, getAttestationConfig } from './attestation-gate'
@@ -362,6 +362,7 @@ export const EVALUATOR_LEADERBOARD_MAX = 50
 export const fetchEvaluatorLeaderboard = completeReadCache('evaluator-leaderboard', readEvaluatorLeaderboard, {
   revalidate: SERVER_CACHE_TTL.evaluatorLeaderboard,
   hardCeilingSeconds: SERVER_CACHE_CEILING.evaluatorLeaderboard,
+  snapshot: SNAPSHOT_VERSION.evaluatorLeaderboard,
   tags: () => [],
 })
 

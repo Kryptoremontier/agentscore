@@ -16,7 +16,7 @@
  */
 
 import {
-  completeReadCache, readWithFreshness, recordLiveRead, SERVER_CACHE_CEILING, SERVER_CACHE_TTL,
+  completeReadCache, readWithFreshness, recordLiveRead, SERVER_CACHE_CEILING, SERVER_CACHE_TTL, SNAPSHOT_VERSION,
 } from './server-cache'
 import { CDN_MAX_EXTRA_AGE_SECONDS } from './api-helpers'
 import { cachedAgentSkillTriples, loadAgentCorpus, loadErc8004Cohort, type AgentCorpus } from './api-data'
@@ -84,7 +84,7 @@ const loadCohortAttestations = completeReadCache(
   'cohort-attestations',
   // Throws if any chunk fails: a partial map is never stored.
   async (ids: string[]) => ({ value: await fetchAttestationsForSubjects(ids), complete: true }),
-  { revalidate: SERVER_CACHE_TTL.cohortAttestations, hardCeilingSeconds: SERVER_CACHE_CEILING.cohortAttestations, tags: () => [] },
+  { revalidate: SERVER_CACHE_TTL.cohortAttestations, hardCeilingSeconds: SERVER_CACHE_CEILING.cohortAttestations, snapshot: SNAPSHOT_VERSION.cohortAttestations, tags: () => [] },
 )
 
 export async function getAgentsPageData(): Promise<AgentsPagePayload> {
