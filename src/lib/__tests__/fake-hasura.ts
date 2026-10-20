@@ -27,8 +27,12 @@ export interface FakeHasuraOptions {
   tables: FakeTable[]
   /** Answer anything the tables don't match (return the `data` object), or undefined. */
   other?: (query: string, variables: Vars) => unknown
-  /** Per request: 'rate-limit' → HTTP 429, 'throw' → network error, 'errors' → GraphQL errors. */
-  fail?: (query: string, variables: Vars, requestIndex: number) => 'rate-limit' | 'throw' | 'errors' | undefined
+  /**
+   * Per request: 'rate-limit' → HTTP 429, 'throw' → network error, 'errors' → GraphQL errors,
+   * 'gateway-timeout' → HTTP 504 (the gateway's 60 s limit), 'hang' → no answer until the
+   * request's own signal aborts it (a client timeout).
+   */
+  fail?: (query: string, variables: Vars, requestIndex: number) => 'rate-limit' | 'throw' | 'errors' | 'gateway-timeout' | 'hang' | undefined
 }
 
 export interface FakeHasura {
@@ -52,6 +56,14 @@ export function installFakeHasura(opts: FakeHasuraOptions): FakeHasura {
       return { ok: false, status: 429, json: async () => ({ message: 'API rate limit exceeded' }) }
     }
     if (failure === 'errors') return { ok: true, status: 200, json: async () => ({ errors: [{ message: 'boom' }] }) }
+    if (failure === 'gateway-timeout') return { ok: false, status: 504, json: async () => ({ message: 'Gateway Timeout' }) }
+    if (failure === 'hang') {
+      return new Promise((_, reject) => {
+        const signal = init?.signal
+        if (!signal) return // never answers: a caller without a timeout would wait forever
+        signal.addEventListener('abort', () => reject(signal.reason ?? Object.assign(new Error('aborted'), { name: 'AbortError' })))
+      })
+    }
 
     for (const t of opts.tables) {
       if (!t.match(query, variables)) continue
