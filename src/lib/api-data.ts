@@ -43,6 +43,7 @@ import {
   completeReadCache,
   currentFreshness,
   SERVER_CACHE_CEILING,
+  SNAPSHOT_VERSION,
   recordLiveRead,
   unknownOnFailure,
   SERVER_CACHE_TTL,
@@ -310,6 +311,7 @@ export interface AgentCorpus {
 export const loadAgentCorpus = completeReadCache('agent-corpus', readAgentCorpus, {
   revalidate: SERVER_CACHE_TTL.agentCorpus,
   hardCeilingSeconds: SERVER_CACHE_CEILING.agentCorpus,
+  snapshot: SNAPSHOT_VERSION.agentCorpus,
   tags: () => [],
 })
 
@@ -611,7 +613,7 @@ export const loadErc8004Cohort = completeReadCache(
       && cohort.agents.every(a => a.declaredDomains !== null && a.declaredSkills !== null)
     return { value: cohort, complete }
   },
-  { revalidate: SERVER_CACHE_TTL.erc8004Cohort, hardCeilingSeconds: SERVER_CACHE_CEILING.erc8004Cohort, tags: () => [] },
+  { revalidate: SERVER_CACHE_TTL.erc8004Cohort, hardCeilingSeconds: SERVER_CACHE_CEILING.erc8004Cohort, snapshot: SNAPSHOT_VERSION.erc8004Cohort, tags: () => [] },
 )
 
 /** One subject's attestations — what the cohort read doesn't hold. Per agent, SERVER_CACHE_TTL.agentDetail seconds. */
@@ -918,7 +920,7 @@ interface DomainTriples {
 const fetchDomainTriplesInternal = completeReadCache(
   'domain-triples',
   async (): Promise<CompleteRead<DomainTriples>> => ({ value: await readDomainTriples(), complete: true }),
-  { revalidate: SERVER_CACHE_TTL.domains, hardCeilingSeconds: SERVER_CACHE_CEILING.domains, tags: () => [] },
+  { revalidate: SERVER_CACHE_TTL.domains, hardCeilingSeconds: SERVER_CACHE_CEILING.domains, snapshot: SNAPSHOT_VERSION.domains, tags: () => [] },
 )
 
 async function readDomainTriples(): Promise<DomainTriples> {
@@ -1380,6 +1382,7 @@ interface StatsCounts {
 const loadStatsCounts = completeReadCache('platform-stats', readStatsCounts, {
   revalidate: SERVER_CACHE_TTL.platformStats,
   hardCeilingSeconds: SERVER_CACHE_CEILING.platformStats,
+  snapshot: SNAPSHOT_VERSION.platformStats,
   tags: () => [],
 })
 

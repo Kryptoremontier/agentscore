@@ -1,0 +1,61 @@
+name: Warm after deploy
+
+# Etap 7c: fill the cache right after each production deploy.
+#
+# A deploy changes every `unstable_cache` key (they include the minified callback's source), so a new
+# deployment starts with an empty Data Cache; the first visitor would wait for live indexer reads (or,
+# with the last-good snapshot, be served it while one refill runs). This job is that first visitor:
+# as soon as Vercel reports the Production deployment ready, it calls, read-only, the three answers
+# a visitor's first screen needs, on the deployment's own URL, until each is complete — up to three
+# attempts, 30 s apart. Warnings only: the site never depends on it, and the scheduled warm-up
+# (warm-cache.yml) keeps running.
+on:
+  deployment_status:
+
+permissions: {}
+
+jobs:
+  warm:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Call the cached answers until complete (read-only)
+        env:
+          # From the deployment status Vercel posted; checked below before use.
+          DEPLOY_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+          READY_AT: ${{ github.event.deployment_status.created_at }}
+          PRODUCTION: https://agentscore-gilt.vercel.app
+        run: |
+          base=$PRODUCTION
+          if [[ "$DEPLOY_URL" =~ ^https://[a-z0-9-]+\.vercel\.app/?$ ]]; then
+            # The deployment's own URL, unless deployment protection keeps it private (then the alias,
+            # which points at this deployment once it is ready).
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${DEPLOY_URL%/}/api/v1") || code=000
+            if [ "$code" = 200 ]; then base=${DEPLOY_URL%/}; else echo "::notice::$DEPLOY_URL answered HTTP $code — using $PRODUCTION"; fi
+          fi
+          echo "Deployment ready at $READY_AT; warming $base"
+          for path in /api/v1/agents/page /api/v1/stats '/api/v1/agents?limit=1'; do
+            done_ok=0
+            for attempt in 1 2 3; do
+              rm -f body.json
+              out=$(curl -sS -o body.json -w '%{http_code} %{time_total}' --max-time 60 -H 'user-agent: agentscore-warm-after-deploy' "$base$path") || out="000 -"
+              code=${out%% *}; secs=${out#* }
+              state=$(python3 - <<'PY' 2>/dev/null || echo unreadable
+          import json
+          b = json.load(open('body.json'))
+          d = b.get('data')
+          if not b.get('success'): print('failed')
+          elif isinstance(d, dict) and 'parts' in d: print('complete' if all(v == 'ok' for v in d['parts'].values()) else 'incomplete')
+          elif isinstance(d, dict) and 'agentScore' in d: print('complete' if all(isinstance(v, dict) and v.get('status') == 'ok' for v in d.values()) else 'incomplete')
+          else: print('complete')
+          PY
+              )
+              age=$(python3 -c "import json; print(json.load(open('body.json')).get('meta', {}).get('dataAgeSeconds'))" 2>/dev/null || echo '?')
+              echo "$path attempt $attempt → HTTP $code in ${secs}s, $state, meta.dataAgeSeconds=$age, at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              if [ "$code" = 200 ] && [ "$state" = complete ]; then done_ok=1; break; fi
+              [ "$attempt" -lt 3 ] && sleep 30
+            done
+            [ "$done_ok" = 1 ] || echo "::warning::$path not complete after 3 attempts"
+          done
+          exit 0

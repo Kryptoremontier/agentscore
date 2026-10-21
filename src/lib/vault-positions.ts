@@ -34,7 +34,11 @@ export const VAULT_POSITIONS_MAX = 50_000
 export type PositionOrder = 'id' | 'shares-desc' | 'created-asc'
 
 // Pages are always read in `id` order — unique and immutable — and the requested order is
-// applied after the full read. Paging on `shares` would skip or repeat a wallet whose shares
+// applied after the full read. The query says `[term_id, id]`, the same order (every id is
+// `${term_id}-…` and every term_id is 66 characters), because Hasura plans `order_by: { id }` with
+// a `term_id: { _in }` filter as a walk of the whole positions table in id order: 4.7–6.0 s per
+// request live, 7.5–9.2 s six at a time, and the gateway's 60 s 504 in production (Etap 7c).
+// `[term_id, id]` uses the term_id index: 0.4–1.1 s, the same rows in the same order. Paging on `shares` would skip or repeat a wallet whose shares
 // change between two page requests (a trade mid-read), and still report the read complete.
 function sharesOf(p: VaultPosition): bigint {
   try { return BigInt(p.shares || '0') } catch { return 0n }
@@ -72,8 +76,19 @@ export async function fetchVaultPositions(
   vaultIds: readonly string[],
   options: FetchVaultPositionsOptions = {},
 ): Promise<VaultPosition[]> {
-  const ids = [...new Set(vaultIds.filter(Boolean))]
+  // Sorted, so chunks cover contiguous term_id ranges and their pages join in `[term_id, id]` order.
+  const ids = [...new Set(vaultIds.filter(Boolean))].sort()
   if (ids.length === 0) return []
+  const rows: VaultPosition[] = []
+  // One chunk at a time: ≤ VAULT_ID_CHUNK ids per `_in` (REPO_MAP §7), never a burst on the indexer.
+  for (let i = 0; i < ids.length; i += VAULT_ID_CHUNK) rows.push(...await readVaultChunk(ids.slice(i, i + VAULT_ID_CHUNK), options))
+  return options.order && options.order !== 'id' ? sortPositions(rows, options.order) : rows
+}
+
+/** Vault ids per `_in` list. */
+export const VAULT_ID_CHUNK = 200
+
+async function readVaultChunk(ids: string[], options: FetchVaultPositionsOptions): Promise<VaultPosition[]> {
   const fields = options.withMeta
     ? 'id term_id account_id shares created_at updated_at account { label }'
     : 'id term_id account_id shares'
@@ -82,7 +97,7 @@ export async function fetchVaultPositions(
       query VaultPositions($vaultIds: [String!]!, $limit: Int!, $offset: Int!) {
         positions(
           where: { term_id: { _in: $vaultIds } }
-          order_by: { id: asc }
+          order_by: [{ term_id: asc }, { id: asc }]
           limit: $limit
           offset: $offset
         ) { ${fields} }
@@ -101,7 +116,7 @@ export async function fetchVaultPositions(
     request: options.request,
   })
   if (page.truncated !== false) throw new Error('vault positions not read to the end')
-  return options.order && options.order !== 'id' ? sortPositions(page.rows, options.order) : page.rows
+  return page.rows
 }
 
 /** Positions already read, in one of the read's orders (a copy). */

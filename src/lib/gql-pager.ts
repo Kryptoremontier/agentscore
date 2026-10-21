@@ -18,7 +18,11 @@
  * Failure is failure (§7 rule 5): a non-2xx response (the endpoint rate-limits
  * with HTTP 429 `{"message":"API rate limit exceeded"}`, no `errors`, no
  * `data`), GraphQL errors, or a body without `data` all throw. So does a page
- * failing mid-way. A partial list is never returned as if it were complete.
+ * failing mid-way. A partial list is never returned as if it were complete. *
+ * A request that takes longer than REQUEST_TIMEOUT_MS is cut and retried once,
+ * as is one the indexer gateway answers 504 (its own limit is 60 s; Etap 7c
+ * saw corpus reads 504 there). A second timeout or 504 throws, so a page that
+ * still fails fails the whole read.
  */
 
 import { APP_CONFIG } from './app-config'
@@ -34,41 +38,72 @@ export const SERVER_ROW_CAP = {
 /** 429 retries (one transport, so every caller backs off the same way). */
 const RATE_LIMIT_RETRY_MS = [400, 1200] as const
 
+/**
+ * Per-request ceiling (Etap 7c): well under the gateway's 60 s, so a request that hangs is cut
+ * and retried once while a function still has time to answer.
+ */
+export const REQUEST_TIMEOUT_MS = 25_000
+
+/** Retries after a timeout or a gateway 504 — one, then the read fails. */
+const GATEWAY_RETRIES = 1
+
 export type GqlRequest = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /**
  * POST one GraphQL request. Throws on a non-2xx response (after two short
- * retries on 429), on GraphQL errors, and on a body without `data`. Never
- * returns empty data for a failed read.
+ * retries on 429), on a timeout or gateway 504 (after one retry), on GraphQL
+ * errors, and on a body without `data`. Never returns empty data for a failed
+ * read.
  */
 export async function gqlRequest<T>(
   query: string,
   variables?: Record<string, unknown>,
-  init?: { cache?: RequestCache; url?: string },
+  init?: { cache?: RequestCache; url?: string; timeoutMs?: number },
 ): Promise<T> {
   const url = init?.url ?? APP_CONFIG.GRAPHQL_URL
-  for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(variables ? { query, variables } : { query }),
-      ...(init?.cache ? { cache: init.cache } : {}),
-    })
-    if (res.ok === false) {
-      if (res.status === 429 && attempt < RATE_LIMIT_RETRY_MS.length) {
-        await sleep(RATE_LIMIT_RETRY_MS[attempt])
+  const timeoutMs = init?.timeoutMs ?? REQUEST_TIMEOUT_MS
+  let rateLimited = 0
+  let gatewayRetries = GATEWAY_RETRIES
+  for (;;) {
+    let json: { data?: unknown; errors?: Array<{ message?: string }> } | null
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(variables ? { query, variables } : { query }),
+        signal: AbortSignal.timeout(timeoutMs),
+        ...(init?.cache ? { cache: init.cache } : {}),
+      })
+      if (res.ok === false) {
+        if (res.status === 429 && rateLimited < RATE_LIMIT_RETRY_MS.length) {
+          await sleep(RATE_LIMIT_RETRY_MS[rateLimited++])
+          continue
+        }
+        if (res.status === 504 && gatewayRetries > 0) {
+          gatewayRetries--
+          continue
+        }
+        throw new Error(`GraphQL HTTP ${res.status}`)
+      }
+      // Under the same signal: a body that stalls is a timeout too.
+      json = await res.json()
+    } catch (err) {
+      if (!isTimeout(err)) throw err
+      if (gatewayRetries > 0) {
+        gatewayRetries--
         continue
       }
-      throw new Error(`GraphQL HTTP ${res.status}`)
+      throw new Error(`GraphQL timeout after ${timeoutMs} ms`)
     }
-    const json = await res.json()
     if (json?.errors) throw new Error(json.errors[0]?.message || 'GraphQL error')
     if (json?.data == null) throw new Error('GraphQL response without data')
     return json.data as T
   }
 }
+
+const isTimeout = (err: unknown) => err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
 
 export interface PagedRows<T> {
   rows: T[]

@@ -23,6 +23,9 @@
  *    live read fails, the last complete read is served with its real age (Etap 4c: a page never
  *    goes blank while we hold good data). No entry at all and a failed read → the failure. A
  *    failed refill never replaces the entry: only complete reads are stored (rule 1).
+ *    With no entry at all — after a deploy, since the keys change with the build — the read's
+ *    last-good snapshot (option `snapshot`, lib/snapshot-store.ts; Etap 7c) is served at once
+ *    with its real age, under the same ceiling, and one refill runs after the response.
  * 4. **Each entry's TTL is the configured one ±10 %,** drawn when the entry is read, so entries
  *    filled together don't refill together every TTL (`jitteredTtl`).
  *
@@ -34,7 +37,10 @@
  */
 
 import { unstable_cache } from 'next/cache'
+// The store Next keeps per request and waits on after the response (its own background refills).
+import { staticGenerationAsyncStorage } from 'next/dist/client/components/static-generation-async-storage.external'
 import { encodeForCache, decodeFromCache } from './json-codec'
+import { snapshotStore } from './snapshot-store'
 
 // ─── Read ledger (per request) ────────────────────────────────────────────────
 
@@ -52,10 +58,11 @@ interface Ledger {
   parent: Ledger | null
 }
 
-interface LedgerStore {
-  run<R>(store: Ledger, fn: () => R): R
-  getStore(): Ledger | undefined
+interface AsyncStore<S> {
+  run<R>(store: S | undefined, fn: () => R): R
+  getStore(): S | undefined
 }
+type LedgerStore = AsyncStore<Ledger>
 
 /**
  * AsyncLocalStorage without a static `node:async_hooks` import: client pages import api-data (for
@@ -63,8 +70,8 @@ interface LedgerStore {
  * failed on it. The Next server sets `globalThis.AsyncLocalStorage`; plain Node (tests, scripts)
  * has `process.getBuiltinModule`; in a browser bundle nothing is ledgered (a no-op store).
  */
-function createLedgerStore(): LedgerStore {
-  type Ctor = new () => LedgerStore
+function createAsyncStore<S>(): AsyncStore<S> {
+  type Ctor = new () => AsyncStore<S>
   const fromGlobal = (globalThis as { AsyncLocalStorage?: Ctor }).AsyncLocalStorage
   const fromNode = typeof process !== 'undefined'
     ? (process as { getBuiltinModule?: (id: string) => { AsyncLocalStorage?: Ctor } | undefined }).getBuiltinModule?.('node:async_hooks')?.AsyncLocalStorage
@@ -74,11 +81,16 @@ function createLedgerStore(): LedgerStore {
   return { run: (_store, fn) => fn(), getStore: () => undefined }
 }
 
-let ledgerStoreInstance: LedgerStore | null = null
-const ledgerStore: LedgerStore = {
-  run: (store, fn) => (ledgerStoreInstance ??= createLedgerStore()).run(store, fn),
-  getStore: () => (ledgerStoreInstance ??= createLedgerStore()).getStore(),
+/** Created on first use (the Next server sets `globalThis.AsyncLocalStorage` before any request). */
+function lazyAsyncStore<S>(): AsyncStore<S> {
+  let instance: AsyncStore<S> | null = null
+  return {
+    run: (store, fn) => (instance ??= createAsyncStore<S>()).run(store, fn),
+    getStore: () => (instance ??= createAsyncStore<S>()).getStore(),
+  }
 }
+
+const ledgerStore: LedgerStore = lazyAsyncStore<Ledger>()
 
 /** Run `fn` with a fresh read ledger (one per REST request / MCP tool call). */
 export function runWithReadLedger<T>(fn: () => T): T {
@@ -212,6 +224,74 @@ class IncompleteRead extends Error {
 const isIncomplete = (e: unknown): e is IncompleteRead =>
   !!e && typeof e === 'object' && (e as Record<symbol, unknown>)[INCOMPLETE] === true
 
+// ─── Last-good snapshot (Etap 7c) ─────────────────────────────────────────────
+
+/**
+ * The last complete read of a read, as the snapshot store keeps it (lib/snapshot-store.ts). The
+ * Data Cache keys change with almost every build (they include the minified callback's source), so
+ * after a deploy there is no entry; this copy outlives the build. `version` is the read's
+ * SNAPSHOT_VERSION: a build whose stored shape differs bumps it and never reads the old shape.
+ */
+interface Snapshot { key: string; version: number; readAt: number; v: unknown }
+
+/** Snapshot keys: per network (a mainnet build never reads testnet data), per read, per version. */
+const SNAPSHOT_PREFIX = `agentscore:${process.env.NEXT_PUBLIC_NETWORK || 'testnet'}:snapshot`
+
+/** A snapshot is written at most this often per read and instance (the store's free plan counts commands). */
+export const SNAPSHOT_WRITE_INTERVAL_MS = 5 * 60_000
+
+/** FNV-1a — a short, stable name for a read's arguments (cohort attestations: 264 term ids). */
+function fnv1a(text: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(16).padStart(8, '0')
+}
+
+export function snapshotKeyFor(key: string, version: number, args: readonly unknown[] = []): string {
+  const k = JSON.stringify(args)
+  return `${SNAPSHOT_PREFIX}:${key}:${version}${k === '[]' ? '' : `:${fnv1a(k)}`}`
+}
+
+const SNAPSHOT_SERVE = Symbol.for('agentscore.server-cache.snapshot-serve')
+
+/** Thrown from the cache callback on a miss when a snapshot can answer: nothing is stored. */
+class SnapshotServe extends Error {
+  readonly [SNAPSHOT_SERVE] = true
+  constructor(readonly snapshot: Snapshot) {
+    super(`served from the last-good snapshot: ${snapshot.key}`)
+  }
+}
+const isSnapshotServe = (e: unknown): e is SnapshotServe =>
+  !!e && typeof e === 'object' && (e as Record<symbol, unknown>)[SNAPSHOT_SERVE] === true
+
+/** Is the caller still waiting on the cache callback? (see the callback in completeReadCache) */
+interface CallerWait { settled: boolean }
+const callerStore = lazyAsyncStore<CallerWait>()
+
+const backgroundOutsideNext = new Set<Promise<void>>()
+
+/**
+ * Run `task` after the response: in a Next request it joins the store's `pendingRevalidates`,
+ * which Next waits on (Vercel's waitUntil) — the same path its own background refills take.
+ * Outside Next (tests, scripts) it just runs; `settleBackgroundForTests` waits for it.
+ */
+function afterResponse(id: string, task: () => Promise<unknown>): void {
+  const p = task().then(() => undefined, (err) => console.warn(`[server-cache] ${id}:`, err instanceof Error ? err.message : err))
+  const store = staticGenerationAsyncStorage.getStore()
+  if (store) {
+    store.pendingRevalidates ??= {}
+    store.pendingRevalidates[id] = p
+  } else {
+    backgroundOutsideNext.add(p)
+    void p.finally(() => backgroundOutsideNext.delete(p))
+  }
+}
+
+/** Tests only: wait for work started outside a Next request (snapshot refills). */
+export async function settleBackgroundForTests(): Promise<void> {
+  while (backgroundOutsideNext.size) await Promise.all([...backgroundOutsideNext])
+}
+
 export interface CompleteReadCacheOptions<A extends unknown[]> {
   /** Seconds a complete read is served from the cache — each entry gets this ±10 % (jitteredTtl). */
   revalidate: number
@@ -222,6 +302,13 @@ export interface CompleteReadCacheOptions<A extends unknown[]> {
    * refilling it in the background). Default HARD_CEILING_SECONDS (1 h).
    */
   hardCeilingSeconds?: number
+  /**
+   * Keep the last complete read in the snapshot store (lib/snapshot-store.ts) under this schema
+   * version — SNAPSHOT_VERSION.<read>. With no Data Cache entry (after a deploy) the snapshot is
+   * served at once with its real age, under the same hard ceiling, and one refill runs after the
+   * response. Bump the version whenever the stored value's shape changes.
+   */
+  snapshot?: number
   cache?: CacheImpl
   now?: () => number
   /** Tests only: the draw behind each entry's jittered TTL. */
@@ -285,13 +372,62 @@ export function completeReadCache<A extends unknown[], T>(
     return p
   }
 
+  // The last-good snapshot (Etap 7c): read on a miss, written after a complete read.
+  const version = options.snapshot
+  const lastSnapshotWrite = new Map<string, number>()
+  const readSnapshot = async (args: A): Promise<Snapshot | null> => {
+    const store = version != null ? snapshotStore() : null
+    if (!store || version == null) return null
+    try {
+      const text = await store.get(snapshotKeyFor(key, version, args))
+      if (!text) return null
+      const snap = JSON.parse(text) as Partial<Snapshot>
+      // Another build's shape (or another read's) is never served.
+      if (snap.key !== key || snap.version !== version || typeof snap.readAt !== 'number' || !('v' in snap)) return null
+      // Past the hard ceiling a snapshot is as stale as an entry would be: the caller reads live.
+      if (now() - snap.readAt > ceilingMs) return null
+      return snap as Snapshot
+    } catch (err) {
+      console.warn(`[server-cache] ${key}: snapshot unread:`, err instanceof Error ? err.message : err)
+      return null
+    }
+  }
+  const writeSnapshot = async (args: A, stamped: Stamped): Promise<void> => {
+    const store = version != null ? snapshotStore() : null
+    if (!store || version == null) return
+    const sk = snapshotKeyFor(key, version, args)
+    const last = lastSnapshotWrite.get(sk)
+    if (last != null && now() - last < SNAPSHOT_WRITE_INTERVAL_MS) return
+    lastSnapshotWrite.set(sk, now())
+    const snap: Snapshot = { key, version, readAt: stamped.readAt, v: stamped.v }
+    try {
+      await store.set(sk, JSON.stringify(snap), (2 * ceilingMs) / 1000)
+    } catch (err) {
+      lastSnapshotWrite.delete(sk)
+      console.warn(`[server-cache] ${key}: snapshot not written:`, err instanceof Error ? err.message : err)
+    }
+  }
+
   return async (...args: A): Promise<T> => {
     const k = JSON.stringify(args)
     const cached = (options.cache ?? defaultCache)(
       async (...a: A) => {
+        const wait = version != null && snapshotStore() ? callerStore.getStore() : undefined
+        if (wait) {
+          // Called on a miss (the caller waits on this callback) or as the background refill of a
+          // stale entry (started while the cached value is being returned)? One macrotask later only
+          // the refill's caller has its value. On a miss a snapshot answers at once (thrown, so
+          // nothing is stored: the caller serves it and starts the one refill after the response).
+          await new Promise((r) => setTimeout(r, 0))
+          if (!wait.settled) {
+            const snap = await readSnapshot(a)
+            if (snap) throw new SnapshotServe(snap)
+          }
+        }
         const { stamped, complete } = await readOnce(...a)
         if (!complete) throw new IncompleteRead(stamped, key)
         rememberTtl(JSON.stringify(a), stamped.ttl) // about to be stored: this is the entry's TTL now
+        await writeSnapshot(a, stamped) // only a complete read is ever kept (rule 1)
         return stamped
       },
       [`agentscore:${key}`],
@@ -299,9 +435,22 @@ export function completeReadCache<A extends unknown[], T>(
     )
     let stamped: Stamped
     try {
-      stamped = await cached(...args)
+      const wait: CallerWait = { settled: false }
+      try {
+        stamped = await callerStore.run(wait, () => cached(...args))
+      } finally {
+        wait.settled = true // before any macrotask: a stale entry's refill sees it (the callback above)
+      }
       rememberTtl(k, stamped.ttl)
     } catch (e) {
+      if (isSnapshotServe(e)) {
+        // No Data Cache entry (a new build), a snapshot under the ceiling: served now, with its age.
+        // One refill after the response, outside this caller (its own ledger: it shapes later answers).
+        afterResponse(`agentscore:snapshot-refill:${key}:${k}`, () =>
+          ledgerStore.run({ reads: [], parent: null }, () => callerStore.run(undefined, () => cached(...args))))
+        record({ key, readAt: e.snapshot.readAt, cached: true, complete: true })
+        return decodeFromCache<T>(e.snapshot.v)
+      }
       if (!isIncomplete(e)) throw e
       record({ key, readAt: e.stamped.readAt, cached: false, complete: false })
       return decodeFromCache<T>(e.stamped.v)
@@ -361,4 +510,18 @@ export const SERVER_CACHE_CEILING = {
   platformStats: 86_400,
   domains: 86_400,
   evaluatorLeaderboard: 86_400,
+} as const
+
+/**
+ * Snapshot schema versions (Etap 7c) — one per read kept in the snapshot store, the same reads as
+ * SERVER_CACHE_CEILING. Bump a read's version in the same change that alters what it stores (its
+ * value's shape or meaning): a new build then ignores snapshots in the old shape.
+ */
+export const SNAPSHOT_VERSION = {
+  agentCorpus: 1,
+  erc8004Cohort: 1,
+  cohortAttestations: 1,
+  platformStats: 1,
+  domains: 1,
+  evaluatorLeaderboard: 1,
 } as const

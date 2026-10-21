@@ -78,7 +78,8 @@ describe('fetchVaultPositions — pages by immutable id, orders after the full r
     })
     const rows = await fetchVaultPositions(['0xvault'], { order: 'shares-desc' })
     expect(new Set(rows.map((r) => r.account_id)).size).toBe(150)
-    expect(fake.rowCalls('positions').every((c) => /order_by:\s*\{\s*id:\s*asc\s*\}/.test(c.query))).toBe(true)
+    // Paged on the immutable key: `[term_id, id]` is id order (every id is `${term_id}-…`; Etap 7c).
+    expect(fake.rowCalls('positions').every((c) => /order_by:\s*\[\{\s*term_id:\s*asc\s*\},\s*\{\s*id:\s*asc\s*\}\]/.test(c.query))).toBe(true)
     // …and the requested order is applied to what was read (wallet 10 was read on page 1,
     // before its trade, so the smallest position read is wallet 149's).
     expect(rows[0].account_id).toBe('0xw000')
