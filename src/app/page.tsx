@@ -2,6 +2,7 @@ import { Hero } from '@/components/landing/Hero'
 import { HowItWorks } from '@/components/landing/HowItWorks'
 import { TrustOverTime } from '@/components/landing/TrustOverTime'
 import { GateExample } from '@/components/landing/GateExample'
+import { TrustContexts } from '@/components/landing/TrustContexts'
 import { CTA } from '@/components/landing/CTA'
 import { getLandingData } from '@/lib/landing-data'
 
@@ -36,6 +37,7 @@ export default async function HomePage() {
       <HowItWorks />
       <TrustOverTime story={data.story} now={now} />
       <GateExample gate={data.gate} />
+      <TrustContexts contexts={data.contexts} />
       <CTA />
     </div>
   )
