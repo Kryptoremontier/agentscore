@@ -10,7 +10,7 @@ import { cn } from '@/lib/cn'
 import { BugReportModal } from '@/components/shared/BugReportModal'
 import { PRIMARY_NAV, MORE_NAV, MORE_LABEL, ACCENT, isNavActive, type NavItem } from './nav-items'
 
-// The phone's bottom nav is Check an agent · Vouch · More (Etap 7 Run B; before: Agents · How it works
+// The phone's bottom nav is Check an agent · Trust an agent · More (Etap 7 Run B, Etap 8a; before: Agents · How it works
 // · More). "For developers" opens the More sheet, above everything else under More
 // (components/layout/nav-items.ts — the sidebar's model).
 const BOTTOM_TABS = PRIMARY_NAV.filter(item => item.href !== '/docs')

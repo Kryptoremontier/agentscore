@@ -157,9 +157,9 @@ describe('checkCardOf — the /agents card\'s own derivations', () => {
     cohortAttestations: part('2026-10-18T17:58:00Z'),
   } as unknown as AgentsPagePayload
 
-  it('Luda: 2 people for 3 areas, Unverified (0.04554 < 0.05 tTRUST), backing measured, data 5 min old', () => {
+  it('Luda: 2 people for 3 trust contexts, Unverified (0.04554 < 0.05 tTRUST), backing measured, data 5 min old', () => {
     const c = checkCardOf(LUDA, payload, view(), NOW)!
-    expect(c).toMatchObject({ id: LUDA, name: 'Luda', origin: 'agentscore', line: { kind: 'some', claim: '2 people vouch · for 3 areas' }, dataAgeSeconds: 300 })
+    expect(c).toMatchObject({ id: LUDA, name: 'Luda', origin: 'agentscore', line: { kind: 'some', claim: '2 people trust it for 3 trust contexts' }, dataAgeSeconds: 300 })
     expect(c.attesters?.map((a) => a.wallet)).toEqual([KRYPTO, CCA0])
     expect(c.tier?.tier).toBe('unverified')
     expect(c.backing).toEqual(expect.any(Number))
@@ -167,11 +167,11 @@ describe('checkCardOf — the /agents card\'s own derivations', () => {
 
   it('Captain Dackie: ERC-8004, 1 person for Crypto / Onchain, no backing score (its vault is not read); the oldest of its two parts', () => {
     const c = checkCardOf(DACKIE, payload, view(), NOW)!
-    expect(c).toMatchObject({ name: 'Captain Dackie', origin: 'erc8004', line: { claim: '1 person vouches · for Crypto / Onchain' }, backing: null, dataAgeSeconds: 600, dataReadAt: '2026-10-18T17:50:00Z' })
+    expect(c).toMatchObject({ name: 'Captain Dackie', origin: 'erc8004', line: { claim: '1 person trusts it for Crypto / Onchain' }, backing: null, dataAgeSeconds: 600, dataReadAt: '2026-10-18T17:50:00Z' })
   })
 
   it('OPEN CLAW: nobody vouches (backing is not vouching)', () => {
-    expect(checkCardOf(OPEN_CLAW, payload, view(), NOW)).toMatchObject({ line: { kind: 'none', claim: 'Nobody vouches yet' }, attesters: [], tier: { tier: 'unverified' } })
+    expect(checkCardOf(OPEN_CLAW, payload, view(), NOW)).toMatchObject({ line: { kind: 'none', claim: 'Nobody trusts it yet' }, attesters: [], tier: { tier: 'unverified' } })
   })
 
   it('attestations unread → no claim, no seals, tier unknown — never "Nobody vouches"', () => {

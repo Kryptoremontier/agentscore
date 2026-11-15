@@ -308,7 +308,7 @@ const GROUP_LABELS: Record<PredicateGroup, { title: string; subtitle: string; co
   capability:   { title: 'Capability',   subtitle: 'Certifications & qualifications',   color: '#2ECC71' },
   relationship: { title: 'Relationship', subtitle: 'Discovery between agents',          color: '#2EE6D6' },
   opinion:      { title: 'Opinion',      subtitle: 'Stakeable community sentiment',     color: '#38B6FF' },
-  attestation:  { title: 'Attestation',  subtitle: 'Identity verification & vouches',   color: '#A78BFA' },
+  attestation:  { title: 'Attestation',  subtitle: 'Identity verification & endorsements', color: '#A78BFA' },
   report:       { title: 'Report',       subtitle: 'Moderation & abuse reporting',      color: '#EF4444' },
   identity:     { title: 'Identity',     subtitle: 'Entity equivalence (sameAs)',       color: '#C8963C' },
 }

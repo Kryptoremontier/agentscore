@@ -18,8 +18,8 @@ const SELF_DEPOSIT_ONLY = entry(1, '980000000000000', 100) // 0.00098 tTRUST sel
 const REAL_AGENT_MODEST = entry(5, '200000000000000000', 62) // real agent, modest score
 
 describe('the options — people first by default', () => {
-  it('"Most vouched" (default), "Newest", "Highest backing"; ?sort= parses, anything else → the default', () => {
-    expect(SORT_OPTIONS.map((o) => o.label)).toEqual(['Most vouched', 'Newest', 'Highest backing'])
+  it('"Most trusted" (default; `?sort=vouched` unchanged), "Newest", "Highest backing"; ?sort= parses, anything else → the default', () => {
+    expect(SORT_OPTIONS.map((o) => o.label)).toEqual(['Most trusted', 'Newest', 'Highest backing'])
     expect(DEFAULT_SORT).toBe('vouched')
     expect([parseSort('vouched'), parseSort('newest'), parseSort('backing')]).toEqual(['vouched', 'newest', 'backing'])
     expect([parseSort(null), parseSort(''), parseSort('score_desc')]).toEqual(['vouched', 'vouched', 'vouched'])

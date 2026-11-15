@@ -77,8 +77,8 @@ async function modalView(id: string) {
 
 describe('list ↔ modal parity — Dackie, Luda, OPEN CLAW (live rows 2026-09-26)', () => {
   const expected = {
-    [DACKIE]: { attesters: 1, domains: 1, tier: 'unverified', claim: '1 person vouches · for Crypto / Onchain' },
-    [LUDA]: { attesters: 1, domains: 1, tier: 'unverified', claim: '1 person vouches · for Knowledge / Productivity' },
+    [DACKIE]: { attesters: 1, domains: 1, tier: 'unverified', claim: '1 person trusts it for Crypto / Onchain' },
+    [LUDA]: { attesters: 1, domains: 1, tier: 'unverified', claim: '1 person trusts it for Knowledge / Productivity' },
     [OPEN_CLAW]: { attesters: 0, domains: 0, tier: 'unverified', claim: CARD_NO_ATTESTATIONS },
   } as const
 
@@ -96,15 +96,15 @@ describe('list ↔ modal parity — Dackie, Luda, OPEN CLAW (live rows 2026-09-2
 })
 
 describe('Captain Dackie — the first cohort attestation', () => {
-  it('the card shows "1 person vouches", never "Nobody vouches yet" (a sold-out wallet on the same triple changes nothing)', async () => {
+  it('the card shows "1 person trusts it", never "Nobody trusts it yet" (a sold-out wallet on the same triple changes nothing)', async () => {
     fake()
     const line = cardAttesterLine(cardAttestationView((await fetchAttestationsForSubjects([DACKIE])).get(DACKIE)!))
     expect(line.kind).toBe('some')
-    expect(line.claim).toBe('1 person vouches · for Crypto / Onchain')
+    expect(line.claim).toBe('1 person trusts it for Crypto / Onchain')
     expect(line.claim).not.toContain(CARD_NO_ATTESTATIONS)
   })
 
-  it('a failed read → no claim (CTA only), never "Nobody vouches yet"', async () => {
+  it('a failed read → no claim (CTA only), never "Nobody trusts it yet"', async () => {
     fake((q) => (q.includes('VaultPositions(') ? 'throw' : undefined))
     const view = await fetchAttestationsForSubjects([DACKIE]).then((m) => cardAttestationView(m.get(DACKIE)!), () => null)
     expect(view).toBeNull()
@@ -114,13 +114,13 @@ describe('Captain Dackie — the first cohort attestation', () => {
   it('its card keeps one shape across the read: compact before and after (it used to grow 82 → 137 px when the read answered)', () => {
     // A cohort row: the list never reads its atom vault. The shape is decided at first paint.
     expect(isCompactCard({ vaultRead: false })).toBe(true)
-    // Only the line changes — loading → "1 person vouches · for Crypto / Onchain" — inside its reserved height.
+    // Only the line changes — loading → "1 person trusts it for Crypto / Onchain" — inside its reserved height.
     expect(attesterLineOf(undefined, DACKIE).kind).toBe('loading')
     const after = new Map([[DACKIE, { attesters: 1, domains: 1, areas: ['Crypto / Onchain'], stakeWei: 0n, tier: calculateAgentTier([]) }]])
-    expect(attesterLineOf(after, DACKIE).claim).toBe('1 person vouches · for Crypto / Onchain')
+    expect(attesterLineOf(after, DACKIE).claim).toBe('1 person trusts it for Crypto / Onchain')
   })
 
-  it('OPEN CLAW (AgentScore row, vault read, 0 attesters) keeps the full card with "Nobody vouches yet · Vouch"', async () => {
+  it('OPEN CLAW (AgentScore row, vault read, 0 attesters) keeps the full card with "Nobody trusts it yet · Trust"', async () => {
     fake()
     const line = cardAttesterLine(cardAttestationView((await fetchAttestationsForSubjects([OPEN_CLAW])).get(OPEN_CLAW)!))
     expect(line).toEqual({ kind: 'none', claim: CARD_NO_ATTESTATIONS, cta: true })
@@ -140,17 +140,17 @@ describe('cardAttesterLine — states (REPO_MAP §7 rule 5: failed ≠ empty)', 
   it('read failed → no claim, CTA only', () => {
     expect(cardAttesterLine(null)).toEqual({ kind: 'unread', claim: null, cta: true })
   })
-  it('read ok, no attestation → "Nobody vouches yet" + CTA', () => {
-    expect(cardAttesterLine(cardAttestationView([]))).toEqual({ kind: 'none', claim: 'Nobody vouches yet', cta: true })
+  it('read ok, no attestation → "Nobody trusts it yet" + CTA', () => {
+    expect(cardAttesterLine(cardAttestationView([]))).toEqual({ kind: 'none', claim: 'Nobody trusts it yet', cta: true })
   })
-  it('plurals and cross-domain dedup: one wallet on two domains + another on one → "2 people vouch · for 2 areas"', () => {
+  it('plurals and cross-domain dedup: one wallet on two domains + another on one → "2 people trust it for 2 trust contexts"', () => {
     const view = cardAttestationView([entry('Crypto / Onchain', [['0xA', 5n], ['0xB', 1n]]), entry('Social', [['0xa', 3n]])])
-    expect(cardAttesterLine(view).claim).toBe('2 people vouch · for 2 areas')
+    expect(cardAttesterLine(view).claim).toBe('2 people trust it for 2 trust contexts')
   })
   it('one area is named; one person is singular', () => {
     const view = cardAttestationView([entry('Knowledge / Productivity', [['0xA', 5n]])])
-    expect(cardAttesterLine(view).claim).toBe('1 person vouches · for Knowledge / Productivity')
-    expect(cardAttesterLine(cardAttestationView([entry('Social', [['0xA', 5n], ['0xB', 1n]])])).claim).toBe('2 people vouch · for Social')
+    expect(cardAttesterLine(view).claim).toBe('1 person trusts it for Knowledge / Productivity')
+    expect(cardAttesterLine(cardAttestationView([entry('Social', [['0xA', 5n], ['0xB', 1n]])])).claim).toBe('2 people trust it for Social')
   })
 })
 
@@ -194,9 +194,9 @@ describe('grid ↔ list parity — Dackie, Luda, OPEN CLAW (live rows 2026-09-26
     fake()
     const bulk = await fetchAttestationsForSubjects([DACKIE, LUDA, OPEN_CLAW])
     const views = new Map<string, CardAttestationView>([...bulk].map(([id, e]) => [id, cardAttestationView(e)]))
-    expect(printed(attesterLineOf(views, DACKIE))).toBe('1 person vouches · for Crypto / Onchain')
-    expect(printed(attesterLineOf(views, LUDA))).toBe('1 person vouches · for Knowledge / Productivity')
-    expect(printed(attesterLineOf(views, OPEN_CLAW))).toBe('Nobody vouches yet · Vouch')
+    expect(printed(attesterLineOf(views, DACKIE))).toBe('1 person trusts it for Crypto / Onchain')
+    expect(printed(attesterLineOf(views, LUDA))).toBe('1 person trusts it for Knowledge / Productivity')
+    expect(printed(attesterLineOf(views, OPEN_CLAW))).toBe('Nobody trusts it yet · Trust')
     for (const id of [DACKIE, LUDA, OPEN_CLAW]) expect(tierChipOf(views, id)).toBeNull() // all Unverified
   })
 

@@ -29,7 +29,7 @@ describe('backing is not called trust', () => {
   })
 
   it('the modal and the profile share the section and its copy', () => {
-    expect(BACKING_IS_NOT_VOUCHING).toBe('Put tTRUST behind this agent. Backing is not vouching — it doesn’t change the tier.')
+    expect(BACKING_IS_NOT_VOUCHING).toBe('Put tTRUST behind this agent. Capital on the agent itself. It never changes the tier.')
     expect(read('components/profile/BackThisAgentSection.tsx')).toMatch(/\{BACKING_IS_NOT_VOUCHING\}/)
     const modal = read('app/agents/agents-client.tsx')
     expect(modal).toMatch(/<BackThisAgentSection open=\{backAccordionOpen\} onToggle=/)

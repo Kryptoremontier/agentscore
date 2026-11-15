@@ -21,13 +21,13 @@ describe('the copy', () => {
     expect(LANDING_TITLE).toEqual(['Trust layer for', 'AI agents.'])
     expect(LANDING_CTA_CHECK).toBe('Check an agent') // Etap 7 Run B: the primary goes to /check
     expect(DEV_HEADING).toBe('For developers & agents')
-    expect(LANDING_CHECKS).toEqual(['TESTNET tTRUST IS FREE', 'EVERY VOUCH IS ON-CHAIN', 'ONE WALLET CAN NEVER DO IT ALONE'])
+    expect(LANDING_CHECKS).toEqual(['TESTNET tTRUST IS FREE', 'ALL TRUST IS ON-CHAIN', 'ONE WALLET CAN NEVER DO IT ALONE'])
   })
 
   it('the sentence after the subtitle leads with the live number: "1 person" — and the invitation', () => {
-    expect(peopleHereLead(1)).toEqual({ lead: '1 person', rest: 'vouches for agents here.' })
-    expect(peopleHereLead(3)).toEqual({ lead: '3 people', rest: 'vouch for agents here.' })
-    expect(peopleHereLead(null)).toEqual({ lead: '—', rest: 'people vouch for agents here.' })
+    expect(peopleHereLead(1)).toEqual({ lead: '1 person', rest: 'trusts agents here.' })
+    expect(peopleHereLead(3)).toEqual({ lead: '3 people', rest: 'trust agents here.' })
+    expect(peopleHereLead(null)).toEqual({ lead: '—', rest: 'people trust agents here.' })
     expect(invitationLine(1)).toBe('Be the second.')
     expect(invitationLine(3)).toBe('Add yours.')
   })

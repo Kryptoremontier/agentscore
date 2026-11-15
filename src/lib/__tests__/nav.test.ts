@@ -13,15 +13,16 @@ const SRC = path.join(__dirname, '..', '..')
 const code = (f: string) => readFileSync(path.join(SRC, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 
 describe('the nav model', () => {
-  it('three primary places, in order: Check an agent · Vouch · For developers', () => {
+  it('three primary places, in order: Check an agent · Trust an agent · For developers', () => {
     expect(PRIMARY_NAV.map((i) => [i.label, i.href])).toEqual([
-      ['Check an agent', '/check'], ['Vouch', '/agents'], ['For developers', '/docs'],
+      ['Check an agent', '/check'], ['Trust an agent', '/agents'], ['For developers', '/docs'],
     ])
   })
 
-  it('How it works moved under More; Skills, Claims, Domains, Evaluators, Leaderboard, IntuForge stay there', () => {
+  it('How it works moved under More; Skills, Claims, Trust contexts (/domains), Evaluators, Leaderboard, IntuForge stay there', () => {
     const more = MORE_NAV.flatMap((g) => g.items).map((i) => i.label)
-    expect(more).toEqual(expect.arrayContaining(['How it works', 'Skills', 'Claims', 'Domains', 'Evaluators', 'Leaderboard', 'IntuForge']))
+    expect(more).toEqual(expect.arrayContaining(['How it works', 'Skills', 'Claims', 'Trust contexts', 'Evaluators', 'Leaderboard', 'IntuForge']))
+    expect(MORE_NAV.flatMap((g) => g.items).find((i) => i.label === 'Trust contexts')?.href).toBe('/domains')
   })
 
   it('no route removed: every page the old nav linked is still in the nav (primary, More, or the profile link)', () => {

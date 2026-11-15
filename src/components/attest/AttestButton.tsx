@@ -42,7 +42,7 @@ import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 import { useConnectModal } from '@/components/wallet/ConnectModal'
 import {
   VOUCH_CTA, vouchFor, connectToVouch, VOUCH_WRONG_NETWORK, VOUCH_AREA_LABEL, VOUCH_PICK_AREA, vouchIn,
-  firstVouchNote, VOUCH_SUCCESS, VOUCH_INDEXING, VOUCHED_FOR,
+  firstVouchNote, VOUCH_SUCCESS, VOUCH_INDEXING, VOUCHED_FOR, VOUCHED_FOR_CONTEXT, NEED_TTRUST,
 } from '@/lib/people-copy'
 
 interface AttestButtonProps {
@@ -208,7 +208,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
           <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#2ECC71' }} />
           <div className="min-w-0">
             <p style={{ color: '#2ECC71' }}>
-              {VOUCHED_FOR} <span className="font-semibold">{agentName}</span> in{' '}
+              {VOUCHED_FOR} <span className="font-semibold">{agentName}</span> {VOUCHED_FOR_CONTEXT}{' '}
               <span className="font-semibold">{result.domain.emoji} {result.domain.label}</span>
               {' '}· stake {result.stake} tTRUST
             </p>
@@ -450,7 +450,7 @@ function AttestStepPanel({ step, agentName }: { step: Exclude<AttestStep, 'ready
   }
   return (
     <div className={box} style={{ background: 'rgba(46,204,113,0.06)', border: '1px solid rgba(46,204,113,0.25)' }} data-testid="attest-step" data-step={step}>
-      <p className="text-white">You need a little testnet tTRUST to vouch — it&apos;s free.</p>
+      <p className="text-white">{NEED_TTRUST}</p>
       <a href={INTUITION_HUB_URL} target="_blank" rel="noopener noreferrer" className={primary}>
         <Droplets className="w-4 h-4" /> Get free tTRUST from Intuition Hub <ExternalLink className="w-3.5 h-3.5" />
       </a>

@@ -76,8 +76,8 @@ describe('<SealRow> — the same slots at three sizes', () => {
   it('an open slot says "Open" (md, lg); the row names the count for screen readers', () => {
     expect(render([person(1, T)], 'lg')).toContain('>Open<')
     expect(render([person(1, T)], 'md')).toContain('Open')
-    expect(render([], 'sm')).toContain('aria-label="Nobody vouches yet. Verified takes 3 people."')
-    expect(render([person(1, T)], 'lg')).toContain('aria-label="1 person vouches. Verified takes 3 people."')
+    expect(render([], 'sm')).toContain('aria-label="Nobody trusts it yet. Verified takes 3 people."')
+    expect(render([person(1, T)], 'lg')).toContain('aria-label="1 person trusts it. Verified takes 3 people."')
   })
 
   it.each(['sm', 'md', 'lg'] as const)('%s: a failed read draws no slots (the surface says it couldn’t read)', (size) => {

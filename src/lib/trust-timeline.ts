@@ -17,6 +17,8 @@
  * roadmap for the (separate, future) persisted-snapshots feature.
  */
 
+import { timelineTrustedTitle, timelineTrustedBody } from './people-copy'
+
 // ─── Event Types ──────────────────────────────────────────────────────────────
 
 export type TimelineEventType =
@@ -238,8 +240,8 @@ export function buildAgentTimeline(input: BuildTimelineInput): AgentTimeline {
         id: `attest_${skill.tripleId}`,
         timestamp: ts,
         type: 'domain_attested',
-        title: `Domain Attested: ${skill.skillName}`,
-        description: `Community attestation created and staked: "${input.agentName} is skilled in ${skill.skillName}".`,
+        title: timelineTrustedTitle(skill.skillName),
+        description: timelineTrustedBody(input.agentName, skill.skillName),
         scoreAtEvent: null,
         scoreDelta: null,
         icon: '🛡️',

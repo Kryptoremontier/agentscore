@@ -42,7 +42,7 @@ describe('the invitation under the one number', () => {
 
 describe('How it works: the tier rule in one line, after the steps', () => {
   it('the words from the spec', () => {
-    expect(LANDING_TIERS_LINE).toBe('Trusted takes 2 people. Verified takes 3. Backing with tTRUST never changes the tier.')
+    expect(LANDING_TIERS_LINE).toBe('Established takes 2 people. Verified takes 3. Backing with tTRUST never changes the tier.')
   })
   it('rendered once, after the steps', () => {
     const how = code('components/landing/HowItWorks.tsx')

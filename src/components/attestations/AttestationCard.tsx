@@ -57,7 +57,7 @@ const BASE_PREDICATE_CONFIG: Partial<Record<AttestationPredicate, PredicateDispl
   vouches_for: {
     icon: CheckCircle,
     color: 'text-trust-good',
-    label: 'Vouches For',
+    label: 'Endorses',
   },
 }
 

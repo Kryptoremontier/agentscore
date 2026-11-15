@@ -42,6 +42,7 @@ import { OpposeUnreadNotice } from '@/components/shared/OpposeUnreadNotice'
 import { useNotice } from '@/components/shared/NoticeProvider'
 import { txFailureNotice } from '@/lib/user-notice'
 import { pluralize } from '@/lib/plural'
+import { STAKERS_TAB, STAKERS_HEADING, NO_STAKERS_YET, REPORT_COST_NOTE, CLAIM_PICK } from '@/lib/people-copy'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -2139,7 +2140,7 @@ function SkillsPageContent() {
                 <div className="flex border-b border-[#C8963C]/12">
                   {[
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
-                    { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+                    { id: 'attestations', label: STAKERS_TAB, icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'activity', label: 'Activity', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'timeline', label: 'Timeline', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="4" r="1.5" fill="currentColor" fillOpacity="0.5"/><circle cx="12" cy="20" r="1.5" fill="currentColor" fillOpacity="0.5"/><path d="M12 6v4M12 14v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M7 8h3M14 8h3M7 16h3M14 16h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5"/></svg> },
                   ].map((tab) => (
@@ -2813,7 +2814,7 @@ function SkillsPageContent() {
                   <div className="p-5">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-white font-semibold text-sm">Attestors</h4>
+                        <h4 className="text-white font-semibold text-sm">{STAKERS_HEADING}</h4>
                         <div className="flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#34a872] animate-pulse" />
                           <span className="text-xs text-[#B5BDC6]">live</span>
@@ -2837,7 +2838,7 @@ function SkillsPageContent() {
                             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#B5BDC6" strokeWidth="2"/>
                           </svg>
                         </div>
-                        <p className="text-[#B5BDC6] text-sm">No attestors yet</p>
+                        <p className="text-[#B5BDC6] text-sm">{NO_STAKERS_YET}</p>
                         <p className="text-[#7A838D] text-xs mt-1">Be the first to stake on this skill</p>
                       </div>
                     ) : (
@@ -3140,7 +3141,7 @@ function SkillsPageContent() {
             {/* Cost notice */}
             <div className="bg-[#f9731610] border border-[#f9731625] rounded-lg px-3 py-2 mb-4">
               <p className="text-[#f97316] text-xs">
-                <strong>On-chain report:</strong> Submitting this report creates an on-chain attestation triple and costs ~0.03 tTRUST (atom creation + triple deposit).
+                <strong>On-chain report:</strong> {REPORT_COST_NOTE}
               </p>
             </div>
 
@@ -3179,7 +3180,7 @@ function SkillsPageContent() {
             <div className="mb-5">
               <h2 className="text-xl font-bold text-white mb-1">Select a Claim</h2>
               <p className="text-[#B5BDC6] text-sm">
-                Choose what you want to attest about{' '}
+                {CLAIM_PICK}{' '}
                 <span className="text-white font-medium">{getSkillName(pendingVote.agent.label)}</span>
               </p>
             </div>

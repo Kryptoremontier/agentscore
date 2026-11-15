@@ -17,7 +17,7 @@ import {
   type SkillEvent,
 } from '@/lib/trust-timeline'
 import { formatDate, formatDateShort } from '@/lib/format'
-import { DETAILS_HEADING } from '@/lib/people-copy'
+import { DETAILS_HEADING, TIMELINE_FILTER_SKILLS } from '@/lib/people-copy'
 import { timelineEntryView } from './timeline-entry'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ interface TrustTimelineProps {
 const FILTER_OPTIONS: { id: string; label: string; types?: TimelineEventType[] }[] = [
   { id: 'all', label: 'All Events' },
   { id: 'staking', label: 'Staking Only', types: ['staker_joined', 'staker_opposed', 'staker_left', 'evaluator_staked'] },
-  { id: 'skills', label: 'Skills & Attestations', types: ['skill_added', 'domain_attested'] },
+  { id: 'skills', label: TIMELINE_FILTER_SKILLS, types: ['skill_added', 'domain_attested'] },
   { id: 'milestones', label: 'Milestones', types: ['registered', 'tier_upgrade', 'a2a_ready'] },
   { id: 'negative', label: 'Negative Events', types: ['staker_opposed', 'staker_left'] },
 ]

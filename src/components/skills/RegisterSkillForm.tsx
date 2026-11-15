@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { createWriteConfig, createSkillAtom, getFeeConfig } from '@/lib/intuition'
 import { SKILL_CATEGORIES, SKILL_COMPATIBILITIES, type SkillCategory, type SkillCompatibility } from '@/types/skill'
+import { REGISTER_GROW_SKILL } from '@/lib/people-copy'
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Brain, Code2, BarChart3, Globe, Search, Database, Eye, Mic, Plug, GitBranch,
@@ -825,7 +826,7 @@ export function RegisterSkillForm({ onSuccess }: RegisterSkillFormProps) {
               <p className="text-[11px] uppercase tracking-widest text-[#4A5568] font-semibold">Next Steps</p>
               {[
                 { icon: ShieldCheck, color: '#C8963C', label: 'Build Trust', desc: 'Encourage users to Support your skill with tTRUST stakes' },
-                { icon: Users,       color: '#38B6FF', label: 'Engage Community', desc: 'Grow your reputation through attestations' },
+                { icon: Users,       color: '#38B6FF', label: 'Engage Community', desc: REGISTER_GROW_SKILL },
                 { icon: TrendingUp,  color: '#4ADE80', label: 'Monitor Score', desc: 'Track trust score, stakers and activity in Explorer' },
               ].map(item => (
                 <div

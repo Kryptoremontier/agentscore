@@ -8,6 +8,7 @@ import { MobileBottomNav } from '@/components/layout/MobileNav'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { ScrollToTop } from '@/components/shared/ScrollToTop'
 import './globals.css'
+import { SITE_DESCRIPTION } from '@/lib/people-copy'
 import { SITE_URL } from '@/lib/site'
 
 const inter = Inter({
@@ -42,7 +43,7 @@ const instrumentSerif = Instrument_Serif({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: 'AgentScore | Trust Layer for AI Agents',
-  description: 'Real people vouch for AI agents, on-chain — by name, for something specific. One wallet can never do it alone. Built on Intuition.',
+  description: SITE_DESCRIPTION,
   icons: {
     icon: [
       { url: '/favicon.png', type: 'image/png' },
@@ -53,7 +54,7 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
   openGraph: {
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'Real people vouch for AI agents, on-chain — by name, for something specific. One wallet can never do it alone. Built on Intuition.',
+    description: SITE_DESCRIPTION,
     url: 'https://agentscore-gilt.vercel.app',
     siteName: 'AgentScore',
     images: [
@@ -69,7 +70,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AgentScore | Trust Layer for AI Agents',
-    description: 'Real people vouch for AI agents, on-chain — by name, for something specific. One wallet can never do it alone. Built on Intuition.',
+    description: SITE_DESCRIPTION,
     images: ['https://agentscore-gilt.vercel.app/images/brand/gold/og-image.png'],
     creator: '@AgentScoreApp',
   },
