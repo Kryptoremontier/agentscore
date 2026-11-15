@@ -1,6 +1,7 @@
 /**
- * Etap 5b Run 1 commit 1 — people-first vocabulary on the agent surfaces. One verb ("vouch"),
- * one copy module (lib/people-copy.ts, REPO_MAP §7 rule 4), and the machine surfaces unchanged.
+ * Etap 5b Run 1 commit 1 — people-first vocabulary on the agent surfaces; Etap 8a — Intuition's own
+ * words: one verb ("trust"), "trust context" for an area, one copy module (lib/people-copy.ts,
+ * REPO_MAP §7 rule 2), and the machine surfaces' field names unchanged.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -33,11 +34,11 @@ const AGENT_SURFACES = [
 describe('the copy', () => {
   it('people, and the people line: the area named when one, counted when more', () => {
     expect([people(0), people(1), people(2)]).toEqual(['0 people', '1 person', '2 people'])
-    expect([peopleVouch(1), peopleVouch(3)]).toEqual(['1 person vouches', '3 people vouch'])
+    expect([peopleVouch(1), peopleVouch(3)]).toEqual(['1 person trusts it', '3 people trust it'])
     expect(forAreas(['Knowledge / Productivity'])).toBe('for Knowledge / Productivity')
-    expect(forAreas(['Social', 'Energy'])).toBe('for 2 areas')
-    expect(peopleLine(1, ['Knowledge / Productivity'])).toBe('1 person vouches · for Knowledge / Productivity')
-    expect(NOBODY_VOUCHES).toBe('Nobody vouches yet')
+    expect(forAreas(['Social', 'Energy'])).toBe('for 2 trust contexts')
+    expect(peopleLine(1, ['Knowledge / Productivity'])).toBe('1 person trusts it for Knowledge / Productivity')
+    expect(NOBODY_VOUCHES).toBe('Nobody trusts it yet')
   })
 
   it('the tier chip keeps its name; the subtitle counts people', () => {
@@ -53,12 +54,12 @@ describe('the copy', () => {
   })
 
   it('the map from the spec', () => {
-    expect(VOUCH_CTA).toBe('Vouch for this agent')
-    expect(connectToVouch('Luda')).toBe('Connect a wallet to vouch for Luda.')
-    expect(vouchFor('Luda')).toBe('Vouch for Luda')
-    expect(WHO_VOUCHES_HEADING.toUpperCase()).toBe('WHO VOUCHES, AND FOR WHAT')
-    expect(`${SAYS_IT_DOES_HEADING.toUpperCase()} ${SAYS_IT_DOES_NOTE}`).toBe('SAYS IT DOES — self-declared, nobody has vouched yet')
-    expect(ERC8004_ABOUT).toBe('Listed in the ERC-8004 agent registry. It describes itself; people here can vouch for it.')
+    expect(VOUCH_CTA).toBe('Trust this agent')
+    expect(connectToVouch('Luda')).toBe('Connect a wallet to trust Luda.')
+    expect(vouchFor('Luda')).toBe('Trust Luda')
+    expect(WHO_VOUCHES_HEADING.toUpperCase()).toBe('WHO TRUSTS IT, AND FOR WHAT')
+    expect(`${SAYS_IT_DOES_HEADING.toUpperCase()} ${SAYS_IT_DOES_NOTE}`).toBe('SAYS IT DOES — self-declared, nobody has trusted it for this yet')
+    expect(ERC8004_ABOUT).toBe('Listed in the ERC-8004 agent registry. It describes itself; people here can trust it.')
   })
 })
 
@@ -75,7 +76,7 @@ describe('one copy module — the old words are gone from the agent surfaces, th
   })
 
   it('the new strings are written only in lib/people-copy.ts', () => {
-    const NEW = ['Vouch for this agent', 'Nobody vouches yet', 'Who vouches, and for what', 'people needed to verify', 'Backed with', 'Says it does', 'Listed in the ERC-8004 agent registry', 'Find an AI agent and see who vouches', 'Real people vouch for AI agents, on-chain. One wallet', 'who know your agent', 'you’ve backed with tTRUST', 'rely on this skill']
+    const NEW = ['Trust this agent', 'Nobody trusts it yet', 'Who trusts it, and for what', 'people needed to verify', 'Backed with', 'Says it does', 'Listed in the ERC-8004 agent registry', 'Find an AI agent and see who trusts it', 'Real people trust AI agents, on-chain. One wallet', 'who know your agent', 'you’ve backed with tTRUST', 'rely on this skill', 'Choose a trust context', 'Capital on the agent itself', 'Most trusted']
     const hits = files(SRC).filter((f) => !f.endsWith(path.join('lib', 'people-copy.ts'))).flatMap((f) => {
       const src = code(f)
       return NEW.filter((s) => src.includes(s)).map((s) => `${rel(f)}: ${s}`)
@@ -85,10 +86,10 @@ describe('one copy module — the old words are gone from the agent surfaces, th
 })
 
 describe('the /agents header: plain words, no staking pitch', () => {
-  it('"Agents" and "Find an AI agent and see who vouches for it, and for what."', async () => {
+  it('"Agents" and "Find an AI agent and see who trusts it, and for what."', async () => {
     const { AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB } = await import('../people-copy')
     expect(AGENTS_PAGE_TITLE).toBe('Agents')
-    expect(AGENTS_PAGE_SUB).toBe('Find an AI agent and see who vouches for it, and for what.')
+    expect(AGENTS_PAGE_SUB).toBe('Find an AI agent and see who trusts it, and for what.')
     const page = code(path.join(SRC, 'app/agents/agents-client.tsx'))
     expect(page).toMatch(/<h1[^>]*>\s*\{AGENTS_PAGE_TITLE\}\s*<\/h1>/)
     expect(page).toMatch(/\{AGENTS_PAGE_SUB\}/)
@@ -99,7 +100,7 @@ describe('the /agents header: plain words, no staking pitch', () => {
 describe('footer, /register and the Supporting tab: plain words from the copy module', () => {
   it('the footer tagline is the landing line itself — imported, never copied', async () => {
     const { LANDING_SUB } = await import('../people-copy')
-    expect(LANDING_SUB).toBe('Real people vouch for AI agents, on-chain. One wallet can never do it alone.')
+    expect(LANDING_SUB).toBe('Real people trust AI agents, on-chain. One wallet can never do it alone.')
     const footer = code(path.join(SRC, 'components/layout/Footer.tsx'))
     expect(footer).toMatch(/import \{[^}]*\bLANDING_SUB\b[^}]*\} from '@\/lib\/people-copy'/)
     expect(footer).toMatch(/<p[^>]*>\s*\{LANDING_SUB\}\s*<\/p>/)
@@ -108,18 +109,18 @@ describe('footer, /register and the Supporting tab: plain words from the copy mo
     expect(copy.split(LANDING_SUB).length - 1).toBe(1)
   })
 
-  it('/register "Build Trust": vouched for on the agent tab, backed on the skill tab', async () => {
+  it('/register "Build Trust": trusted on the agent tab, backed on the skill tab', async () => {
     const { REGISTER_BUILD_TRUST, REGISTER_BUILD_TRUST_SKILL } = await import('../people-copy')
-    expect(REGISTER_BUILD_TRUST).toBe('Get vouched for by people who know your agent’s work.')
+    expect(REGISTER_BUILD_TRUST).toBe('Get trusted by people who know your agent’s work.')
     expect(REGISTER_BUILD_TRUST_SKILL).toBe('Get backed with tTRUST by people who rely on this skill.')
     const page = code(path.join(SRC, 'app/register/page.tsx'))
     expect(page).toMatch(/desc: activeTab === 'agent' \? REGISTER_BUILD_TRUST : REGISTER_BUILD_TRUST_SKILL,/)
     expect(page).not.toMatch(/Earn reputation/)
   })
 
-  it('the Supporting tab, empty: backing is not vouching', async () => {
+  it('the Supporting tab, empty: backing is capital on the agent itself', async () => {
     const { NO_POSITIONS_NOTE } = await import('../people-copy')
-    expect(NO_POSITIONS_NOTE).toBe('Agents and skills you’ve backed with tTRUST. Backing is not vouching — it doesn’t change an agent’s tier.')
+    expect(NO_POSITIONS_NOTE).toBe('Agents and skills you’ve backed with tTRUST — capital on the agent itself; it never changes an agent’s tier.')
     const tab = code(path.join(SRC, 'components/profile/MySupportedAgents.tsx'))
     expect(tab).toMatch(/\{NO_POSITIONS_NOTE\}/)
     expect(tab).not.toMatch(/Buy shares|to signal trust/)
@@ -133,21 +134,23 @@ describe('machine surfaces do not change', () => {
     expect(api.filter((f) => /people-copy/.test(readFileSync(f, 'utf8'))).map(rel)).toEqual([])
   })
 
-  it('llms.txt and SKILL.md keep attest / attesters / trustScore', () => {
+  it('llms.txt and SKILL.md keep their field names (trustScore, attesters, peopleVouching) and say "trust" in prose', () => {
     const skill = readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8')
     expect(skill).toMatch(/trustScore/)
-    // Etap 7: the trust gate is new and speaks its own fields (`peopleVouching`, "N people vouch …");
-    // everything SKILL.md said before it keeps its words.
-    const gate = /## Before you pay or delegate: the trust gate[\s\S]*?(?=\n## )/
-    expect(skill).toMatch(gate)
-    expect(skill.replace(gate, '')).not.toMatch(/\bvouch/i)
+    expect(skill).toMatch(/peopleVouching/)
+    // Etap 8a: "vouch" survives only inside the unchanged field name.
+    expect(skill.replace(/peopleVouching/g, '')).not.toMatch(/vouch/i)
+    expect(skill).toMatch(/trust context/)
   })
 
   it('the trust gate (REST, MCP) phrases its own reasons — it never imports the UI copy', () => {
     expect(readFileSync(path.join(SRC, 'lib/trust-gate.ts'), 'utf8')).not.toMatch(/people-copy/)
   })
 
-  it('/docs says it once: vouch (UI) = attestation (protocol)', () => {
-    expect(readFileSync(path.join(SRC, 'app/docs/page.tsx'), 'utf8')).toContain('vouch (UI) = attestation (protocol)')
+  it('/docs says it once: trusting an agent for a trust context = the triple, with a deposit', async () => {
+    const { TRUST_ONCHAIN_MAPPING } = await import('../people-copy')
+    expect(TRUST_ONCHAIN_MAPPING).toBe('Trusting an agent for a trust context = the triple `<agent> — is skilled in — <context>` with a deposit from your wallet. Only distinct wallets with live shares count.')
+    const docs = readFileSync(path.join(SRC, 'app/docs/page.tsx'), 'utf8')
+    expect(docs.split('{TRUST_ONCHAIN_MAPPING}').length - 1).toBe(1)
   })
 })

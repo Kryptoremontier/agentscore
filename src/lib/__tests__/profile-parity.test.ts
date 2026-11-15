@@ -82,9 +82,9 @@ function modalInput(key: keyof typeof ID): StatRowInput {
 
 describe('statRowView — the modal and the profile render the same row', () => {
   it.each([
-    ['dackie', ['1 Person vouching', '1 Area', '0.0099 tTRUST behind vouches', '0 Reports'], 'No tTRUST backing yet'],
-    ['luda', ['1 Person vouching', '1 Area', '0.0208 tTRUST behind vouches', '0 Reports'], 'Backed with 0.0010 tTRUST by 1 wallet · 1 signal'],
-    ['openclaw', ['0 People vouching', '0 Areas', '0.0000 tTRUST behind vouches', '0 Reports'], 'Backed with 0.3351 tTRUST by 1 wallet · 16 signals'],
+    ['dackie', ['1 Person who trusts it', '1 Trust context', '0.0099 tTRUST behind their trust', '0 Reports'], 'No tTRUST backing yet'],
+    ['luda', ['1 Person who trusts it', '1 Trust context', '0.0208 tTRUST behind their trust', '0 Reports'], 'Backed with 0.0010 tTRUST by 1 wallet · 1 signal'],
+    ['openclaw', ['0 People who trust it', '0 Trust contexts', '0.0000 tTRUST behind their trust', '0 Reports'], 'Backed with 0.3351 tTRUST by 1 wallet · 16 signals'],
   ] as const)('%s', (key, boxes, backersLine) => {
     const profile = statRowView(profileInput(key))
     expect(profile).toEqual(statRowView(modalInput(key)))
@@ -95,7 +95,7 @@ describe('statRowView — the modal and the profile render the same row', () => 
   it('a part not read renders "—", never a 0 derived from nothing; one signal is singular', () => {
     const v = statRowView({ attested: null, reportCount: null, backers: null, signals: null })
     expect(v.boxes.map((b) => b.value)).toEqual(['—', '—', '—', '—'])
-    expect(v.boxes.map((b) => b.label)).toEqual(['People vouching', 'Areas', 'tTRUST behind vouches', 'Reports'])
+    expect(v.boxes.map((b) => b.label)).toEqual(['People who trust it', 'Trust contexts', 'tTRUST behind their trust', 'Reports'])
     expect(v.backersLine).toBe('Backed with — by —')
     expect(statRowView({ attested: [], reportCount: 0, backers: { count: 1, atomVaultWei: wei('0.001') }, signals: 1 }).backersLine)
       .toBe('Backed with 0.0010 tTRUST by 1 wallet · 1 signal')

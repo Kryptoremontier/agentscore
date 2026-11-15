@@ -1,14 +1,14 @@
 'use client'
 
 /**
- * The landing's closing call (Etap 5b Run 2): the same two ways in as the first screen — vouch for
+ * The landing's closing call (Etap 5b Run 2): the same two ways in as the first screen — trust
  * an agent, or build on it. No numbers here any more: the one number is on the first screen.
  */
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowRight, Code2, BadgeCheck } from 'lucide-react'
-import { LANDING_CTA_VOUCH, LANDING_CTA_DEVELOPERS } from '@/lib/people-copy'
+import { CTA_HEADING, CTA_LINE, LANDING_CTA_VOUCH, LANDING_CTA_DEVELOPERS } from '@/lib/people-copy'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 
 export function CTA() {
@@ -24,16 +24,15 @@ export function CTA() {
           </div>
 
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-display leading-display">
-            Know an agent that delivers?
+            {CTA_HEADING}
           </h2>
 
           <p className="mt-6 text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
-            Vouch for it in the area it is good at. It takes a wallet and a little testnet tTRUST —
-            free from the{' '}
+            {CTA_LINE.before}{' '}
             <a href={INTUITION_HUB_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-white">
               Intuition Hub
             </a>{' '}
-            — and your name stays on it.
+            {CTA_LINE.after}
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">

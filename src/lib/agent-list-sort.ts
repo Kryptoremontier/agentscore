@@ -11,12 +11,14 @@
  * every measured row ("—" last), never interleaved with real scores.
  */
 
+import { SORT_MOST_TRUSTED } from './people-copy'
+
 export type AgentListSortBy = 'vouched' | 'newest' | 'backing'
 
 export const DEFAULT_SORT: AgentListSortBy = 'vouched'
 
 export const SORT_OPTIONS: ReadonlyArray<{ id: AgentListSortBy; label: string }> = [
-  { id: 'vouched', label: 'Most vouched' },
+  { id: 'vouched', label: SORT_MOST_TRUSTED },
   { id: 'newest', label: 'Newest' },
   { id: 'backing', label: 'Highest backing' },
 ]

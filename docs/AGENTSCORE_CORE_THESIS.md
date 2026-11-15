@@ -91,6 +91,8 @@ shrinkage for small samples.
 
 Agent tiers. An agent's tier is derived only from attestations: distinct live attesters (wallets with shares > 0 on attestation triples) and tTRUST attested on those triples. Backing on the agent's atom vault never changes its tier. Verified: ≥ 3 attesters and ≥ 0.1 tTRUST. Trusted: ≥ 2 attesters and ≥ 0.05 tTRUST. Otherwise Unverified. A single wallet can never lift an agent above Unverified.
 
+Labels on screen (Etap 8a; the rule above is unchanged): the app uses Intuition's words — people *trust* an agent for a *trust context* (an attestation, on-chain) — so the middle rung reads **Established**, not "Trusted", which fought the verb ("1 person trusts it · not Trusted"). Unverified · Established · Verified on screen = `unverified` · `trusted` · `verified` in the API, unchanged. Established (`trusted` in the API): at least 2 people and 0.05 tTRUST.
+
 ## 7. THE ERC-8004 LAYER (v1.1 — what changed 2026-07-21)
 
 Intuition shipped the official ERC-8004 reputation layer: ~100-agent cohort as

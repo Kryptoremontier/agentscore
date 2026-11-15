@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 import { EXAMPLE_GATE, GATE_SNIPPET } from '@/lib/gate-example'
+import { TRUST_ONCHAIN_MAPPING, ESTABLISHED_MAPPING, BACKING_EXPLAINER, TIER_LABEL, DOMAINS_TITLE } from '@/lib/people-copy'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -232,7 +233,7 @@ function TabGettingStarted() {
             Browse{' '}
             <Link href="/agents" className="text-[#C8963C] font-medium hover:underline">Agents</Link>
             {' '}or{' '}
-            <Link href="/domains" className="text-[#C8963C] font-medium hover:underline">Domains</Link>.
+            <Link href="/domains" className="text-[#C8963C] font-medium hover:underline">{DOMAINS_TITLE}</Link>.
             Click any agent → Support or Oppose with tTRUST.
           </p>
           <ul className="mt-1.5 space-y-1 list-none">
@@ -682,34 +683,38 @@ function TabScoring() {
 
       {/* Agent Tiers — thesis §6: attestations only */}
       <DocCard>
-        <SectionTitle icon={ShieldCheck} color="#C8963C" label="Agent Tiers — from attestations only" />
+        <SectionTitle icon={ShieldCheck} color="#C8963C" label="Agent Tiers — from the people who trust it" />
         <p className="text-[#9BA5B0] text-xs leading-relaxed mb-4">
-          An agent&apos;s tier is derived only from attestations: distinct live attesters (wallets with shares &gt; 0 on
-          attestation triples) and tTRUST attested on those triples. Backing on the agent&apos;s atom vault never changes
-          its tier, and a single wallet can never lift an agent above Unverified.
+          An agent&apos;s tier comes only from the people who trust it — on-chain, attestations: distinct live wallets
+          (shares &gt; 0 on attestation triples) and the tTRUST on those triples. Backing on the agent&apos;s atom vault
+          never changes its tier, and a single wallet can never lift an agent above Unverified.
         </p>
         <p className="text-[#9BA5B0] text-xs leading-relaxed mb-4" data-testid="glossary">
-          <span className="text-white font-semibold">Glossary:</span> vouch (UI) = attestation (protocol). The app says
-          &ldquo;vouch&rdquo; and &ldquo;people who vouch&rdquo;; REST, MCP, <code>llms.txt</code> and SKILL.md keep{' '}
-          <code>attest</code>, <code>attesters</code> and <code>trustScore</code>. Backing score (UI) ={' '}
-          <code>score.trustScore</code> (support vs oppose on the agent&apos;s own vault), printed only when{' '}
-          <code>scoreBasis</code> is <code>measured</code>; Composite and Hybrid (<code>objectScore</code>) sit under Details.
+          <span className="text-white font-semibold">Glossary:</span> AgentScore uses Intuition&apos;s words: people{' '}
+          <span className="text-white/80">trust</span> an agent for a{' '}
+          <span className="text-white/80">trust context</span>. {TRUST_ONCHAIN_MAPPING} A trust context is one of the
+          canonical domain buckets: <code>area</code> on the gate and in its answer. Field names don&apos;t change with
+          the words — <code>peopleVouching</code> = distinct people who trust the agent, <code>areas</code> = per trust
+          context, <code>attesters</code> and <code>tier.requirements.attesters</code> = the same people.{' '}
+          {ESTABLISHED_MAPPING}. Backing score (UI) = <code>score.trustScore</code> (support vs oppose on the
+          agent&apos;s own vault). {BACKING_EXPLAINER} It is printed only when <code>scoreBasis</code> is{' '}
+          <code>measured</code>; Composite and Hybrid (<code>objectScore</code>) sit under Details.
         </p>
         <div className="rounded-xl overflow-hidden mb-5"
           style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
           <table className="w-full text-xs">
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                {['Tier', 'Distinct live attesters', 'tTRUST attested'].map(h => (
+                {['Tier', 'People who trust it (distinct live wallets)', 'tTRUST behind their trust'].map(h => (
                   <th key={h} className="text-left px-3 py-2 text-[#7A838D] font-semibold uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {[
-                { icon: '⭐', tier: 'Verified', attesters: '≥ 3', attested: '≥ 0.1', rgb: '232,184,75' },
-                { icon: '✓', tier: 'Trusted', attesters: '≥ 2', attested: '≥ 0.05', rgb: '46,204,113' },
-                { icon: '○', tier: 'Unverified', attesters: 'otherwise', attested: '—', rgb: '120,131,141' },
+                { icon: '⭐', tier: TIER_LABEL.verified, attesters: '≥ 3', attested: '≥ 0.1', rgb: '232,184,75' },
+                { icon: '✓', tier: `${TIER_LABEL.trusted} (trusted)`, attesters: '≥ 2', attested: '≥ 0.05', rgb: '46,204,113' },
+                { icon: '○', tier: TIER_LABEL.unverified, attesters: 'otherwise', attested: '—', rgb: '120,131,141' },
               ].map((row, i) => (
                 <tr key={row.tier} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                   <td className="px-3 py-2 font-bold" style={{ color: `rgb(${row.rgb})` }}>{row.icon} {row.tier}</td>
@@ -1220,7 +1225,7 @@ function TabApiMcp() {
     { method: 'GET', path: '/api/v1',                         desc: 'API index — endpoint directory' },
   ]
   const mcpTools = [
-    { name: 'should_i_trust',     desc: 'Before you pay or delegate: allow / deny / unknown, with who vouches' },
+    { name: 'should_i_trust',     desc: 'Before you pay or delegate: allow / deny / unknown, with who trusts it' },
     { name: 'search_agents',      desc: 'Search agents by score, stakers, or newest' },
     { name: 'get_agent_trust',    desc: 'Full trust breakdown for a specific agent' },
     { name: 'get_domain_ranking', desc: 'Top agents in a skill domain' },
@@ -1239,10 +1244,10 @@ function TabApiMcp() {
         <div data-testid="docs-trust-gate">
           <SectionTitle icon={ShieldCheck} color="#C8963C" label="Trust gate — ask before you pay or delegate" />
           <p className="text-sm text-[#8B949E] mb-4">
-            One yes/no under <span className="text-white/80">your</span> policy, with the reason: who vouches, for what,
-            and how old the data is. <span className="text-white/80">unknown</span> means the data couldn&apos;t be read
+            One yes/no under <span className="text-white/80">your</span> policy, with the reason: who trusts the agent,
+            for which trust context (<code>area</code>), and how old the data is. <span className="text-white/80">unknown</span> means the data couldn&apos;t be read
             right now — treat it as no: don&apos;t pay. Default policy{' '}
-            <code className="text-[#C8963C] bg-white/5 px-1 py-0.5 rounded text-xs">{'{ minTier: "trusted" }'}</code>; no
+            <code className="text-[#C8963C] bg-white/5 px-1 py-0.5 rounded text-xs">{'{ minTier: "trusted" }'}</code> ({TIER_LABEL.trusted} on screen); no
             parameter or payment changes a decision.
           </p>
           <Formula label="REST">

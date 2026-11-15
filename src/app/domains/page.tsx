@@ -31,7 +31,7 @@ import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 import { PersonName } from '@/components/shared/PersonName'
 import { pluralize } from '@/lib/plural'
 import {
-  DOMAINS_INTRO, DOMAINS_VOUCHED_HEADING, DOMAINS_VOUCHED_NOTE, DOMAINS_NOBODY_YET, DOMAINS_TAGS_HEADING, DOMAINS_TAGS_NOTE,
+  DOMAINS_TITLE, DOMAINS_TOPICS, DOMAINS_INTRO, DOMAINS_VOUCHED_HEADING, DOMAINS_VOUCHED_NOTE, DOMAINS_NOBODY_YET, DOMAINS_TAGS_HEADING, DOMAINS_TAGS_NOTE,
   WHO, WHO_VOUCHES_UNREAD, people,
 } from '@/lib/people-copy'
 
@@ -573,12 +573,12 @@ function DomainsPageContent() {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-3">
                 <Layers className="w-6 h-6" style={{ color: '#8B5CF6' }} />
-                <h1 className="text-2xl text-white font-extrabold tracking-display leading-display">Agent Domains</h1>
+                <h1 className="text-2xl text-white font-extrabold tracking-display leading-display">{DOMAINS_TITLE}</h1>
               </div>
               <button
                 onClick={load}
                 disabled={loading}
-                title="Refresh domains"
+                title={DOMAINS_TOPICS.refresh}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40"
                 style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.20)', color: '#8B5CF6' }}
               >
@@ -627,7 +627,7 @@ function DomainsPageContent() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.3)' }} />
                   <input
                     type="text"
-                    placeholder="Search domains..."
+                    placeholder={DOMAINS_TOPICS.search}
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     className="w-full pl-8 pr-3 py-2 rounded-lg text-xs text-white placeholder-white/30 outline-none focus:ring-1 focus:ring-purple-500"
@@ -667,7 +667,7 @@ function DomainsPageContent() {
                   <div className="py-12 text-center px-4">
                     <Layers className="w-8 h-8 mx-auto mb-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
                     <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                      {searchTerm ? 'No domains found' : 'No domains yet'}
+                      {searchTerm ? DOMAINS_TOPICS.noneFound : DOMAINS_TOPICS.noneYet}
                     </p>
                     {!searchTerm && (
                       <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.25)' }}>
@@ -728,7 +728,7 @@ function DomainsPageContent() {
                 <div className="flex flex-col items-center justify-center h-full py-24">
                   <Trophy className="w-12 h-12 mb-4" style={{ color: 'rgba(255,255,255,0.1)' }} />
                   <p className="text-base font-medium" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                    Select a domain to see rankings
+                    {DOMAINS_TOPICS.select}
                   </p>
                 </div>
               )}
@@ -756,7 +756,7 @@ function DomainsPageContent() {
                   {domainAgents.length === 0 ? (
                     <div className="py-12 text-center">
                       <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                        No agents ranked in this domain yet.
+                        {DOMAINS_TOPICS.noAgents}
                       </p>
                     </div>
                   ) : (

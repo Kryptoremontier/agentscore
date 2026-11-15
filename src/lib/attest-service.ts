@@ -45,6 +45,7 @@ import {
   type WriteConfig,
 } from './intuition'
 import { IS_SKILLED_IN, type CanonicalDomainDef } from './canonical-domains'
+import { trustingFor, TRUST_TESTNET_ONLY } from './people-copy'
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ export function assertTestnet(chainId: number | undefined, source: string): void
   if (chainId !== ATTEST_CHAIN_ID) {
     throw new AttestError(
       'WRONG_NETWORK',
-      `Attestations are testnet-only. ${source} is on chain ${chainId ?? 'unknown'}, expected Intuition Testnet (${ATTEST_CHAIN_ID}).`
+      `${TRUST_TESTNET_ONLY} ${source} is on chain ${chainId ?? 'unknown'}, expected Intuition Testnet (${ATTEST_CHAIN_ID}).`
     )
   }
 }
@@ -349,7 +350,7 @@ export async function attestAgentSkill(
     }
 
     // Create the triple — the user's stake IS the triple deposit (1 tx).
-    onProgress?.(`Attesting ${domain.label}…`)
+    onProgress?.(trustingFor(domain.label))
     const { transactionHash } = await createTriple(
       config,
       agentTermId,

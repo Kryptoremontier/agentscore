@@ -2,46 +2,39 @@
 
 import { motion } from 'framer-motion'
 import { Search, Users, BadgeCheck } from 'lucide-react'
-import { LANDING_TIERS_LINE, type ExplainerTerm } from '@/lib/people-copy'
+import { HOW_IT_WORKS, LANDING_TIERS_LINE, type ExplainerTerm } from '@/lib/people-copy'
 import { Explainer } from '@/components/shared/Explainer'
 import { AccentWord } from '@/components/shared/AccentWord'
 
-// Etap 5b Run 2: how it works is about people vouching — the landing's three steps, told in full.
+// Etap 5b Run 2: how it works is about people trusting agents — the landing's three steps (copy: HOW_IT_WORKS).
 const steps = [
   {
+    ...HOW_IT_WORKS.steps[0],
     num: '01',
     icon: Search,
-    title: 'Find an agent',
-    description: 'Browse AI agents registered on Intuition — from AgentScore and from the ERC-8004 agent registry. Each card says who vouches for it, and for what.',
     accentRgb: '200,150,60',
     accentHex: '#C8963C',
     brightHex: '#E8B84B',
-    label: 'Find',
-    bullets: ['AgentScore', 'ERC-8004', 'Most vouched first'],
+    explain: undefined,
   },
   {
+    ...HOW_IT_WORKS.steps[1],
     num: '02',
     icon: Users,
-    title: 'See who vouches, and for what',
-    description: 'A vouch is one person putting a little tTRUST behind one claim: this agent is good at this area. You see every name and every area. One wallet can never lift an agent alone — Verified takes three people.',
     accentRgb: '46,204,113',
     accentHex: '#2ECC71',
     brightHex: '#4AE685',
-    label: 'Who vouches',
-    bullets: ['Names', 'Areas', 'Tier'],
     // Etap 6: "tTRUST" first appears on the landing here — its "?" sits right after the word.
     explain: { after: 'tTRUST', term: 'ttrust' as ExplainerTerm },
   },
   {
+    ...HOW_IT_WORKS.steps[2],
     num: '03',
     icon: BadgeCheck,
-    title: 'Vouch for one you know',
-    description: 'Used an agent and it delivered? Vouch for it in the area it is good at. It is on-chain, with your wallet on it, and it counts toward the agent\'s tier. Testnet tTRUST is free.',
     accentRgb: '56,182,255',
     accentHex: '#38B6FF',
     brightHex: '#5AC8FF',
-    label: 'Vouch',
-    bullets: ['Pick an area', 'Put tTRUST behind it', 'On-chain'],
+    explain: undefined,
   },
 ]
 
@@ -85,7 +78,7 @@ export function HowItWorks() {
             How It <AccentWord>Works</AccentWord>
           </h2>
           <p className="mt-5 text-lg text-[#7A838D] max-w-xl mx-auto">
-            Real people vouch for AI agents — one area at a time, with their names on it
+            {HOW_IT_WORKS.sub}
           </p>
         </motion.div>
 

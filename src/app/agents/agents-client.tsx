@@ -51,7 +51,7 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
-import { showMoreAgents, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND, ORIGIN_LABEL } from '@/lib/people-copy'
+import { showMoreAgents, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND, ORIGIN_LABEL, CLAIM_PICK } from '@/lib/people-copy'
 import { ScoreParts } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
@@ -3591,7 +3591,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                 Select a Claim
               </h2>
               <p className="text-[#B5BDC6] text-sm">
-                Choose what you want to attest about{' '}
+                {CLAIM_PICK}{' '}
                 <span className="text-white font-medium">
                   {getAgentNameFromAtom(pendingVote.agent)}
                 </span>

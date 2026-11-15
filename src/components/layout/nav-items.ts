@@ -1,6 +1,6 @@
 /**
  * The app's navigation, in one place. The Beta shape (Etap 7 Run B): three primary places — Check
- * an agent, Vouch (the agent list, where vouching happens), For developers — and everything else
+ * an agent, Trust an agent (the agent list, where trusting happens; Etap 8a), For developers — and everything else
  * under More, How it works included (Etap 5b Run 2 had Agents · How it works · For developers).
  * The desktop sidebar and the phone's bottom nav + More sheet both render from here (REPO_MAP §7
  * rule 4). No route is removed; the admin links stay gated where they are rendered.
@@ -10,6 +10,7 @@ import {
   SearchCheck, HandHeart, BookOpenCheck, Code2, Zap, Trophy, MessageSquare, Hammer, Target, Crown, Plus, PenSquare,
   type LucideIcon,
 } from 'lucide-react'
+import { CHECK_TITLE, DOMAINS_TITLE, LANDING_CTA_VOUCH } from '@/lib/people-copy'
 
 export interface NavItem {
   href: string
@@ -25,8 +26,8 @@ export const HOW_IT_WORKS_HREF = '/#how-it-works'
 export const ACCENT = 'rgb(var(--accent))'
 
 export const PRIMARY_NAV: readonly NavItem[] = [
-  { href: '/check', label: 'Check an agent', icon: SearchCheck, color: '#C8963C' },
-  { href: '/agents', label: 'Vouch', icon: HandHeart, color: '#2ECC71' },
+  { href: '/check', label: CHECK_TITLE, icon: SearchCheck, color: '#C8963C' },
+  { href: '/agents', label: LANDING_CTA_VOUCH, icon: HandHeart, color: '#2ECC71' },
   { href: '/docs', label: 'For developers', icon: Code2, color: '#38B6FF' },
 ]
 
@@ -42,7 +43,7 @@ export const MORE_NAV: ReadonlyArray<{ label: string; items: readonly NavItem[] 
     label: 'Explore',
     items: [
       { href: '/skills', label: 'Skills', icon: Zap, color: '#2EE6D6' },
-      { href: '/domains', label: 'Domains', icon: Trophy, color: '#8B5CF6' },
+      { href: '/domains', label: DOMAINS_TITLE, icon: Trophy, color: '#8B5CF6' },
       { href: '/claims', label: 'Claims', icon: MessageSquare, color: '#38B6FF' },
       { href: '/evaluators', label: 'Evaluators', icon: Target, color: '#F59E0B' },
       { href: '/leaderboard', label: 'Leaderboard', icon: Crown, color: '#C8963C' },

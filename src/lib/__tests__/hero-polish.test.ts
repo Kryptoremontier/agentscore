@@ -71,7 +71,7 @@ describe('3 — the example card', () => {
     const p = (n: number, stake: bigint, domains: string[]): AttesterSummary =>
       ({ wallet: `0x${String(n).padStart(4, '0')}aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, domains, totalStake: stake })
     const html = renderToStaticMarkup(createElement(SealRow, { attesters: [p(1, 2n * T, ['Knowledge / Productivity'])], size: 'md' }))
-    expect(html).toMatch(/<ul aria-label="1 person vouches\. Verified takes 3 people\." class="grid grid-cols-3 gap-1\.5">/)
+    expect(html).toMatch(/<ul aria-label="1 person trusts it\. Verified takes 3 people\." class="grid grid-cols-3 gap-1\.5">/)
     const filled = html.match(/<li[^>]*data-seal="filled"[^>]*>([\s\S]*?)<\/li>/)!
     expect(filled[0]).toMatch(/class="flex flex-col items-center text-center/)
     // ring → name → area, top to bottom

@@ -3,6 +3,7 @@
 import { Shield, Eye, BookOpen, Sparkles, Crown, Lock, CheckCircle2 } from 'lucide-react'
 import { EVALUATOR_TIER_CONFIG, type EvaluatorProfile, type EvaluatorTier } from '@/lib/evaluator-score'
 import { cn } from '@/lib/cn'
+import { evaluatorCappedTip, evaluatorVouchedTip } from '@/lib/people-copy'
 
 const TIER_ICONS: Record<EvaluatorTier, React.ElementType> = {
   newcomer: Shield,
@@ -40,10 +41,10 @@ export function EvaluatorBadge({ profile, size = 'md', className }: EvaluatorBad
     `${cfg.label} evaluator`,
     `${accuracyPct}% accuracy across ${profile.totalPositions} evaluation${profile.totalPositions !== 1 ? 's' : ''}`,
     isGated
-      ? `Weight: ${profile.evaluatorWeight.toFixed(2)}x (capped — needs attestation to unlock ${profile.rawEvaluatorWeight.toFixed(2)}x)`
+      ? evaluatorCappedTip(profile.rawEvaluatorWeight)
       : `Staking weight: ${profile.evaluatorWeight.toFixed(2)}x`,
-    attestationChecked && !isGated && profile.meetsAttestationThreshold
-      ? `Attested by ${profile.attestationCount} wallet(s)`
+    attestationChecked && !isGated && profile.meetsAttestationThreshold && profile.attestationCount != null
+      ? evaluatorVouchedTip(profile.attestationCount)
       : '',
     profile.streakCount > 1 ? `${profile.streakCount} pick streak` : '',
   ].filter(Boolean).join(' · ')

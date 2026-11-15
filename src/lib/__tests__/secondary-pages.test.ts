@@ -14,7 +14,7 @@ const code = (f: string) => readFileSync(path.join(SRC, f), 'utf8').replace(/\/\
 describe('/domains', () => {
   const page = code('app/domains/page.tsx')
   it('a plain intro, the spec\'s words', () => {
-    expect(DOMAINS_INTRO).toBe('Areas people vouch for agents in. Below them, topics agents tag themselves with — not vouched for.')
+    expect(DOMAINS_INTRO).toBe('The trust contexts people trust agents for. Below them, topics agents tag themselves with — self-declared, not trusted.')
     expect(page).toMatch(/data-testid="domains-intro">\s*\{DOMAINS_INTRO\}/)
   })
   it('no jargon header counts (active domains, ranked agents, total stakers, "attested · skills shown · junk filtered")', () => {
@@ -41,9 +41,9 @@ describe('/evaluators', () => {
     expect(client).toMatch(/data-testid="evaluators-legend"/)
     expect(client).toMatch(/<span className="line-through tabular-nums">1\.40×<\/span> — \{EVALUATOR_LEGEND\.struck\}/)
     expect(client).toMatch(/<Lock className="w-3 h-3" \/>[\s\S]*?\{EVALUATOR_LEGEND\.lock\}/)
-    expect(EVALUATOR_LEGEND.struck).toMatch(/capped at 1\.0× until someone vouches/)
-    expect(evaluatorCappedTip(1.4)).toBe('Capped at 1.0× — needs 1 person to vouch for this evaluator to unlock 1.40×')
-    expect(evaluatorVouchedTip(1)).toBe('1 person vouches for this evaluator')
+    expect(EVALUATOR_LEGEND.struck).toMatch(/capped at 1\.0× until someone trusts them/)
+    expect(evaluatorCappedTip(1.4)).toBe('Capped at 1.0× — needs 1 person to trust this evaluator to unlock 1.40×')
+    expect(evaluatorVouchedTip(1)).toBe('1 person trusts this evaluator')
   })
 })
 

@@ -23,12 +23,12 @@ describe('the first screen: five parts, in order', () => {
     expect([...hero.matchAll(/data-story="(\d)"/g)].map((m) => m[1])).toEqual(['1', '2', '3', '4', '5'])
   })
   it('the copy from the spec', () => {
-    expect(LANDING_SUB).toBe('Real people vouch for AI agents, on-chain. One wallet can never do it alone.')
-    expect(LANDING_STEPS).toEqual(['Find an agent', 'See who vouches, and for what', 'Vouch for one you know'])
-    expect(LANDING_CTA_VOUCH).toBe('Vouch for an agent')
+    expect(LANDING_SUB).toBe('Real people trust AI agents, on-chain. One wallet can never do it alone.')
+    expect(LANDING_STEPS).toEqual(['Find an agent', 'See who trusts it, and for what', 'Trust one you know'])
+    expect(LANDING_CTA_VOUCH).toBe('Trust an agent')
     expect(LANDING_CTA_DEVELOPERS).toBe('For developers & agents (MCP / REST)')
     expect(LIVE_ON_TESTNET).toBe('Live on Intuition Testnet')
-    expect(peopleVouchHereParts(1)).toEqual({ count: '1', rest: 'person vouches for agents here' })
+    expect(peopleVouchHereParts(1)).toEqual({ count: '1', rest: 'person trusts agents here' })
   })
   it('the CTAs: check → /check (primary, Etap 7 Run B), developers → /docs (Etap 6b: story part 3)', () => {
     const cta = hero.slice(hero.indexOf('data-story="3"'), hero.indexOf('data-story="4"'))
@@ -52,9 +52,12 @@ describe('below the fold, and what is gone', () => {
     expect(existsSync(path.join(SRC, 'components/landing/Stats.tsx'))).toBe(false)
     expect(existsSync(path.join(SRC, 'components/landing/AlphaTestnetBanner.tsx'))).toBe(false)
   })
-  it('How it works is about people vouching; the closing call prints no stats', () => {
+  it('How it works is about people trusting agents; the closing call prints no stats', async () => {
+    const { HOW_IT_WORKS } = await import('../people-copy')
     const how = code('components/landing/HowItWorks.tsx')
-    for (const s of LANDING_STEPS) expect(how).toContain(`title: '${s}'`)
+    // The three steps' titles are the first screen's three steps, from the copy module.
+    expect(HOW_IT_WORKS.steps.map((s) => s.title)).toEqual([...LANDING_STEPS])
+    for (const i of [0, 1, 2]) expect(how).toContain(`...HOW_IT_WORKS.steps[${i}]`)
     expect(how).toMatch(/id="how-it-works"/)
     expect(code('components/landing/CTA.tsx')).not.toMatch(/fetchLandingStats|Active Staker|Registered/)
   })

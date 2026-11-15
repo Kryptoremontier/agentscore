@@ -1,14 +1,18 @@
 /**
- * People-first copy (Etap 5b) — every human-facing string about vouching and backing on the agent
- * surfaces (card, list row, modal, profile), in one module: no string is duplicated across
- * components (REPO_MAP §7 rule 4).
+ * People-first copy (Etap 5b; Etap 8a: Intuition's own words) — every human-facing string about
+ * trust and backing on the agent surfaces (card, list row, modal, profile, landing, /check,
+ * /domains), in one module: no string is duplicated across components (REPO_MAP §7 rule 2).
  *
- * One verb: "vouch". vouch (UI) = attestation (protocol) — a wallet's tTRUST stake on
- * [agent] is skilled in [area]. Backing is a stake on the agent's own atom vault; it is never
- * called vouching or trust. Tier names (Unverified / Trusted / Verified) stay.
+ * Intuition's consumer app talks about people, things and trust ("24.1k people trust them",
+ * "Choose a trust context"); so does AgentScore. One verb: "trust". To trust an agent for a trust
+ * context (UI) = an attestation (protocol): the triple <agent> — is skilled in — <context> with a
+ * deposit from your wallet; only distinct wallets with live shares count. "Trust context" (UI) =
+ * one of the canonical domain buckets (`area` / `domain` in code and on the API). Backing is a
+ * stake on the agent's own atom vault: capital on the agent itself, never called trust.
  *
- * Machine surfaces (REST, MCP, llms.txt, SKILL.md) keep "attest", "attesters", "trustScore" and
- * never print its strings.
+ * Tier labels: Unverified · Established · Verified — `unverified` / `trusted` / `verified` on the
+ * API, unchanged ("Trusted" as a tier name fought the verb: "1 person trusts it · not Trusted").
+ * API field names, query params, tool names and enum values never change with this copy.
  */
 
 import { formatTTrust } from './format'
@@ -18,95 +22,123 @@ import { plural, pluralize as count } from './plural'
 /** "1 person" / "2 people". */
 export const people = (n: number) => count(n, 'person', 'people')
 
-// ─── Vouching: the action ────────────────────────────────────────────────────
+// ─── Trusting: the action ────────────────────────────────────────────────────
 
 /** The page's one primary CTA (desktop section button, phone sticky bar). */
-export const VOUCH_CTA = 'Vouch for this agent'
+export const VOUCH_CTA = 'Trust this agent'
 /** The card's inline CTA after its people line. */
-export const VOUCH_SHORT = 'Vouch'
-/** Screen-reader name of a card's CTA, and the vouch dialog's title. */
-export const vouchFor = (agentName: string) => `Vouch for ${agentName}`
+export const VOUCH_SHORT = 'Trust'
+/** Screen-reader name of a card's CTA, and the trust dialog's title. */
+export const vouchFor = (agentName: string) => `Trust ${agentName}`
 /** Why the wallet-connect modal opened, and the dialog's disconnected step. */
-export const connectToVouch = (agentName: string) => `Connect a wallet to vouch for ${agentName}.`
-export const VOUCH_WRONG_NETWORK = 'Your wallet is on another network. Vouches live on Intuition Testnet.'
-export const VOUCH_AREA_LABEL = 'Area'
-export const VOUCH_PICK_AREA = 'Pick an area'
-/** The dialog's confirm button once an area is picked. */
-export const vouchIn = (areaLabel: string) => `Vouch in ${areaLabel}`
-/** The cost preview's note when this vouch creates the claim on-chain. */
+export const connectToVouch = (agentName: string) => `Connect a wallet to trust ${agentName}.`
+export const VOUCH_WRONG_NETWORK = 'Your wallet is on another network. Trust lives on Intuition Testnet.'
+export const VOUCH_AREA_LABEL = 'Trust context'
+export const VOUCH_PICK_AREA = 'Choose a trust context'
+/** The dialog's confirm button once a trust context is chosen. */
+export const vouchIn = (areaLabel: string) => `Trust it for ${areaLabel}`
+/** The cost preview's note when this deposit creates the claim on-chain. */
 export const firstVouchNote = (areaLabel: string, txCount: number) =>
-  `First vouch for this agent in ${areaLabel} — includes a one-time on-chain setup (${txCount} transaction${txCount > 1 ? 's' : ''}).`
-export const VOUCH_SUCCESS = 'You vouched in'
-export const VOUCH_INDEXING = 'A new vouch may take a minute to show up here (indexing).'
-/** The read-back under the button after a vouch: "You vouched for Luda in …". */
-export const VOUCHED_FOR = 'You vouched for'
+  `First to trust this agent for ${areaLabel} — includes a one-time on-chain setup (${count(txCount, 'transaction', 'transactions')}).`
+/** "You trusted it for 📚 Knowledge / Productivity · stake …". */
+export const VOUCH_SUCCESS = 'You trusted it for'
+export const VOUCH_INDEXING = 'New trust may take a minute to show up here (indexing).'
+/** The read-back under the button: "You trust Luda for …" — VOUCHED_FOR, the name, VOUCHED_FOR_CONTEXT, the contexts. */
+export const VOUCHED_FOR = 'You trust'
+export const VOUCHED_FOR_CONTEXT = 'for'
+/** The dialog's no-tTRUST step. */
+export const NEED_TTRUST = 'You need a little testnet tTRUST to trust an agent — it’s free.'
 
-// ─── Who vouches: the count and the areas ────────────────────────────────────
+// ─── Who trusts it: the count and the trust contexts ─────────────────────────
 
-/** "1 person vouches" / "2 people vouch". */
-export const peopleVouch = (n: number) => `${people(n)} ${plural(n, 'vouches', 'vouch')}`
+/** "1 person trusts it" / "2 people trust it" (0: "0 people trust it"; most surfaces say NOBODY_VOUCHES). */
+export const peopleVouch = (n: number) => `${people(n)} ${plural(n, 'trusts it', 'trust it')}`
 
-/** "for Knowledge / Productivity" when one area, "for 2 areas" when more. */
+/** "Trust context" / "trust contexts" — Intuition's word for what an agent is trusted for (an `area` on the API). */
+export const trustContexts = (n: number) => count(n, 'trust context', 'trust contexts')
+
+/** "for Knowledge / Productivity" when one trust context, "for 2 trust contexts" when more. */
 export const forAreas = (areaLabels: readonly string[]) =>
-  areaLabels.length === 1 ? `for ${areaLabels[0]}` : `for ${count(areaLabels.length, 'area', 'areas')}`
+  areaLabels.length === 1 ? `for ${areaLabels[0]}` : `for ${trustContexts(areaLabels.length)}`
 
-/** The card's and the section's people line: "1 person vouches · for Knowledge / Productivity". */
-export const peopleLine = (n: number, areaLabels: readonly string[]) => `${peopleVouch(n)} · ${forAreas(areaLabels)}`
+/** The card's and the section's people line: "1 person trusts it for Knowledge / Productivity". */
+export const peopleLine = (n: number, areaLabels: readonly string[]) => `${peopleVouch(n)} ${forAreas(areaLabels)}`
 
-export const NOBODY_VOUCHES = 'Nobody vouches yet'
+export const NOBODY_VOUCHES = 'Nobody trusts it yet'
 
 /** The tier chip's subtitle under Verified: "1 of 3 people needed to verify"; "—" while loading. */
 export const tierProgress = (n: number | null, needed: number) => `${n ?? '—'} of ${needed} people needed to verify`
-export const TIER_UNREAD = 'Tier unavailable — couldn’t read who vouches'
+export const TIER_UNREAD = 'Tier unavailable — couldn’t read who trusts it'
+/**
+ * Tier labels on screen (Etap 8a). The API values stay `unverified` / `trusted` / `verified`; only
+ * `trusted` reads differently — "Established" — because "Trusted" fought the verb ("1 person trusts
+ * it · not Trusted"). The rule (thesis §6) is unchanged.
+ */
+export const TIER_LABEL = { unverified: 'Unverified', trusted: 'Established', verified: 'Verified' } as const
+/** Trust, on-chain — written once in /docs (For developers) and llms.txt. */
+export const TRUST_ONCHAIN_MAPPING =
+  'Trusting an agent for a trust context = the triple `<agent> — is skilled in — <context>` with a deposit from your wallet. Only distinct wallets with live shares count.'
+/** One line per tier: what it takes. */
+export const TIER_RULE = {
+  verified: 'at least 3 people and 0.1 tTRUST',
+  trusted: 'at least 2 people and 0.05 tTRUST',
+  unverified: 'fewer than 2 people, or too little tTRUST',
+} as const
+/** The one line that maps the Established label to its API value (tier explainer, /docs, llms.txt). */
+export const ESTABLISHED_MAPPING = `${TIER_LABEL.trusted} (\`trusted\` in the API): ${TIER_RULE.trusted}`
 export const TIER_TOOLTIP =
-  'The tier comes only from people who vouch: how many distinct wallets, and how much tTRUST is behind their vouches. ' +
-  'Verified: ≥ 3 people and ≥ 0.1 tTRUST. Trusted: ≥ 2 and ≥ 0.05. Otherwise Unverified. ' +
+  'The tier comes only from people who trust the agent: how many distinct wallets, and how much tTRUST is behind their trust. ' +
+  `Verified: at least 3 people and 0.1 tTRUST. ${ESTABLISHED_MAPPING}. Otherwise Unverified. ` +
   'Backing the agent never changes it; one wallet can never lift it.'
 
 // ─── Sections ────────────────────────────────────────────────────────────────
 
-export const WHO_VOUCHES_HEADING = 'Who vouches, and for what'
-export const WHO_VOUCHES_UNREAD = 'Couldn’t read who vouches right now — this is not an empty record.'
-/** The row's expander: the wallets behind that area. */
+export const WHO_VOUCHES_HEADING = 'Who trusts it, and for what'
+export const WHO_VOUCHES_UNREAD = 'Couldn’t read who trusts it right now — this is not an empty record.'
+/** The row's expander: the wallets behind that trust context. */
 export const WHO = 'who'
 
-export const EMPTY_VOUCH_TITLE = 'Unverified — nobody vouches yet'
+export const EMPTY_VOUCH_TITLE = 'Unverified — nobody trusts it yet'
 export const EMPTY_VOUCH_BODY =
-  'Nobody has vouched for this agent in any area yet. Be the first — pick an area, put a little tTRUST behind it, with your wallet on it.'
+  'Nobody has trusted this agent for any trust context yet. Be the first — choose a trust context, put a little tTRUST behind it, with your wallet on it.'
 
 export const SAYS_IT_DOES_HEADING = 'Says it does'
-export const SAYS_IT_DOES_NOTE = '— self-declared, nobody has vouched yet'
+export const SAYS_IT_DOES_NOTE = '— self-declared, nobody has trusted it for this yet'
 export const SAYS_IT_DOES_UNREAD = 'Couldn’t read what it says it does right now — this is not an empty record.'
 
-export const PEOPLE_WHO_VOUCH_HEADING = 'People who vouch'
-export const PEOPLE_WHO_VOUCH_NOTE = 'for an area · with tTRUST'
-export const PEOPLE_WHO_VOUCH_EMPTY = 'Nobody has vouched for this agent in any area yet.'
+export const PEOPLE_WHO_VOUCH_HEADING = 'People who trust it'
+export const PEOPLE_WHO_VOUCH_NOTE = 'for a trust context · with tTRUST'
+export const PEOPLE_WHO_VOUCH_EMPTY = 'Nobody has trusted this agent for any trust context yet.'
 
 export const BACKERS_HEADING = 'Backers'
-export const BACKERS_NOTE = 'tTRUST on this agent · not a vouch'
+/** Backing, in one line (Etap 8a): what it is and what it never does. */
+export const BACKING_EXPLAINER = 'Capital on the agent itself. It never changes the tier.'
+export const BACKERS_NOTE = 'capital on the agent itself · never changes the tier'
 export const BACKERS_UNREAD = 'Couldn’t read backers right now — this is not an empty record.'
 export const BACKERS_EMPTY = 'Nobody has backed this agent with tTRUST yet.'
 
-/** The modal tab holding people who vouch and backers. */
+/** The modal tab holding people who trust it and backers. */
 export const PEOPLE_TAB = 'People'
 /** The profile tab: the same two lists. */
-export const PEOPLE_AND_BACKERS_TAB = 'Who vouches & backers'
+export const PEOPLE_AND_BACKERS_TAB = 'Who trusts it & backers'
 
-export const BACKING_IS_NOT_VOUCHING = 'Put tTRUST behind this agent. Backing is not vouching — it doesn’t change the tier.'
+export const BACKING_IS_NOT_VOUCHING = `Put tTRUST behind this agent. ${BACKING_EXPLAINER}`
 
-/** The pre-canonical skill claims list, below the vouches. */
+/** The pre-canonical skill claims list, below who trusts it. */
 export const LEGACY_CLAIMS_NOTE =
-  'Older hasAgentSkill / isTrustedFor claims with free-text objects — real stake, not vouches. To vouch, use “Vouch for this agent” above.'
+  'Older hasAgentSkill / isTrustedFor claims with free-text objects — real stake, not trust for a trust context. To trust it, use “Trust this agent” above.'
+/** The same list on the agent's tabs: counted, not shown as trust. */
+export const LEGACY_CLAIMS_COUNTED = 'predicate, free-text objects) — counted here, not shown as trust.'
 
 // ─── The stat row and its backing line ───────────────────────────────────────
 
-export const STAT_PEOPLE = (n: number | null | undefined) => plural(n ?? 0, 'Person vouching', 'People vouching')
-export const STAT_AREAS = (n: number | null | undefined) => plural(n ?? 0, 'Area', 'Areas')
-export const STAT_STAKE = 'tTRUST behind vouches'
+export const STAT_PEOPLE = (n: number | null | undefined) => plural(n ?? 0, 'Person who trusts it', 'People who trust it')
+export const STAT_AREAS = (n: number | null | undefined) => plural(n ?? 0, 'Trust context', 'Trust contexts')
+export const STAT_STAKE = 'tTRUST behind their trust'
 export const STAT_REPORTS = 'Reports'
 export const STAT_ROW_TOOLTIP =
-  'A vouch is tTRUST behind a claim that the agent is good at something, with the wallet on it. ' +
-  'Backing is tTRUST on the agent itself. Only vouches count toward the tier.'
+  'To trust an agent is to put tTRUST behind a claim that it is good at one trust context, with your wallet on it. ' +
+  `Backing: ${BACKING_EXPLAINER} Only trust counts toward the tier.`
 
 /**
  * "Backed with 0.3351 tTRUST by 1 wallet · 16 signals". `backers` null = not read ("—", never a
@@ -121,8 +153,8 @@ export function backedLine(backers: { count: number; atomVaultWei: bigint } | nu
 
 // ─── Where the agent comes from ──────────────────────────────────────────────
 
-export const ERC8004_ABOUT = 'Listed in the ERC-8004 agent registry. It describes itself; people here can vouch for it.'
-export const ERC8004_TAB_TITLE = 'Listed in the ERC-8004 agent registry — they describe themselves; people here can vouch for them'
+export const ERC8004_ABOUT = 'Listed in the ERC-8004 agent registry. It describes itself; people here can trust it.'
+export const ERC8004_TAB_TITLE = 'Listed in the ERC-8004 agent registry — they describe themselves; people here can trust them'
 
 // ─── Details (collapsed) ─────────────────────────────────────────────────────
 
@@ -134,14 +166,13 @@ export const DETAILS_CAIP = 'ERC-8004 id'
 
 /**
  * The vault-based number, renamed: small, neutral, never tier-sounding. It measures tTRUST on
- * the agent's own vault — not who vouches. API field names (trustScore / objectScore /
+ * the agent's own vault — not who trusts it. API field names (trustScore / objectScore /
  * agentScore) do not change.
  */
 export const BACKING_LABEL = 'Backing'
 export const BACKING_SCORE = 'Backing score'
 export const BACKING_SCORE_TIP =
-  'From the tTRUST staked on this agent itself: support vs oppose. ' +
-  'It says how much money is behind the agent — not who vouches for it, and it never changes the tier.'
+  `${BACKING_EXPLAINER} From the tTRUST staked on this agent: support vs oppose — how much money is behind it, not who trusts it.`
 export const NOT_SCORED_TIP = 'Only agents registered through AgentScore get a backing score.'
 /** The list's filter by the backing score's buckets (same buckets as before, secondary). */
 export const BACKING_LEVEL = 'Backing level'
@@ -155,29 +186,58 @@ export const BACKING_TREND = 'Backing trend'
 
 // ─── The landing: the story on one phone screen (Etap 5b Run 2) ───────────────
 
+// ─── Skills, claims, evaluators, the trust dialog's progress (Etap 8a) ────────
+// "Attestation" is the protocol's word; on screen it is trust (agents) or staking (skills, claims).
+
+/** The skill and claim pages' tab and list of wallets staked on them. */
+export const STAKERS_TAB = 'Stakers'
+export const STAKERS_HEADING = 'Stakers'
+export const NO_STAKERS_YET = 'No stakers yet'
+/** The agent modal's and the skill page's claim picker (support / oppose a claim about something). */
+export const CLAIM_PICK = 'Choose the claim to stake on, about'
+/** The report form's cost notice, after its bold "On-chain report:". */
+export const REPORT_COST_NOTE = 'Submitting this report creates an on-chain claim (a triple) and costs ~0.03 tTRUST (atom creation + triple deposit).'
+/** The trust dialog's progress line while the deposit goes through. */
+export const trustingFor = (areaLabel: string) => `Trusting it for ${areaLabel}…`
+export const TRUST_TESTNET_ONLY = 'Trust is testnet-only.'
+/** The agent timeline: someone trusted it for a trust context (the canonical claim, staked). */
+export const timelineTrustedTitle = (areaLabel: string) => `Trusted for ${areaLabel}`
+export const timelineTrustedBody = (agentName: string, areaLabel: string) =>
+  `Someone put tTRUST behind "${agentName} is skilled in ${areaLabel}".`
+/** The agent timeline's filter for skill claims and trust. */
+export const TIMELINE_FILTER_SKILLS = 'Skills & trust'
+/** /register: what registering leads to. */
+export const REGISTER_GROW = 'Grow your reputation as people trust your agent'
+export const REGISTER_GROW_SKILL = 'Grow your reputation as people back your skill'
+export const REGISTER_INTRO = 'Create an on-chain identity and join the trust network. Build reputation as people trust your agent.'
+/** /agents sort: the default order. */
+export const SORT_MOST_TRUSTED = 'Most trusted'
+
+/** The site's meta description (layout.tsx: title, Open Graph, Twitter). */
+export const SITE_DESCRIPTION = 'Real people trust AI agents, on-chain — by name, for something specific. One wallet can never do it alone. Built on Intuition.'
 export const LIVE_ON_TESTNET = 'Live on Intuition Testnet'
 export const LANDING_TITLE = ['Trust layer for', 'AI agents.'] as const
-export const LANDING_SUB = 'Real people vouch for AI agents, on-chain. One wallet can never do it alone.'
-export const LANDING_STEPS = ['Find an agent', 'See who vouches, and for what', 'Vouch for one you know'] as const
-/** "1 person vouches for agents here" — distinct live people who vouch (/api/v1/stats attesters). */
+export const LANDING_SUB = 'Real people trust AI agents, on-chain. One wallet can never do it alone.'
+export const LANDING_STEPS = ['Find an agent', 'See who trusts it, and for what', 'Trust one you know'] as const
+/** "1 person trusts agents here" — distinct live people who trust agents (/api/v1/stats attesters). */
 export const peopleVouchHere = (n: number | null) => {
   const p = peopleVouchHereParts(n)
   return `${p.count} ${p.rest}`
 }
-/** The number and the words after it, for a number set apart: "1" · "person vouches for agents here". */
+/** The number and the words after it, for a number set apart: "1" · "person trusts agents here". */
 export function peopleVouchHereParts(n: number | null): { count: string; rest: string } {
-  if (n == null) return { count: '—', rest: 'people vouch for agents here' }
-  return { count: String(n), rest: `${plural(n, 'person', 'people')} ${plural(n, 'vouches', 'vouch')} for agents here` }
+  if (n == null) return { count: '—', rest: 'people trust agents here' }
+  return { count: String(n), rest: `${plural(n, 'person', 'people')} ${plural(n, 'trusts', 'trust')} agents here` }
 }
-export const PEOPLE_HERE_UNREAD = 'Couldn’t read who vouches right now'
-export const LANDING_CTA_VOUCH = 'Vouch for an agent'
+export const PEOPLE_HERE_UNREAD = 'Couldn’t read who trusts agents right now'
+export const LANDING_CTA_VOUCH = 'Trust an agent'
 /** The landing's primary action (Etap 7 Run B: the Beta shape) — the /check page. */
 export const LANDING_CTA_CHECK = 'Check an agent'
 
 // ── Check an agent (Etap 7 Run B, app/check) ──
 export const CHECK_TITLE = 'Check an agent'
 export const CHECK_EYEBROW = 'Before you pay or delegate'
-export const CHECK_SUB = 'Who vouches for it, for what — and how old that is.'
+export const CHECK_SUB = 'Who trusts it, for what — and how old that is.'
 export const CHECK_LABEL = 'Agent name, AgentScore id, ERC-8004 id or wallet'
 export const CHECK_PLACEHOLDER = 'Luda, 8453:1380, 0x45078a…'
 export const CHECK_BUTTON = 'Check'
@@ -186,69 +246,80 @@ export const CHECK_PICK = 'More than one agent fits. Which one?'
 export const checkPickMore = (n: number) => `${n} more — type more of the name`
 export const CHECK_NOT_FOUND = 'No agent by that name or id on AgentScore or in the ERC-8004 registry.'
 export const CHECK_WALLET_NOT_FOUND = 'No agent on AgentScore was registered by this wallet.'
-export const CHECK_WALLET_PROFILE = 'See what this wallet vouched for'
+export const CHECK_WALLET_PROFILE = 'See what this wallet trusts'
 export const CHECK_BROWSE = 'Browse all agents'
 export const CHECK_UNREAD = 'Couldn’t read the agent list right now — this is not a “not found”. Try again in a minute.'
 export const CHECK_SHARE = 'Share on X'
 export const CHECK_PERMALINK = 'Link to this card'
-/** The post a person shares: "{name}: {N} people vouch on AgentScore. Who vouches for your agent?" */
-export const checkShareText = (name: string, n: number) => `${name}: ${people(n)} ${plural(n, 'vouches', 'vouch')} on AgentScore. Who vouches for your agent?`
+/** The post a person shares: "{name}: {N} people trust it on AgentScore. Who trusts your agent?" */
+export const checkShareText = (name: string, n: number) => `${name}: ${peopleVouch(n)} on AgentScore. Who trusts your agent?`
 /** On the Open Graph image, under the card: the data's age, printed on the picture itself. */
 export const checkImageAge = (readAt: string, ageLabel: string) => `Data read ${readAt.slice(0, 16).replace('T', ' ')} UTC · ${ageLabel}`
-export const CHECK_IMAGE_ALT = 'Who vouches for this agent on AgentScore'
+export const CHECK_IMAGE_ALT = 'Who trusts this agent on AgentScore'
 export const CHECK_IMAGE_UNREAD = 'Couldn’t read this agent right now — no numbers shown.'
 export const ORIGIN_LABEL: Record<'agentscore' | 'erc8004', string> = { agentscore: 'via AgentScore', erc8004: 'ERC-8004' }
 export const LANDING_CTA_DEVELOPERS = 'For developers & agents (MCP / REST)'
-export const EXAMPLE_HEADING = 'Most vouched right now'
+export const EXAMPLE_HEADING = 'Most trusted right now'
 export const EXAMPLE_UNREAD = 'Couldn’t load an example right now — the list is one tap away.'
 
-// ─── /domains (Etap 5b Run 2) ─────────────────────────────────────────────────
+// ─── /domains: trust contexts (Etap 5b Run 2; Etap 8a) ────────────────────────
 
-export const DOMAINS_INTRO = 'Areas people vouch for agents in. Below them, topics agents tag themselves with — not vouched for.'
-export const DOMAINS_VOUCHED_HEADING = 'Vouched for, by area'
-export const DOMAINS_VOUCHED_NOTE = 'Each row: an agent, how many people vouch for it in that area, and the tTRUST behind them.'
-export const DOMAINS_NOBODY_YET = 'Nobody has vouched for an agent in this area yet —'
+/** The page's and the nav's name (the route stays /domains). */
+export const DOMAINS_TITLE = 'Trust contexts'
+export const DOMAINS_INTRO = 'The trust contexts people trust agents for. Below them, topics agents tag themselves with — self-declared, not trusted.'
+export const DOMAINS_VOUCHED_HEADING = 'Trusted for, by trust context'
+export const DOMAINS_VOUCHED_NOTE = 'Each row: an agent, how many people trust it for that context, and the tTRUST behind them.'
+export const DOMAINS_NOBODY_YET = 'Nobody has trusted an agent for this trust context yet —'
 export const DOMAINS_TAGS_HEADING = 'Topics agents tag themselves with'
-export const DOMAINS_TAGS_NOTE = '— self-declared, not vouched for'
+export const DOMAINS_TAGS_NOTE = '— self-declared, not trusted'
+/** The topics list below the trust contexts (skill tags agents give themselves). */
+export const DOMAINS_TOPICS = {
+  refresh: 'Refresh',
+  search: 'Search topics...',
+  noneFound: 'No topics found',
+  noneYet: 'No topics yet',
+  select: 'Select a topic to see rankings',
+  noAgents: 'No agents ranked in this topic yet.',
+} as const
 
 // ─── /evaluators (Etap 5b Run 2) ──────────────────────────────────────────────
 
-export const EVALUATOR_VOUCHED_COLUMN = 'Vouched'
-export const EVALUATOR_VOUCHED_COLUMN_TIP = 'A weight above 1.0× counts only once at least one person vouches for this evaluator'
-export const evaluatorCappedTip = (earned: number) => `Capped at 1.0× — needs 1 person to vouch for this evaluator to unlock ${earned.toFixed(2)}×`
-export const evaluatorVouchedTip = (n: number) => `${people(n)} ${plural(n, 'vouches', 'vouch')} for this evaluator`
+export const EVALUATOR_VOUCHED_COLUMN = 'Trusted by'
+export const EVALUATOR_VOUCHED_COLUMN_TIP = 'A weight above 1.0× counts only once at least one person trusts this evaluator'
+export const evaluatorCappedTip = (earned: number) => `Capped at 1.0× — needs 1 person to trust this evaluator to unlock ${earned.toFixed(2)}×`
+export const evaluatorVouchedTip = (n: number) => `${people(n)} ${plural(n, 'trusts', 'trust')} this evaluator`
 export const EVALUATOR_NOT_NEEDED_TIP = 'Nothing to unlock at this weight'
 export const EVALUATOR_LEGEND = {
-  struck: 'the weight this evaluator earned, capped at 1.0× until someone vouches for them.',
-  lock: 'people vouching for this evaluator / needed to unlock a weight above 1.0×.',
-  check: 'vouched for — the full weight counts.',
+  struck: 'the weight this evaluator earned, capped at 1.0× until someone trusts them.',
+  lock: 'people who trust this evaluator / needed to unlock a weight above 1.0×.',
+  check: 'trusted — the full weight counts.',
 } as const
 
 // ─── /agents header ───────────────────────────────────────────────────────────
 
 export const AGENTS_PAGE_TITLE = 'Agents'
-export const AGENTS_PAGE_SUB = 'Find an AI agent and see who vouches for it, and for what.'
+export const AGENTS_PAGE_SUB = 'Find an AI agent and see who trusts it, and for what.'
 
 // ─── Footer, /register, profile positions ─────────────────────────────────────
 // The footer's tagline is LANDING_SUB itself (imported, not copied).
 
 /** /register's "Build Trust" benefit card, agent tab. */
-export const REGISTER_BUILD_TRUST = 'Get vouched for by people who know your agent’s work.'
-/** The same card on the skill tab: skills are backed, not vouched for. */
+export const REGISTER_BUILD_TRUST = 'Get trusted by people who know your agent’s work.'
+/** The same card on the skill tab: skills are backed, not trusted for a context. */
 export const REGISTER_BUILD_TRUST_SKILL = 'Get backed with tTRUST by people who rely on this skill.'
 /** The profile's Supporting tab, when the wallet backs nothing yet. */
-export const NO_POSITIONS_NOTE = 'Agents and skills you’ve backed with tTRUST. Backing is not vouching — it doesn’t change an agent’s tier.'
+export const NO_POSITIONS_NOTE = 'Agents and skills you’ve backed with tTRUST — capital on the agent itself; it never changes an agent’s tier.'
 
 // ─── Seals: the path to Verified (Etap 6) ─────────────────────────────────────
 
-/** An empty seal slot — a place for the next person who vouches. */
+/** An empty seal slot — a place for the next person who trusts it. */
 export const SEAL_OPEN = 'Open'
 /** More people than slots: "and 2 more". */
 export const sealsMore = (n: number) => `and ${n} more`
-/** The row's name for screen readers: "1 person vouches. Verified takes 3 people." */
+/** The row's name for screen readers: "1 person trusts it. Verified takes 3 people." */
 export const sealRowLabel = (n: number, needed: number) =>
   `${n === 0 ? NOBODY_VOUCHES : peopleVouch(n)}. Verified takes ${needed} people.`
-/** One seal's areas: "Knowledge / Productivity · Crypto / Onchain". */
+/** One seal's trust contexts: "Knowledge / Productivity · Crypto / Onchain". */
 export const sealAreas = (areaLabels: readonly string[]) => areaLabels.join(' · ')
 
 // ─── Explainers at the point of use (Etap 6) ──────────────────────────────────
@@ -258,16 +329,16 @@ export const sealAreas = (areaLabels: readonly string[]) => areaLabels.join(' ·
 export type ExplainerTerm = 'vouch' | 'tiers' | 'backing' | 'ttrust'
 export const EXPLAINERS: Record<ExplainerTerm, { label: string; text: string; link?: { text: string; href: string } }> = {
   vouch: {
-    label: 'What is a vouch?',
-    text: 'A vouch is a person putting a little tTRUST behind one claim: this agent is good at this area. It’s on-chain, with their wallet on it.',
+    label: 'What does it mean to trust an agent?',
+    text: 'To trust an agent is to put a little tTRUST behind one claim: this agent is good at this trust context. It’s on-chain, with your wallet on it.',
   },
   tiers: {
-    label: 'What do Unverified, Trusted and Verified mean?',
-    text: 'Trusted takes 2 different people, Verified takes 3. One wallet can never lift an agent on its own.',
+    label: 'What do Unverified, Established and Verified mean?',
+    text: `${ESTABLISHED_MAPPING}. Verified: at least 3 people and 0.1 tTRUST. One wallet can never lift an agent on its own.`,
   },
   backing: {
     label: 'What is the backing score?',
-    text: 'How much tTRUST sits on the agent itself. Backing is not vouching — it never changes the tier.',
+    text: `${BACKING_EXPLAINER} It is how much tTRUST sits on the agent, not who trusts it.`,
   },
   ttrust: {
     label: 'What is tTRUST?',
@@ -280,8 +351,43 @@ export const EXPLAINERS: Record<ExplainerTerm, { label: string; text: string; li
 
 /** Under the one number: one person so far → "Be the second."; otherwise "Add yours." (null = unread → none). */
 export const invitationLine = (n: number | null) => (n == null ? null : n === 1 ? 'Be the second.' : 'Add yours.')
+/** The landing's How it works: the three steps told in full (Etap 5b Run 2; Etap 8a words). */
+export const HOW_IT_WORKS = {
+  sub: 'Real people trust AI agents — one trust context at a time, with their names on it',
+  steps: [
+    {
+      title: 'Find an agent',
+      description: 'Browse AI agents registered on Intuition — from AgentScore and from the ERC-8004 agent registry. Each card says who trusts it, and for what.',
+      label: 'Find',
+      bullets: ['AgentScore', 'ERC-8004', 'Most trusted first'],
+    },
+    {
+      title: 'See who trusts it, and for what',
+      description: 'To trust an agent, a person puts a little tTRUST behind one claim: this agent is good at this trust context. You see every name and every trust context. One wallet can never lift an agent alone — Verified takes three people.',
+      label: 'Who trusts it',
+      bullets: ['Names', 'Trust contexts', 'Tier'],
+    },
+    {
+      title: 'Trust one you know',
+      description: 'Used an agent and it delivered? Trust it for the context it is good at. It is on-chain, with your wallet on it, and it counts toward the agent\'s tier. Testnet tTRUST is free.',
+      label: 'Trust',
+      bullets: ['Choose a trust context', 'Put tTRUST behind it', 'On-chain'],
+    },
+  ],
+} as const
+/** The landing's features: what makes trust here worth reading (Etap 5b Run 2; Etap 8a words). */
+export const LANDING_FEATURES = [
+  { title: 'Trust per context', tag: 'Context', description: 'An agent is not good at everything. People trust it for one trust context at a time — Crypto / Onchain, Knowledge / Productivity — and you see which.' },
+  { title: 'On-chain, with names', tag: 'Provenance', description: 'Every bit of trust and every report is an on-chain claim with the wallet behind it — its ENS name when it has one. Nothing is anonymous, nothing is edited later.' },
+  { title: 'A track record counts', tag: 'Evaluators', description: 'People whose trust holds up count for more, up to 1.5×; newcomers start at 0.5×. Weight comes from a record, not only from tTRUST.' },
+  { title: 'Who is best at what', tag: 'Discovery', description: 'Each trust context ranks the agents people trust for it, so you can start from the job you need done.' },
+  { title: 'Built on Intuition', tag: 'Infrastructure', description: 'Trust lives on Intuition\'s network: low fees, fast finality, and open data any agent or app can read.' },
+] as const
+/** The landing's closing call: the line under "Know an agent that delivers?", around the Hub link. */
+export const CTA_HEADING = 'Know an agent that delivers?'
+export const CTA_LINE = { before: 'Trust it for the context it is good at. It takes a wallet and a little testnet tTRUST — free from the', after: '— and your name stays on it.' } as const
 /** How it works, one line after the steps. */
-export const LANDING_TIERS_LINE = 'Trusted takes 2 people. Verified takes 3. Backing with tTRUST never changes the tier.'
+export const LANDING_TIERS_LINE = 'Established takes 2 people. Verified takes 3. Backing with tTRUST never changes the tier.'
 /** The "For developers" block: a live get_agent_trust answer for the landing's example agent. */
 export const DEV_HEADING = 'For developers & agents'
 export const DEV_LINE = 'Your agent can ask before it trusts. Every answer carries the age of its data.'
@@ -309,15 +415,15 @@ export const skillAdded = (skillName: string) => `Skill added: ${skillName}`
 /** The hero's eyebrow — mono, amber, uppercase via .eyebrow, "//" via .eyebrow-slash. */
 export const HERO_EYEBROW = `Trust layer · ${LIVE_ON_TESTNET}`
 /**
- * The sentence after the subtitle, its lead in the accent: "1 person" · "vouches for agents here."
+ * The sentence after the subtitle, its lead in the accent: "1 person" · "trusts agents here."
  * The live N from /api/v1/stats (null = not read → "—", never a 0).
  */
 export function peopleHereLead(n: number | null): { lead: string; rest: string } {
-  if (n == null) return { lead: '—', rest: 'people vouch for agents here.' }
-  return { lead: `${n} ${plural(n, 'person', 'people')}`, rest: `${plural(n, 'vouches', 'vouch')} for agents here.` }
+  if (n == null) return { lead: '—', rest: 'people trust agents here.' }
+  return { lead: `${n} ${plural(n, 'person', 'people')}`, rest: `${plural(n, 'trusts', 'trust')} agents here.` }
 }
 /** The check row under the hero's buttons (mono, small). tTRUST keeps its lowercase t. */
-export const LANDING_CHECKS = ['TESTNET tTRUST IS FREE', 'EVERY VOUCH IS ON-CHAIN', 'ONE WALLET CAN NEVER DO IT ALONE'] as const
+export const LANDING_CHECKS = ['TESTNET tTRUST IS FREE', 'ALL TRUST IS ON-CHAIN', 'ONE WALLET CAN NEVER DO IT ALONE'] as const
 
 /** /agents (Etap 7a): the list draws its first rows, then this button adds the next ones. */
 export const showMoreAgents = (n: number) => `Show ${n} more`

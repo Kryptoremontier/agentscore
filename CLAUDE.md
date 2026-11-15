@@ -84,6 +84,9 @@ AGENTSCORE = trustScore × 0.60 + compositeScore × 0.40
   in `src/lib/agent-tier.ts` — Verified ≥ 3 distinct live attesters and ≥ 0.1 tTRUST attested, Trusted ≥ 2 and
   ≥ 0.05, otherwise Unverified. Backing on the atom vault never changes it. Every agent surface (card, modal,
   profile, REST, MCP) uses only this; `calculateTier` (vault ladder) stays for skills, claims, IntuForge, My Agents.
+- **Words on screen = Intuition's** (Etap 8a): people *trust* an agent for a *trust context* (an `area`).
+  UI tier labels Unverified · Established · Verified = API `unverified` · `trusted` · `verified`.
+  All UI copy lives in `src/lib/people-copy.ts`; API field names / enum values never change with it.
 
 ## GraphQL quirks (Intuition Hasura)
 

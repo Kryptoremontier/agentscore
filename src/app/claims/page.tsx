@@ -73,6 +73,7 @@ import { TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } from '@/lib/gql-filters'
 import { formatTTrust, formatDate, formatDateShort } from '@/lib/format'
 import { useNotice } from '@/components/shared/NoticeProvider'
 import { pluralize } from '@/lib/plural'
+import { STAKERS_TAB, NO_STAKERS_YET } from '@/lib/people-copy'
 
 const GRAPHQL_URL = APP_CONFIG.GRAPHQL_URL
 const debugLog = (...args: unknown[]) => {
@@ -1739,7 +1740,7 @@ function ClaimsPageContent() {
                 <div className="flex border-b border-[#C8963C]/12">
                   {[
                     { id: 'overview', label: 'Overview', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/></svg> },
-                    { id: 'attestations', label: 'Attestations', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
+                    { id: 'attestations', label: STAKERS_TAB, icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'activity', label: 'Activity', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
                     { id: 'timeline', label: 'Timeline', icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="4" r="1.5" fill="currentColor" fillOpacity="0.5"/><circle cx="12" cy="20" r="1.5" fill="currentColor" fillOpacity="0.5"/><path d="M12 6v4M12 14v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M7 8h3M14 8h3M7 16h3M14 16h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5"/></svg> },
                   ].map(tab => (
@@ -2164,7 +2165,7 @@ function ClaimsPageContent() {
                     <div className="p-4 space-y-3">
                       {profiles.length === 0 ? (
                         <div className="text-center py-8">
-                          <p className="text-[#B5BDC6] text-sm">No attestations yet</p>
+                          <p className="text-[#B5BDC6] text-sm">{NO_STAKERS_YET}</p>
                           <p className="text-[#7A838D] text-xs mt-1">Be the first to stake on this claim</p>
                         </div>
                       ) : profiles.map(profile => {

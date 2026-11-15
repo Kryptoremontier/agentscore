@@ -259,13 +259,13 @@ describe('landing stats (Hero / Stats / CTA) — /api/v1/stats only', () => {
       expect(landingPeopleNumber(state).value).toBeNull()
     }
   })
-  it('the one number (Etap 5b Run 2): distinct live people who vouch — "1 person vouches for agents here"', async () => {
+  it('the one number (Etap 5b Run 2): distinct live people who trust agents — "1 person trusts agents here"', async () => {
     const { peopleVouchHere } = await import('../people-copy')
     const n = landingPeopleNumber({ status: 'ok', stats: parseLandingStats(ok)! })
     expect(n).toEqual({ value: 1, unavailable: null })
-    expect(peopleVouchHere(n.value)).toBe('1 person vouches for agents here')
-    expect(peopleVouchHere(3)).toBe('3 people vouch for agents here')
-    expect(peopleVouchHere(null)).toBe('— people vouch for agents here')
+    expect(peopleVouchHere(n.value)).toBe('1 person trusts agents here')
+    expect(peopleVouchHere(3)).toBe('3 people trust agents here')
+    expect(peopleVouchHere(null)).toBe('— people trust agents here')
   })
   it('landing readers mounting together share one request; a 500 → null', async () => {
     const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ success: false }) }))

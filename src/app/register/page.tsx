@@ -11,7 +11,7 @@ import { RegisterSkillForm } from '@/components/skills/RegisterSkillForm'
 import { Button } from '@/components/ui/button'
 import { GlassCard } from '@/components/shared/GlassCard'
 import { cn } from '@/lib/cn'
-import { REGISTER_BUILD_TRUST, REGISTER_BUILD_TRUST_SKILL } from '@/lib/people-copy'
+import { REGISTER_BUILD_TRUST, REGISTER_BUILD_TRUST_SKILL, REGISTER_GROW, REGISTER_INTRO } from '@/lib/people-copy'
 
 type RegisterTab = 'agent' | 'skill'
 
@@ -109,7 +109,7 @@ function RegisterContent() {
                 <div className="space-y-2.5">
                   {[
                     { icon: Shield, hex: '#C8963C', rgb: '200,150,60', title: 'Build Trust', desc: `Encourage users to Support your ${isSkill ? 'skill' : 'agent'} with tTRUST stakes` },
-                    { icon: Users, hex: '#2EE6D6', rgb: '46,230,214', title: 'Engage Community', desc: 'Grow your reputation through attestations' },
+                    { icon: Users, hex: '#2EE6D6', rgb: '46,230,214', title: 'Engage Community', desc: REGISTER_GROW },
                     { icon: TrendingUp, hex: '#2ECC71', rgb: '46,204,113', title: 'Monitor Score', desc: 'Track trust score, stakers and activity in Explorer' },
                   ].map((step) => (
                     <div
@@ -155,8 +155,7 @@ function RegisterContent() {
           </div>
           <h1 className="text-4xl mb-4 font-extrabold tracking-display leading-display">Register on AgentScore</h1>
           <p className="text-xl text-text-secondary max-w-2xl mx-auto">
-            Create an on-chain identity and join the trust network.
-            Build reputation through community attestations.
+            {REGISTER_INTRO}
           </p>
         </motion.div>
 

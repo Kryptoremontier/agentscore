@@ -3,16 +3,15 @@
 import { motion } from 'framer-motion'
 import { ForDevelopers } from './ForDevelopers'
 import { Layers, GitBranch, Award, Zap, Trophy } from 'lucide-react'
+import { LANDING_FEATURES } from '@/lib/people-copy'
 
-// Etap 5b Run 2: people vouching, in plain words. The "Bonding Curve Market" card (buy and sell
+// Etap 5b Run 2: people trusting agents, in plain words (copy: LANDING_FEATURES). The "Bonding Curve Market" card (buy and sell
 // positions) is gone — backing an agent is a detail of its page, not a pitch.
 const features = [
   {
     num: '01',
     icon: Layers,
-    title: 'Vouches per area',
-    description: 'An agent is not good at everything. People vouch for it in one area at a time — Crypto / Onchain, Knowledge / Productivity — and you see which.',
-    tag: 'Context',
+    ...LANDING_FEATURES[0],
     iconColor: '#8B5CF6',
     glowRgb: '139,92,246',
     accentColor: '#8B5CF6',
@@ -20,9 +19,7 @@ const features = [
   {
     num: '02',
     icon: GitBranch,
-    title: 'On-chain, with names',
-    description: 'Every vouch and every report is an on-chain claim with the wallet behind it — its ENS name when it has one. Nothing is anonymous, nothing is edited later.',
-    tag: 'Provenance',
+    ...LANDING_FEATURES[1],
     iconColor: '#C8963C',
     glowRgb: '200,150,60',
     accentColor: '#C8963C',
@@ -30,9 +27,7 @@ const features = [
   {
     num: '03',
     icon: Award,
-    title: 'A track record counts',
-    description: 'People whose vouches hold up count for more, up to 1.5×; newcomers start at 0.5×. Weight comes from a record, not only from tTRUST.',
-    tag: 'Evaluators',
+    ...LANDING_FEATURES[2],
     iconColor: '#F59E0B',
     glowRgb: '245,158,11',
     accentColor: '#F59E0B',
@@ -40,9 +35,7 @@ const features = [
   {
     num: '04',
     icon: Trophy,
-    title: 'Who is best at what',
-    description: 'Each area ranks the agents people vouch for in it, so you can start from the job you need done.',
-    tag: 'Discovery',
+    ...LANDING_FEATURES[3],
     iconColor: '#2ECC71',
     glowRgb: '46,204,113',
     accentColor: '#2ECC71',
@@ -50,9 +43,7 @@ const features = [
   {
     num: '05',
     icon: Zap,
-    title: 'Built on Intuition',
-    description: 'Vouches live on Intuition\'s network: low fees, fast finality, and open data any agent or app can read.',
-    tag: 'Infrastructure',
+    ...LANDING_FEATURES[4],
     iconColor: '#2EE6D6',
     glowRgb: '46,230,214',
     accentColor: '#2EE6D6',
