@@ -78,26 +78,20 @@ describe('where the "?" sits — next to the word, on the modal, the profile and
   it('every surface explains all four', () => {
     const modal = terms(['app/agents/agents-client.tsx', 'components/profile/ProfileStatRow.tsx'])
     const profile = terms(['app/agents/[id]/page.tsx', 'components/agents/AgentHeader.tsx', 'components/profile/ProfileStatRow.tsx'])
-    const landing = terms(['components/landing/Hero.tsx', 'components/landing/ExampleAgentCard.tsx', 'components/landing/HowItWorks.tsx'])
     for (const t of ['vouch', 'tiers', 'backing', 'ttrust']) {
       expect(modal.has(t), `modal: ${t}`).toBe(true)
       expect(profile.has(t), `profile: ${t}`).toBe(true)
-      expect(landing.has(t), `landing: ${t}`).toBe(true)
     }
+    // The landing (Etap 8b) explains the words it uses: trust (step 02) and the tier (the card's chip).
+    // It no longer prints a backing score or a tTRUST amount, so those two have nothing to sit beside.
+    const landing = terms(['components/landing/Hero.tsx', 'components/landing/HowItWorks.tsx', 'components/trust/TrustOverTimeCard.tsx'])
+    for (const t of ['vouch', 'tiers']) expect(landing.has(t), `landing: ${t}`).toBe(true)
   })
 
-  it('the landing: vouch after its first line, tTRUST right after the word in How it works', () => {
-    expect(code('components/landing/Hero.tsx')).toMatch(/\{LANDING_SUB\} <Explainer term="vouch"/)
-    expect(code('components/landing/HowItWorks.tsx')).toMatch(/explain: \{ after: 'tTRUST', term: 'ttrust'/)
-  })
-
-  it('the example card: a button never inside its link — the name is the (stretched) link', () => {
-    const card = code('components/landing/ExampleAgentCard.tsx')
-    const link = card.slice(card.indexOf('<Link'), card.indexOf('</Link>'))
-    expect(link).not.toContain('<Explainer')
-    expect(link).toMatch(/after:absolute after:inset-0/)
-    expect(card).toMatch(/<Explainer term="backing" \/>/)
-    expect(card).toMatch(/<Explainer term="tiers" \/>/)
+  it('the landing: trust right after the step that names it; tiers beside the card\'s chip', () => {
+    expect(code('components/landing/HowItWorks.tsx')).toMatch(/step\.num === '02' && <Explainer term="vouch"/)
+    const card = code('components/trust/TrustOverTimeCard.tsx')
+    expect(card.indexOf('<Explainer term="tiers" />')).toBeGreaterThan(card.indexOf('data-testid="agent-tier-chip"'))
   })
 
   it('never a separate FAQ page', () => {

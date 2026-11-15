@@ -313,7 +313,7 @@ describe('getPlatformStats — attesters, and no 0 for a failed count', () => {
     fake({ attestationsFail: true, claimsFail: true })
     expect(await stats()).toMatchObject({ attesters: null, claims: null })
   })
-  it('claims = the claims AgentScore lists — the /claims page\'s and the landing Claims tab\'s `where` — not every triple on the network', async () => {
+  it('claims = the claims AgentScore lists — the /claims page\'s `where` — not every triple on the network', async () => {
     const { AGENTSCORE_CLAIMS_WHERE_STR, TRIPLE_SUBJECT_OR_STR, TRIPLE_OBJECT_OR_STR } = await import('../gql-filters')
     const hasura = fake()
     await stats()
@@ -326,11 +326,10 @@ describe('getPlatformStats — attesters, and no 0 for a failed count', () => {
     expect(AGENTSCORE_CLAIMS_WHERE_STR).toBe(`{ _and: [ { ${TRIPLE_SUBJECT_OR_STR} }, { ${TRIPLE_OBJECT_OR_STR} } ] }`)
     expect(TRIPLE_SUBJECT_OR_STR).toMatch(/subject:/)
     expect(TRIPLE_OBJECT_OR_STR).toMatch(/object:/)
-    // The same `where` on the landing's Claims tab (rows and badge) and the /claims page's rows.
+    // The same `where` on the /claims page's rows (the landing's Claims tab is gone, Etap 8b).
     const { readFileSync } = await import('node:fs')
     const path = await import('node:path')
     const src = (f: string) => readFileSync(path.join(__dirname, '..', '..', f), 'utf8')
-    expect(src('components/landing/FeaturedAgents.tsx')).toMatch(/const CLAIM_WHERE = `where: \$\{AGENTSCORE_CLAIMS_WHERE_STR\}`/)
     expect(src('app/claims/page.tsx')).toMatch(/_and: \[\s*\{ \$\{TRIPLE_SUBJECT_OR_STR\} \}\s*\{ \$\{TRIPLE_OBJECT_OR_STR\} \}\s*\]/)
   })
 })
@@ -555,16 +554,19 @@ describe('declaredDomainsView — a failed classification read is an error state
 
 describe('the components use those lib decisions (source guards — no DOM in this env)', () => {
   const src = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8')
-  it('the Hero reads its number only from /api/v1/stats (fetchLandingStats) and its example from our page API — never its own GraphQL counts', () => {
-    const s = src('src/components/landing/Hero.tsx')
-    expect(s).toContain('fetchLandingStats(')
-    expect(s).toContain('landingPeopleNumber(statsState)')
-    expect(s).toContain('mostVouched(view, 1)')
-    expect(s).not.toMatch(/GRAPHQL_URL|AGENT_WHERE_STR|triples_aggregate|positions_aggregate|'Attestations'/)
-    // The closing call prints no numbers any more (Etap 5b Run 2).
-    expect(src('src/components/landing/CTA.tsx')).not.toMatch(/fetchLandingStats|stats\./)
+  it('the landing (Etap 8b) reads only through the shared readers — the /agents page data, the timeline\'s triples, the gate — never its own GraphQL counts', () => {
+    const data = src('src/lib/landing-data.ts')
+    expect(data).toContain('getAgentsPageData()')
+    expect(data).toContain('fetchAgentTrustEvents(')
+    expect(data).toContain('trustGate(chosen.id, policy)')
+    for (const f of ['src/lib/landing-data.ts', 'src/app/page.tsx', ...['Hero', 'HowItWorks', 'TrustOverTime', 'GateExample', 'TrustContexts', 'CTA'].map((c) => `src/components/landing/${c}.tsx`)]) {
+      expect(src(f), f).not.toMatch(/GRAPHQL_URL|triples_aggregate|positions_aggregate/)
+    }
+    // The trust events come from the timeline reader's own triple read.
+    expect(src('src/lib/trust-events.ts')).toContain('readCanonicalSkillTriples(agentTermId)')
+    expect(src('src/lib/timeline-data.ts')).toContain('readCanonicalSkillTriples(agentTermId)')
   })
-  it('/agents and Featured read oppose through stakeReadingOf; the card uses attesterLineOf (→ cardViewFor) / attestScrollStep; DeclaredDomains uses declaredDomainsView', () => {
+  it('/agents reads oppose through stakeReadingOf; the card uses attesterLineOf (→ cardViewFor) / attestScrollStep; DeclaredDomains uses declaredDomainsView', () => {
     const page = src('src/app/agents/agents-client.tsx')
     // Etap 5b: the list's rows go through listEntryOf (→ stakeReadingOf), shared with the carousel.
     expect(page).toContain('listEntryOf(')
@@ -572,12 +574,6 @@ describe('the components use those lib decisions (source guards — no DOM in th
     expect(page).toContain('attesterLineOf(attestationViewBySubject')
     expect(page).toContain('attestScrollStep(')
     expect(page).not.toMatch(/__opposeWei \?\? 0n/)
-    const featured = src('src/components/landing/FeaturedAgents.tsx')
-    expect(featured).toContain('annotateVaultReads(')
-    expect(featured).toContain('stakeReadingOf(')
-    expect(featured).toContain('mostVouched(view, 8)')
-    expect(src('src/lib/most-vouched.ts')).toContain('orderAgents(rows.map(listEntryOf), views, DEFAULT_SORT)')
-    expect(featured).not.toMatch(/__opposeWei \?\? 0n/)
     expect(src('src/components/agents/CardAttesterLine.tsx')).toMatch(/stopPropagation\(\)/)
     expect(src('src/components/profile/DeclaredDomains.tsx')).toContain('declaredDomainsView(')
   })

@@ -34,6 +34,47 @@ export interface TimelineRawData {
   skillEvents: SkillEvent[]
 }
 
+// ─── Skill triples ────────────────────────────────────────────────────────────
+
+/** One skill triple as the timeline reads it: its id, when it was made, and its object. */
+export type RawSkillTriple = { term_id: string; created_at: string; object: { term_id: string; label: string } }
+
+/** Every triple matching `where`, to the end — a capped or failed read throws (never a silent first N). */
+async function readSkillTriples(name: string, where: string, variables: Record<string, unknown>, vars: string): Promise<RawSkillTriple[]> {
+  const page = await fetchAllRows<RawSkillTriple>({
+    query: `
+      query ${name}(${vars}, $limit: Int!, $offset: Int!) {
+        triples(where: ${where}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
+          term_id
+          created_at
+          object { term_id label }
+        }
+      }
+    `,
+    field: 'triples',
+    countQuery: `query ${name}Count(${vars}) { triples_aggregate(where: ${where}) { aggregate { count } } }`,
+    countField: 'triples_aggregate',
+    variables,
+    pageSize: SERVER_ROW_CAP.triples,
+    maxRows: TIMELINE_TRIPLES_MAX,
+  })
+  if (page.truncated !== false) throw new Error(`${name} not read to the end`)
+  return page.rows
+}
+
+/**
+ * The agent's canonical `is skilled in` triples (thesis §4) — the timeline's trust claims, and the
+ * vaults whose positions are the people who trust it (lib/trust-events.ts). Throws on a failed read.
+ */
+export function readCanonicalSkillTriples(agentTermId: string): Promise<RawSkillTriple[]> {
+  return readSkillTriples(
+    'GetAgentCanonicalSkillTriples',
+    '{ subject_id: { _eq: $agentId }, predicate_id: { _eq: $canonicalPred } }',
+    { agentId: agentTermId, canonicalPred: IS_SKILLED_IN.termId },
+    '$agentId: String!, $canonicalPred: String!',
+  )
+}
+
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
 /**
@@ -133,41 +174,14 @@ export async function fetchTimelineData(agentTermId: string): Promise<TimelineRa
     // Legacy predicate (pre-canonical) and the canonical `is skilled in` +
     // stake unit (thesis §4) are queried separately and tagged, so the
     // timeline can label them as different claims — never conflated.
-    type RawTriple = { term_id: string; created_at: string; object: { term_id: string; label: string } }
-    const readTriples = async (name: string, where: string, variables: Record<string, unknown>, vars: string) => {
-      const page = await fetchAllRows<RawTriple>({
-        query: `
-          query ${name}(${vars}, $limit: Int!, $offset: Int!) {
-            triples(where: ${where}, order_by: { term_id: asc }, limit: $limit, offset: $offset) {
-              term_id
-              created_at
-              object { term_id label }
-            }
-          }
-        `,
-        field: 'triples',
-        countQuery: `query ${name}Count(${vars}) { triples_aggregate(where: ${where}) { aggregate { count } } }`,
-        countField: 'triples_aggregate',
-        variables,
-        pageSize: SERVER_ROW_CAP.triples,
-        maxRows: TIMELINE_TRIPLES_MAX,
-      })
-      if (page.truncated !== false) throw new Error(`${name} not read to the end`)
-      return page.rows
-    }
     const [rawLegacy, rawCanonical] = await Promise.all([
-      readTriples(
+      readSkillTriples(
         'GetAgentLegacySkillTriples',
         '{ subject_id: { _eq: $agentId }, predicate: { label: { _in: ["hasAgentSkill", "has-agent-skill"] } } }',
         { agentId: agentTermId },
         '$agentId: String!',
       ),
-      readTriples(
-        'GetAgentCanonicalSkillTriples',
-        '{ subject_id: { _eq: $agentId }, predicate_id: { _eq: $canonicalPred } }',
-        { agentId: agentTermId, canonicalPred: IS_SKILLED_IN.termId },
-        '$agentId: String!, $canonicalPred: String!',
-      ),
+      readCanonicalSkillTriples(agentTermId),
     ])
 
     const skillEvents: SkillEvent[] = [
