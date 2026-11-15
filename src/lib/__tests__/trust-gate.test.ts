@@ -45,7 +45,7 @@ describe('the reference agents (live-shaped)', () => {
   it('Luda: 2 people, 0.04554 tTRUST → Unverified → deny under the default; allow at minPeople 1 in Knowledge / Productivity', () => {
     const d = gate(LUDA, DEFAULT_GATE_POLICY)
     expect(d).toMatchObject({ decision: 'deny', tier: 'unverified', peopleVouching: 2 })
-    expect(d.reason).toBe('Unverified: 2 people vouch for this agent; your minimum is Trusted (at least 2 people and 0.05 tTRUST vouched).')
+    expect(d.reason).toBe('Unverified: 2 people trust this agent; your minimum is Established (`trusted`) (at least 2 people and 0.05 tTRUST behind their trust).')
     expect(d.areas).toEqual([
       { area: 'Knowledge / Productivity', people: 1, tTrust: '0.03069' },
       { area: 'AI / Coding', people: 1, tTrust: '0.0099' },
@@ -60,7 +60,7 @@ describe('the reference agents (live-shaped)', () => {
     expect(gate(DACKIE, DEFAULT_GATE_POLICY)).toMatchObject({ decision: 'deny', tier: 'unverified', peopleVouching: 1 })
     const d = gate(DACKIE, { minPeople: 1, area: 'Crypto / Onchain' })
     expect(d).toMatchObject({ decision: 'allow', tier: 'unverified', peopleVouching: 1, areas: [{ area: 'Crypto / Onchain', people: 1, tTrust: '0.0099' }] })
-    expect(d.reason).toBe('1 person vouches for this agent in Crypto / Onchain; your policy needs at least 1.')
+    expect(d.reason).toBe('1 person trusts this agent for Crypto / Onchain; your policy needs at least 1.')
   })
 
   it('OPEN CLAW: nobody vouches (backing is not vouching) → deny under every policy, areas []', () => {
@@ -68,9 +68,9 @@ describe('the reference agents (live-shaped)', () => {
       expect(gate(OPEN_CLAW, p)).toMatchObject({ decision: 'deny', tier: 'unverified', peopleVouching: 0, areas: [] })
     }
     expect(gate(OPEN_CLAW, { minPeople: 1, area: 'Crypto / Onchain' }).reason)
-      .toBe('No one vouches for this agent in Crypto / Onchain; your policy needs at least 1.')
+      .toBe('No one trusts this agent for Crypto / Onchain; your policy needs at least 1.')
     expect(gate(OPEN_CLAW, DEFAULT_GATE_POLICY).reason)
-      .toBe('Unverified: no one vouches for this agent; your minimum is Trusted (at least 2 people and 0.05 tTRUST vouched).')
+      .toBe('Unverified: no one trusts this agent; your minimum is Established (`trusted`) (at least 2 people and 0.05 tTRUST behind their trust).')
   })
 })
 
@@ -95,9 +95,9 @@ describe('minTier — allow and deny at each rung (the thesis ladder, unchanged)
   })
 
   it('the allow reason names the tier and the minimum', () => {
-    expect(gate(people(3, 0.1), { minTier: 'trusted' }).reason).toBe('Verified: 3 people vouch for this agent, which meets your minimum of Trusted.')
+    expect(gate(people(3, 0.1), { minTier: 'trusted' }).reason).toBe('Verified: 3 people trust this agent, which meets your minimum of Established (`trusted`).')
     expect(gate(people(2, 0.05), { minTier: 'verified' }).reason)
-      .toBe('Trusted: 2 people vouch for this agent; your minimum is Verified (at least 3 people and 0.1 tTRUST vouched).')
+      .toBe('Established (`trusted`): 2 people trust this agent; your minimum is Verified (at least 3 people and 0.1 tTRUST behind their trust).')
   })
 })
 

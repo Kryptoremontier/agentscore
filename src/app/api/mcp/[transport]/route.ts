@@ -61,7 +61,8 @@ const handler = createMcpHandler(
         description:
           'Search and list AI agents registered on AgentScore. ' +
           'Returns agents with a score envelope (trustScore, qualityScore, objectScore) ' +
-          'plus the attestation tier (tier + tierBasis: "attestations" — Verified: >= 3 distinct attesters and >= 0.1 tTRUST attested; Trusted: >= 2 and >= 0.05; otherwise Unverified; null = unknown), ' +
+          'plus the agent tier from the people who trust it (tier + tierBasis: "attestations" — "verified": >= 3 distinct people and >= 0.1 tTRUST; ' +
+          '"trusted" (Established on screen): >= 2 and >= 0.05; otherwise "unverified"; null = unknown), ' +
           'momentum direction, live staker count, and skill count. ' +
           'In list context qualityScore is null — use get_agent_trust for the full composite. ' +
           'Sort by score, stakers, or newest. Filter by minimum trust score. ' +
@@ -131,7 +132,7 @@ const handler = createMcpHandler(
           'per-skill breakdown (contextual trust), ' +
           'trust score components (economic confidence, composite quality), ' +
           'anti-manipulation metrics (whale detection, evaluator weights), ' +
-          'and the attestation tier with what the next rung needs (distinct attesters, tTRUST attested — never backing). ' +
+          'and the agent tier with what the next rung needs (tier.requirements.attesters = distinct people who trust it, tTRUST behind their trust — never backing). ' +
           "ERC-8004 cohort agents (outside the scored corpus) return origin 'erc8004' with their identity, declared " +
           'domains and attestation tier; they carry no score (scoreBasis null), and no stake/staker fields are invented.',
         inputSchema: {
@@ -568,7 +569,7 @@ const handler = createMcpHandler(
           'top domain, and top agent. ' +
           'topAgent.trustScore is trustScore-based (list context — no quality ' +
           'composite computed in aggregate; use get_agent_trust for the full envelope). ' +
-          'attesters = distinct wallets with a live position on any attestation triple ' +
+          'attesters = the people who trust agents here: distinct wallets with a live position on any attestation triple ' +
           '(is skilled in → canonical domain). claims = the claims AgentScore lists (subject and ' +
           'object both AgentScore agents or skills — the /claims page), not every triple on the network. ' +
           'A count whose read failed is null, never 0; parts says which reads answered ' +
@@ -686,22 +687,23 @@ const handler = createMcpHandler(
         description:
           'Call this BEFORE you pay or delegate a task to another AI agent. ' +
           'Returns decision "allow" | "deny" | "unknown" under YOUR policy, a one-sentence reason, ' +
-          'who vouches and for what (peopleVouching = distinct people; areas = per area: people and tTRUST vouched), ' +
+          'who trusts the agent and for what (peopleVouching = distinct people who trust it; areas = per trust context: people and tTRUST), ' +
           'the agent tier, and how old the data is (meta.dataAgeSeconds). ' +
-          'Policy: minTier "trusted" (the default — at least 2 distinct people and 0.05 tTRUST vouched) or "verified" ' +
-          '(at least 3 and 0.1); or minPeople N — at least N distinct people vouching, optionally only in one area. ' +
+          'Policy: minTier "trusted" (the default; Established on screen — at least 2 distinct people and 0.05 tTRUST) or "verified" ' +
+          '(at least 3 and 0.1); or minPeople N — at least N distinct people who trust it, optionally for one trust context (area). ' +
           '"unknown" means the data could not be read right now: treat it as NO — do not pay or delegate; ask again later. ' +
           '"deny" with "Not found in AgentScore or the ERC-8004 registry" means the id is not a known agent. ' +
-          'A vouch is an on-chain attestation (agent — is skilled in — area) by a distinct wallet; money staked on the agent ' +
-          'itself never counts, and no parameter or payment can change a decision.',
+          'Trusting an agent for a trust context = the triple <agent> — is skilled in — <context> with a deposit from a wallet; ' +
+          'only distinct wallets with live shares count. Money staked on the agent itself never counts, and no parameter or ' +
+          'payment can change a decision.',
         inputSchema: {
           agentId: z.string().describe("The agent's term ID (from search_agents)"),
           minTier: z.enum(['trusted', 'verified']).optional()
-            .describe('Minimum tier. Default "trusted". Use either minTier or minPeople, not both.'),
+            .describe('Minimum tier. Default "trusted" (Established on screen). Use either minTier or minPeople, not both.'),
           minPeople: z.number().int().min(1).optional()
-            .describe('Minimum distinct people vouching (in `area` when given).'),
+            .describe('Minimum distinct people who trust the agent (for `area` when given).'),
           area: z.enum(GATE_AREAS as [string, ...string[]]).optional()
-            .describe('Only count vouches in this area (needs minPeople).'),
+            .describe('`area` = the trust context: only count people who trust the agent for it (needs minPeople).'),
         },
       },
       async ({ agentId, minTier, minPeople, area }) => {

@@ -18,7 +18,7 @@
 
 import { CANONICAL_DOMAINS_REGISTRY } from './canonical-domains'
 import { summarizeAttesters } from './agent-profile'
-import { calculateAgentTier, AGENT_TIER_DISPLAY, AGENT_TIER_LADDER, type AgentTier } from './agent-tier'
+import { calculateAgentTier, AGENT_TIER_LADDER, type AgentTier } from './agent-tier'
 import type { AttestedEntry } from './attestation-reader'
 
 export type GatePolicy =
@@ -54,7 +54,7 @@ export const GATE_NOT_FOUND = 'Not found in AgentScore or the ERC-8004 registry'
 export const GATE_LOOKUP_UNREAD =
   'Couldn’t read this agent from the Intuition network right now, so this is not a yes — do not pay or delegate; try again shortly.'
 export const GATE_VOUCHES_UNREAD =
-  'Couldn’t read who vouches for this agent right now, so this is not a yes — do not pay or delegate; try again shortly.'
+  'Couldn’t read who trusts this agent right now, so this is not a yes — do not pay or delegate; try again shortly.'
 
 const TIER_RANK: Record<AgentTier, number> = { unverified: 0, trusted: 1, verified: 2 }
 
@@ -112,7 +112,7 @@ export function tTrustString(wei: bigint): string {
   return `${neg ? '-' : ''}${whole}${frac ? `.${frac}` : ''}`
 }
 
-/** Per area: distinct live attesters and the tTRUST they vouched — areas nobody vouches in are left out. */
+/** Per area (trust context): distinct live attesters and the tTRUST behind them — areas nobody trusts it for are left out. */
 function areasOf(attested: readonly AttestedEntry[]): NonNullable<GateDecision['areas']> {
   const byArea = new Map<string, AttestedEntry[]>()
   for (const e of attested) byArea.set(e.domain.label, [...(byArea.get(e.domain.label) ?? []), e])
@@ -127,12 +127,19 @@ function areasOf(attested: readonly AttestedEntry[]): NonNullable<GateDecision['
 }
 
 /**
- * "1 person vouches for this agent in Social" — `midSentence` after a colon ("Unverified: no one
- * vouches …"). Its own words, not the UI copy module: a machine answer never changes
- * because a screen's wording did.
+ * "1 person trusts this agent for Social" — `midSentence` after a colon ("Unverified: no one
+ * trusts …"). Its own words, not the UI copy module: a machine answer never changes because a
+ * screen's wording did. Etap 8a: Intuition's words — trust, for a trust context (`area`).
  */
-const vouchPhrase = (n: number, area?: string, midSentence = false) =>
-  `${n === 0 ? (midSentence ? 'no one vouches' : 'No one vouches') : n === 1 ? '1 person vouches' : `${n} people vouch`} for this agent${area ? ` in ${area}` : ''}`
+const trustPhrase = (n: number, area?: string, midSentence = false) =>
+  `${n === 0 ? (midSentence ? 'no one trusts' : 'No one trusts') : n === 1 ? '1 person trusts' : `${n} people trust`} this agent${area ? ` for ${area}` : ''}`
+
+/**
+ * A tier in a reason: the name people read, and the API value where they differ (Etap 8a). The
+ * gate's own words, like trustPhrase — not the UI copy module's labels.
+ */
+const TIER_NAME: Record<AgentTier, string> = { unverified: 'Unverified', trusted: 'Established (`trusted`)', verified: 'Verified' }
+const tierName = (tier: AgentTier) => TIER_NAME[tier]
 
 export function decideTrustGate(
   subject: GateSubject,
@@ -150,19 +157,19 @@ export function decideTrustGate(
 
   if ('minTier' in policy) {
     const people = summarizeAttesters(attested).length
-    const label = AGENT_TIER_DISPLAY[tier].label
-    const min = AGENT_TIER_DISPLAY[policy.minTier].label
+    const label = tierName(tier)
+    const min = tierName(policy.minTier)
     const rung = AGENT_TIER_LADDER[policy.minTier]
     const allow = TIER_RANK[tier] >= TIER_RANK[policy.minTier]
     const reason = allow
-      ? `${label}: ${vouchPhrase(people, undefined, true)}, which meets your minimum of ${min}.`
-      : `${label}: ${vouchPhrase(people, undefined, true)}; your minimum is ${min} (at least ${rung.minAttesters} people and ${tTrustString(rung.minAttestedWei)} tTRUST vouched).`
+      ? `${label}: ${trustPhrase(people, undefined, true)}, which meets your minimum of ${min}.`
+      : `${label}: ${trustPhrase(people, undefined, true)}; your minimum is ${min} (at least ${rung.minAttesters} people and ${tTrustString(rung.minAttestedWei)} tTRUST behind their trust).`
     return { decision: allow ? 'allow' : 'deny', reason, tier, peopleVouching: people, areas, policy, meta }
   }
 
   const inArea = policy.area === undefined ? attested : attested.filter((e) => e.domain.label === policy.area)
   const people = summarizeAttesters(inArea).length
   const allow = people >= policy.minPeople
-  const reason = `${vouchPhrase(people, policy.area)}; your policy needs at least ${policy.minPeople}.`
+  const reason = `${trustPhrase(people, policy.area)}; your policy needs at least ${policy.minPeople}.`
   return { decision: allow ? 'allow' : 'deny', reason, tier, peopleVouching: people, areas, policy, meta }
 }

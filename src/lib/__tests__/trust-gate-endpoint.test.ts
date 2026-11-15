@@ -139,7 +139,7 @@ describe('REST GET /api/v1/agents/:id/gate', () => {
   it('minPeople=1 in Crypto / Onchain: Captain Dackie allow; Luda and OPEN CLAW deny (backing is not a vouch)', async () => {
     expect((await rest(DACKIE, AREA_Q)).body.data).toMatchObject({
       decision: 'allow', peopleVouching: 1, policy: { minPeople: 1, area: 'Crypto / Onchain' },
-      reason: '1 person vouches for this agent in Crypto / Onchain; your policy needs at least 1.',
+      reason: '1 person trusts this agent for Crypto / Onchain; your policy needs at least 1.',
     })
     expect((await rest(LUDA, AREA_Q)).body.data).toMatchObject({ decision: 'deny', peopleVouching: 0 })
     expect((await rest(OPEN_CLAW, AREA_Q)).body.data).toMatchObject({ decision: 'deny', peopleVouching: 0 })
@@ -263,7 +263,7 @@ describe('the snippet to paste (examples/trust-gate.ts), against the REST route'
     const ok = await pastedTrustGate(DACKIE, { minPeople: 1, area: 'Crypto / Onchain' }, BASE)
     expect(ok).toMatchObject({ decision: 'allow', peopleVouching: 1 })
     const no = await pastedTrustGate(OPEN_CLAW, { minPeople: 1, area: 'Crypto / Onchain' }, BASE)
-    expect(no).toMatchObject({ decision: 'deny', reason: 'No one vouches for this agent in Crypto / Onchain; your policy needs at least 1.' })
+    expect(no).toMatchObject({ decision: 'deny', reason: 'No one trusts this agent for Crypto / Onchain; your policy needs at least 1.' })
     expect(await pastedTrustGate(LUDA, undefined, BASE)).toMatchObject({ decision: 'deny', policy: { minTier: 'trusted' } })
   })
 

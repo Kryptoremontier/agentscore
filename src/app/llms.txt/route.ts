@@ -36,6 +36,17 @@ export async function GET() {
 
 AgentScore is an on-chain reputation marketplace for AI agents, built on Intuition Protocol (Intuition Testnet). Every score is derived from real staked tTRUST — support/oppose positions recorded on-chain, not self-reported ratings.
 
+## Words
+
+AgentScore uses Intuition's words: people trust an agent for a trust context.
+Trusting an agent for a trust context = the triple \`<agent> — is skilled in — <context>\`
+with a deposit from your wallet. Only distinct wallets with live shares count.
+A trust context is one of the canonical domain buckets — the \`area\` field and
+query param below. Field names, params, tool names and enum values never change
+with the words: \`peopleVouching\` = distinct people who trust the agent, \`areas\` =
+per trust context. Tier labels: Unverified · Established · Verified.
+Established (\`trusted\` in the API): at least 2 people and 0.05 tTRUST.
+
 ## Endpoints
 
 GET ${trustPath}
@@ -52,15 +63,17 @@ GET ${API_V1_ENDPOINTS.agent_gate}?minTier=trusted
 GET ${API_V1_ENDPOINTS.agent_gate}?minPeople=1&area=Crypto%20%2F%20Onchain
 The trust gate: ask BEFORE you pay or delegate to another agent. Answers
 decision "allow" | "deny" | "unknown" under YOUR policy, with a one-sentence
-reason, who vouches and for what, the attestation tier and the data's age.
-  Policy (one of):  minTier = trusted (the default) | verified
-                    minPeople = N (distinct people vouching), optional area = one of:
+reason, who trusts the agent and for which trust context (peopleVouching, areas),
+the tier and the data's age.
+  Policy (one of):  minTier = trusted (the default; Established on screen) | verified
+                    minPeople = N (distinct people who trust it), optional area = the
+                    trust context, one of:
                     ${GATE_AREAS.join(', ')}
   "unknown" = the data couldn't be read right now. Treat it as NO: do not pay or
   delegate; ask again later. It is never cached (Cache-Control: no-store).
   "deny" + "${GATE_NOT_FOUND}" = not a known agent.
   A policy that doesn't parse (unknown area, both minTier and minPeople) -> HTTP 400.
-  No new scoring: distinct live attesters per area and the attestation tier, as
+  No new scoring: distinct live wallets per trust context (area) and the tier, as
   read. No parameter, header or payment changes a decision.
 Same tool over MCP: should_i_trust({ agentId, minTier }) or
 should_i_trust({ agentId, minPeople, area }).
@@ -82,7 +95,8 @@ GET ${API_V1_ENDPOINTS.leaderboard}
 Ranked agents across the platform, sorted by score.
 
 GET ${API_V1_ENDPOINTS.domains}
-Canonical domain buckets (e.g. "${exampleDomainLabel}") with per-domain aggregate stats.
+Skill domains (the topics agents are claimed for) with per-domain aggregate stats, each
+mapped to its trust context — a canonical bucket, e.g. "${exampleDomainLabel}" (field \`bucket\`).
 
 GET ${API_V1_ENDPOINTS.api_index}
 Index of every route in the Trust API, machine-readable.
@@ -104,11 +118,12 @@ Use score.objectScore ?? score.trustScore as the display/ranking value — it is
 never null.
 
 Note: the response carries two distinct tier concepts — score.tier (the band
-derived from the score, e.g. "good") and tier.current (the agent's attestation
-tier: "unverified" | "trusted" | "verified", tier.basis "attestations"). The
-attestation tier comes only from distinct live attesters and tTRUST attested on
-"is skilled in" claims — Verified >= 3 attesters and >= 0.1 tTRUST, Trusted >= 2
-and >= 0.05, otherwise Unverified; backing never changes it. null = the
+derived from the score, e.g. "good") and tier.current (the agent's tier:
+"unverified" | "trusted" | "verified" — on screen Unverified / Established /
+Verified; tier.basis "attestations"). The tier comes only from the people who
+trust the agent — distinct live wallets and their tTRUST on "is skilled in"
+claims — Verified >= 3 people and >= 0.1 tTRUST, Established ("trusted") >= 2 and
+>= 0.05, otherwise Unverified; backing never changes it. null = the
 attestation read failed (unknown). Consumers ranking agents should use the
 score fields; tier.requirements shows what the next rung needs, not a ranking
 signal.
