@@ -5,11 +5,11 @@ import { personName } from '@/lib/person-names'
 import { updatedAgoLabel } from '@/lib/agents-page-types'
 import { AGENT_TIER_DISPLAY, AGENT_TIER_LADDER } from '@/lib/agent-tier'
 import { SEAL_SLOTS } from '@/components/agents/seal-slots'
-import { CHECK_TITLE, CHECK_NOT_FOUND, CHECK_IMAGE_UNREAD, ORIGIN_LABEL, checkImageAge, tierProgress, SEAL_OPEN } from '@/lib/people-copy'
+import { CHECK_TITLE, CHECK_NOT_FOUND, CHECK_IMAGE_UNREAD, ORIGIN_LABEL, checkImageAge, tierProgress, SEAL_OPEN, sealAreas } from '@/lib/people-copy'
 
 /**
  * GET /check/[id]/og — the /check/[id] link preview (Etap 7 Run B): the same card, drawn from the
- * same read as the page (lib/check-data.ts checkCard) — name, seals, who vouches, tier — with the
+ * same read as the page (lib/check-data.ts checkCard) — name, seals, who trusts it, tier — with the
  * data's age printed on the image, so a preview a platform keeps still says how old its numbers
  * are. Rendered per request and sent no-store: a route, not the opengraph-image file convention,
  * which Next serves "immutable, max-age=31536000" (a year-old picture beside today's numbers).
@@ -71,10 +71,10 @@ export async function GET(_request: Request, { params }: { params: { id: string 
                 background: a ? 'rgba(245,165,36,0.18)' : 'transparent',
                 border: a ? `3px solid ${ACCENT}` : '3px dashed rgba(245,165,36,0.4)',
               }} />
-              {/* A fixed width each, cut with an ellipsis: a long name or several areas never run into the next seal. */}
+              {/* A fixed width each, cut with an ellipsis: a long name or several trust contexts never run into the next seal. */}
               <div style={{ display: 'flex', flexDirection: 'column', width: 260, overflow: 'hidden' }}>
                 <span style={{ fontSize: 22, color: a ? 'white' : MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a ? personName(a.wallet, names[a.wallet.toLowerCase()]) : SEAL_OPEN}</span>
-                {a && <span style={{ fontSize: 18, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.domains.join(' · ')}</span>}
+                {a && <span style={{ fontSize: 18, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sealAreas(a.domains)}</span>}
               </div>
             </div>
           ))}

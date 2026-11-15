@@ -19,7 +19,7 @@ vi.mock('../person-names-server', () => ({ resolvePersonNames: vi.fn(async () =>
 
 const DACKIE_CARD: CheckCard = {
   id: DACKIE, name: 'Captain Dackie', origin: 'erc8004',
-  line: { kind: 'some', claim: '1 person vouches · for Crypto / Onchain', cta: false, attesters: 1, domains: 1 },
+  line: { kind: 'some', claim: '1 person trusts it for Crypto / Onchain', cta: false, attesters: 1, domains: 1 },
   attesters: [{ wallet: KRYPTO, domains: ['Crypto / Onchain'], totalStake: 9_900_000_000_000_000n }],
   tier: null, backing: null, backingTip: '', dataAgeSeconds: 420, dataReadAt: '2026-10-18T18:01:12.000Z',
 }
@@ -27,9 +27,9 @@ const DACKIE_CARD: CheckCard = {
 beforeEach(() => checkCard.mockReset())
 
 describe('Share on X', () => {
-  it('the post: "{name}: {N} people vouch on AgentScore. Who vouches for your agent?" + the card\'s permalink', () => {
-    expect(checkShareText('Luda', 2)).toBe('Luda: 2 people vouch on AgentScore. Who vouches for your agent?')
-    expect(checkShareText('Captain Dackie', 1)).toBe('Captain Dackie: 1 person vouches on AgentScore. Who vouches for your agent?')
+  it('the post: "{name}: {N} people trust it on AgentScore. Who trusts your agent?" + the card\'s permalink', () => {
+    expect(checkShareText('Luda', 2)).toBe('Luda: 2 people trust it on AgentScore. Who trusts your agent?')
+    expect(checkShareText('Captain Dackie', 1)).toBe('Captain Dackie: 1 person trusts it on AgentScore. Who trusts your agent?')
     const url = new URL(shareOnXUrl('Captain Dackie', 1, DACKIE))
     expect(url.origin + url.pathname).toBe('https://x.com/intent/post')
     expect(url.searchParams.get('text')).toBe(checkShareText('Captain Dackie', 1))
