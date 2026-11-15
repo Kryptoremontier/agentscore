@@ -89,21 +89,34 @@ export function gateContextFor(view: AgentsPageView, agentId: string): string | 
   return ranked[0]?.label ?? null
 }
 
-export async function getLandingData(): Promise<LandingData> {
-  const list = await attempt('agents-page', async () => {
+function readList() {
+  return attempt('agents-page', async () => {
     const payload = await getAgentsPageData()
     const view = agentsPageView(payload)
     if (view.unreachable) throw new Error('list unreachable')
     return { payload, view }
   })
+}
+
+/** The contexts part from one list read: null attestations → failed (unknown, never 8 empty contexts). */
+function contextsPart(payload: AgentsPagePayload, view: AgentsPageView): LandingData['contexts'] {
+  const summaries = contextSummaries(view)
+  return summaries
+    ? { status: 'ok', value: { summaries, featured: featuredContext(summaries), dataReadAt: listReadAt(payload) ?? new Date().toISOString() } }
+    : { status: 'failed' }
+}
+
+/** The trust contexts alone — /domains and /domains?context=<slug> (Etap 8b Run B). */
+export async function getTrustContexts(): Promise<LandingData['contexts']> {
+  const list = await readList()
+  return list.status === 'ok' ? contextsPart(list.value.payload, list.value.view) : { status: 'failed' }
+}
+
+export async function getLandingData(): Promise<LandingData> {
+  const list = await readList()
   if (list.status !== 'ok') return { contexts: { status: 'failed' }, story: { status: 'failed' }, gate: { status: 'failed' } }
   const { payload, view } = list.value
-  const readAt = listReadAt(payload) ?? new Date().toISOString()
-
-  const summaries = contextSummaries(view)
-  const contexts: LandingData['contexts'] = summaries
-    ? { status: 'ok', value: { summaries, featured: featuredContext(summaries), dataReadAt: readAt } }
-    : { status: 'failed' }
+  const contexts = contextsPart(payload, view)
 
   // The story agent: most people; a tie goes to the oldest first trust event.
   if (!view.attestations) return { contexts, story: { status: 'failed' }, gate: { status: 'failed' } }

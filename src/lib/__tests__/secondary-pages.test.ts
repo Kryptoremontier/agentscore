@@ -12,7 +12,7 @@ const SRC = path.join(__dirname, '..', '..')
 const code = (f: string) => readFileSync(path.join(SRC, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 
 describe('/domains', () => {
-  const page = code('app/domains/page.tsx')
+  const page = code('app/domains/domains-client.tsx') // the overview's client part (Etap 8b Run B)
   it('a plain intro, the spec\'s words', () => {
     expect(DOMAINS_INTRO).toBe('The trust contexts people trust agents for. Below them, topics agents tag themselves with — self-declared, not trusted.')
     expect(page).toMatch(/data-testid="domains-intro">\s*\{DOMAINS_INTRO\}/)

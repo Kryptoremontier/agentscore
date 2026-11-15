@@ -12,29 +12,27 @@ import {
   STORY_SECTIONS, CONTEXTS_HEADING, CONTEXTS_UNREAD, CONTEXTS_GRID_LABEL, CONTEXT_EMPTY, contextsFeatured, peopleVouch, people as peopleCount, agentsCount,
 } from '@/lib/people-copy'
 import type { LandingData } from '@/lib/landing-data'
-import { initialsOf } from '@/lib/landing-story'
 import { contextHref } from '@/lib/trust-contexts'
 import { DataAge } from '@/components/shared/DataAge'
 import { ContextIcon } from '@/components/trust/ContextIcon'
+import { InitialsTile } from '@/components/trust/InitialsTile'
 import { StorySection, GLASS } from './story-parts'
 
 /** How many agents the featured list shows. */
 export const FEATURED_MAX = 5
 
-export function InitialsTile({ name, size = 'md' }: { name: string; size?: 'md' | 'lg' }) {
-  return (
-    <span
-      aria-hidden
-      className={`inline-flex items-center justify-center flex-shrink-0 rounded-lg bg-accent text-[#0B0C0F] font-display font-black tracking-[-0.02em] ${size === 'lg' ? 'w-14 h-14 text-xl' : 'w-11 h-11 text-base'}`}
-    >
-      {initialsOf(name)}
-    </span>
-  )
-}
-
 export function TrustContexts({ contexts }: { contexts: LandingData['contexts'] }) {
   return (
     <StorySection id="trust-contexts" section={STORY_SECTIONS.contexts} heading={CONTEXTS_HEADING}>
+      <TrustContextsBody contexts={contexts} />
+    </StorySection>
+  )
+}
+
+/** The featured ranked list and the 8-context grid — the landing's §04 and the /domains overview (Run B). */
+export function TrustContextsBody({ contexts }: { contexts: LandingData['contexts'] }) {
+  return (
+    <>
       {contexts.status !== 'ok' ? (
         <p className="text-[#B5BDC6]" data-testid="trust-contexts" data-state="failed">{CONTEXTS_UNREAD}</p>
       ) : (
@@ -110,6 +108,6 @@ export function TrustContexts({ contexts }: { contexts: LandingData['contexts'] 
           </nav>
         </div>
       )}
-    </StorySection>
+    </>
   )
 }

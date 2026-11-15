@@ -140,7 +140,9 @@ const SHOTS: Shot[] = [
       await statRowMatchesModal(page, key)
     },
   })),
-  { name: 'domains', url: ROUTES.domains },
+  // Etap 8b Run B: the overview (the landing's contexts grid, then what was there) and one context's ranked list.
+  { name: 'domains', url: ROUTES.domains, prepare: domainsGridReady, check: domainsGridChecks },
+  { name: 'domains-context-crypto-onchain', url: `${ROUTES.domains}?context=crypto-onchain`, prepare: contextRankingReady, check: contextRankingChecks },
   { name: 'evaluators', url: ROUTES.evaluators },
   { name: 'leaderboard', url: ROUTES.leaderboard },
   { name: 'claims', url: ROUTES.claims },
@@ -381,6 +383,7 @@ async function modalReady(page: Page) {
       .or(modal.getByText(NOBODY_VOUCHES, { exact: true }))
       .first(),
   ).toBeVisible({ timeout: WAIT_CAP })
+  await trustCardSettled(page)
 }
 
 /**
@@ -400,6 +403,50 @@ async function profileReady(page: Page) {
   // The header's stat row (the modal's, Etap 5a) answered: no "—" box, a backing read.
   await expect(page.getByTestId('backers-line')).toHaveText(BACKING_READ, { timeout: WAIT_CAP })
   await expect(page.locator('[data-testid="stat-box"] p', { hasText: /^—$/ })).toHaveCount(0, { timeout: WAIT_CAP })
+  await trustCardSettled(page)
+}
+
+/**
+ * Etap 8b Run B: the agent's trust-over-time card left its loading box — the card (with its age, and
+ * no curve under 3 events), "nobody trusts it yet", or its honest error.
+ */
+async function trustCardSettled(page: Page) {
+  const card = page.getByTestId('trust-over-time').first()
+  await card.waitFor({ timeout: WAIT_CAP })
+  await expect(page.locator('[data-testid="trust-over-time"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
+  if ((await card.getAttribute('data-state')) == null) {
+    await expect(card.getByTestId('data-age')).toHaveText(/^Updated /)
+    const events = Number(await card.getAttribute('data-events'))
+    await expect(card.getByTestId('trust-curve')).toHaveCount(events >= 3 ? 1 : 0)
+  }
+}
+
+/** /domains: the server-rendered contexts grid is there, all 8 tiles (or its honest error). */
+async function domainsGridReady(page: Page) {
+  await page.getByTestId('trust-contexts').waitFor({ timeout: WAIT_CAP })
+}
+async function domainsGridChecks(page: Page) {
+  if ((await page.getByTestId('trust-contexts').getAttribute('data-state')) === 'ok') {
+    await expect(page.getByTestId('context-tile')).toHaveCount(8)
+    await expect(page.locator('a[data-testid="context-tile"][href="/domains?context=crypto-onchain"]')).toHaveCount(1)
+  }
+  await pageFitsViewport(page)
+}
+
+/** /domains?context=…: the header and the list (or its empty / failed state) are there. */
+async function contextRankingReady(page: Page) {
+  await page.getByTestId('context-headline').waitFor({ timeout: WAIT_CAP })
+  await page.getByTestId('context-ranking').waitFor({ timeout: WAIT_CAP })
+}
+async function contextRankingChecks(page: Page) {
+  await expect(page.getByTestId('context-headline')).toHaveText(/Agents people trust for Crypto \/ Onchain\./)
+  const state = await page.getByTestId('context-ranking').getAttribute('data-state')
+  if (state !== 'failed') await expect(page.getByTestId('context-stats')).toHaveText(/^\d+ agents? · \d+ (person|people) · Updated /)
+  if (state === 'ok') {
+    const people = await page.getByTestId('context-agent').evaluateAll((rows) => rows.map((r) => Number((r.textContent ?? '').match(/(\d+) (person|people) trust/)?.[1] ?? 0)))
+    expect(people, 'distinct people first').toEqual([...people].sort((a, b) => b - a))
+  }
+  await pageFitsViewport(page)
 }
 
 /**
@@ -412,6 +459,8 @@ async function checkCardReady(page: Page) {
   await card.waitFor({ timeout: WAIT_CAP })
   await expect(card.getByTestId('check-people')).toHaveText(/trusts? it/i, { timeout: WAIT_CAP })
   await expect(card.getByTestId('check-age')).toHaveText(/^Updated /, { timeout: WAIT_CAP })
+  // Etap 8b Run B: the compact trust-over-time card under it (server-rendered).
+  await trustCardSettled(page)
 }
 
 /** Nothing on the page reaches past the viewport (no sideways scroll). */

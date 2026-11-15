@@ -135,7 +135,7 @@ export function TrustOverTimeCard({
       </div>
 
       <footer className="mt-6 pt-5 border-t border-white/10 flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1" data-testid="agent-tier-chip">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1" data-testid="trust-card-tier">
           {tier ? (
             <>
               <TrustTierBadge tier={tier.display} size="md" />
