@@ -43,4 +43,5 @@ export const WARMUP_PATHS: string[] = [
   ROUTES.intuforge,
   ROUTES.check,
   ROUTES.checkCard(AGENTS.dackie),
+  ROUTES.checkCard(AGENTS.luda),
 ]

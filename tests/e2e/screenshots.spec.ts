@@ -50,6 +50,9 @@ const SHOTS: Shot[] = [
   // Etap 7 Run B: "Check an agent" — the box, and one agent's card at its permalink.
   { name: 'check', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-dackie', url: ROUTES.checkCard(AGENTS.dackie), prepare: checkCardReady, check: checkCardChecks },
+  { name: 'check-luda', url: ROUTES.checkCard(AGENTS.luda), prepare: checkCardReady, check: checkCardChecks },
+  // Etap 8a: the nav in Intuition's words — the desktop sidebar; the phone's bottom nav with More open.
+  { name: 'nav', url: ROUTES.landing, prepare: navReady, target: navTarget, firstScreen: true, check: navWords },
   { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: mostVouchedFirst },
   // The first screen, as a visitor sees it: at 390×844 the first card must be on it.
   { name: 'agents-list-fold', url: ROUTES.agents, prepare: agentsListReady, firstScreen: true, check: firstCardAboveFold },
@@ -158,7 +161,7 @@ for (const shot of SHOTS) {
     if (shot.target) {
       const el = await shot.target(page).catch(() => null)
       if (el) await el.screenshot({ path: file })
-      else await page.screenshot({ path: file, fullPage: true })
+      else await page.screenshot({ path: file, fullPage: !shot.firstScreen })
     } else {
       await page.screenshot({ path: file, fullPage: !shot.firstScreen })
     }
@@ -179,6 +182,47 @@ for (const shot of SHOTS) {
       expect.soft(broken, `${shot.name}: layout check failed`).toBeNull()
     }
   })
+}
+
+/**
+ * Etap 8a: the card a shared link previews as — the Open Graph image, from the same read as the
+ * page, never cached (desktop run only: the image doesn't depend on the viewport).
+ */
+test('og-dackie', async ({ request }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'one image, not per viewport')
+  const res = await request.get(`${ROUTES.checkCard(AGENTS.dackie)}/og`, { timeout: 60_000 })
+  const file = path.join(REPO_ROOT, 'screenshots', process.env.SHOTS_DATE!, testInfo.project.name, 'og-dackie.png')
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  mkdirSync(path.dirname(file), { recursive: true })
+  writeFileSync(file, await res.body())
+  testInfo.annotations.push({ type: 'screenshot', description: path.relative(REPO_ROOT, file) })
+  expect(res.headers()['content-type']).toBe('image/png')
+  expect(res.headers()['cache-control']).toBe('no-store')
+})
+
+/** The landing settled; on a phone, the More sheet is open (the nav's second level). */
+async function navReady(page: Page) {
+  await landingStatsReady(page)
+  if ((page.viewportSize()?.width ?? 0) < 1024) {
+    await page.locator('nav.fixed.bottom-0').getByText('More', { exact: true }).click()
+    await page.getByText('Trust contexts', { exact: true }).first().waitFor({ timeout: WAIT_CAP })
+  }
+}
+
+/** Desktop: the sidebar alone. Phone: the first screen (bottom nav + the More sheet). */
+async function navTarget(page: Page): Promise<Locator> {
+  if ((page.viewportSize()?.width ?? 0) < 1024) throw new Error('phone: first screen')
+  return page.locator('aside').first()
+}
+
+/** The three primary places and More → Trust contexts, in Intuition's words; the old ones are gone. */
+async function navWords(page: Page, project: string) {
+  const nav = project === 'mobile' ? page.locator('nav.fixed.bottom-0') : page.locator('aside').first()
+  for (const label of project === 'mobile' ? ['Check an agent', 'Trust an agent', 'More'] : ['Check an agent', 'Trust an agent', 'For developers']) {
+    await expect(nav.getByText(label, { exact: true }).first(), label).toBeVisible()
+  }
+  await expect(nav.getByText(/^Vouch$/), 'the old "Vouch"').toHaveCount(0)
+  await expect(page.getByText(/^Domains$/), 'the old "Domains" nav label').toHaveCount(0)
 }
 
 /**
@@ -245,8 +289,8 @@ async function landingStoryOnOneScreen(page: Page, project: string) {
 }
 
 // Etap 5b copy (lib/people-copy.ts), spelled out here so the harness checks the words a person reads.
-const WHO_VOUCHES = 'Who vouches, and for what'
-const NOBODY_VOUCHES = 'Unverified — nobody vouches yet'
+const WHO_VOUCHES = 'Who trusts it, and for what'
+const NOBODY_VOUCHES = 'Unverified — nobody trusts it yet'
 const TIER_READ = /\d+ of \d+ people needed to verify|Verified/
 /** The backing line once read: an amount and wallets, or nobody — never "Backed with — by —". */
 const BACKING_READ = /^(Backed with \d|No tTRUST backing yet)/
@@ -254,15 +298,15 @@ const BACKING_READ = /^(Backed with \d|No tTRUST backing yet)/
 /**
  * Modal is open and its own "—" loading placeholders resolved: the four
  * primary stat boxes and the backing line render "—" only while loading
- * (see the Etap 4b comments in src/app/agents/agents-client.tsx), and the "Who vouches"
- * section left its skeleton — either its heading (≥1 vouch) or the empty
- * state (nobody vouches, e.g. OPEN CLAW). Copy: lib/people-copy.ts (Etap 5b).
+ * (see the Etap 4b comments in src/app/agents/agents-client.tsx), and the "Who trusts it"
+ * section left its skeleton — either its heading (≥1 person) or the empty
+ * state (nobody trusts it, e.g. OPEN CLAW). Copy: lib/people-copy.ts (Etap 5b, 8a).
  */
 async function modalReady(page: Page) {
   const modal = modalLocator(page)
   await modal.waitFor({ timeout: WAIT_CAP })
   await expect(modal.getByTestId('backers-line')).toHaveText(BACKING_READ, { timeout: WAIT_CAP })
-  // The agent tier chip resolved: Unverified / Trusted with "1 of 3 people needed to verify", or
+  // The agent tier chip resolved: Unverified / Established with "1 of 3 people needed to verify", or
   // "Verified". "— of 3 people…" (loading) and "Tier unavailable" don't match.
   await expect(modal.getByTestId('agent-tier-chip').getByText(TIER_READ).first()).toBeVisible({ timeout: WAIT_CAP })
   // The four primary stat boxes print "—" only while their data loads.
@@ -276,7 +320,7 @@ async function modalReady(page: Page) {
 
 /**
  * /agents/[id] resolved: the agent tier chip left its loading state, the
- * "Who vouches" section rendered (heading or empty state) and the stat row answered. The reference agents all
+ * "Who trusts it" section rendered (heading or empty state) and the stat row answered. The reference agents all
  * exist — ERC-8004 ones included — so "Agent Not Found" is a failure here, not
  * a settled page.
  */
@@ -297,11 +341,11 @@ async function profileReady(page: Page) {
  * Etap 5a: exactly one attest CTA in the DOM (not one visible and one hidden): inline in the
  * Attested section on desktop, the sticky bar on a phone — and it is visible.
  */
-/** Etap 7 Run B: the /check card answered — who vouches, the seals, how old the data is. */
+/** Etap 7 Run B: the /check card answered — who trusts it, the seals, how old the data is. */
 async function checkCardReady(page: Page) {
   const card = page.getByTestId('check-result')
   await card.waitFor({ timeout: WAIT_CAP })
-  await expect(card.getByTestId('check-people')).toHaveText(/vouch/i, { timeout: WAIT_CAP })
+  await expect(card.getByTestId('check-people')).toHaveText(/trusts? it/i, { timeout: WAIT_CAP })
   await expect(card.getByTestId('check-age')).toHaveText(/^Updated /, { timeout: WAIT_CAP })
 }
 
@@ -311,7 +355,7 @@ async function pageFitsViewport(page: Page) {
   expect(overflow, 'page wider than the viewport').toBeLessThanOrEqual(0)
 }
 
-/** The card: one vouch action, the share row, and it fits the viewport. */
+/** The card: one trust action, the share row, and it fits the viewport. */
 async function checkCardChecks(page: Page) {
   await oneAttestCta(page)
   await expect(page.getByTestId('share-x'), 'Share on X').toBeVisible()
@@ -344,8 +388,8 @@ async function statRowMatchesModal(page: Page, key: keyof typeof AGENTS) {
 }
 
 /**
- * Etap 5b: the list opens on "Most vouched" — people first. The first cards are the agents people
- * vouch for, most people first; the top five are logged for the report.
+ * Etap 5b: the list opens on "Most trusted" (`?sort=vouched`) — people first. The first cards are the
+ * agents people trust, most people first; the top five are logged for the report.
  */
 async function mostVouchedFirst(page: Page) {
   await expect(page.getByRole('combobox', { name: 'Sort' })).toHaveValue('vouched')
@@ -353,10 +397,10 @@ async function mostVouchedFirst(page: Page) {
     name: (c.querySelector('h3, p.font-semibold') as HTMLElement | null)?.innerText.trim() ?? '',
     line: (c.querySelector('[data-testid="card-attester-line"]') as HTMLElement | null)?.innerText.trim() ?? '',
   })))
-  console.log(`most vouched, top 5: ${JSON.stringify(top)}`)
-  // Whoever people vouch for comes before anyone nobody vouches for.
-  const vouched = top.map((t) => /vouch(es)? · for /.test(t.line))
-  expect(vouched.indexOf(false) === -1 || !vouched.slice(vouched.indexOf(false)).includes(true), 'a vouched agent after an unvouched one').toBe(true)
+  console.log(`most trusted, top 5: ${JSON.stringify(top)}`)
+  // Whoever people trust comes before anyone nobody trusts.
+  const trusted = top.map((t) => /trusts? it for /.test(t.line))
+  expect(trusted.indexOf(false) === -1 || !trusted.slice(trusted.indexOf(false)).includes(true), 'a trusted agent after an untrusted one').toBe(true)
 }
 
 /** Wallet disconnected: the visible Attest CTA opens the connect modal; no native dialog fires. */
@@ -366,7 +410,7 @@ async function attestClickOpensConnectModal(page: Page) {
   page.on('dialog', (d) => { dialogs.push(d.message()); void d.dismiss() })
   await page.locator('[data-testid="attest-cta"]').filter({ visible: true }).first().click()
   await expect(page.getByTestId('connect-wallet-modal')).toBeVisible({ timeout: WAIT_CAP })
-  await expect(page.getByTestId('connect-wallet-modal')).toContainText('Connect a wallet to vouch for Luda.')
+  await expect(page.getByTestId('connect-wallet-modal')).toContainText('Connect a wallet to trust Luda.')
   expect(dialogs, 'no native browser dialog').toEqual([])
 }
 
