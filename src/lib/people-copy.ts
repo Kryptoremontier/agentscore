@@ -10,8 +10,9 @@
  * one of the canonical domain buckets (`area` / `domain` in code and on the API). Backing is a
  * stake on the agent's own atom vault: capital on the agent itself, never called trust.
  *
- * Machine surfaces (REST, MCP, llms.txt, SKILL.md) keep "attest", "attesters", "trustScore" and
- * never print its strings.
+ * Tier labels: Unverified · Established · Verified — `unverified` / `trusted` / `verified` on the
+ * API, unchanged ("Trusted" as a tier name fought the verb: "1 person trusts it · not Trusted").
+ * API field names, query params, tool names and enum values never change with this copy.
  */
 
 import { formatTTrust } from './format'
@@ -67,10 +68,27 @@ export const NOBODY_VOUCHES = 'Nobody trusts it yet'
 
 /** The tier chip's subtitle under Verified: "1 of 3 people needed to verify"; "—" while loading. */
 export const tierProgress = (n: number | null, needed: number) => `${n ?? '—'} of ${needed} people needed to verify`
-export const TIER_UNREAD = 'Tier unavailable — couldn’t read who vouches'
+export const TIER_UNREAD = 'Tier unavailable — couldn’t read who trusts it'
+/**
+ * Tier labels on screen (Etap 8a). The API values stay `unverified` / `trusted` / `verified`; only
+ * `trusted` reads differently — "Established" — because "Trusted" fought the verb ("1 person trusts
+ * it · not Trusted"). The rule (thesis §6) is unchanged.
+ */
+export const TIER_LABEL = { unverified: 'Unverified', trusted: 'Established', verified: 'Verified' } as const
+/** Trust, on-chain — written once in /docs (For developers) and llms.txt. */
+export const TRUST_ONCHAIN_MAPPING =
+  'Trusting an agent for a trust context = the triple `<agent> — is skilled in — <context>` with a deposit from your wallet. Only distinct wallets with live shares count.'
+/** One line per tier: what it takes. */
+export const TIER_RULE = {
+  verified: 'at least 3 people and 0.1 tTRUST',
+  trusted: 'at least 2 people and 0.05 tTRUST',
+  unverified: 'fewer than 2 people, or too little tTRUST',
+} as const
+/** The one line that maps the Established label to its API value (tier explainer, /docs, llms.txt). */
+export const ESTABLISHED_MAPPING = `${TIER_LABEL.trusted} (\`trusted\` in the API): ${TIER_RULE.trusted}`
 export const TIER_TOOLTIP =
-  'The tier comes only from people who vouch: how many distinct wallets, and how much tTRUST is behind their vouches. ' +
-  'Verified: ≥ 3 people and ≥ 0.1 tTRUST. Trusted: ≥ 2 and ≥ 0.05. Otherwise Unverified. ' +
+  'The tier comes only from people who trust the agent: how many distinct wallets, and how much tTRUST is behind their trust. ' +
+  `Verified: at least 3 people and 0.1 tTRUST. ${ESTABLISHED_MAPPING}. Otherwise Unverified. ` +
   'Backing the agent never changes it; one wallet can never lift it.'
 
 // ─── Sections ────────────────────────────────────────────────────────────────
@@ -315,8 +333,8 @@ export const EXPLAINERS: Record<ExplainerTerm, { label: string; text: string; li
     text: 'To trust an agent is to put a little tTRUST behind one claim: this agent is good at this trust context. It’s on-chain, with your wallet on it.',
   },
   tiers: {
-    label: 'What do Unverified, Trusted and Verified mean?',
-    text: 'Trusted takes 2 different people, Verified takes 3. One wallet can never lift an agent on its own.',
+    label: 'What do Unverified, Established and Verified mean?',
+    text: `${ESTABLISHED_MAPPING}. Verified: at least 3 people and 0.1 tTRUST. One wallet can never lift an agent on its own.`,
   },
   backing: {
     label: 'What is the backing score?',
@@ -369,7 +387,7 @@ export const LANDING_FEATURES = [
 export const CTA_HEADING = 'Know an agent that delivers?'
 export const CTA_LINE = { before: 'Trust it for the context it is good at. It takes a wallet and a little testnet tTRUST — free from the', after: '— and your name stays on it.' } as const
 /** How it works, one line after the steps. */
-export const LANDING_TIERS_LINE = 'Trusted takes 2 people. Verified takes 3. Backing with tTRUST never changes the tier.'
+export const LANDING_TIERS_LINE = 'Established takes 2 people. Verified takes 3. Backing with tTRUST never changes the tier.'
 /** The "For developers" block: a live get_agent_trust answer for the landing's example agent. */
 export const DEV_HEADING = 'For developers & agents'
 export const DEV_LINE = 'Your agent can ask before it trusts. Every answer carries the age of its data.'

@@ -16,6 +16,7 @@
 
 import { isLivePosition } from './live-position'
 import type { AttesterSummary } from './agent-profile'
+import { TIER_LABEL, TIER_RULE } from './people-copy'
 
 export type AgentTier = 'unverified' | 'trusted' | 'verified'
 
@@ -31,7 +32,7 @@ export const AGENT_TIER_LADDER = {
   trusted: { minAttesters: 2, minAttestedWei: WEI / 20n },   // 0.05 tTRUST
 } as const
 
-/** Badge visuals — same palette as the other tier chips (trust-tiers.ts), rule text from the thesis. */
+/** Badge visuals — same palette as the other tier chips (trust-tiers.ts); label and rule text from people-copy (Etap 8a: `trusted` reads "Established"). */
 export interface AgentTierDisplay {
   tier: AgentTier
   label: string
@@ -44,19 +45,19 @@ export interface AgentTierDisplay {
 
 export const AGENT_TIER_DISPLAY: Record<AgentTier, AgentTierDisplay> = {
   verified: {
-    tier: 'verified', label: 'Verified', color: '#f59e0b',
+    tier: 'verified', label: TIER_LABEL.verified, color: '#f59e0b',
     bgColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.3)', icon: '⭐',
-    description: '≥ 3 distinct attesters and ≥ 0.1 tTRUST attested',
+    description: TIER_RULE.verified,
   },
   trusted: {
-    tier: 'trusted', label: 'Trusted', color: '#22c55e',
+    tier: 'trusted', label: TIER_LABEL.trusted, color: '#22c55e',
     bgColor: 'rgba(34, 197, 94, 0.15)', borderColor: 'rgba(34, 197, 94, 0.3)', icon: '✓',
-    description: '≥ 2 distinct attesters and ≥ 0.05 tTRUST attested',
+    description: TIER_RULE.trusted,
   },
   unverified: {
-    tier: 'unverified', label: 'Unverified', color: '#6b7280',
+    tier: 'unverified', label: TIER_LABEL.unverified, color: '#6b7280',
     bgColor: 'rgba(107, 114, 128, 0.15)', borderColor: 'rgba(107, 114, 128, 0.3)', icon: '○',
-    description: 'fewer than 2 distinct attesters, or too little tTRUST attested',
+    description: TIER_RULE.unverified,
   },
 }
 

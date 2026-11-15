@@ -19,9 +19,11 @@ const code = (f: string) => readFileSync(path.join(SRC, f), 'utf8').replace(/\/\
 
 describe('the four explainers — the words from the spec', () => {
   it('vouch, tiers, backing score, tTRUST', () => {
-    expect(EXPLAINERS.vouch.text).toBe('A vouch is a person putting a little tTRUST behind one claim: this agent is good at this area. It’s on-chain, with their wallet on it.')
-    expect(EXPLAINERS.tiers.text).toBe('Trusted takes 2 different people, Verified takes 3. One wallet can never lift an agent on its own.')
-    expect(EXPLAINERS.backing.text).toBe('How much tTRUST sits on the agent itself. Backing is not vouching — it never changes the tier.')
+    expect(EXPLAINERS.vouch.text).toBe('To trust an agent is to put a little tTRUST behind one claim: this agent is good at this trust context. It’s on-chain, with your wallet on it.')
+    // Etap 8a: the tier "?" carries the one line that maps the label to the API value.
+    expect(EXPLAINERS.tiers.label).toBe('What do Unverified, Established and Verified mean?')
+    expect(EXPLAINERS.tiers.text).toBe('Established (`trusted` in the API): at least 2 people and 0.05 tTRUST. Verified: at least 3 people and 0.1 tTRUST. One wallet can never lift an agent on its own.')
+    expect(EXPLAINERS.backing.text).toBe('Capital on the agent itself. It never changes the tier. It is how much tTRUST sits on the agent, not who trusts it.')
     expect(EXPLAINERS.ttrust.text).toBe('Intuition’s testnet token. It’s free — get it from the Intuition Hub.')
   })
 
@@ -39,7 +41,7 @@ describe('<Explainer> — a real button, closed until asked', () => {
   it('a <button type="button"> with an aria-label, aria-expanded="false" and no panel yet', () => {
     const html = renderToStaticMarkup(createElement(Explainer, { term: 'vouch' }))
     expect(html).toMatch(/^<button type="button"/)
-    expect(html).toContain('aria-label="What is a vouch?"')
+    expect(html).toContain('aria-label="What does it mean to trust an agent?"')
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('data-term="vouch"')
     expect(html).not.toContain('explainer-panel')
