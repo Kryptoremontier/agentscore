@@ -91,7 +91,7 @@ describe('where the "?" sits — next to the word, on the modal, the profile and
   it('the landing: trust right after the step that names it; tiers beside the card\'s chip', () => {
     expect(code('components/landing/HowItWorks.tsx')).toMatch(/step\.num === '02' && <Explainer term="vouch"/)
     const card = code('components/trust/TrustOverTimeCard.tsx')
-    expect(card.indexOf('<Explainer term="tiers" />')).toBeGreaterThan(card.indexOf('data-testid="agent-tier-chip"'))
+    expect(card.indexOf('<Explainer term="tiers" />')).toBeGreaterThan(card.indexOf('data-testid="trust-card-tier"'))
   })
 
   it('never a separate FAQ page', () => {

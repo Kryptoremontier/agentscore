@@ -24,6 +24,7 @@ import { AgentTabs } from '@/components/agents/AgentTabs'
 import { BackThisAgentSection } from '@/components/profile/BackThisAgentSection'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { SealRow } from '@/components/agents/SealRow'
+import { AgentTrustOverTime } from '@/components/trust/AgentTrustOverTime'
 import { Explainer } from '@/components/shared/Explainer'
 import { AgentDetails } from '@/components/profile/AgentDetails'
 import { ScoreParts, type ScorePartsView } from '@/components/profile/ScoreParts'
@@ -224,6 +225,8 @@ export default function AgentDetailPage() {
 
               {/* ATTESTED > DECLARED > REPORTS (thesis §5 hierarchy) */}
               <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agentId} agentName={name} />
+              {/* Trust over time (Etap 8b Run B): the landing's card, for this agent. */}
+              <AgentTrustOverTime agentId={agentId} agentName={name} people={attesters?.length ?? null} tier={agentTier} compact />
               <DeclaredDomains declaredDomains={cohortFailed ? null : cohortMatch?.declaredDomains} />
               <ReportsSection reports={vector.reports} loading={profileLoading} />
 
@@ -331,6 +334,8 @@ export default function AgentDetailPage() {
               DECLARED (cohort only) > REPORTS (collapsed) > score context below.
               Zero attestations renders AttestEmptyState (thesis §6). */}
           <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agent.id} agentName={agent.name} />
+          {/* Trust over time (Etap 8b Run B): the landing's card, for this agent — same reader, same <3-events rule. */}
+          <AgentTrustOverTime agentId={agent.id} agentName={agent.name} people={attesters?.length ?? null} tier={agentTier} />
           <DeclaredDomains declaredDomains={cohortMatch?.declaredDomains} />
           <ReportsSection reports={vector.reports} loading={profileLoading} />
 

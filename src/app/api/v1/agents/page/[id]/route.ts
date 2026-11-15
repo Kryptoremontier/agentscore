@@ -1,7 +1,7 @@
 import { type NextRequest } from 'next/server'
 import { apiError, apiSuccess, corsOptions, withReadLedger } from '@/lib/api-helpers'
 import { getAgentModalParts, isListedAgent } from '@/lib/agents-page-data'
-import { MODAL_PARTS, type ModalPart } from '@/lib/agents-page-types'
+import { MODAL_NAMED_PARTS, MODAL_PARTS, type ModalPart } from '@/lib/agents-page-types'
 import { encodeForCache } from '@/lib/json-codec'
 
 /**
@@ -24,8 +24,9 @@ async function handleGET(
     // ?parts=vault,signals,reports — only those (the agent header's; Etap 5a). Default: every part.
     const asked = request.nextUrl.searchParams.get('parts')
     const parts = asked ? asked.split(',').map((p) => p.trim()).filter(Boolean) : [...MODAL_PARTS]
-    const unknown = parts.filter((p) => !(MODAL_PARTS as readonly string[]).includes(p))
-    if (unknown.length || parts.length === 0) return apiError(`Unknown part(s): ${unknown.join(', ') || '(none)'} — one or more of ${MODAL_PARTS.join(', ')}`, 400)
+    const known: readonly string[] = [...MODAL_PARTS, ...MODAL_NAMED_PARTS]
+    const unknown = parts.filter((p) => !known.includes(p))
+    if (unknown.length || parts.length === 0) return apiError(`Unknown part(s): ${unknown.join(', ') || '(none)'} — one or more of ${known.join(', ')}`, 400)
     if ((await isListedAgent(id)) === false) return apiError('Agent not found', 404)
     return apiSuccess(encodeForCache(await getAgentModalParts(id, parts as ModalPart[])))
   } catch (error) {

@@ -127,6 +127,7 @@ const loadModalParts = () => Promise.all([
   loadTimeline(),
   import('@/components/agents/BondingCurveChart'),
   import('@/components/profile/AttestedDomains'),
+  import('@/components/trust/AgentTrustOverTime'),
   import('@/components/attest/AttestStickyBar'),
   import('@/components/profile/BackThisAgentSection'),
 ])
@@ -149,6 +150,11 @@ const AttestedDomains = dynamic(() => import('@/components/profile/AttestedDomai
   loading: () => <div className="mb-3 h-28 rounded-xl bg-white/[0.03] animate-pulse" aria-hidden />,
 })
 const AttestStickyBar = dynamic(() => import('@/components/attest/AttestStickyBar').then((m) => m.AttestStickyBar), { ssr: false })
+// Etap 8b Run B: the landing's trust-over-time card, for the open agent — loads with the modal, never with the list.
+const AgentTrustOverTime = dynamic(() => import('@/components/trust/AgentTrustOverTime').then((m) => m.AgentTrustOverTime), {
+  ssr: false,
+  loading: () => <div className="mb-3 h-40 rounded-2xl bg-white/[0.03] animate-pulse" aria-hidden />,
+})
 const BackThisAgentSection = dynamic(() => import('@/components/profile/BackThisAgentSection').then((m) => m.BackThisAgentSection), {
   ssr: false,
   loading: () => <div className="mb-3 h-14 rounded-xl bg-white/[0.03] animate-pulse" aria-hidden />,
@@ -2165,6 +2171,16 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                   agentId={selectedAgent.term_id}
                   agentName={getAgentNameFromAtom(selectedAgent)}
                   className="mb-3"
+                />
+              </div>
+              {/* Trust over time (Etap 8b Run B): who trusted it, for what, when — the landing's card. */}
+              <div className="mb-3">
+                <AgentTrustOverTime
+                  agentId={selectedAgent.term_id}
+                  agentName={getAgentNameFromAtom(selectedAgent)}
+                  people={modalAttesters ? modalAttesters.length : null}
+                  tier={agentTier}
+                  compact
                 />
               </div>
               {selectedAgent.origin === 'erc8004' && (

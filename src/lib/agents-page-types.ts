@@ -15,6 +15,7 @@ import { decodeCohortAttestations, decodeCohortCard, type CohortCard, type Cohor
 import type { VaultPositionWithMeta } from './vault-positions'
 import type { AgentSignals } from './agent-signals'
 import type { AgentReport } from './agent-profile'
+import type { FirstTrust, TrustEvent } from './trust-events-view'
 import type { fetchAgentSkillTriples } from './intuition'
 
 export type PagePart<T> =
@@ -72,6 +73,12 @@ export interface AgentModalPayload {
   stakerWeights: PagePart<Record<string, number>>
   /** An ERC-8004 agent's identity link and declarations (the list carries only its card); null = not a cohort agent. */
   identity: PagePart<CohortIdentity | null>
+  /**
+   * Etap 8b, asked for by name only (`?parts=trustEvents`): who trusts the agent, for which context,
+   * since when (lib/trust-events.ts), and the first trust in AgentScore's history (null = none, or
+   * that read failed — then nothing is marked).
+   */
+  trustEvents?: PagePart<{ events: TrustEvent[]; first: FirstTrust | null }>
 }
 
 /** What the modal shows of a cohort agent beyond its card (lib/cohort-reader.ts CohortAgent). */
@@ -79,7 +86,9 @@ export type CohortIdentity = Pick<CohortAgent, 'caipIdentity' | 'declaredDomains
 
 /** The modal answer's parts, and which of them the agent header (stat row + Backers line) needs. */
 export const MODAL_PARTS = ['vault', 'signals', 'skillTriples', 'reports', 'stakerWeights', 'identity'] as const
-export type ModalPart = (typeof MODAL_PARTS)[number]
+/** Parts served only when asked for by name — never in the default (every-part) answer or the modal's poll. */
+export const MODAL_NAMED_PARTS = ['trustEvents'] as const
+export type ModalPart = (typeof MODAL_PARTS)[number] | (typeof MODAL_NAMED_PARTS)[number]
 /**
  * The header's parts — fast reads (vault, signals, reports: well under a second cold). Asked for on
  * their own (`?parts=`) so the header never waits on the slow ones (skill triples: ~5.5 s cold).

@@ -31,6 +31,7 @@ import { calculateEvaluatorScore, type EvaluatorProfile } from './evaluator-scor
 import { gqlRequest, type GqlRequest } from './gql-pager'
 import { MODAL_PARTS, type AgentModalPayload, type AgentsPagePayload, type CohortIdentity, type ModalPart, type PagePart } from './agents-page-types'
 import { encodeCohortAttestations, encodeCohortCard } from './cohort-wire'
+import { fetchAgentTrustEvents, fetchFirstTrust } from './trust-events'
 
 /** Server reads bypass Next's fetch cache: the complete-reads cache decides what is kept. */
 const serverRequest: GqlRequest = (query, variables) => gqlRequest(query, variables, { cache: 'no-store' })
@@ -185,7 +186,7 @@ export async function getAgentModalParts(termId: string, parts: readonly ModalPa
   // Signals and staker weights depend on the vault (which vaults to read; whose weights).
   const needVault = want.has('vault') || want.has('signals') || want.has('stakerWeights')
   const vault = needVault ? await pagePart('agent-vault', SERVER_CACHE_TTL.agentDetail, () => loadAgentVault(termId)) : FAILED
-  const [signals, skillTriples, reports, stakerWeights, identity] = await Promise.all([
+  const [signals, skillTriples, reports, stakerWeights, identity, trustEvents] = await Promise.all([
     !want.has('signals') ? undefined
       // Which vaults to read depends on the trust triple: no vault read, no signals.
       : vault.status === 'ok'
@@ -200,6 +201,13 @@ export async function getAgentModalParts(termId: string, parts: readonly ModalPa
             stakerWeightsFrom(await fetchEvaluatorLeaderboard(), stakerWalletsOf(vault.value.positions)))
         : FAILED,
     want.has('identity') ? pagePart('erc8004-cohort', SERVER_CACHE_TTL.erc8004Cohort, () => cohortIdentityOf(termId)) : undefined,
+    // The events must be read; the first trust is only a mark — its failure marks nothing (null).
+    want.has('trustEvents')
+      ? pagePart('agent-trust-events', SERVER_CACHE_TTL.agentDetail, async () => {
+          const [events, first] = await Promise.all([fetchAgentTrustEvents(termId), fetchFirstTrust().catch(() => null)])
+          return { events, first }
+        })
+      : undefined,
   ])
   const out: Partial<AgentModalPayload> = {}
   if (want.has('vault')) out.vault = vault
@@ -208,6 +216,7 @@ export async function getAgentModalParts(termId: string, parts: readonly ModalPa
   if (reports) out.reports = reports
   if (stakerWeights) out.stakerWeights = stakerWeights
   if (identity) out.identity = identity
+  if (trustEvents) out.trustEvents = trustEvents
   return out
 }
 
