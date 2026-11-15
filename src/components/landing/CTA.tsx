@@ -1,51 +1,38 @@
-'use client'
-
 /**
- * The landing's closing call (Etap 5b Run 2): the same two ways in as the first screen — trust
- * an agent, or build on it. No numbers here any more: the one number is on the first screen.
+ * The landing's closing block (Etap 8b): the big headline on the left with its one accent block,
+ * a CTA card on the right — Check an agent (primary), Trust an agent (secondary), one line of
+ * reassurance, and the status pill. No numbers here: the numbers are in the sections above, with
+ * their age.
  */
 
 import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { ArrowRight, Code2, BadgeCheck } from 'lucide-react'
-import { CTA_HEADING, CTA_LINE, LANDING_CTA_VOUCH, LANDING_CTA_DEVELOPERS } from '@/lib/people-copy'
-import { INTUITION_HUB_URL } from '@/lib/intuition-links'
+import { ArrowRight } from 'lucide-react'
+import { CLOSING_HEADLINE, CLOSING_REASSURE, CLOSING_PILL, LANDING_CTA_CHECK, LANDING_CTA_VOUCH } from '@/lib/people-copy'
+import { AccentBlock, DISPLAY, GLASS } from './story-parts'
 
 export function CTA() {
   return (
-    <section className="relative py-24 sm:py-32 overflow-hidden">
-      {/* Semi-transparent overlay — fixed bg shows through */}
+    <section data-section="closing" className="relative py-20 sm:py-28 overflow-hidden">
+      {/* Semi-transparent overlay — the fixed background shows through */}
       <div className="absolute inset-0 bg-[rgb(10,10,15)]/70" />
-
-      <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}>
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#C8963C]/15 mb-8">
-            <BadgeCheck className="w-8 h-8 text-[#C8963C]" />
-          </div>
-
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-display leading-display">
-            {CTA_HEADING}
-          </h2>
-
-          <p className="mt-6 text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
-            {CTA_LINE.before}{' '}
-            <a href={INTUITION_HUB_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-white">
-              Intuition Hub
-            </a>{' '}
-            {CTA_LINE.after}
-          </p>
-
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/agents" className="btn-primary group px-8">
-              {LANDING_CTA_VOUCH}
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid gap-10 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-center">
+        <h2 className={`text-4xl sm:text-6xl ${DISPLAY}`} data-testid="closing-headline">
+          {CLOSING_HEADLINE.before} <AccentBlock>{CLOSING_HEADLINE.accent}</AccentBlock> {CLOSING_HEADLINE.after}
+        </h2>
+        <div className={`${GLASS} p-6 sm:p-8`} data-testid="closing-card">
+          <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 px-3 py-1 font-mono text-[11px] uppercase tracking-eyebrow text-accent">
+            <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-accent" />
+            {CLOSING_PILL}
+          </span>
+          <div className="mt-6 flex flex-col gap-3">
+            <Link href="/check" className="btn-primary group w-full">
+              {LANDING_CTA_CHECK}
+              <ArrowRight aria-hidden className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
-            <Link href="/docs" className="btn-secondary">
-              <Code2 className="w-5 h-5" />
-              {LANDING_CTA_DEVELOPERS}
-            </Link>
+            <Link href="/agents" className="btn-secondary w-full">{LANDING_CTA_VOUCH}</Link>
           </div>
-        </motion.div>
+          <p className="mt-4 text-sm text-[#7A838D] text-center">{CLOSING_REASSURE}</p>
+        </div>
       </div>
     </section>
   )

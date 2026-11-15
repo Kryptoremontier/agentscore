@@ -116,10 +116,10 @@ describe('mono for eyebrows (and the landing check row) — not for data labels'
     // /docs: "Platform Documentation" in the same mono amber line, no pill left.
     expect(read('app/docs/page.tsx')).toMatch(/<p className="eyebrow eyebrow-slash text-accent mb-5">Platform Documentation<\/p>/)
     expect(read('app/docs/page.tsx')).not.toMatch(/rounded-full mb-5 text-xs font-semibold uppercase tracking-widest/)
-    // The landing's section eyebrows too (6b polish): the same mono amber "// …" line, no pill.
-    for (const f of ['components/landing/HowItWorks.tsx', 'components/landing/Features.tsx', 'components/landing/FeaturedAgents.tsx']) {
-      expect(read(f), f).toMatch(/<p className="eyebrow eyebrow-slash text-accent mb-\d">/)
-      expect(read(f), f).not.toMatch(/rounded-full mb-\d eyebrow"/)
+    // The landing's section eyebrows (Etap 8b): mono too — "■ 01 / How it works", the square in the accent.
+    expect(read('components/landing/story-parts.tsx')).toMatch(/<p className="eyebrow inline-flex items-center gap-2/)
+    for (const f of ['components/landing/HowItWorks.tsx', 'components/landing/TrustOverTime.tsx', 'components/landing/GateExample.tsx', 'components/landing/TrustContexts.tsx']) {
+      expect(read(f), f).toMatch(/<StorySection id="[a-z-]+" section=\{STORY_SECTIONS\.\w+\}/)
     }
   })
 })

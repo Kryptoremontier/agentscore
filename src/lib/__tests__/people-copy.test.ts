@@ -98,15 +98,13 @@ describe('the /agents header: plain words, no staking pitch', () => {
 })
 
 describe('footer, /register and the Supporting tab: plain words from the copy module', () => {
-  it('the footer tagline is the landing line itself — imported, never copied', async () => {
-    const { LANDING_SUB } = await import('../people-copy')
-    expect(LANDING_SUB).toBe('Real people trust AI agents, on-chain. One wallet can never do it alone.')
+  it('the footer\'s brand line comes from the copy module (Etap 8b: "Built on Intuition.") — imported, never copied', async () => {
+    const { FOOTER_BRAND } = await import('../people-copy')
+    expect(FOOTER_BRAND).toBe('Built on Intuition.')
     const footer = code(path.join(SRC, 'components/layout/Footer.tsx'))
-    expect(footer).toMatch(/import \{[^}]*\bLANDING_SUB\b[^}]*\} from '@\/lib\/people-copy'/)
-    expect(footer).toMatch(/<p[^>]*>\s*\{LANDING_SUB\}\s*<\/p>/)
+    expect(footer).toMatch(/import \{[^}]*\bFOOTER_BRAND\b[^}]*\} from '@\/lib\/people-copy'/)
+    expect(footer).toMatch(/<p[^>]*>\{FOOTER_BRAND\}<\/p>/)
     expect(footer).not.toMatch(/Decentralized trust verification|to signal\s+confidence|every vote is transparent/)
-    const copy = readFileSync(path.join(SRC, 'lib/people-copy.ts'), 'utf8')
-    expect(copy.split(LANDING_SUB).length - 1).toBe(1)
   })
 
   it('/register "Build Trust": trusted on the agent tab, backed on the skill tab', async () => {
