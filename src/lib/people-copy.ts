@@ -427,3 +427,68 @@ export const LANDING_CHECKS = ['TESTNET tTRUST IS FREE', 'ALL TRUST IS ON-CHAIN'
 
 /** /agents (Etap 7a): the list draws its first rows, then this button adds the next ones. */
 export const showMoreAgents = (n: number) => `Show ${n} more`
+
+// ─── The landing tells the story (Etap 8b) ────────────────────────────────────
+// Numbered sections, each under a mono eyebrow "■ 0N / …". Headlines are set uppercase by CSS;
+// the copy keeps sentence case so a screen reader says words, not letters.
+
+/** The hero's headline: one accent word on a solid block. */
+export const STORY_HEADLINE = { before: 'AI agents, trusted by', accent: 'real people', after: '.' } as const
+export const STORY_SUB = 'See who trusts an agent, and for what, before you use it, pay it, or let your agent call it.'
+export const STORY_HOW_LINK = 'How it works'
+/** The section eyebrows, in order: "■ 01 / How it works". */
+export const STORY_SECTIONS = {
+  how: { num: '01', label: 'How it works' },
+  overTime: { num: '02', label: 'Trust over time' },
+  gate: { num: '03', label: 'Agents ask first' },
+  contexts: { num: '04', label: 'Trust contexts' },
+} as const
+export const storyEyebrow = (s: { num: string; label: string }) => `${s.num} / ${s.label}`
+
+/** 01 — three steps, one line each. `code` is printed as code. */
+export const STORY_STEPS = [
+  { num: '01', title: 'Find it', line: 'Any agent: AgentScore or the ERC-8004 registry.' },
+  { num: '02', title: 'Trust it', line: 'Choose a trust context and sign. One wallet can never do it alone.' },
+  { num: '03', title: 'Agents ask', line: 'Before an agent pays or delegates, it asks', code: 'should_i_trust', after: 'and gets yes, no or unknown.' },
+] as const
+
+/** 02 — one real agent's trust, event by event. */
+export const OVER_TIME_HEADING = 'Every bit of trust has a name and a date.'
+export const OVER_TIME_EVENT = { trusted: 'trusted', for: 'for' } as const
+export const FIRST_TRUST_NOTE = 'First trust in AgentScore’s history'
+export const OVER_TIME_FEW = 'Fewer than 3 trust events: no curve, just each one.'
+export const OVER_TIME_CHART_LABEL = (agent: string, n: number) => `${agent}: ${count(n, 'trust event', 'trust events')} over time`
+export const OVER_TIME_UNREAD = 'Couldn’t read who trusts this agent, and when, right now. This is not an empty record.'
+export const OVER_TIME_NONE = 'No one trusts an agent here yet.'
+export const OVER_TIME_OPEN = 'Open this agent'
+/** "Showing the latest 5 of 9". */
+export const overTimeShowing = (shown: number, total: number) => `Showing the latest ${shown} of ${total}`
+
+/** 03 — the gate, from a real answer. */
+export const GATE_HEADING = 'Agents ask first.'
+export const GATE_WHY = ['Agents will pay agents.', 'Before they do, they can ask who stands behind the other side.'] as const
+export const GATE_DEVELOPERS = 'For developers'
+export const GATE_UNREAD = 'Couldn’t get a live answer from the gate right now, so no example is shown.'
+export const GATE_CAPTION = 'A live answer from the gate, as it returned it.'
+export const GATE_NONE = 'No one trusts an agent here yet, so there is no answer to show.'
+
+/** 04 — the trust contexts. */
+export const CONTEXTS_HEADING = 'What people trust agents for.'
+export const contextsFeatured = (context: string) => `Agents people trust for ${context}`
+export const CONTEXT_EMPTY = { line: 'No one trusts an agent here yet.', cta: 'Be the first.' } as const
+export const CONTEXTS_UNREAD = 'Couldn’t read who trusts which agent right now. This is not an empty record.'
+export const CONTEXTS_GRID_LABEL = 'All trust contexts'
+
+/** The closing block. */
+export const CLOSING_HEADLINE = { before: 'Your agent needs', accent: 'people', after: 'who trust it.' } as const
+export const CLOSING_REASSURE = 'Free on Intuition Testnet · Bring one agent you’ve used'
+export const CLOSING_PILL = 'Testnet beta'
+
+/** The footer. */
+export const FOOTER_BRAND = 'Built on Intuition.'
+/** The big number's words: "{N}" then "people trust it" / "person trusts it". */
+export const peopleTrustItRest = (n: number) => plural(n, 'person trusts it', 'people trust it')
+/** "1 agent" / "3 agents". */
+export const agentsCount = (n: number) => count(n, 'agent', 'agents')
+/** Over the curve: "3 trust events". */
+export const trustEventsCount = (n: number) => count(n, 'trust event', 'trust events')

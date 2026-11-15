@@ -44,10 +44,11 @@ describe('where the accent is', () => {
     expect(read('components/shared/AccentWord.tsx')).toMatch(/font-accent italic font-normal tracking-normal text-accent/)
   })
 
-  it('numbers highlighted inside a sentence (the landing\'s one number) and the invitation under it', () => {
-    const hero = read('components/landing/Hero.tsx')
-    expect(hero).toMatch(/text-accent font-semibold tabular-nums/)
-    expect(hero).toMatch(/text-accent[^"]*" data-testid="invitation"/)
+  it('the landing (Etap 8b): the headline\'s accent block, the eyebrow squares, the step numbers and the curve', () => {
+    expect(read('components/landing/story-parts.tsx')).toMatch(/bg-accent text-\[#0B0C0F\]/)
+    expect(read('components/landing/story-parts.tsx')).toMatch(/w-2 h-2 bg-accent/)
+    expect(read('components/landing/HowItWorks.tsx')).toMatch(/font-mono text-sm text-accent/)
+    expect(read('components/trust/TrustOverTimeCard.tsx')).toMatch(/stroke="rgb\(var\(--accent\)\)"/)
   })
 
   it('the seals: rings, checks and slot borders — no old gold left', () => {
@@ -63,7 +64,6 @@ describe('where the accent is', () => {
     for (const f of ['components/shared/Explainer.tsx', 'components/agents/AgentsStatusLine.tsx']) {
       expect(read(f), f).toMatch(/focus-visible:ring-accent\/70/)
     }
-    expect(read('components/landing/ExampleAgentCard.tsx')).toMatch(/focus-visible:after:ring-accent\/70/)
   })
 
   it('the active nav item — sidebar, phone tabs, More — is the accent whatever the item\'s colour', () => {

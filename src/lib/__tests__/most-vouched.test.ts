@@ -1,6 +1,7 @@
 /**
- * Etap 5b Run 1 commit 3 — sort by people. /agents and the landing carousel order their rows with
- * one helper (lib/agent-list.ts orderAgents) and one default ("Most vouched"), from the same read.
+ * Etap 5b Run 1 commit 3 — sort by people. /agents orders its rows with one helper
+ * (lib/agent-list.ts orderAgents) and one default ("Most trusted"). The landing's carousel that
+ * shared it is gone (Etap 8b: the landing ranks per trust context, lib/landing-story.ts).
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -49,7 +50,7 @@ describe('orderAgents — the default order, from the list\'s read', () => {
   })
 })
 
-describe('one order for /agents and the landing carousel (source guards)', () => {
+describe('one order for /agents (source guards)', () => {
   const SRC = path.join(__dirname, '..', '..')
   const read = (f: string) => readFileSync(path.join(SRC, f), 'utf8')
   it('/agents: sort from the URL (default "Most vouched"), rows through listEntryOf, ordered by orderAgents', () => {
@@ -58,14 +59,5 @@ describe('one order for /agents and the landing carousel (source guards)', () =>
     expect(page).toMatch(/const sorted = orderAgents\(filtered, attestationViewBySubject, sortBy\)/)
     expect(page).toMatch(/\{SORT_OPTIONS\.map\(o => <option key=\{o\.id\} value=\{o\.id\}>\{o\.label\}<\/option>\)\}/)
     expect(page).toMatch(/onChange=\{\(e\) => setListFilters\(\{ sort: parseSort\(e\.target\.value\) \}\)\}/)
-  })
-  it('the carousel and the first screen\'s example: the same read (our API), the same rows, the same default', () => {
-    const featured = read('components/landing/FeaturedAgents.tsx')
-    expect(featured).toMatch(/agentsPageView\(await fetchAgentsPage\(\)\)/)
-    expect(featured).toMatch(/mostVouched\(view, 8\)/)
-    expect(read('components/landing/Hero.tsx')).toMatch(/mostVouched\(view, 1\)/)
-    expect(read('lib/most-vouched.ts')).toMatch(/orderAgents\(rows\.map\(listEntryOf\), views, DEFAULT_SORT\)\.slice\(0, n\)/)
-    // No second, newest-first GraphQL read of AgentScore atoms for the agents tab.
-    expect(featured).not.toMatch(/AGENT_WHERE_STR/)
   })
 })

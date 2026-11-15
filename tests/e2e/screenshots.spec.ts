@@ -43,10 +43,20 @@ interface Shot {
    * Receives the viewport's project name; a failure fails the test with its own message.
    */
   check?: (page: Page, project: string) => Promise<void>
+  /** Etap 8b: shoot at this viewport instead of the project's — desktop project only (e.g. laptop 1280). */
+  viewport?: { width: number; height: number }
 }
 
+// Etap 8b: the landing's numbered sections, each shot on its own (desktop, phone, and laptop 1280).
+const LANDING_SECTIONS = ['hero', 'how-it-works', 'trust-over-time', 'agents-ask-first', 'trust-contexts', 'closing'] as const
+const LAPTOP = { width: 1280, height: 800 }
+
 const SHOTS: Shot[] = [
-  { name: 'landing', url: ROUTES.landing, prepare: landingStatsReady, check: landingStoryOnOneScreen },
+  { name: 'landing', url: ROUTES.landing, prepare: landingReady, check: landingChecks },
+  { name: 'landing-first-screen', url: ROUTES.landing, prepare: landingReady, firstScreen: true, check: landingFirstScreen },
+  ...LANDING_SECTIONS.map((id): Shot => ({ name: `landing-section-${id}`, url: ROUTES.landing, prepare: landingReady, target: (page) => landingSection(page, id) })),
+  { name: 'landing-laptop', url: ROUTES.landing, prepare: landingReady, viewport: LAPTOP, check: landingChecks },
+  ...LANDING_SECTIONS.map((id): Shot => ({ name: `landing-laptop-section-${id}`, url: ROUTES.landing, prepare: landingReady, viewport: LAPTOP, target: (page) => landingSection(page, id) })),
   // Etap 7 Run B: "Check an agent" — the box, and one agent's card at its permalink.
   { name: 'check', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-dackie', url: ROUTES.checkCard(AGENTS.dackie), prepare: checkCardReady, check: checkCardChecks },
@@ -140,6 +150,8 @@ const SHOTS: Shot[] = [
 
 for (const shot of SHOTS) {
   test(shot.name, async ({ page }, testInfo) => {
+    test.skip(!!shot.viewport && testInfo.project.name !== 'desktop', 'a fixed viewport: shot once, from the desktop project')
+    if (shot.viewport) await page.setViewportSize(shot.viewport)
     const file = path.join(
       REPO_ROOT, 'screenshots', process.env.SHOTS_DATE!, testInfo.project.name, `${shot.name}.png`,
     )
@@ -202,7 +214,7 @@ test('og-dackie', async ({ request }, testInfo) => {
 
 /** The landing settled; on a phone, the More sheet is open (the nav's second level). */
 async function navReady(page: Page) {
-  await landingStatsReady(page)
+  await landingReady(page)
   if ((page.viewportSize()?.width ?? 0) < 1024) {
     await page.locator('nav.fixed.bottom-0').getByText('More', { exact: true }).click()
     await page.getByText('Trust contexts', { exact: true }).first().waitFor({ timeout: WAIT_CAP })
@@ -262,30 +274,83 @@ async function agentsListReady(page: Page) {
   await expect(page.locator('[data-testid="card-attester-line"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
 }
 
-/** Landing Hero/Stats tiles print "—" while /api/v1/stats loads (lib/landing-stats.ts); wait for the answer. */
-/** The landing's number and its live example answered (Etap 5b Run 2): no "loading" left. */
-async function landingStatsReady(page: Page) {
-  await expect(page.locator('[data-testid="people-vouching"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
-  await expect(page.locator('[data-testid="example-agent"][data-state="loading"]')).toHaveCount(0, { timeout: WAIT_CAP })
+/**
+ * The landing is rendered on the server (Etap 8b): every section is in the HTML. Ready when all six
+ * are there and the live parts answered one way or the other — the card, the gate and the contexts
+ * each either show data (with its age) or say their read failed; nothing is left loading.
+ */
+async function landingReady(page: Page) {
+  for (const id of LANDING_SECTIONS) await page.locator(`[data-section="${id}"]`).waitFor({ timeout: WAIT_CAP })
+  for (const id of ['trust-over-time', 'gate-example', 'trust-contexts']) {
+    await page.getByTestId(id).first().waitFor({ timeout: WAIT_CAP })
+  }
 }
 
 /**
- * Etap 5b Run 2: at 390×844 the whole story — what it is, a live example, three steps, one number,
- * the two ways in — is on the first screen, above the bottom nav, without scrolling.
+ * One landing section, with the fixed chrome (header, bottom nav, scroll-to-top) hidden for the
+ * capture — an element shot otherwise shows the header over the section it scrolled to. The page's
+ * background stays. Restored before the checks (__restoreShotChrome).
  */
-async function landingStoryOnOneScreen(page: Page, project: string) {
+async function landingSection(page: Page, id: string): Promise<Locator> {
+  const section = page.locator(`[data-section="${id}"]`)
+  await section.evaluate((el: HTMLElement) => {
+    const hidden: HTMLElement[] = []
+    for (const node of document.body.querySelectorAll<HTMLElement>('*')) {
+      if (el.contains(node) || node.contains(el)) continue
+      if (getComputedStyle(node).position !== 'fixed') continue
+      if (node.getBoundingClientRect().height >= window.innerHeight - 1) continue // the page background layers
+      node.setAttribute('data-shot-hidden', '')
+      hidden.push(node)
+    }
+    const style = document.createElement('style')
+    style.textContent = '[data-shot-hidden], [data-shot-hidden] * { visibility: hidden !important; transition: none !important; }'
+    document.head.appendChild(style)
+    ;(window as unknown as { __restoreShotChrome?: () => void }).__restoreShotChrome = () => {
+      style.remove()
+      for (const n of hidden) n.removeAttribute('data-shot-hidden')
+    }
+  })
+  return section
+}
+
+/** Each section has its eyebrow; every live part shows its age or its honest error — never a bare card. */
+async function landingChecks(page: Page) {
+  await expect(page.getByTestId('story-eyebrow'), 'hero + 4 numbered eyebrows').toHaveCount(5)
+  await expect(page.getByTestId('story-eyebrow').nth(1)).toHaveText(/01 \/ How it works/i)
+  const card = page.getByTestId('trust-over-time').first()
+  if ((await card.getAttribute('data-state')) == null) {
+    await expect(card.getByTestId('data-age'), 'the card says how old its data is').toHaveText(/^Updated /)
+    await expect(card.getByTestId('people-number')).toHaveText(/^\d+ (person trusts it|people trust it)$/)
+    const events = Number(await card.getAttribute('data-events'))
+    // Never a curve through fewer than 3 events.
+    await expect(card.getByTestId('trust-curve')).toHaveCount(events >= 3 ? 1 : 0)
+    await expect(card.getByTestId('trust-event')).toHaveCount(Math.min(events, 5))
+  }
+  const gate = page.getByTestId('gate-example')
+  if ((await gate.getAttribute('data-state')) === 'ok') {
+    await expect(gate.locator('pre'), 'the answer carries its age').toContainText('"dataAgeSeconds"')
+    await expect(gate.locator('pre')).toContainText('should_i_trust({ agentId:')
+  }
+  if ((await page.getByTestId('trust-contexts').getAttribute('data-state')) === 'ok') {
+    await expect(page.getByTestId('context-tile'), 'all 8 trust contexts, empty ones included').toHaveCount(8)
+  }
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  expect(overflow, 'no sideways scroll').toBeLessThanOrEqual(0)
+}
+
+/** Etap 8b: on a phone, the first screen shows the headline and the Check an agent button (above the bottom nav). */
+async function landingFirstScreen(page: Page, project: string) {
   if (project !== 'mobile') return
   const parts = await page.evaluate(() => {
     window.scrollTo(0, 0)
     const nav = document.querySelector('nav.fixed.bottom-0') as HTMLElement | null
     const floor = nav ? nav.getBoundingClientRect().top : window.innerHeight
-    return [...document.querySelectorAll<HTMLElement>('[data-story]')].map((e) => {
-      const r = e.getBoundingClientRect()
-      return { part: e.dataset.story, bottom: Math.round(r.bottom), floor: Math.round(floor), fits: r.top >= 0 && r.bottom <= floor }
+    return ['story-headline', 'story-check'].map((id) => {
+      const r = document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect()
+      return { id, fits: r.top >= 0 && r.bottom <= floor, bottom: Math.round(r.bottom), floor: Math.round(floor) }
     })
   })
-  expect(parts.map((p) => p.part), 'the five story parts, in order').toEqual(['1', '2', '3', '4', '5'])
-  expect(parts.filter((p) => !p.fits), 'story parts below the first screen').toEqual([])
+  expect(parts.filter((p) => !p.fits), 'below the first screen').toEqual([])
 }
 
 // Etap 5b copy (lib/people-copy.ts), spelled out here so the harness checks the words a person reads.
