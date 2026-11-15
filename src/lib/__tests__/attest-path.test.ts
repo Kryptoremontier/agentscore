@@ -122,11 +122,9 @@ describe('source guards — no native dialogs, one Hub URL, the disconnected cli
     expect(calls).toEqual([])
   })
 
-  it('the Intuition Hub URL is written once (lib/intuition-links.ts); the landing\'s closing call and the attest path use it', () => {
+  it('the Intuition Hub URL is written once (lib/intuition-links.ts); the attest path uses it', () => {
     const copies = all.filter(({ s }) => s.includes('testnet.hub.intuition.systems')).map(({ f }) => f)
     expect(copies).toEqual([path.join('lib', 'intuition-links.ts')])
-    const cta = all.find(({ f }) => f.endsWith(path.join('landing', 'CTA.tsx')))!.s
-    expect(cta).toMatch(/href=\{INTUITION_HUB_URL\}/)
     const attest = all.find(({ f }) => f.endsWith(path.join('attest', 'AttestButton.tsx')))!.s
     expect(attest).toMatch(/href=\{INTUITION_HUB_URL\}/)
     expect(attest).toContain('{NEED_TTRUST}')

@@ -126,9 +126,29 @@ describe('where the seals are — beside the words, never instead of them (sourc
     expect(page.match(/<ProfileStatRow[^\n]*\/>\s*<SealRow attesters=\{profileLoading \? undefined : attesters\} size="lg"/g)).toHaveLength(2)
   })
 
-  it('the landing example card (md), in place of the "by …" names — the same people, still the people line above', () => {
-    const card = code('components/landing/ExampleAgentCard.tsx')
-    expect(card).toMatch(/<SealRow attesters=\{agent\.attesters\} size="md"/)
-    expect(card).toMatch(/agent\.line\.claim/)
+})
+
+// The md size (Etap 6b, the landing's old example card) — kept, and covered, for any surface that wants it.
+describe('SealRow md', () => {
+  it('SealRow md: a column per slot — the seal, then the name and the area under it; open slots keep the height', () => {
+    const p = (n: number, stake: bigint, domains: string[]): AttesterSummary =>
+      ({ wallet: `0x${String(n).padStart(4, '0')}aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, domains, totalStake: stake })
+    const html = renderToStaticMarkup(createElement(SealRow, { attesters: [p(1, 2n * T, ['Knowledge / Productivity'])], size: 'md' }))
+    expect(html).toMatch(/<ul aria-label="1 person trusts it\. Verified takes 3 people\." class="grid grid-cols-3 gap-1\.5">/)
+    const filled = html.match(/<li[^>]*data-seal="filled"[^>]*>([\s\S]*?)<\/li>/)!
+    expect(filled[0]).toMatch(/class="flex flex-col items-center text-center/)
+    // ring → name → area, top to bottom
+    const [ring, name, area] = ['rounded-full', '>0x0001...aaaa<', '>Knowledge / Productivity<'].map((s) => filled[1].indexOf(s))
+    expect(ring).toBeGreaterThanOrEqual(0)
+    expect(name).toBeGreaterThan(ring)
+    expect(area).toBeGreaterThan(name)
+    expect(html.match(/data-seal="open"[^>]*class="flex flex-col items-center/g)).toHaveLength(2)
+    expect(html.match(/aria-hidden="true" class="text-\[10px\] leading-\[14px\]">\u00a0</g)).toHaveLength(2)
+  })
+
+  it('SealRow md while loading: the same columns (ring and two bars), so the card doesn\'t move', () => {
+    const html = renderToStaticMarkup(createElement(SealRow, { attesters: undefined, size: 'md' }))
+    expect(html).toMatch(/class="grid grid-cols-3 gap-1\.5 ?"/)
+    expect(html.match(/flex flex-col items-center gap-1 py-0\.5/g)).toHaveLength(3)
   })
 })
