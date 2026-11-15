@@ -492,3 +492,14 @@ export const peopleTrustItRest = (n: number) => plural(n, 'person trusts it', 'p
 export const agentsCount = (n: number) => count(n, 'agent', 'agents')
 /** Over the curve: "3 trust events". */
 export const trustEventsCount = (n: number) => count(n, 'trust event', 'trust events')
+/** An agent's trust-over-time card when nobody trusts it yet. */
+export const OVER_TIME_NOBODY = 'Nobody trusts this agent yet. Be the first.'
+
+// ─── /domains?context=<slug>: one ranked list per trust context (Etap 8b Run B) ──
+export const CONTEXT_EYEBROW = 'Trust context'
+export const contextHeadline = { before: 'Agents people trust for', after: '.' } as const
+/** "3 agents · 5 people". */
+export const contextStats = (agents: number, people: number) => `${agentsCount(agents)} · ${count(people, 'person', 'people')}`
+export const CONTEXT_ALL = 'All trust contexts'
+export const CONTEXT_UNKNOWN = (slug: string) => `There is no trust context called “${slug}”. Here are all of them.`
+export const CONTEXT_RANK_NOTE = 'Ranked by distinct people first, then tTRUST behind them.'
