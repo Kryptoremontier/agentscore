@@ -49,7 +49,7 @@
  * folding the real Code Helper AI duplicate on that page only).
  */
 
-export type AgentJunkReason = 'test_fixture' | 'blocklisted_id' | 'folded_duplicate'
+export type AgentJunkReason = 'test_fixture' | 'blocklisted_id' | 'folded_duplicate' | 'skill_atom'
 
 /**
  * A candidate wraps the caller's own row (`original`) with just the fields
@@ -96,10 +96,23 @@ const JUNK_LABEL_PATTERNS: readonly RegExp[] = [
   /^Trust Test Agent\b/i,
 ]
 
-/** Classify one atom as a pure test fixture, or null if it may be real. */
+/**
+ * (C) CLASSIFICATION — a skill atom is not an agent (Etap 9). The skill form writes its own type
+ * marker at the start of the label ("Skill: …", later "Skill:INTU: …"), as the agent form wrote
+ * "Agent: …". The agent corpus also takes any atom that is the subject of a trust triple
+ * (gql-filters.ts AGENT_WHERE_STR), so a skill someone put that triple on was listed as an agent:
+ * "Skill: On-Chain Data Analyzer" (0xf9508a10…, created 2026-03-04 beside four other "Skill:"
+ * atoms; its only position was redeemed to 0). This is the atom's registered type, read from the
+ * marker the registration wrote — not a judgement about a name, and not the blocklist, which
+ * stays exact-ID only.
+ */
+const SKILL_TYPE_MARKER = /^Skill:/i
+
+/** Classify one atom as a pure test fixture or a skill atom, or null if it may be a real agent. */
 export function classifyAgentJunk(a: { termId: string; label: string }): AgentJunkReason | null {
   if (BLOCKLIST_IDS.has(a.termId.toLowerCase())) return 'blocklisted_id'
   const label = (a.label ?? '').trim()
+  if (SKILL_TYPE_MARKER.test(label)) return 'skill_atom'
   if (JUNK_LABEL_PATTERNS.some((re) => re.test(label))) return 'test_fixture'
   return null
 }

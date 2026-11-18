@@ -5,6 +5,7 @@
  * and reuse existing scoring engines (zero duplication of business logic).
  */
 
+import { cleanAtomName } from '@/types/claim'
 import { createPublicClient, http } from 'viem'
 import { intuitionTestnet } from '@0xintuition/protocol'
 import { APP_CONFIG } from './app-config'
@@ -82,6 +83,16 @@ function weiToFloat(wei: bigint): number {
   return Math.round((Number(wei) / 1e18) * 1e6) / 1e6
 }
 
+/**
+ * An agent's display name from its raw label — the ONE parser the screens use (types/claim.ts
+ * getAtomName, Etap 9). REST and MCP used a second one that stripped only the first wrapper and
+ * kept the description: "Agent:INTU:Talaria" answered as "INTU:Talaria", and OPEN CLAW as "OPEN
+ * CLAW from Kryptoremontier - OPEN CLAW from Kryptoremontier for Testing AgentScore." while every
+ * screen said "OPEN CLAW from Kryptoremontier".
+ */
+const agentNameOf = cleanAtomName
+
+/** Skill and topic labels keep their old cleaning: skill names key the domain mapping (skill-domain-map). */
 function cleanLabel(label: string | null | undefined): string {
   if (!label || typeof label !== 'string') return 'Unnamed'
   try {
@@ -392,7 +403,7 @@ function rowToAgentItem(row: AgentRow, opposeWei: bigint, stakerCount: number, a
   const effLabel = effectiveLabel(row)
   return {
     id: row.term_id,
-    name: cleanLabel(effLabel),
+    name: agentNameOf(effLabel),
     rawLabel: effLabel,
     score,
     scoreBasis: scoreBasisOf({ supportWei, opposeWei }),
@@ -818,7 +829,7 @@ export async function getAgentTrustBreakdown(termId: string): Promise<AgentTrust
 
   return {
     agentId: termId,
-    agentName: cleanLabel(effectiveLabel(row)),
+    agentName: agentNameOf(effectiveLabel(row)),
     score: breakdownScore,
     agentScore,
     trustScore: {
@@ -975,7 +986,7 @@ async function readDomainTriples(): Promise<DomainTriples> {
     return {
       tripleId: t.term_id,
       agentId: t.subject?.term_id || '',
-      agentName: t.subject?.label ? cleanLabel(t.subject.label) : 'Unknown',
+      agentName: t.subject?.label ? agentNameOf(t.subject.label) : 'Unknown',
       skillId: t.object?.term_id || '',
       skillName: t.object?.label ? cleanLabel(t.object.label) : 'Unknown',
       supportShares: forVault.totalShares,

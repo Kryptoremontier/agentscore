@@ -406,7 +406,7 @@ export const agentsStatusMissing = (n: number | null, missing: string) =>
 /** The line's popover: where the numbers come from, and what is hidden. */
 export const AGENTS_STATUS_DETAILS = 'Where these agents come from'
 export const hiddenNote = (n: number) =>
-  `${n} hidden: test fixtures and duplicate registrations of the same agent — counted here, not shown in the list.`
+  `${n} hidden: test fixtures, skills registered as agents and duplicate registrations of the same agent — counted here, not shown in the list.`
 /** The timeline's pre-canonical skill claim: "Skill added: watch"; the raw predicate stays in its details. */
 export const skillAdded = (skillName: string) => `Skill added: ${skillName}`
 
