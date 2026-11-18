@@ -112,6 +112,8 @@ export function resolveCheckQuery(
   q: CheckQuery,
   view: AgentsPageView,
   identities: ReadonlyArray<{ termId: string; caipIdentity: string }> | null,
+  /** `exactName`: a name only matches a whole name (the trust gate — Etap 9: a payer's id is never "contains"). */
+  opts: { exactName?: boolean } = {},
 ): CheckResolution {
   if (q.kind === 'empty') return { status: 'empty' }
   const all = agentsOf(view)
@@ -145,7 +147,7 @@ export function resolveCheckQuery(
   const wanted = norm(q.name)
   const exact = all.filter((a) => norm(a.name) === wanted)
   if (exact.length) return pick(exact)
-  const contains = wanted.length >= CHECK_MIN_CONTAINS ? all.filter((a) => norm(a.name).includes(wanted)) : []
+  const contains = !opts.exactName && wanted.length >= CHECK_MIN_CONTAINS ? all.filter((a) => norm(a.name).includes(wanted)) : []
   return contains.length ? pick(contains) : notFound()
 }
 

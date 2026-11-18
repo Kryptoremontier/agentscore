@@ -158,6 +158,8 @@ Tools: `search_agents`, `get_agent_trust`, `get_domain_ranking`, `list_domains`,
 
 `should_i_trust` = the trust gate (`src/lib/trust-gate.ts`, REST `GET /api/v1/agents/:id/gate`):
 allow / deny / unknown under the caller's policy. No new scoring; fails closed (`unknown` = do not pay).
+Any id (Etap 9, `src/lib/gate-any-id.ts`): a term id, an ERC-8004 id, the registering wallet or an exact
+name, through the `/check` resolver; an id that fits several agents is `unknown` with `candidates`.
 
 ## REST API (14 endpoints at `/api/v1`)
 

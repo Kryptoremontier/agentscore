@@ -10,7 +10,8 @@ import {
   Shield, Eye, Sparkles, Crown,
 } from 'lucide-react'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
-import { EXAMPLE_GATE, GATE_SNIPPET } from '@/lib/gate-example'
+import { EXAMPLE_GATE, GATE_ID_EXAMPLES, GATE_SNIPPET } from '@/lib/gate-example'
+import { TRUST_GATE_EXAMPLE_URL } from '@/lib/site'
 import { TRUST_ONCHAIN_MAPPING, ESTABLISHED_MAPPING, BACKING_EXPLAINER, TIER_LABEL, DOMAINS_TITLE } from '@/lib/people-copy'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1261,7 +1262,30 @@ function TabApiMcp() {
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {JSON.stringify(EXAMPLE_GATE.answer, null, 2)}
           </pre>
-          <div className="text-[#6B7480] text-xs uppercase tracking-wider mb-2">Paste this — fetch only, no dependencies</div>
+          <div className="text-[#6B7480] text-xs uppercase tracking-wider mb-2">Any id — one real answer per id form</div>
+          <p className="text-sm text-[#8B949E] mb-3">
+            <code>:id</code> (and <code>agentId</code> over MCP) is the agent&apos;s Intuition term id, its ERC-8004 id
+            (<code>8453:1380</code> or the CAIP form), the wallet that registered it, or its exact name. <code>agentId</code> in
+            the answer is the term id the decision is about. If more than one agent fits, the answer is{' '}
+            <span className="text-white/80">unknown</span> with <code>candidates</code> — never a guess between them.
+          </p>
+          <div className="grid gap-3 mb-4" data-testid="docs-gate-ids">
+            {GATE_ID_EXAMPLES.map((ex) => (
+              <div key={ex.form} data-testid="docs-gate-id">
+                <div className="text-xs text-white/70 mb-1">{ex.form}</div>
+                <pre className="text-[11px] leading-relaxed font-mono text-[#C9D1D9] rounded-xl p-3 whitespace-pre-wrap break-all"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  {`GET ${ex.request}\n${JSON.stringify(ex.data)}`}
+                </pre>
+              </div>
+            ))}
+          </div>
+          <div className="text-[#6B7480] text-xs uppercase tracking-wider mb-2">
+            Paste this — fetch only, no dependencies ·{' '}
+            <a href={TRUST_GATE_EXAMPLE_URL} target="_blank" rel="noopener noreferrer" className="text-[#C8963C] hover:underline normal-case" data-testid="docs-gate-example-link">
+              examples/trust-gate.ts
+            </a>
+          </div>
           <pre className="text-[11px] leading-relaxed font-mono text-[#C9D1D9] rounded-xl p-4 overflow-x-auto"
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {GATE_SNIPPET}

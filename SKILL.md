@@ -49,15 +49,16 @@ Real response (Captain Dackie):
       "area": "Crypto / Onchain"
     },
     "meta": {
-      "dataAgeSeconds": 0,
-      "dataReadAt": "2026-11-15T16:08:02.655Z"
-    }
+      "dataAgeSeconds": 24,
+      "dataReadAt": "2026-11-18T19:48:31.243Z"
+    },
+    "agentId": "0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb"
   },
   "meta": {
-    "timestamp": "2026-11-15T16:08:03.354Z",
+    "timestamp": "2026-11-18T19:48:56.165Z",
     "network": "testnet",
-    "dataAgeSeconds": 0,
-    "dataReadAt": "2026-11-15T16:08:02.655Z"
+    "dataAgeSeconds": 24,
+    "dataReadAt": "2026-11-18T19:48:31.243Z"
   }
 }
 ```
@@ -67,6 +68,64 @@ Real response (Captain Dackie):
 - `data.meta.dataAgeSeconds` says how old the data behind the decision is.
 - Over MCP (`https://agentscore-gilt.vercel.app/api/mcp/mcp`): `should_i_trust({ agentId, minPeople: 1, area: "Crypto / Onchain" })`.
 - No parameter, header or payment changes a decision.
+
+### Any id
+
+`:id` (and `agentId` over MCP) is the agent's Intuition term id, its ERC-8004 id (`8453:1380` or the CAIP form), the wallet that registered it, or its exact name — percent-encode it in the path. `data.agentId` is the term id the decision is about. If more than one agent fits, the answer is `unknown` with `data.candidates` (ask again with one term id) — never a guess between them.
+
+One real response per id form (`data` only):
+
+**Intuition term id**
+
+```bash
+curl "https://agentscore-gilt.vercel.app/api/v1/agents/0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb/gate?minPeople=1"
+```
+
+```json
+{"decision":"allow","reason":"1 person trusts this agent; your policy needs at least 1.","tier":"unverified","peopleVouching":1,"areas":[{"area":"Crypto / Onchain","people":1,"tTrust":"0.0099"}],"policy":{"minPeople":1},"meta":{"dataAgeSeconds":24,"dataReadAt":"2026-11-18T19:48:31.243Z"},"agentId":"0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb"}
+```
+
+**ERC-8004 id (chain:token)**
+
+```bash
+curl "https://agentscore-gilt.vercel.app/api/v1/agents/8453%3A1380/gate?minPeople=1"
+```
+
+```json
+{"decision":"allow","reason":"1 person trusts this agent; your policy needs at least 1.","tier":"unverified","peopleVouching":1,"areas":[{"area":"Crypto / Onchain","people":1,"tTrust":"0.0099"}],"policy":{"minPeople":1},"meta":{"dataAgeSeconds":24,"dataReadAt":"2026-11-18T19:48:31.243Z"},"agentId":"0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb"}
+```
+
+**ERC-8004 id (CAIP)**
+
+```bash
+curl "https://agentscore-gilt.vercel.app/api/v1/agents/eip155%3A8453%2Ferc721%3A0x8004a169fb4a3325136eb29fa0ceb6d2e539a432%2F1380/gate?minPeople=1"
+```
+
+```json
+{"decision":"allow","reason":"1 person trusts this agent; your policy needs at least 1.","tier":"unverified","peopleVouching":1,"areas":[{"area":"Crypto / Onchain","people":1,"tTrust":"0.0099"}],"policy":{"minPeople":1},"meta":{"dataAgeSeconds":24,"dataReadAt":"2026-11-18T19:48:31.243Z"},"agentId":"0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb"}
+```
+
+**exact name**
+
+```bash
+curl "https://agentscore-gilt.vercel.app/api/v1/agents/Captain%20Dackie/gate?minPeople=1"
+```
+
+```json
+{"decision":"allow","reason":"1 person trusts this agent; your policy needs at least 1.","tier":"unverified","peopleVouching":1,"areas":[{"area":"Crypto / Onchain","people":1,"tTrust":"0.0099"}],"policy":{"minPeople":1},"meta":{"dataAgeSeconds":24,"dataReadAt":"2026-11-18T19:48:31.243Z"},"agentId":"0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb"}
+```
+
+**wallet that registered the agent**
+
+```bash
+curl "https://agentscore-gilt.vercel.app/api/v1/agents/0x139219107C1eBE569f543C581b3B807Cf6740006/gate?minPeople=1"
+```
+
+```json
+{"decision":"unknown","reason":"More than one agent fits \"0x139219107C1eBE569f543C581b3B807Cf6740006\": AgentScore Sorting Agent (0x221236…00d5), AGI Tracker (0x5ef2a1…e8a4), Code Helper AI (0x60b8fa…f025), CodeBuddy (0x4547b9…30be). This is not a yes — do not pay or delegate; ask again with one agent’s Intuition term id (see candidates).","tier":null,"peopleVouching":null,"areas":null,"policy":{"minPeople":1},"meta":{"dataAgeSeconds":24,"dataReadAt":"2026-11-18T19:48:31.243Z"},"agentId":null,"candidates":[{"id":"0x221236a20251c98a4fc14a94c271be0086bb4fd891aaf797f13f3e4fddc600d5","name":"AgentScore Sorting Agent","origin":"agentscore","peopleVouching":0},{"id":"0x5ef2a114a690e4775b20efd8efa7b2876374bcf1b8b93a3d82799be50a84e8a4","name":"AGI Tracker","origin":"agentscore","peopleVouching":0},{"id":"0x60b8fa47d7165f07a475321a86a16f8e00e7d65c743647f6baa27f70f63df025","name":"Code Helper AI","origin":"agentscore","peopleVouching":0},{"id":"0x4547b953c73d6e8e8a7ac39fc4e868b89c233543c057dc63c3cfe0ee4a2930be","name":"CodeBuddy","origin":"agentscore","peopleVouching":0}]}
+```
+
+A ~20-line client to paste (fetch only, no dependencies; `unknown` and an unreachable AgentScore are both a no): [examples/trust-gate.ts](https://github.com/Kryptoremontier/agentscore/blob/main/examples/trust-gate.ts)
 
 ## The full trust breakdown
 

@@ -12,8 +12,8 @@ import {
   getEvaluatorProfile,
   trustQuery,
   getPlatformStats,
-  trustGate,
 } from '@/lib/api-data'
+import { trustGateFor } from '@/lib/gate-any-id'
 import { GATE_AREAS, parseGatePolicy } from '@/lib/trust-gate'
 import { fetchTimelineDataCached as fetchTimelineData } from '@/lib/timeline-data'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
@@ -693,11 +693,14 @@ const handler = createMcpHandler(
           '(at least 3 and 0.1); or minPeople N — at least N distinct people who trust it, optionally for one trust context (area). ' +
           '"unknown" means the data could not be read right now: treat it as NO — do not pay or delegate; ask again later. ' +
           '"deny" with "Not found in AgentScore or the ERC-8004 registry" means the id is not a known agent. ' +
+          '`agentId` in the answer is the term ID the decision is about; an id that fits more than one agent gets "unknown" and `candidates` (ask again with one term ID). ' +
           'Trusting an agent for a trust context = the triple <agent> — is skilled in — <context> with a deposit from a wallet; ' +
           'only distinct wallets with live shares count. Money staked on the agent itself never counts, and no parameter or ' +
           'payment can change a decision.',
         inputSchema: {
-          agentId: z.string().describe("The agent's term ID (from search_agents)"),
+          agentId: z.string().describe(
+            "The agent: its term ID (from search_agents), an ERC-8004 id ('8453:1380' or the CAIP form), " +
+            'the wallet that registered it, or its exact name. If more than one agent fits, the answer is "unknown" with `candidates`.'),
           minTier: z.enum(['trusted', 'verified']).optional()
             .describe('Minimum tier. Default "trusted" (Established on screen). Use either minTier or minPeople, not both.'),
           minPeople: z.number().int().min(1).optional()
@@ -709,7 +712,7 @@ const handler = createMcpHandler(
       async ({ agentId, minTier, minPeople, area }) => {
         const parsed = parseGatePolicy({ minTier, minPeople, area })
         if (!parsed.ok) return { isError: true, content: [{ type: 'text' as const, text: parsed.error }] }
-        const decision = await trustGate(agentId, parsed.policy)
+        const decision = await trustGateFor(agentId, parsed.policy)
         return { content: [{ type: 'text' as const, text: JSON.stringify(decision, null, 2) }] }
       }
     )

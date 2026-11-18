@@ -284,3 +284,76 @@ describe('the snippet to paste (examples/trust-gate.ts), against the REST route'
     expect(src.trim().split('\n').length).toBeLessThanOrEqual(22)
   })
 })
+
+describe('Etap 9 — any id: the resolver /check uses, in front of the same gate', () => {
+  const CAIP = 'eip155:8453/erc721:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432/1380'
+
+  it('a term id answers exactly as before, and says which agent the answer is about (agentId)', async () => {
+    const r = await rest(DACKIE, AREA_Q)
+    expect(r.body.data).toMatchObject({ decision: 'allow', peopleVouching: 1, agentId: DACKIE })
+    expect(Object.keys(r.body.data)).toEqual(['decision', 'reason', 'tier', 'peopleVouching', 'areas', 'policy', 'meta', 'agentId'])
+    expect((await rest(NOBODY)).body.data).toMatchObject({ decision: 'deny', reason: GATE_NOT_FOUND, agentId: null })
+  })
+
+  it('an ERC-8004 id — `8453:1380` or the CAIP form — is that agent', async () => {
+    const byTerm = (await rest(DACKIE, AREA_Q)).body.data
+    for (const id of ['8453:1380', CAIP, encodeURIComponent(CAIP)]) {
+      const r = await rest(id, AREA_Q)
+      expect(r.body.data, id).toEqual(byTerm)
+      expect(r.cacheControl).not.toBe('no-store')
+    }
+    // Another chain, or another registry, is another agent: not found.
+    expect((await rest('1:1380')).body.data).toMatchObject({ decision: 'deny', reason: GATE_NOT_FOUND, agentId: null })
+    expect((await rest(CAIP.replace('0x8004A169', '0x9999A169'))).body.data).toMatchObject({ decision: 'deny', reason: GATE_NOT_FOUND })
+  })
+
+  it('an exact name is that agent (case and spacing aside); part of a name is not an id', async () => {
+    const byTerm = (await rest(LUDA)).body.data
+    expect(byTerm).toMatchObject({ decision: 'deny', peopleVouching: 2, agentId: LUDA })
+    for (const name of ['Luda', 'luda', '  LUDA ']) expect((await rest(name)).body.data, name).toEqual(byTerm)
+    expect((await rest('Captain Dackie', AREA_Q)).body.data).toMatchObject({ decision: 'allow', agentId: DACKIE })
+    // /check lists "Lud…" matches for a person to pick from; a payer's id is never "contains".
+    expect((await rest('Lud')).body.data).toMatchObject({ decision: 'deny', reason: GATE_NOT_FOUND, agentId: null })
+    expect((await rest('Captain')).body.data).toMatchObject({ decision: 'deny', reason: GATE_NOT_FOUND })
+  })
+
+  it('more than one agent fits → unknown, naming the candidates — never a guess, never cached', async () => {
+    const LUDA_8004 = `0x${'7'.repeat(64)}`
+    installFakeHasura({
+      tables: tables().map((t) => (t.rows === SAME_AS
+        ? { ...t, rows: [...SAME_AS, { ...SAME_AS[0], term_id: '0xsa2', subject_id: LUDA_8004, subject: { term_id: LUDA_8004, label: 'Luda' }, object: { label: CAIP.replace('/1380', '/77') } }] }
+        : t)),
+    })
+    const r = await rest('Luda', AREA_Q)
+    expect(r.status).toBe(200)
+    expect(r.cacheControl).toBe('no-store')
+    expect(r.body.data).toMatchObject({ decision: 'unknown', tier: null, peopleVouching: null, areas: null, agentId: null, policy: { minPeople: 1, area: 'Crypto / Onchain' } })
+    expect(r.body.data.candidates).toEqual([
+      { id: LUDA, name: 'Luda', origin: 'agentscore', peopleVouching: 2 },
+      { id: LUDA_8004, name: 'Luda', origin: 'erc8004', peopleVouching: 0 },
+    ])
+    expect(r.body.data.reason).toBe(
+      'More than one agent fits "Luda": Luda (0x82d87d…2c5a), Luda (0x777777…7777). ' +
+      'This is not a yes — do not pay or delegate; ask again with one agent’s Intuition term id (see candidates).')
+    // Each candidate's own term id still answers.
+    expect((await rest(LUDA)).body.data).toMatchObject({ decision: 'deny', peopleVouching: 2, agentId: LUDA })
+    expect((await rest(LUDA)).body.data.candidates).toBeUndefined()
+  })
+
+  it('a failed lookup is unknown — never "not found", never allow', async () => {
+    indexer.down = true
+    for (const id of ['Luda', '8453:1380', KRYPTO]) {
+      const r = await rest(id)
+      expect(r.body.data, id).toMatchObject({ decision: 'unknown', reason: GATE_LOOKUP_UNREAD, agentId: null })
+      expect(r.cacheControl).toBe('no-store')
+    }
+  })
+
+  it('MCP should_i_trust: the same resolver, the same answers', async () => {
+    type Answer = GateDecision & { agentId: string | null; candidates?: unknown[] }
+    const byName = (await mcp({ agentId: 'Captain Dackie', minPeople: 1, area: 'Crypto / Onchain' })).answer as Answer
+    expect(byName).toMatchObject({ decision: 'allow', peopleVouching: 1, agentId: DACKIE })
+    expect(((await mcp({ agentId: '8453:1380', minPeople: 1 })).answer as Answer)).toMatchObject({ decision: 'allow', agentId: DACKIE })
+    expect(((await mcp({ agentId: 'nobody by this name' })).answer as Answer)).toMatchObject({ decision: 'deny', reason: GATE_NOT_FOUND, agentId: null })
+  })
+})
