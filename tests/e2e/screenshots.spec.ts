@@ -65,10 +65,12 @@ const SHOTS: Shot[] = [
   { name: 'check-builder', url: ROUTES.checkBuilder, prepare: async (page) => { await page.getByTestId('check-builder-note').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-luda-builder', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, check: builderDoorChecks },
   { name: 'check-luda-builder-block', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, target: async (page) => page.getByTestId('builder-door') },
-  { name: 'badge-luda', url: ROUTES.badge(AGENTS.luda), target: async (page) => page.locator('svg').first(), check: (page) => badgeSays(page, /^AgentScore · (Unverified|Established|Verified) · \d+ (person trusts it|people trust it) · as of \d{4}-\d\d-\d\d \d\d:\d\d UTC$/) },
-  { name: 'badge-unknown-id', url: ROUTES.badge('no-such-agent-anywhere'), target: async (page) => page.locator('svg').first(), check: (page) => badgeSays(page, /^AgentScore · not found$/) },
-  // Etap 8a: the nav in Intuition's words — the desktop sidebar; the phone's bottom nav with More open.
+  { name: 'badge-luda', url: ROUTES.check, prepare: (page) => showBadge(page, ROUTES.badge(AGENTS.luda)), target: async (page) => page.getByTestId('shot-badge'), check: (page) => badgeSays(page, ROUTES.badge(AGENTS.luda), /^AgentScore · (Unverified|Established|Verified) · \d+ (person trusts it|people trust it) · as of \d{4}-\d\d-\d\d \d\d:\d\d UTC$/, 'public, max-age=300') },
+  { name: 'badge-unknown-id', url: ROUTES.check, prepare: (page) => showBadge(page, ROUTES.badge('no-such-agent-anywhere')), target: async (page) => page.getByTestId('shot-badge'), check: (page) => badgeSays(page, ROUTES.badge('no-such-agent-anywhere'), /^AgentScore · not found$/, 'public, max-age=60') },
+  // Etap 9: the nav is three places — the desktop sidebar; the phone's bottom nav (first screen).
   { name: 'nav', url: ROUTES.landing, prepare: navReady, target: navTarget, firstScreen: true, check: navWords },
+  // Etap 9: everything that left the nav — the footer group, on every page.
+  { name: 'footer-more', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, target: footerTarget },
   { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: async (page) => { await mostVouchedFirst(page); await twoSections(page) } },
   // Etap 9: the second section opened — every agent is still one click away.
   { name: 'agents-list-untrusted-open', url: ROUTES.agents, prepare: async (page) => { await agentsListReady(page); await openUntrusted(page) }, check: untrustedOpened },
@@ -122,6 +124,20 @@ const SHOTS: Shot[] = [
       await modalFitsPhone(page, project)
     },
   })),
+  {
+    // Etap 9: the list is short now (the second section is collapsed), so the footer is near. A card
+    // opened with the page scrolled to its end: the modal covers the footer, never the other way round.
+    name: 'agent-modal-over-footer',
+    url: ROUTES.agents,
+    prepare: async (page) => {
+      await agentsListReady(page)
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+      await page.locator('[data-term-id]').first().click()
+      await modalReady(page)
+    },
+    firstScreen: true,
+    check: modalCoversFooter,
+  },
   {
     // Etap 5a: the modal as it opens, at normal scroll — its title clears the fixed site header
     // (the overlap in the full-height modal PNGs was a capture artifact; see unfixModal).
@@ -226,26 +242,47 @@ test('og-dackie', async ({ request }, testInfo) => {
 /** The landing settled; on a phone, the More sheet is open (the nav's second level). */
 async function navReady(page: Page) {
   await landingReady(page)
-  if ((page.viewportSize()?.width ?? 0) < 1024) {
-    await page.locator('nav.fixed.bottom-0').getByText('More', { exact: true }).click()
-    await page.getByText('Trust contexts', { exact: true }).first().waitFor({ timeout: WAIT_CAP })
-  }
 }
 
-/** Desktop: the sidebar alone. Phone: the first screen (bottom nav + the More sheet). */
+/** Desktop: the sidebar alone. Phone: the first screen (the bottom nav under the hero). */
 async function navTarget(page: Page): Promise<Locator> {
   if ((page.viewportSize()?.width ?? 0) < 1024) throw new Error('phone: first screen')
   return page.locator('aside').first()
 }
 
-/** The three primary places and More → Trust contexts, in Intuition's words; the old ones are gone. */
+/**
+ * Etap 9, one job: the nav is three places — Check an agent · Trust an agent · For developers — on
+ * the sidebar and the phone's bottom nav alike, with no "More". Everything else is a footer group,
+ * "More from AgentScore", whose links all go somewhere.
+ */
+const FOOTER_MORE_LINKS = [
+  'How it works', 'Trust contexts', 'Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge', 'Register an agent', 'Register a skill', 'Create claim',
+]
 async function navWords(page: Page, project: string) {
   const nav = project === 'mobile' ? page.locator('nav.fixed.bottom-0') : page.locator('aside').first()
-  for (const label of project === 'mobile' ? ['Check an agent', 'Trust an agent', 'More'] : ['Check an agent', 'Trust an agent', 'For developers']) {
-    await expect(nav.getByText(label, { exact: true }).first(), label).toBeVisible()
-  }
+  const links = (await nav.locator('a').allInnerTexts()).map((t) => t.trim()).filter((t) => !/^0x/.test(t))
+  expect(links, 'the nav: three places, in order').toEqual(['Check an agent', 'Trust an agent', 'For developers'])
+  for (const label of links) await expect(nav.getByText(label, { exact: true }).first(), label).toBeVisible()
+  await expect(nav.getByText('More', { exact: true }), 'no "More" in the nav').toHaveCount(0)
   await expect(nav.getByText(/^Vouch$/), 'the old "Vouch"').toHaveCount(0)
-  await expect(page.getByText(/^Domains$/), 'the old "Domains" nav label').toHaveCount(0)
+  for (const moved of ['Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge']) {
+    await expect(nav.getByText(moved, { exact: true }), `${moved} left the nav`).toHaveCount(0)
+  }
+  const more = page.getByTestId('footer-more')
+  await expect(more.locator('h4')).toHaveText('More from AgentScore')
+  const footerLinks = (await more.locator('a').allInnerTexts()).map((t) => t.trim())
+  expect(footerLinks, 'the footer group').toEqual(FOOTER_MORE_LINKS)
+  await expect(more.getByTestId('report-bug')).toHaveText('Report a bug')
+  // The group is inside the page (no sideways scroll), each link a full tap target apart from the next.
+  const box = await more.boundingBox()
+  expect(box && box.x >= 0 && box.x + box.width <= (page.viewportSize()?.width ?? 0) + 1, 'the footer group fits the viewport').toBe(true)
+}
+
+/** The footer, scrolled to: where "More from AgentScore" lives. */
+async function footerTarget(page: Page): Promise<Locator> {
+  const footer = page.getByTestId('site-footer')
+  await footer.scrollIntoViewIfNeeded()
+  return footer
 }
 
 /**
@@ -526,10 +563,49 @@ async function builderDoorChecks(page: Page) {
   await pageFitsViewport(page)
 }
 
-/** The badge route answers an SVG whose words are its accessible name. */
-async function badgeSays(page: Page, words: RegExp) {
-  const label = await page.locator('svg').first().getAttribute('aria-label')
-  expect(label ?? '', 'the badge\'s words').toMatch(words)
+/**
+ * The badge as a README shows it: an <img>, drawn large on a plain ground (test-side only — the
+ * harness shoots pages, and the badge is an image).
+ */
+async function showBadge(page: Page, src: string) {
+  await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP })
+  await page.evaluate((src) => {
+    const box = document.createElement('div')
+    box.setAttribute('data-testid', 'shot-badge')
+    box.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;padding:24px;background:#0d1117;'
+    const img = document.createElement('img')
+    img.src = src
+    img.alt = ''
+    img.style.cssText = 'display:block;height:40px;max-width:calc(100vw - 48px);'
+    box.appendChild(img)
+    document.body.appendChild(box)
+  }, src)
+  await expect.poll(() => page.locator('[data-testid="shot-badge"] img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), { timeout: WAIT_CAP }).toBe(true)
+}
+
+/** The badge route answers an SVG image whose words are its accessible name, with the cache it promises. */
+async function badgeSays(page: Page, src: string, words: RegExp, cacheControl: string) {
+  const res = await page.request.get(src)
+  expect(res.status()).toBe(200)
+  expect(res.headers()['content-type']).toBe('image/svg+xml; charset=utf-8')
+  expect(res.headers()['cache-control']).toBe(cacheControl)
+  const label = (await res.text()).match(/aria-label="([^"]*)"/)?.[1] ?? ''
+  expect(label, 'the badge\'s words').toMatch(words)
+}
+
+/** No footer link or button is the top element anywhere on screen while the agent modal is open. */
+async function modalCoversFooter(page: Page) {
+  const onTop = await page.evaluate(() => {
+    const footer = document.querySelector('[data-testid="site-footer"]')
+    if (!footer) return ['no footer']
+    return [...footer.querySelectorAll('a, button')].filter((el) => {
+      const b = el.getBoundingClientRect()
+      if (b.width === 0 || b.bottom <= 0 || b.top >= window.innerHeight) return false
+      const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)
+      return top === el || el.contains(top)
+    }).map((el) => (el.textContent ?? '').trim())
+  })
+  expect(onTop, 'footer links painted over the open modal').toEqual([])
 }
 
 /** Etap 9: open "Not trusted yet" if the list is in two sections and it is closed. */

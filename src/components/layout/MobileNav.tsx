@@ -1,209 +1,53 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
-import { User, Menu, X, Bug } from 'lucide-react'
-import { WalletButton } from '@/components/wallet/WalletButton'
-import { cn } from '@/lib/cn'
-import { BugReportModal } from '@/components/shared/BugReportModal'
-import { PRIMARY_NAV, MORE_NAV, MORE_LABEL, ACCENT, isNavActive, type NavItem } from './nav-items'
+import { PRIMARY_NAV, ACCENT, isNavActive } from './nav-items'
 
-// The phone's bottom nav is Check an agent · Trust an agent · More (Etap 7 Run B, Etap 8a; before: Agents · How it works
-// · More). "For developers" opens the More sheet, above everything else under More
-// (components/layout/nav-items.ts — the sidebar's model).
-const BOTTOM_TABS = PRIMARY_NAV.filter(item => item.href !== '/docs')
-
-const MENU_GROUPS: ReadonlyArray<{ label: string; items: readonly NavItem[] }> = [
-  { label: 'For developers', items: PRIMARY_NAV.filter(item => item.href === '/docs') },
-  ...MORE_NAV,
-  { label: 'You', items: [{ href: '/profile', label: 'My Profile', icon: User, color: '#C8963C' }] },
-]
-
+/**
+ * The phone's bottom nav (Etap 9, one job): the three places — Check an agent · Trust an agent ·
+ * For developers — the same three as the desktop sidebar (components/layout/nav-items.ts). The
+ * "More" sheet is gone: everything it held is in the footer, under "More from AgentScore", on
+ * every page. The wallet and My Profile are in the top bar (components/wallet/WalletButton).
+ */
 export function MobileBottomNav() {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [bugModalOpen, setBugModalOpen] = useState(false)
   const pathname = usePathname()
-
-  const isActive = (href: string) => isNavActive(href, pathname)
-
-  const anyTabActive = BOTTOM_TABS.some(t => isActive(t.href))
-
   return (
-    <>
-      {/* Bottom tab bar */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 md:hidden z-40"
-        style={{
-          background: 'rgba(8,8,14,0.97)',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          backdropFilter: 'blur(12px)',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-        }}
-      >
-        <div className="grid grid-cols-3 h-16">
-          {BOTTOM_TABS.map(tab => {
-            const active = isActive(tab.href)
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className="flex flex-col items-center justify-center gap-1 transition-colors"
+    <nav
+      aria-label="Primary"
+      className="fixed bottom-0 left-0 right-0 md:hidden z-40"
+      style={{
+        background: 'rgba(8,8,14,0.97)',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        backdropFilter: 'blur(12px)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+      data-testid="bottom-nav"
+    >
+      <div className="grid grid-cols-3 h-16">
+        {PRIMARY_NAV.map(tab => {
+          const active = isNavActive(tab.href, pathname)
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={active ? 'page' : undefined}
+              className="flex flex-col items-center justify-center gap-1 transition-colors"
+            >
+              <tab.icon
+                className="w-5 h-5 transition-colors"
+                style={{ color: active ? ACCENT : 'rgba(255,255,255,0.3)' }}
+              />
+              <span
+                className="text-[10px] font-medium transition-colors"
+                style={{ color: active ? ACCENT : 'rgba(255,255,255,0.3)' }}
               >
-                <tab.icon
-                  className="w-5 h-5 transition-colors"
-                  style={{ color: active ? ACCENT : 'rgba(255,255,255,0.3)' }}
-                />
-                <span
-                  className="text-[10px] font-medium transition-colors"
-                  style={{ color: active ? ACCENT : 'rgba(255,255,255,0.3)' }}
-                >
-                  {tab.label}
-                </span>
-              </Link>
-            )
-          })}
-
-          {/* More button */}
-          <button
-            onClick={() => setMenuOpen(true)}
-            className="flex flex-col items-center justify-center gap-1 transition-colors"
-          >
-            <Menu
-              className="w-5 h-5"
-              style={{ color: menuOpen ? ACCENT : 'rgba(255,255,255,0.3)' }}
-            />
-            <span
-              className="text-[10px] font-medium"
-              style={{ color: menuOpen ? ACCENT : 'rgba(255,255,255,0.3)' }}
-            >
-              {MORE_LABEL}
-            </span>
-          </button>
-        </div>
-      </nav>
-
-      {/* Full-screen menu overlay */}
-      <AnimatePresence>
-        {menuOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-50 md:hidden"
-              style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-              onClick={() => setMenuOpen(false)}
-            />
-
-            {/* Slide-up panel */}
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-              className="fixed bottom-0 left-0 right-0 z-50 md:hidden rounded-t-2xl overflow-hidden"
-              style={{
-                background: '#0d0d14',
-                border: '1px solid rgba(255,255,255,0.08)',
-                maxHeight: '85vh',
-              }}
-            >
-              {/* Handle + close */}
-              <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                <div className="w-10 h-1 rounded-full bg-white/10 mx-auto absolute left-1/2 -translate-x-1/2 top-3" />
-                <span className="text-sm font-semibold text-white/60">{MORE_LABEL}</span>
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-white/10"
-                >
-                  <X className="w-4 h-4 text-white/60" />
-                </button>
-              </div>
-
-              {/* Nav groups */}
-              <div className="overflow-y-auto px-4 pb-6" style={{ maxHeight: 'calc(85vh - 60px)' }}>
-                {MENU_GROUPS.map((group, gi) => (
-                  <div key={group.label} className={gi > 0 ? 'mt-4' : 'mt-2'}>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/20 px-2 mb-1">
-                      {group.label}
-                    </p>
-                    <div className="space-y-0.5">
-                      {group.items.map(item => {
-                        const active = isActive(item.href)
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setMenuOpen(false)}
-                            className={cn(
-                              'flex items-center gap-3 px-3 py-3 rounded-xl transition-colors',
-                              active ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]',
-                            )}
-                          >
-                            <div
-                              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                              style={{
-                                background: `${item.color}15`,
-                                border: `1px solid ${item.color}30`,
-                              }}
-                            >
-                              <item.icon className="w-4 h-4" style={{ color: item.color }} />
-                            </div>
-                            <span className={cn(
-                              'text-sm font-medium',
-                              active ? 'text-white' : 'text-white/60',
-                            )}>
-                              {item.label}
-                            </span>
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Report Bug */}
-                <div className="mt-4">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/20 px-2 mb-1">
-                    Actions
-                  </p>
-                  <button
-                    onClick={() => { setMenuOpen(false); setBugModalOpen(true) }}
-                    className="flex items-center gap-3 px-3 py-3 rounded-xl transition-colors hover:bg-white/[0.04] w-full"
-                  >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }}
-                    >
-                      <Bug className="w-4 h-4" style={{ color: '#EF4444' }} />
-                    </div>
-                    <span className="text-sm font-medium text-white/60">Report Bug</span>
-                  </button>
-                </div>
-
-                {/* Wallet */}
-                <div className="mt-5 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <WalletButton />
-                </div>
-
-                {/* Safe area spacer */}
-                <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} />
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      <BugReportModal open={bugModalOpen} onClose={() => setBugModalOpen(false)} />
-    </>
+                {tab.label}
+              </span>
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
   )
-}
-
-// Legacy export — kept for any stray imports
-export function MobileNav() {
-  return null
 }
