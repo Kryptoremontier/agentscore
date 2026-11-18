@@ -16,7 +16,7 @@ import { fetchAllRows, gqlRequest, SERVER_ROW_CAP } from './gql-pager'
 import { fetchVaultPositions } from './vault-positions'
 import { isLivePosition } from './live-position'
 import { readCanonicalSkillTriples } from './timeline-data'
-import { completeReadCache, SERVER_CACHE_TTL } from './server-cache'
+import { completeReadCache, SERVER_CACHE_CEILING, SERVER_CACHE_TTL } from './server-cache'
 import { IS_SKILLED_IN } from './canonical-domains'
 import { contextByTermId, TRUST_CONTEXTS } from './trust-contexts'
 import { isEnsName } from './person-names'
@@ -63,12 +63,8 @@ export const fetchAgentTrustEvents = completeReadCache(
 
 // ─── The first trust in AgentScore's history ─────────────────────────────────
 
-/**
- * The oldest position on any canonical `is skilled in` triple whose object is a trust context —
- * the first time anyone trusted an agent here. Positions keep their created_at after a sale, so this
- * is the first ever, live or not. null = there is none yet. Throws on a failed or capped read.
- */
-export async function readFirstTrust(): Promise<FirstTrust | null> {
+/** Every canonical `is skilled in` triple whose object is a trust context. Throws on a failed or capped read. */
+async function readCanonicalTrustTripleIds(): Promise<string[]> {
   const page = await fetchAllRows<{ term_id: string }>({
     query: `
       query CanonicalTrustTriples($pred: String!, $objects: [String!]!, $limit: Int!, $offset: Int!) {
@@ -87,7 +83,16 @@ export async function readFirstTrust(): Promise<FirstTrust | null> {
     maxRows: 5_000,
   })
   if (page.truncated !== false) throw new Error('canonical trust triples not read to the end')
-  const ids = page.rows.map((r) => r.term_id)
+  return page.rows.map((r) => r.term_id)
+}
+
+/**
+ * The oldest position on any canonical `is skilled in` triple whose object is a trust context —
+ * the first time anyone trusted an agent here. Positions keep their created_at after a sale, so this
+ * is the first ever, live or not. null = there is none yet. Throws on a failed or capped read.
+ */
+export async function readFirstTrust(): Promise<FirstTrust | null> {
+  const ids = await readCanonicalTrustTripleIds()
   if (ids.length === 0) return null
   const data = await gqlRequest<{ positions: Array<{ account_id: string | null; term_id: string; created_at: string }> }>(
     `query FirstTrust($ids: [String!]!) {
@@ -105,3 +110,48 @@ export const fetchFirstTrust = completeReadCache(
   { revalidate: 600, tags: () => [] },
 )
 
+
+// ─── Trust events in the last 7 days (Etap 9, /api/v1/stats trustEvents7d) ────
+
+export const TRUST_EVENTS_WINDOW_DAYS = 7
+
+/**
+ * How many trust events began in the last 7 days, network-wide: live positions (the tier's rule,
+ * lib/live-position.ts) opened in that window on any canonical `is skilled in` triple whose object
+ * is a trust context — the same triples and the same event (one live position, its created_at) as
+ * the per-agent history above. A wallet that sold out has no event. Throws on a failed or capped
+ * read: an unread week is never "0 events".
+ */
+export async function readTrustEventsSince(sinceIso: string): Promise<number> {
+  const ids = await readCanonicalTrustTripleIds()
+  if (ids.length === 0) return 0
+  const page = await fetchAllRows<{ id: string; shares: string }>({
+    query: `
+      query TrustEventsSince($ids: [String!]!, $since: timestamptz!, $limit: Int!, $offset: Int!) {
+        positions(where: { term_id: { _in: $ids }, created_at: { _gte: $since } }, order_by: [{ created_at: asc }, { id: asc }], limit: $limit, offset: $offset) { id shares }
+      }
+    `,
+    field: 'positions',
+    countQuery: `
+      query TrustEventsSinceCount($ids: [String!]!, $since: timestamptz!) {
+        positions_aggregate(where: { term_id: { _in: $ids }, created_at: { _gte: $since } }) { aggregate { count } }
+      }
+    `,
+    countField: 'positions_aggregate',
+    variables: { ids, since: sinceIso },
+    pageSize: SERVER_ROW_CAP.positions,
+    maxRows: 20_000,
+  })
+  if (page.truncated !== false) throw new Error('trust events not read to the end')
+  return page.rows.filter((p) => {
+    try { return isLivePosition({ shares: BigInt(p.shares || '0') }) } catch { return false }
+  }).length
+}
+
+/** The last 7 days, counted from the read's own time; 5 minutes, like /stats' other counts. */
+export const fetchTrustEvents7d = completeReadCache(
+  'trust-events-7d',
+  async () => ({ value: await readTrustEventsSince(new Date(Date.now() - TRUST_EVENTS_WINDOW_DAYS * 86_400_000).toISOString()), complete: true }),
+  // /stats' own ceiling: while the indexer is slow or down, the last complete count is served with its age.
+  { revalidate: SERVER_CACHE_TTL.platformStats, hardCeilingSeconds: SERVER_CACHE_CEILING.platformStats, tags: () => [] },
+)

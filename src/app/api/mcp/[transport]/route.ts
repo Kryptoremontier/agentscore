@@ -11,9 +11,10 @@ import {
   getEvaluatorLeaderboard,
   getEvaluatorProfile,
   trustQuery,
-  getPlatformStats,
 } from '@/lib/api-data'
 import { trustGateFor } from '@/lib/gate-any-id'
+import { headersOfRecord, recordGateCall } from '@/lib/gate-calls'
+import { getStatsWithNorthStar } from '@/lib/north-star'
 import { GATE_AREAS, parseGatePolicy } from '@/lib/trust-gate'
 import { fetchTimelineDataCached as fetchTimelineData } from '@/lib/timeline-data'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
@@ -574,12 +575,16 @@ const handler = createMcpHandler(
           'object both AgentScore agents or skills — the /claims page), not every triple on the network. ' +
           'A count whose read failed is null, never 0; parts says which reads answered ' +
           "('failed' → that part's fields are null — agents, totalStaked, activeStakers and topAgent share the corpus). " +
+          'agentsEstablished / agentsVerified = listed agents whose tier is Established (`trusted`) / Verified, by the tier rule; ' +
+          'their sum is the number of agents that pass the default trust gate. trustEvents7d = times someone began to trust an agent ' +
+          'in the last 7 days. gateCalls7d = outside trust-gate calls in the last 7 days; null with parts.gateCalls "unavailable" ' +
+          'when no counter is configured — never 0. ' +
           'Use this for a quick overview of the ecosystem.',
         inputSchema: {},
       },
       async () => {
         try {
-          const stats = await getPlatformStats()
+          const stats = await getStatsWithNorthStar()
           return {
             content: [{
               type: 'text' as const,
@@ -709,10 +714,14 @@ const handler = createMcpHandler(
             .describe('`area` = the trust context: only count people who trust the agent for it (needs minPeople).'),
         },
       },
-      async ({ agentId, minTier, minPeople, area }) => {
+      async ({ agentId, minTier, minPeople, area }, extra) => {
         const parsed = parseGatePolicy({ minTier, minPeople, area })
         if (!parsed.ok) return { isError: true, content: [{ type: 'text' as const, text: parsed.error }] }
-        const decision = await trustGateFor(agentId, parsed.policy)
+        // Counted for stats `gateCalls7d` (lib/gate-calls.ts) unless the request says it is our own (X-AgentScore-Internal).
+        const [decision] = await Promise.all([
+          trustGateFor(agentId, parsed.policy),
+          recordGateCall(headersOfRecord(extra?.requestInfo?.headers)),
+        ])
         return { content: [{ type: 'text' as const, text: JSON.stringify(decision, null, 2) }] }
       }
     )

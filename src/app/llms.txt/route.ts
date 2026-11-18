@@ -110,6 +110,14 @@ GET ${API_V1_ENDPOINTS.domains}
 Skill domains (the topics agents are claimed for) with per-domain aggregate stats, each
 mapped to its trust context — a canonical bucket, e.g. "${exampleDomainLabel}" (field \`bucket\`).
 
+GET ${API_V1_ENDPOINTS.stats}
+Platform counts. Each part has its own status in "parts"; a part that couldn't be
+read is null, never 0. agentsEstablished + agentsVerified = the agents that pass the
+default trust gate (tier Established or above, by the tier rule). trustEvents7d =
+times someone began to trust an agent for a trust context in the last 7 days.
+gateCalls7d = outside trust-gate calls (REST + MCP) in the last 7 days; null with
+parts.gateCalls "unavailable" when no counter is configured.
+
 GET ${API_V1_ENDPOINTS.api_index}
 Index of every route in the Trust API, machine-readable.
 

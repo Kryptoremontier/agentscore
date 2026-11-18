@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { apiError, cacheControlFor, corsOptions, freshnessMeta, NO_STORE, withReadLedger } from '@/lib/api-helpers'
 import { trustGateFor } from '@/lib/gate-any-id'
+import { recordGateCall } from '@/lib/gate-calls'
 import { parseGatePolicy } from '@/lib/trust-gate'
 
 /**
@@ -26,7 +27,8 @@ async function handleGET(request: NextRequest, { params }: { params: Promise<{ i
   const parsed = parseGatePolicy({ minTier: q.get('minTier'), minPeople: q.get('minPeople'), area: q.get('area') })
   if (!parsed.ok) return apiError(parsed.error, 400)
 
-  const data = await trustGateFor(id, parsed.policy)
+  // One outside call counted (stats `gateCalls7d`), beside the read — never after it, never able to fail it.
+  const [data] = await Promise.all([trustGateFor(id, parsed.policy), recordGateCall(request.headers)])
   return NextResponse.json(
     {
       success: true,

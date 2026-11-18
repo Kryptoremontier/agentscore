@@ -12,7 +12,9 @@ const BASE = (process.env.AGENTSCORE_URL ?? 'https://agentscore-gilt.vercel.app'
 const DACKIE = '0x45078ae569def2264355f77e592028dd6f1f5d6373c204fe82bf3141ab1861fb'
 const request = `/api/v1/agents/${DACKIE}/gate?minPeople=1&area=Crypto%20%2F%20Onchain`
 
-const res = await fetch(`${BASE}${request}`)
+// Our own calls: not counted as outside gate calls (stats gateCalls7d, lib/gate-calls.ts).
+const OURS = { headers: { 'X-AgentScore-Internal': '1' } }
+const res = await fetch(`${BASE}${request}`, OURS)
 const answer = await res.json()
 if (!res.ok || answer?.data?.decision !== 'allow') throw new Error(`unexpected answer: HTTP ${res.status} ${JSON.stringify(answer)}`)
 const snippet = readFileSync('examples/trust-gate.ts', 'utf8')
@@ -28,7 +30,7 @@ const FORMS: Array<{ form: string; id: string }> = [
 const idExamples: Array<{ form: string; id: string; request: string; data: unknown }> = []
 for (const { form, id } of FORMS) {
   const idRequest = `/api/v1/agents/${encodeURIComponent(id)}/gate?minPeople=1`
-  const r = await fetch(`${BASE}${idRequest}`)
+  const r = await fetch(`${BASE}${idRequest}`, OURS)
   const body = await r.json()
   if (!r.ok || !body?.data?.decision) throw new Error(`${form}: HTTP ${r.status} ${JSON.stringify(body)}`)
   // A failed read is not an example of anything: capture again when the indexer answers.

@@ -37,7 +37,8 @@ async function shouldITrust(agentId: string): Promise<Gate> {
   try {
     const res = await fetch(`${BASE}/api/mcp/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      // X-AgentScore-Internal: this demo is ours — it is not counted as an outside gate call (stats gateCalls7d).
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'x-agentscore-internal': '1' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'should_i_trust', arguments: { agentId, ...POLICY } } }),
     })
     const raw = await res.text()
