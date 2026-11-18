@@ -4,7 +4,9 @@ import { PageBackground } from '@/components/shared/PageBackground'
 import { CheckBox } from '@/components/check/CheckBox'
 import { CheckResultCard } from '@/components/check/CheckResultCard'
 import { CheckShare } from '@/components/check/CheckShare'
-import { checkCard } from '@/lib/check-data'
+import { BuilderDoor } from '@/components/check/BuilderDoor'
+import { checkCard, builderContext } from '@/lib/check-data'
+import { contextBySlug } from '@/lib/trust-contexts'
 import { encodeForCache } from '@/lib/json-codec'
 import { CHECK_TITLE, CHECK_NOT_FOUND, CHECK_BROWSE, CHECK_UNREAD, CHECK_IMAGE_ALT, TIER_UNREAD, OVER_TIME_NOBODY, STORY_SECTIONS } from '@/lib/people-copy'
 import { getTrustStory } from '@/lib/trust-story-data'
@@ -15,6 +17,8 @@ import { TrustOverTimeCard, TrustOverTimeUnread } from '@/components/trust/Trust
  * /check, read the same way (lib/check-data.ts), with its permalink and "Share on X"; the link
  * previews as the same card (./og — the same data, its age printed on it). Under it (Etap 8b Run B):
  * the landing's trust-over-time card in compact form — the same reader, the same <3-events rule.
+ * Etap 9, the builder's door: `?for=<context-slug>` is a trust link — the trust dialog starts on
+ * that context — and the block under the card hands that link out (BuilderDoor).
  */
 export const dynamic = 'force-dynamic'
 
@@ -32,9 +36,12 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 }
 
-export default async function CheckCardPage({ params }: { params: { id: string } }) {
+export default async function CheckCardPage({ params, searchParams }: { params: { id: string }; searchParams?: { for?: string | string[] } }) {
   const card = await checkCard(params.id)
-  const story = typeof card !== 'string' ? await getTrustStory(card.id) : null
+  const [story, best] = typeof card !== 'string' ? await Promise.all([getTrustStory(card.id), builderContext(card)]) : [null, null]
+  // A trust link names its context (`?for=<slug>`); an unknown slug names none.
+  const forParam = Array.isArray(searchParams?.for) ? searchParams?.for[0] : searchParams?.for
+  const ask = contextBySlug(forParam)
   const now = new Date().toISOString()
   return (
     <PageBackground image="wave" opacity={0.2}>
@@ -44,6 +51,7 @@ export default async function CheckCardPage({ params }: { params: { id: string }
           {typeof card !== 'string' ? (
             <CheckResultCard
               encoded={encodeForCache(card)}
+              askSlug={ask?.slug ?? null}
               footer={<CheckShare id={card.id} name={card.name} people={card.attesters ? card.attesters.length : null} />}
             />
           ) : card === 'not-found' ? (
@@ -55,6 +63,14 @@ export default async function CheckCardPage({ params }: { params: { id: string }
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5" data-testid="check-unread">
               <p className="text-[#B5BDC6]">{CHECK_UNREAD}</p>
             </div>
+          )}
+          {typeof card !== 'string' && (
+            <BuilderDoor
+              id={card.id}
+              name={card.name}
+              people={card.attesters ? card.attesters.length : null}
+              initialSlug={(ask ?? best)?.slug ?? null}
+            />
           )}
           {typeof card !== 'string' && story && (
             story.status !== 'ok' ? <TrustOverTimeUnread compact />

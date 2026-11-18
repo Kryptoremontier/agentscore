@@ -140,7 +140,7 @@ describe('2 — the agent\'s trust card: our API, one named part', () => {
 describe('3 — /check/[id]: the card in compact form; the OG image as in Etap 7', () => {
   it('the permalink page reads the trust story on the server and draws the compact card (or its error)', () => {
     const page = code('app/check/[id]/page.tsx')
-    expect(page).toMatch(/await getTrustStory\(card\.id\)/)
+    expect(page).toMatch(/await Promise\.all\(\[getTrustStory\(card\.id\), builderContext\(card\)\]\)/)
     expect(page).toMatch(/story\.status !== 'ok' \? <TrustOverTimeUnread compact \/>/)
     expect(page).toMatch(/<TrustOverTimeCard[\s\S]*compact\s*\/>/)
   })

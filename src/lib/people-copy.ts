@@ -253,6 +253,22 @@ export const CHECK_SHARE = 'Share on X'
 export const CHECK_PERMALINK = 'Link to this card'
 /** The post a person shares: "{name}: {N} people trust it on AgentScore. Who trusts your agent?" */
 export const checkShareText = (name: string, n: number) => `${name}: ${peopleVouch(n)} on AgentScore. Who trusts your agent?`
+// ── The builder's door (Etap 9, components/check/BuilderDoor.tsx) ──
+// Anyone can copy the link: none of this copy says, or implies, who built or owns the agent.
+export const BUILDER_HEADING = 'Built this agent? Get its trust link'
+export const BUILDER_CONTEXT_LABEL = 'Trust context for the link'
+export const BUILDER_PICK_CONTEXT = 'Choose a trust context'
+export const BUILDER_COPY = 'Copy trust link'
+export const BUILDER_COPIED = 'Copied'
+export const BUILDER_SEND = 'Send this to 3 people who have used it. Three people make it Verified.'
+/** The rest of the Verified rule (people AND tTRUST — the tier rule's own words), and what the link is not. */
+export const BUILDER_SEND_NOTE = `Verified takes ${TIER_RULE.verified} from them in total. Anyone can copy this link — it does not say who built the agent.`
+/** What the link opens with: the dialog's trust context, preselected; the person can still change it. */
+export const builderAsk = (contextLabel: string) => `This link asks: do you trust it for ${contextLabel}? You can pick another trust context.`
+/** The post when nobody trusts the agent yet; the link follows it (X appends the url). */
+export const builderShareLead = (name: string, contextLabel: string) => `I listed ${name} on AgentScore. Used it? Trust it for ${contextLabel}:`
+export const builderShareText = (name: string, contextLabel: string, link: string) => `${builderShareLead(name, contextLabel)} ${link}`
+export const BUILDER_COPY_MESSAGE = 'Copy message'
 /** On the Open Graph image, under the card: the data's age, printed on the picture itself. */
 export const checkImageAge = (readAt: string, ageLabel: string) => `Data read ${readAt.slice(0, 16).replace('T', ' ')} UTC · ${ageLabel}`
 export const CHECK_IMAGE_ALT = 'Who trusts this agent on AgentScore'

@@ -133,7 +133,8 @@ describe('source guards — no native dialogs, one Hub URL, the disconnected cli
 
   it('Attest, disconnected → the app\'s connect modal, then this agent\'s attest flow; wrong network → one switch button', () => {
     const attest = all.find(({ f }) => f.endsWith(path.join('attest', 'AttestButton.tsx')))!.s
-    expect(attest).toMatch(/if \(!isConnected\) \{\s*\/\/[^\n]*\n\s*openConnectModal\(\{ reason: connectToVouch\(agentName\), onConnected: \(\) => setOpen\(true\) \}\)/)
+    // Etap 9: start() opens the dialog (on the trust link's context, when the page came from one).
+    expect(attest).toMatch(/if \(!isConnected\) \{\s*\/\/[^\n]*\n\s*openConnectModal\(\{ reason: connectToVouch\(agentName\), onConnected: start \}\)/)
     expect(connectToVouch('Luda')).toBe('Connect a wallet to trust Luda.')
     expect(attest).toMatch(/switchChain\(\{ chainId: ATTEST_CHAIN_ID \}\)/)
     expect(attest).toContain("'Switch to Intuition Testnet'")

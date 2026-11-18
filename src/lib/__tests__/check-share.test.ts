@@ -39,7 +39,7 @@ describe('Share on X', () => {
 
   it('no number to share when who vouches couldn\'t be read: the link only', () => {
     const share = readFileSync('src/components/check/CheckShare.tsx', 'utf8')
-    expect(share).toMatch(/\{people !== null && \(/)
+    expect(share).toMatch(/\{people !== null && people > 0 && \(/)
     const page = readFileSync('src/app/check/[id]/page.tsx', 'utf8')
     expect(page).toMatch(/people=\{card\.attesters \? card\.attesters\.length : null\}/)
   })

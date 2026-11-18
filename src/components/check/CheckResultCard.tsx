@@ -10,14 +10,21 @@
 import { decodeFromCache } from '@/lib/json-codec'
 import { updatedAgoLabel } from '@/lib/agents-page-types'
 import type { CheckCard } from '@/lib/check-agent'
-import { ORIGIN_LABEL, WHO_VOUCHES_UNREAD } from '@/lib/people-copy'
+import { ORIGIN_LABEL, WHO_VOUCHES_UNREAD, builderAsk } from '@/lib/people-copy'
+import { contextBySlug } from '@/lib/trust-contexts'
 import { SealRow } from '@/components/agents/SealRow'
 import { AgentTierChip } from '@/components/agents/AgentTierChip'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { Explainer } from '@/components/shared/Explainer'
 import { AttestButton } from '@/components/attest/AttestButton'
 
-export function CheckResultCard({ encoded, footer }: { encoded: unknown; footer?: React.ReactNode }) {
+export function CheckResultCard({ encoded, footer, askSlug = null }: {
+  encoded: unknown
+  footer?: React.ReactNode
+  /** Etap 9 — opened from a trust link (`?for=<slug>`): the dialog starts on that trust context. */
+  askSlug?: string | null
+}) {
+  const ask = contextBySlug(askSlug)
   const card = decodeFromCache<CheckCard>(encoded)
   return (
     <article
@@ -55,7 +62,8 @@ export function CheckResultCard({ encoded, footer }: { encoded: unknown; footer?
       </p>
 
       <div className="mt-5">
-        <AttestButton agentId={card.id} agentName={card.name} variant="hero" />
+        {ask && <p className="mb-2 text-sm text-[#B5BDC6]" data-testid="trust-ask" data-context={ask.slug}>{builderAsk(ask.label)}</p>}
+        <AttestButton agentId={card.id} agentName={card.name} variant="hero" preselect={ask} />
       </div>
       {footer}
     </article>
