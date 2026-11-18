@@ -269,6 +269,12 @@ export const builderAsk = (contextLabel: string) => `This link asks: do you trus
 export const builderShareLead = (name: string, contextLabel: string) => `I listed ${name} on AgentScore. Used it? Trust it for ${contextLabel}:`
 export const builderShareText = (name: string, contextLabel: string, link: string) => `${builderShareLead(name, contextLabel)} ${link}`
 export const BUILDER_COPY_MESSAGE = 'Copy message'
+export const BADGE_HEADING = 'A badge for your README'
+export const BADGE_NOTE = 'The badge shows the tier, how many people trust it and when that was read. It refreshes every 5 minutes.'
+export const BADGE_MARKDOWN = 'Markdown'
+export const BADGE_HTML = 'HTML'
+export const BADGE_COPY = 'Copy'
+export const BADGE_ALT = 'AgentScore badge for this agent'
 /** On the Open Graph image, under the card: the data's age, printed on the picture itself. */
 export const checkImageAge = (readAt: string, ageLabel: string) => `Data read ${readAt.slice(0, 16).replace('T', ' ')} UTC · ${ageLabel}`
 export const CHECK_IMAGE_ALT = 'Who trusts this agent on AgentScore'

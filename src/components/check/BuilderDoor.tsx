@@ -6,6 +6,8 @@
  * trust context (the person can still change it). The context starts as the agent's best match
  * (lib/check-agent.ts bestContextFor — null = none known, the person picks; never a guess).
  *
+ * Under it: the README badge (app/badge/[id], lib/badge.ts) with copy-ready Markdown and HTML.
+ *
  * Anyone can copy the link: nothing here says who built or owns the agent.
  */
 
@@ -15,8 +17,9 @@ import { SITE_URL } from '@/lib/site'
 import { TRUST_CONTEXTS, contextBySlug } from '@/lib/trust-contexts'
 import {
   BUILDER_HEADING, BUILDER_CONTEXT_LABEL, BUILDER_PICK_CONTEXT, BUILDER_COPY, BUILDER_COPIED, BUILDER_SEND, BUILDER_SEND_NOTE,
-  BUILDER_COPY_MESSAGE, builderShareText, CHECK_SHARE,
+  BUILDER_COPY_MESSAGE, builderShareText, CHECK_SHARE, BADGE_HEADING, BADGE_NOTE, BADGE_MARKDOWN, BADGE_HTML, BADGE_COPY, BADGE_ALT,
 } from '@/lib/people-copy'
+import { badgePath, badgeSnippets } from '@/lib/badge'
 import { shareOnXUrl, trustLink } from './CheckShare'
 
 export function BuilderDoor({ id, name, people, initialSlug }: {
@@ -28,7 +31,8 @@ export function BuilderDoor({ id, name, people, initialSlug }: {
   initialSlug: string | null
 }) {
   const [slug, setSlug] = useState(initialSlug ?? '')
-  const [copied, setCopied] = useState<'link' | 'message' | null>(null)
+  const [copied, setCopied] = useState<'link' | 'message' | 'markdown' | 'html' | null>(null)
+  const snippets = badgeSnippets(SITE_URL, id)
   const context = contextBySlug(slug)
   const link = context ? `${SITE_URL}${trustLink(id, context)}` : null
 
@@ -39,7 +43,7 @@ export function BuilderDoor({ id, name, people, initialSlug }: {
     return () => { cancelled = true; clearTimeout(t) }
   }, [copied])
 
-  async function copy(what: 'link' | 'message', text: string) {
+  async function copy(what: NonNullable<typeof copied>, text: string) {
     try {
       await navigator.clipboard.writeText(text)
       setCopied(what)
@@ -111,6 +115,32 @@ export function BuilderDoor({ id, name, people, initialSlug }: {
 
       <p className="mt-4 text-sm text-white" data-testid="builder-send">{BUILDER_SEND}</p>
       <p className="mt-1 text-xs text-[#7A838D]">{BUILDER_SEND_NOTE}</p>
+
+      <div className="mt-5 pt-5 border-t border-white/[0.07]" data-testid="badge-snippets">
+        <h3 className="text-sm font-semibold text-white">{BADGE_HEADING}</h3>
+        {/* The badge itself, from this site (the snippets carry the production address). */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={badgePath(id)} alt={BADGE_ALT} height={20} className="mt-3 h-5 max-w-full" data-testid="badge-preview" />
+        {([['markdown', BADGE_MARKDOWN, snippets.markdown], ['html', BADGE_HTML, snippets.html]] as const).map(([key, label, text]) => (
+          <div key={key} className="mt-3">
+            <p className="text-xs text-[#7A838D]">{label}</p>
+            <div className="mt-1 flex gap-2">
+              <input
+                readOnly
+                value={text}
+                onFocus={(e) => e.currentTarget.select()}
+                aria-label={`${label} snippet`}
+                className="min-w-0 flex-1 h-10 rounded-lg border border-white/10 bg-[#12151A] px-3 font-mono text-xs text-[#B5BDC6] outline-none"
+                data-testid={`badge-${key}`}
+              />
+              <button type="button" onClick={() => copy(key, text)} className="btn-secondary h-10 px-4 text-sm" data-testid={`badge-copy-${key}`}>
+                {copied === key ? BUILDER_COPIED : BADGE_COPY}
+              </button>
+            </div>
+          </div>
+        ))}
+        <p className="mt-3 text-xs text-[#7A838D]">{BADGE_NOTE}</p>
+      </div>
     </section>
   )
 }
