@@ -1,5 +1,6 @@
 {
   "name": "agentscore",
+  "description": "Trust layer for AI agents on Intuition: real, named people trust an agent for a context; agents ask before they pay.",
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
