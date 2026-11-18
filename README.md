@@ -533,7 +533,7 @@ This is the same license model used by Uniswap V3, Sentry, MariaDB, and Cockroac
 | 📄 Documentation | [/docs](https://agentscore-gilt.vercel.app/docs) |
 | 🔗 FeeProxy Contract | [Blockscout](https://testnet.explorer.intuition.systems/address/0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41) |
 | 🏛️ Intuition Protocol | [intuition.systems](https://intuition.systems) |
-| 📋 Fee Model | [docs/FEE_MODEL.md](docs/FEE_MODEL.md) |
+| 📋 Fee Model (archived) | [docs/archive/FEE_MODEL.md](docs/archive/FEE_MODEL.md) |
 
 ---
 

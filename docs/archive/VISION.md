@@ -1,3 +1,5 @@
+> Archived 2026-11: contradicts the thesis or the code; see STRATEGY_REVIEW_2026-11.
+
 # 🌟 AgentScore Vision
 
 <p align="center">

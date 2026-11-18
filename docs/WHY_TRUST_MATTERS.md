@@ -204,7 +204,7 @@ Join us in building it.
 ---
 
 <p align="center">
-  <a href="../VISION.md">Read Our Vision</a> •
-  <a href="../ROADMAP.md">See Our Roadmap</a> •
+  <a href="archive/VISION.md">Read Our Vision</a> •
+  <a href="archive/ROADMAP.md">See Our Roadmap</a> •
   <a href="https://agentscore-gilt.vercel.app">Try AgentScore</a>
 </p>
