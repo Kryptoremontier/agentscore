@@ -61,9 +61,17 @@ const SHOTS: Shot[] = [
   { name: 'check', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-dackie', url: ROUTES.checkCard(AGENTS.dackie), prepare: checkCardReady, check: checkCardChecks },
   { name: 'check-luda', url: ROUTES.checkCard(AGENTS.luda), prepare: checkCardReady, check: checkCardChecks },
+  // Etap 9: the builder's door — /check in builder mode, Luda's card opened from a trust link, and the README badge.
+  { name: 'check-builder', url: ROUTES.checkBuilder, prepare: async (page) => { await page.getByTestId('check-builder-note').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
+  { name: 'check-luda-builder', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, check: builderDoorChecks },
+  { name: 'check-luda-builder-block', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, target: async (page) => page.getByTestId('builder-door') },
+  { name: 'badge-luda', url: ROUTES.badge(AGENTS.luda), target: async (page) => page.locator('svg').first(), check: (page) => badgeSays(page, /^AgentScore · (Unverified|Established|Verified) · \d+ (person trusts it|people trust it) · as of \d{4}-\d\d-\d\d \d\d:\d\d UTC$/) },
+  { name: 'badge-unknown-id', url: ROUTES.badge('no-such-agent-anywhere'), target: async (page) => page.locator('svg').first(), check: (page) => badgeSays(page, /^AgentScore · not found$/) },
   // Etap 8a: the nav in Intuition's words — the desktop sidebar; the phone's bottom nav with More open.
   { name: 'nav', url: ROUTES.landing, prepare: navReady, target: navTarget, firstScreen: true, check: navWords },
-  { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: mostVouchedFirst },
+  { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: async (page) => { await mostVouchedFirst(page); await twoSections(page) } },
+  // Etap 9: the second section opened — every agent is still one click away.
+  { name: 'agents-list-untrusted-open', url: ROUTES.agents, prepare: async (page) => { await agentsListReady(page); await openUntrusted(page) }, check: untrustedOpened },
   // The first screen, as a visitor sees it: at 390×844 the first card must be on it.
   { name: 'agents-list-fold', url: ROUTES.agents, prepare: agentsListReady, firstScreen: true, check: firstCardAboveFold },
   {
@@ -98,6 +106,7 @@ const SHOTS: Shot[] = [
     url: ROUTES.agents,
     prepare: async (page) => {
       await agentsListReady(page)
+      await openUntrusted(page) // OPEN CLAW: nobody trusts it yet, so its row is in the second section
       await page.getByRole('button', { name: 'List', exact: true }).click()
       await expect(page.locator('[data-card]')).toHaveCount(0, { timeout: WAIT_CAP })
     },
@@ -334,8 +343,21 @@ async function landingChecks(page: Page) {
     await expect(gate.locator('pre')).toContainText('should_i_trust({ agentId:')
   }
   if ((await page.getByTestId('trust-contexts').getAttribute('data-state')) === 'ok') {
-    await expect(page.getByTestId('context-tile'), 'all 8 trust contexts, empty ones included').toHaveCount(8)
+    // Etap 9, honest emptiness: only the contexts someone trusts an agent for, then one line for the rest.
+    const grid = page.getByTestId('context-grid')
+    const shown = Number(await grid.getAttribute('data-shown'))
+    const open = Number(await grid.getAttribute('data-open'))
+    expect(shown + open, 'shown + open = all 8 trust contexts').toBe(8)
+    await expect(page.getByTestId('context-tile'), 'one tile per context someone trusts an agent for').toHaveCount(shown)
+    await expect(page.locator('[data-testid="context-tile"][data-people="0"]'), 'no empty tile on the landing').toHaveCount(0)
+    if (open > 0) {
+      await expect(page.getByTestId('contexts-open')).toHaveText(new RegExp(`^${open}( more)? trust contexts? (is|are) open\\. Be the first\\.$`))
+      await expect(page.getByTestId('contexts-open').locator('a')).toHaveAttribute('href', '/domains')
+    }
   }
+  // Etap 9: the second door, under the hero's buttons.
+  await expect(page.getByTestId('story-builder-door')).toHaveText('Built an agent? Get your trust link')
+  await expect(page.getByTestId('story-builder-door')).toHaveAttribute('href', '/check?builder=1')
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow, 'no sideways scroll').toBeLessThanOrEqual(0)
 }
@@ -473,7 +495,91 @@ async function pageFitsViewport(page: Page) {
 async function checkCardChecks(page: Page) {
   await oneAttestCta(page)
   await expect(page.getByTestId('share-x'), 'Share on X').toBeVisible()
+  // Etap 9: Backing is under a closed "Details" — one headline number on the card.
+  await expect(page.getByTestId('check-details')).not.toHaveAttribute('open', /.*/)
+  await expect(page.getByTestId('check-result').getByTestId('backing-score')).toBeHidden()
+  await expect(page.getByTestId('builder-door')).toBeVisible()
   await pageFitsViewport(page)
+}
+
+/**
+ * Etap 9, the builder's door: opened from a trust link (`?for=social`) the card says what the link
+ * asks; the block hands out that link for the same context, the line about three people, and the
+ * README badge — drawn, with both snippets.
+ */
+async function builderDoorChecks(page: Page) {
+  await expect(page.getByTestId('trust-ask')).toHaveAttribute('data-context', 'social')
+  const door = page.getByTestId('builder-door')
+  await expect(door).toContainText('Built this agent? Get its trust link')
+  await expect(door).toHaveAttribute('data-context', 'social')
+  await expect(door.getByTestId('builder-link')).toHaveValue(new RegExp(`/check/${AGENTS.luda}\\?for=social$`))
+  await expect(door.getByTestId('builder-send')).toHaveText('Send this to 3 people who have used it. Three people make it Verified.')
+  await expect(door.getByTestId('builder-context').locator('option')).toHaveCount(8)
+  await expect(door.getByTestId('badge-markdown')).toHaveValue(/^\[!\[AgentScore\]\(https:\/\/[^)]+\/badge\/0x[0-9a-f]{64}\.svg\)\]\(https:\/\/[^)]+\/check\/0x[0-9a-f]{64}\)$/)
+  await expect(door.getByTestId('badge-html')).toHaveValue(/^<a href="[^"]+"><img src="[^"]+\.svg" alt="AgentScore" height="20"><\/a>$/)
+  const drawn = await door.getByTestId('badge-preview').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)
+  expect(drawn, 'the badge image loaded').toBe(true)
+  // Picking another context changes the link; nothing else on the page claims who built the agent.
+  await door.getByTestId('builder-context').selectOption('crypto-onchain')
+  await expect(door.getByTestId('builder-link')).toHaveValue(/\?for=crypto-onchain$/)
+  await expect(page.getByText(/owner verified|verified owner/i)).toHaveCount(0)
+  await pageFitsViewport(page)
+}
+
+/** The badge route answers an SVG whose words are its accessible name. */
+async function badgeSays(page: Page, words: RegExp) {
+  const label = await page.locator('svg').first().getAttribute('aria-label')
+  expect(label ?? '', 'the badge\'s words').toMatch(words)
+}
+
+/** Etap 9: open "Not trusted yet" if the list is in two sections and it is closed. */
+async function openUntrusted(page: Page) {
+  const toggle = page.getByTestId('agents-untrusted-toggle')
+  if ((await toggle.count()) === 0) return
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: WAIT_CAP })
+}
+
+/**
+ * Etap 9: /agents in two sections — "People trust these (N)" with N cards, every one of them
+ * trusted, then "Not trusted yet (M)" collapsed. The header's counts stay the full totals:
+ * N + M = the results line's count.
+ */
+async function twoSections(page: Page) {
+  const trusted = page.getByTestId('agents-trusted')
+  if ((await trusted.count()) === 0) return // who trusts some row wasn't read: one list, no claim
+  const n = Number(await trusted.getAttribute('data-count'))
+  await expect(trusted.locator('h2')).toHaveText(`People trust these (${n})`)
+  await expect(trusted.locator('[data-term-id]')).toHaveCount(n)
+  const lines = await trusted.locator('[data-testid="card-attester-line"]').allInnerTexts()
+  for (const l of lines) expect(l, 'a trusted card says who trusts it').toMatch(/trusts? it/)
+  const untrusted = page.getByTestId('agents-untrusted')
+  const m = (await untrusted.count()) ? Number(await untrusted.getAttribute('data-count')) : 0
+  if (m > 0) {
+    await expect(page.getByTestId('agents-untrusted-toggle')).toHaveText(`Not trusted yet (${m})`)
+    await expect(page.getByTestId('agents-untrusted-toggle')).toHaveAttribute('aria-expanded', 'false')
+    await expect(untrusted.locator('[data-term-id]'), 'collapsed').toHaveCount(0)
+  }
+  const shown = Number((await page.getByTestId('results-line').innerText()).match(/^(\d+)/)?.[1])
+  expect(n + m, 'the two sections are the whole list').toBe(shown)
+  const total = Number(await page.getByTestId('agents-status').getAttribute('data-total'))
+  expect(shown, 'the header keeps the full total').toBe(total)
+  // The card's headline is the people: Backing sits in its Details row, not beside the name.
+  const stray = await page.locator('[data-card="full"]').evaluateAll((cards) => cards.filter((c) => {
+    const b = c.querySelector('[data-testid="backing-score"]')
+    return !!b && !b.closest('[data-testid="card-details"]')
+  }).length)
+  expect(stray, 'a backing score outside a card\'s Details row').toBe(0)
+}
+
+/** The second section, opened: its rows are there, none of them trusted. */
+async function untrustedOpened(page: Page) {
+  const untrusted = page.getByTestId('agents-untrusted')
+  if ((await untrusted.count()) === 0) return
+  const m = Number(await untrusted.getAttribute('data-count'))
+  await expect(untrusted.locator('[data-term-id]')).toHaveCount(Math.min(m, 48))
+  const lines = await untrusted.locator('[data-testid="card-attester-line"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.state))
+  expect(lines.every((s) => s === 'none'), 'every row there: nobody trusts it yet').toBe(true)
 }
 
 async function oneAttestCta(page: Page) {

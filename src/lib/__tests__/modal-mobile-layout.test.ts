@@ -31,7 +31,7 @@ describe('agent modal on a phone', () => {
   it('two-column blocks stack below their breakpoint: Timeline chart/events (the score block is one column under Details now)', () => {
     // Etap 5b: the two-column AGENTSCORE + STAKE BREAKDOWN card became rows in the collapsed Details.
     expect(page).not.toMatch(/=== AGENTSCORE \+ STAKE BREAKDOWN ===/)
-    expect(page).toMatch(/<AgentDetails termId=\{selectedAgent\.term_id\}[^>]*>\s*<ScoreParts view=/)
+    expect(page).toMatch(/<AgentDetails\s+termId=\{selectedAgent\.term_id\}[\s\S]{0,260}className="mb-3"\s*>\s*<ScoreParts view=/)
     expect(timeline).toMatch(/hasChart \? 'grid-cols-1 md:grid-cols-2/)
     expect(timeline).not.toMatch(/hasChart \? 'grid-cols-2'/)
   })

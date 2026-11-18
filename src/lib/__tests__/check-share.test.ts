@@ -52,8 +52,8 @@ describe('Share on X', () => {
 describe('/check → the card\'s permalink', () => {
   it('one agent found → a redirect to /check/[id]; a pick list links to permalinks', () => {
     const page = readFileSync('src/app/check/page.tsx', 'utf8')
-    expect(page).toMatch(/if \(lookup\?\.resolution\.status === 'found'\) redirect\(checkPermalink\(lookup\.resolution\.id\)\)/)
-    expect(page).toMatch(/href=\{checkPermalink\(c\.id\)\}/)
+    expect(page).toMatch(/if \(lookup\?\.resolution\.status === 'found'\) redirect\(checkPermalink\(lookup\.resolution\.id\) \+ \(builder \? `#\$\{BUILDER_ANCHOR\}` : ''\)\)/)
+    expect(page).toMatch(/href=\{checkPermalink\(c\.id\) \+ anchor\}/)
   })
 
   it('the permalink page reads the same card as the image (lib/check-data checkCard)', () => {

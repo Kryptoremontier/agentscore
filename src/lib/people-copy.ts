@@ -233,6 +233,10 @@ export const PEOPLE_HERE_UNREAD = 'Couldn’t read who trusts agents right now'
 export const LANDING_CTA_VOUCH = 'Trust an agent'
 /** The landing's primary action (Etap 7 Run B: the Beta shape) — the /check page. */
 export const LANDING_CTA_CHECK = 'Check an agent'
+/** The landing's second door (Etap 9): for someone who built an agent — to /check in builder mode. */
+export const LANDING_DOOR_BUILDER = 'Built an agent? Get your trust link'
+export const CHECK_BUILDER_NOTE = 'Find your agent. Its card has the trust link and a badge for your README.'
+export const CHECK_BUILDER_REGISTER = 'Not listed yet? Register it'
 
 // ── Check an agent (Etap 7 Run B, app/check) ──
 export const CHECK_TITLE = 'Check an agent'
@@ -449,6 +453,10 @@ export const LANDING_CHECKS = ['TESTNET tTRUST IS FREE', 'ALL TRUST IS ON-CHAIN'
 
 /** /agents (Etap 7a): the list draws its first rows, then this button adds the next ones. */
 export const showMoreAgents = (n: number) => `Show ${n} more`
+/** /agents in two sections (Etap 9): who people trust first; the rest collapsed. The header's counts stay the full totals. */
+export const agentsTrustedHeading = (n: number) => `People trust these (${n})`
+export const agentsUntrustedHeading = (n: number) => `Not trusted yet (${n})`
+export const AGENTS_TRUSTED_NONE = 'Nobody trusts an agent in this view yet. Open one below and be the first.'
 
 // ─── The landing tells the story (Etap 8b) ────────────────────────────────────
 // Numbered sections, each under a mono eyebrow "■ 0N / …". Headlines are set uppercase by CSS;
@@ -498,6 +506,12 @@ export const GATE_NONE = 'No one trusts an agent here yet, so there is no answer
 export const CONTEXTS_HEADING = 'What people trust agents for.'
 export const contextsFeatured = (context: string) => `Agents people trust for ${context}`
 export const CONTEXT_EMPTY = { line: 'No one trusts an agent here yet.', cta: 'Be the first.' } as const
+/**
+ * The landing's §04 shows only the contexts someone trusts an agent for (Etap 9); the rest are one
+ * line — "N more trust contexts are open. Be the first." — linking to the full grid on /domains.
+ */
+export const contextsOpenLine = (open: number, shown: number) =>
+  `${open}${shown > 0 ? ' more' : ''} ${open === 1 ? 'trust context is' : 'trust contexts are'} open.`
 export const CONTEXTS_UNREAD = 'Couldn’t read who trusts which agent right now. This is not an empty record.'
 export const CONTEXTS_GRID_LABEL = 'All trust contexts'
 

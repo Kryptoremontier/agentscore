@@ -20,7 +20,10 @@ describe('the first 48 rows, then "Show N more"', () => {
     expect(LIST_PAGE_SIZE).toBe(48)
     expect(showMoreAgents(48)).toBe('Show 48 more')
     expect(client).toMatch(/const visible = sorted\.slice\(0, shownCount\)/)
-    expect(client.match(/\{visible\.map\(\(\{ agent, trust: cardTrust, measured, noScoreTip \}/g)).toHaveLength(2) // grid and list
+    // Etap 9: one renderer draws every group of rows — the page of the one list, or each of the two sections.
+    expect(client.match(/\{rows\.map\(\(\{ agent, trust: cardTrust, measured, noScoreTip \}/g)).toHaveLength(2) // grid and list
+    expect(client).toMatch(/\) : renderRows\(visible\)\}/)
+    expect(client).toMatch(/renderRows\(sections\.untrusted\.slice\(0, shownCount\)\)/)
     expect(client).not.toMatch(/\{sorted\.map\(\(\{ agent/)
     expect(client).toMatch(/agentResultsLine\(sorted\.length, listRows\.sourceCount\)/) // the results line counts every row
     expect(client).toMatch(/onClick=\{\(\) => setShownCount\(\(n\) => n \+ LIST_PAGE_SIZE\)\}/)

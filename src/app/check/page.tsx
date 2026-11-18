@@ -5,11 +5,11 @@ import { checkLookup } from '@/lib/check-data'
 import type { CheckResolution } from '@/lib/check-agent'
 import { redirect } from 'next/navigation'
 import { CheckBox } from '@/components/check/CheckBox'
-import { checkPermalink } from '@/components/check/CheckShare'
+import { checkPermalink, BUILDER_ANCHOR } from '@/components/check/CheckShare'
 import {
   CHECK_TITLE, CHECK_SUB, CHECK_TRY,
   CHECK_PICK, checkPickMore, CHECK_NOT_FOUND, CHECK_WALLET_NOT_FOUND, CHECK_WALLET_PROFILE, CHECK_BROWSE,
-  CHECK_UNREAD, ORIGIN_LABEL, NOBODY_VOUCHES, peopleVouch,
+  CHECK_UNREAD, ORIGIN_LABEL, NOBODY_VOUCHES, peopleVouch, CHECK_BUILDER_NOTE, CHECK_BUILDER_REGISTER,
 } from '@/lib/people-copy'
 
 /**
@@ -28,20 +28,28 @@ export const metadata: Metadata = {
 
 const EXAMPLES = ['Luda', 'Captain Dackie', '8453:1380'] as const
 
-export default async function CheckPage({ searchParams }: { searchParams: { q?: string | string[] } }) {
+export default async function CheckPage({ searchParams }: { searchParams: { q?: string | string[]; builder?: string | string[] } }) {
   const q = typeof searchParams.q === 'string' ? searchParams.q : ''
+  // Builder mode (Etap 9): from the landing's second door. The same lookup; the card opens on its builder block.
+  const builder = searchParams.builder !== undefined
   // Looked up before the page renders (the /agents answer is a warm cached read — milliseconds), so
   // one agent is a real redirect to its card's permalink, the address a person shares.
   const lookup = q.trim() ? await checkLookup(q) : null
-  if (lookup?.resolution.status === 'found') redirect(checkPermalink(lookup.resolution.id))
+  if (lookup?.resolution.status === 'found') redirect(checkPermalink(lookup.resolution.id) + (builder ? `#${BUILDER_ANCHOR}` : ''))
   return (
     <PageBackground image="wave" opacity={0.2}>
       <main className="max-w-2xl mx-auto px-4 sm:px-6 pt-24 pb-28 lg:pb-16">
-        <CheckBox q={q} />
+        <CheckBox q={q} builder={builder} />
+        {builder && (
+          <p className="mt-4 text-sm text-[#B5BDC6]" data-testid="check-builder-note">
+            {CHECK_BUILDER_NOTE}{' '}
+            <Link href="/register" className="text-accent font-medium hover:text-[#ffc35a]">{CHECK_BUILDER_REGISTER}</Link>
+          </p>
+        )}
 
         <div className="mt-8">
           {lookup ? (
-            <CheckAnswer resolution={lookup.resolution} />
+            <CheckAnswer resolution={lookup.resolution} anchor={builder ? `#${BUILDER_ANCHOR}` : ''} />
           ) : (
             <p className="text-sm text-[#7A838D]" data-testid="check-empty">
               {CHECK_TRY}:{' '}
@@ -59,7 +67,7 @@ export default async function CheckPage({ searchParams }: { searchParams: { q?: 
   )
 }
 
-function CheckAnswer({ resolution }: { resolution: CheckResolution }) {
+function CheckAnswer({ resolution, anchor }: { resolution: CheckResolution; anchor: string }) {
 
   if (resolution.status === 'choose') {
     return (
@@ -69,7 +77,7 @@ function CheckAnswer({ resolution }: { resolution: CheckResolution }) {
           {resolution.candidates.map((c) => (
             <li key={c.id}>
               <Link
-                href={checkPermalink(c.id)}
+                href={checkPermalink(c.id) + anchor}
                 className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 hover:border-accent/50"
               >
                 <span className="min-w-0">

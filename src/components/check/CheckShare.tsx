@@ -16,6 +16,10 @@ export function checkPermalink(id: string): string {
   return `/check/${id}`
 }
 
+/** /check in builder mode (Etap 9): the landing's second door; a found agent opens on its builder block. */
+export const BUILDER_DOOR_HREF = '/check?builder=1'
+export const BUILDER_ANCHOR = 'builder'
+
 /** The builder's trust link (Etap 9): the card, with the trust dialog's context preselected. */
 export function trustLink(id: string, context: Pick<TrustContext, 'slug'> | null): string {
   return context ? `${checkPermalink(id)}?for=${context.slug}` : checkPermalink(id)

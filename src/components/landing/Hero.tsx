@@ -1,7 +1,8 @@
 /**
  * The landing's first screen (Etap 8b): the headline with its one accent block, one line on what
- * this is for, and two ways in — check an agent (primary), or read how it works. On a phone the
- * headline and the Check an agent button are on the first screen (the harness checks it).
+ * this is for, and two ways in — check an agent (primary), or read how it works — and under them
+ * a second door for someone who built an agent (Etap 9). On a phone the headline and the Check an
+ * agent button are on the first screen (the harness checks it).
  *
  * The page background (app/layout.tsx: a fixed image with its horizon glow) shows through the
  * section's two overlays, as before. A server component: no JavaScript, no data — the live story
@@ -10,7 +11,8 @@
 
 import Link from 'next/link'
 import { ArrowRight, ArrowDown } from 'lucide-react'
-import { STORY_HEADLINE, STORY_SUB, STORY_HOW_LINK, LANDING_CTA_CHECK, LIVE_ON_TESTNET } from '@/lib/people-copy'
+import { STORY_HEADLINE, STORY_SUB, STORY_HOW_LINK, LANDING_CTA_CHECK, LANDING_DOOR_BUILDER, LIVE_ON_TESTNET } from '@/lib/people-copy'
+import { BUILDER_DOOR_HREF } from '@/components/check/CheckShare'
 import { AccentBlock, DISPLAY, StoryEyebrow } from './story-parts'
 
 export function Hero() {
@@ -37,6 +39,13 @@ export function Hero() {
             <ArrowDown aria-hidden className="w-4 h-4" />
           </a>
         </div>
+        {/* The second door (Etap 9): for someone who built an agent — /check in builder mode. */}
+        <p className="mt-5">
+          <Link href={BUILDER_DOOR_HREF} className="group inline-flex items-center gap-1.5 min-h-[44px] text-sm sm:text-base font-medium text-accent hover:text-[#ffc35a]" data-testid="story-builder-door">
+            {LANDING_DOOR_BUILDER}
+            <ArrowRight aria-hidden className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+        </p>
       </div>
     </section>
   )

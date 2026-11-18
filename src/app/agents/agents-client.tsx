@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Layers, Globe, LayoutGrid, List, ExternalLink } from 'lucide-react'
+import { Layers, Globe, LayoutGrid, List, ExternalLink, ChevronDown } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther } from 'viem'
 import Link from 'next/link'
@@ -51,7 +51,7 @@ import { AttestersList } from '@/components/profile/AttestersAndBackers'
 import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
-import { showMoreAgents, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND, ORIGIN_LABEL, CLAIM_PICK } from '@/lib/people-copy'
+import { showMoreAgents, DETAILS_HEADING, agentsTrustedHeading, agentsUntrustedHeading, AGENTS_TRUSTED_NONE, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND, ORIGIN_LABEL, CLAIM_PICK } from '@/lib/people-copy'
 import { ScoreParts } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
@@ -60,7 +60,7 @@ import { fetchUserVaultPosition, fetchWalletShares } from '@/lib/wallet-position
 import { livePositions, liveStakerWallets, countLiveStakers } from '@/lib/live-position'
 import { SORT_OPTIONS, parseSort, type AgentListSortBy } from '@/lib/agent-list-sort'
 import {
-  matchesAgentSearch, agentResultsLine, type FeedStatus,
+  matchesAgentSearch, agentResultsLine, trustSections, type FeedStatus,
   cardAttestationView, attesterLineOf, tierChipOf, isCompactCard, attestScrollStep, orderAgents, listEntryOf, type CardAttestationView,
   listTrustTriple, listVaultSnapshot, listOpposeWei, withLiveVault,
   ORIGIN_TABS, QUALITY_LEVELS, LIST_PAGE_SIZE, corpusTotals, qualityOptions, qualityOptionText, parseListFilters, listFiltersSearch,
@@ -270,6 +270,8 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   // How many rows of the current order are drawn (Etap 7a); back to one page when the view changes.
   const [shownCount, setShownCount] = useState(LIST_PAGE_SIZE)
+  // "Not trusted yet" starts collapsed; null = the person hasn't chosen (then a search or a filter opens it).
+  const [untrustedShown, setUntrustedShown] = useState<boolean | null>(null)
   // Etap 2c: ERC-8004 cohort agents, fetched once (not search/sort-param dependent server-side).
   const [cohortAgents, setCohortAgents] = useState<GraphQLAgent[]>(init?.cohortAgents ?? [])
   const [cohortTotal, setCohortTotal] = useState<number | null>(init?.cohortTotal ?? null)
@@ -1802,6 +1804,199 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
             // agents people vouch for first, so nothing that matters is hidden; the counts stay full.
             const visible = sorted.slice(0, shownCount)
             const qualityLabel = QUALITY_LEVELS.find(l => l.id === qualityFilter)?.label
+            // Etap 9 — two sections: the agents people trust, then the rest (collapsed). Only when who
+            // trusts each listed agent was read: an unread row is neither (lib/agent-list.ts trustSections).
+            const sections = trustSections(sorted)
+            // Someone searching or filtering is looking for a row: the second section opens by itself.
+            const untrustedOpen = untrustedShown ?? (searchTerm.trim() !== '' || qualityFilter !== 'all')
+
+            // One renderer for every group of rows (Etap 9: the two sections draw the same cards and rows).
+            const renderRows = (rows: typeof sorted) => viewMode === 'grid' ? (
+              /* ── GRID VIEW ── */
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {rows.map(({ agent, trust: cardTrust, measured, noScoreTip }) => {
+                  // The backing score (Etap 5b): the measured trust score from the atom vault's
+                  // support vs oppose — the modal's and the profile's number too; small and neutral.
+                  // At zero stake cardTrust.score is the formula's 50 prior: "—" (lib/score-basis.ts).
+                  const displayScore = measuredScore(cardTrust, measured)
+                  // Live stakers only (lib/live-position.ts) — a 0-share row is not a staker.
+                  const stakers = agent.liveStakerCount
+                  const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
+                  const name = getAgentNameFromAtom(agent)
+                  // Cohort rows never fetch the atom vault: their stake/stakers were never
+                  // measured, so they are not printed (thesis §6: null ≠ 0.0).
+                  const vaultRead = readSharesWei(agent.positions_aggregate) != null
+                  // Attestations — the same read and derivation as the modal, and the same helper
+                  // as the list row (lib/agent-list.ts attesterLineOf). The tier chip shows only
+                  // Trusted / Verified (thesis §6); Unverified is carried by the people line.
+                  const attesterLine = attesterLineOf(attestationViewBySubject, agent.term_id)
+                  const cardTierChip = tierChipOf(attestationViewBySubject, agent.term_id)
+                  const originChip = <OriginChip origin={agent.origin} tab={originFilter} />
+                  const backing = <BackingScore value={displayScore} tip={noScoreTip} className="flex-shrink-0" />
+                  const cardClass = `bg-[#111318] border border-[#1e2028] rounded-2xl
+                                 cursor-pointer transition-all duration-300 ease-out
+                                 hover:-translate-y-1 hover:border-[#C8963C]/15
+                                 hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]`
+
+                  // Compact: a cohort row (vault never read on the list). Its Details row would be
+                  // the same on every such card ("Backing —"), so it is not drawn; the modal has it.
+                  // Decided at first paint only — the attestation read never reshapes a card
+                  // (lib/agent-list.ts isCompactCard).
+                  if (isCompactCard({ vaultRead })) {
+                    return (
+                      <motion.div
+                        key={agent.term_id}
+                        data-term-id={agent.term_id}
+                        initial={enter({ opacity: 0, y: 20 })}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.05 }}
+                        onClick={() => setSelectedAgent(agent)}
+                        className={`${cardClass} p-4`}
+                        data-card="compact"
+                        onPointerEnter={preloadModal}
+                        onFocus={preloadModal}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
+                            {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
+                            {originChip}
+                          </div>
+                        </div>
+                        <div className="flex items-start justify-between gap-3">
+                          <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="min-w-0" />
+                          <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[3px]" />
+                        </div>
+                      </motion.div>
+                    )
+                  }
+
+                  return (
+                    <motion.div
+                      key={agent.term_id}
+                      initial={enter({ opacity: 0, y: 20 })}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.05 }}
+                      onClick={() => setSelectedAgent(agent)}
+                      className={`${cardClass} p-5`}
+                      data-card="full"
+                      onPointerEnter={preloadModal}
+                      onFocus={preloadModal}
+                      data-term-id={agent.term_id}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
+                            {/* Agent tier chip — Trusted / Verified only (attestations, thesis §6). */}
+                            {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
+                          </div>
+                          {originChip}
+                        </div>
+                      </div>
+                      {/* The headline: who vouches, and for what (Etap 5b) — above the vault line. */}
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="min-w-0" />
+                        <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[3px]" />
+                      </div>
+                      {/* Details (Etap 9): the vault's numbers, backing score included — small, under the headline. */}
+                      {vaultRead && (
+                        <div className="pt-2.5 border-t border-white/[0.06] flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-[#7A838D]" data-testid="card-details">
+                          <span className="text-[10px] uppercase tracking-wider">{DETAILS_HEADING}</span>
+                          {backing}
+                          <span>Stakes: <span className="text-[#B5BDC6] font-medium">{stakes}</span></span>
+                          <span>Stakers: <span className="text-[#B5BDC6] font-medium">{stakers ?? '—'}</span></span>
+                        </div>
+                      )}
+                    </motion.div>
+                  )
+                })}
+              </div>
+              ) : (
+              /* ── LIST VIEW ──
+                 The grid card's information in one row: name (wraps — never cut to one
+                 character), tier and origin chips, the attester line (the same attesterLineOf
+                 as the card), stake, stakers, score. Phones drop the Stakes/Stakers columns
+                 and print the card's stake line under the name instead. */
+              <div className="flex flex-col gap-1.5">
+                <div className={`${LIST_ROW_GRID} py-2 text-[10px] font-bold uppercase tracking-widest text-[#4A5260]`}>
+                  <span />
+                  <span>Agent</span>
+                  <span className="hidden sm:block text-right">Stakes</span>
+                  <span className="hidden sm:block text-right">Stakers</span>
+                  <span className="text-right">{BACKING_LABEL}</span>
+                </div>
+                {rows.map(({ agent, trust: cardTrust, measured, noScoreTip }, i) => {
+                  // The card's backing score, the same derivation (small, neutral — Etap 5b).
+                  const displayScore = measuredScore(cardTrust, measured)
+                  const stakers = agent.liveStakerCount
+                  const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
+                  const name = getAgentNameFromAtom(agent)
+                  const listVaultRead = readSharesWei(agent.positions_aggregate) != null
+                  const attesterLine = attesterLineOf(attestationViewBySubject, agent.term_id)
+                  const rowTierChip = tierChipOf(attestationViewBySubject, agent.term_id)
+
+                  return (
+                    <motion.div
+                      key={agent.term_id}
+                      data-row="list"
+                      onPointerEnter={preloadModal}
+                      onFocus={preloadModal}
+                      data-term-id={agent.term_id}
+                      initial={enter({ opacity: 0, x: -10 })}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.015 }}
+                      onClick={() => setSelectedAgent(agent)}
+                      className={`${LIST_ROW_GRID} items-center py-3 rounded-xl cursor-pointer transition-all duration-150`}
+                      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(200,150,60,0.05)'
+                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(200,150,60,0.15)'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'
+                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.05)'
+                      }}
+                    >
+                      {/* Icon — neutral: it no longer carries the score's colour (Etap 5b) */}
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.03] border border-white/[0.08]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+                            stroke="#7A838D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                      {/* Name + chips, attester line (+ stake line on phones) */}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-semibold text-white leading-snug min-w-0 [overflow-wrap:anywhere]">{name}</p>
+                          {rowTierChip && <TrustTierBadge tier={rowTierChip} size="sm" />}
+                          <OriginChip origin={agent.origin} tab={originFilter} />
+                        </div>
+                        <div className="flex items-start gap-2 mt-0.5">
+                          <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="min-w-0" />
+                          <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[2px]" />
+                        </div>
+                        {listVaultRead && (
+                          <p className="sm:hidden text-xs text-[#B5BDC6] mt-0.5">
+                            <span className="whitespace-nowrap">Stakes: <span className="text-white font-medium">{stakes}</span></span>
+                            {' · '}
+                            <span className="whitespace-nowrap">Stakers: <span className="text-white font-medium">{stakers ?? '—'}</span></span>
+                          </p>
+                        )}
+                      </div>
+                      {/* Stakes */}
+                      <span className="hidden sm:block text-xs text-[#B5BDC6] text-right whitespace-nowrap">{listVaultRead ? stakes : '—'}</span>
+                      {/* Stakers */}
+                      <span className="hidden sm:block text-xs text-[#B5BDC6] text-right whitespace-nowrap">{listVaultRead && stakers != null ? stakers : '—'}</span>
+                      {/* Backing score — the card's number, neutral */}
+                      <div className="flex items-center justify-end">
+                        <BackingScore value={displayScore} tip={noScoreTip} variant="value" />
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+              )
 
             return (
             <motion.div
@@ -1872,192 +2067,52 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                     Show all agents
                   </button>
                 </div>
-              ) : viewMode === 'grid' ? (
-              /* ── GRID VIEW ── */
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {visible.map(({ agent, trust: cardTrust, measured, noScoreTip }) => {
-                  // The backing score (Etap 5b): the measured trust score from the atom vault's
-                  // support vs oppose — the modal's and the profile's number too; small and neutral.
-                  // At zero stake cardTrust.score is the formula's 50 prior: "—" (lib/score-basis.ts).
-                  const displayScore = measuredScore(cardTrust, measured)
-                  // Live stakers only (lib/live-position.ts) — a 0-share row is not a staker.
-                  const stakers = agent.liveStakerCount
-                  const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
-                  const name = getAgentNameFromAtom(agent)
-                  // Cohort rows never fetch the atom vault: their stake/stakers were never
-                  // measured, so they are not printed (thesis §6: null ≠ 0.0).
-                  const vaultRead = readSharesWei(agent.positions_aggregate) != null
-                  // Attestations — the same read and derivation as the modal, and the same helper
-                  // as the list row (lib/agent-list.ts attesterLineOf). The tier chip shows only
-                  // Trusted / Verified (thesis §6); Unverified is carried by the people line.
-                  const attesterLine = attesterLineOf(attestationViewBySubject, agent.term_id)
-                  const cardTierChip = tierChipOf(attestationViewBySubject, agent.term_id)
-                  const originChip = <OriginChip origin={agent.origin} tab={originFilter} />
-                  const backing = <BackingScore value={displayScore} tip={noScoreTip} className="flex-shrink-0 pt-0.5" />
-                  const cardClass = `bg-[#111318] border border-[#1e2028] rounded-2xl
-                                 cursor-pointer transition-all duration-300 ease-out
-                                 hover:-translate-y-1 hover:border-[#C8963C]/15
-                                 hover:bg-[#171A1D] hover:shadow-[0_8px_30px_rgba(200,150,60,0.08)]`
-
-                  // Compact: a cohort row (vault never read on the list). Its stake line would be
-                  // the same on every such card, so it is not drawn; its backing reads "—".
-                  // Decided at first paint only — the attestation read never reshapes a card
-                  // (lib/agent-list.ts isCompactCard).
-                  if (isCompactCard({ vaultRead })) {
-                    return (
-                      <motion.div
-                        key={agent.term_id}
-                        data-term-id={agent.term_id}
-                        initial={enter({ opacity: 0, y: 20 })}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.05 }}
-                        onClick={() => setSelectedAgent(agent)}
-                        className={`${cardClass} p-4`}
-                        data-card="compact"
-                        onPointerEnter={preloadModal}
-                        onFocus={preloadModal}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                            <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
-                            {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
-                            {originChip}
-                          </div>
-                          {backing}
-                        </div>
-                        <div className="flex items-start justify-between gap-3">
-                          <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="min-w-0" />
-                          <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[3px]" />
-                        </div>
-                      </motion.div>
-                    )
-                  }
-
-                  return (
-                    <motion.div
-                      key={agent.term_id}
-                      initial={enter({ opacity: 0, y: 20 })}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.05 }}
-                      onClick={() => setSelectedAgent(agent)}
-                      className={`${cardClass} p-5`}
-                      data-card="full"
-                      onPointerEnter={preloadModal}
-                      onFocus={preloadModal}
-                      data-term-id={agent.term_id}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <h3 className="font-bold text-white text-base leading-tight min-w-0 [overflow-wrap:anywhere]">{name}</h3>
-                            {/* Agent tier chip — Trusted / Verified only (attestations, thesis §6). */}
-                            {cardTierChip && <TrustTierBadge tier={cardTierChip} size="sm" />}
-                          </div>
-                          {originChip}
-                        </div>
-                        {backing}
-                      </div>
-                      {/* The headline: who vouches, and for what (Etap 5b) — above the vault line. */}
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} size="sm" className="min-w-0" />
-                        <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[3px]" />
-                      </div>
-                      {vaultRead && (
-                        <div className="flex items-center gap-4 text-sm text-[#B5BDC6]">
-                          <span>Stakes: <span className="text-white font-medium">{stakes}</span></span>
-                          <span>Stakers: <span className="text-white font-medium">{stakers ?? '—'}</span></span>
+              ) : sections ? (
+                <>
+                  {/* Etap 9 — who people trust first; the rest one click away. The header's counts stay the full totals. */}
+                  <section data-testid="agents-trusted" data-count={sections.trusted.length} aria-labelledby="agents-trusted-heading">
+                    <h2 id="agents-trusted-heading" className="mb-3 text-sm font-semibold text-white">{agentsTrustedHeading(sections.trusted.length)}</h2>
+                    {sections.trusted.length > 0
+                      ? renderRows(sections.trusted)
+                      : <p className="text-sm text-[#7A838D]" data-testid="agents-trusted-none">{AGENTS_TRUSTED_NONE}</p>}
+                  </section>
+                  {sections.untrusted.length > 0 && (
+                    <section className="mt-8" data-testid="agents-untrusted" data-count={sections.untrusted.length} data-open={untrustedOpen ? 'yes' : 'no'}>
+                      <h2 className="mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setUntrustedShown((v) => !(v ?? untrustedOpen))}
+                          aria-expanded={untrustedOpen}
+                          aria-controls="agents-untrusted-rows"
+                          className="inline-flex items-center gap-2 min-h-[44px] text-sm font-semibold text-[#B5BDC6] hover:text-white"
+                          data-testid="agents-untrusted-toggle"
+                        >
+                          <ChevronDown aria-hidden className={`w-4 h-4 transition-transform ${untrustedOpen ? 'rotate-180' : ''}`} />
+                          {agentsUntrustedHeading(sections.untrusted.length)}
+                        </button>
+                      </h2>
+                      {untrustedOpen && (
+                        <div id="agents-untrusted-rows">
+                          {renderRows(sections.untrusted.slice(0, shownCount))}
+                          {sections.untrusted.length > shownCount && (
+                            <div className="mt-6 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => setShownCount((n) => n + LIST_PAGE_SIZE)}
+                                className="btn-secondary"
+                                data-testid="show-more-agents"
+                              >
+                                {showMoreAgents(Math.min(LIST_PAGE_SIZE, sections.untrusted.length - shownCount))}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
-                    </motion.div>
-                  )
-                })}
-              </div>
-              ) : (
-              /* ── LIST VIEW ──
-                 The grid card's information in one row: name (wraps — never cut to one
-                 character), tier and origin chips, the attester line (the same attesterLineOf
-                 as the card), stake, stakers, score. Phones drop the Stakes/Stakers columns
-                 and print the card's stake line under the name instead. */
-              <div className="flex flex-col gap-1.5">
-                <div className={`${LIST_ROW_GRID} py-2 text-[10px] font-bold uppercase tracking-widest text-[#4A5260]`}>
-                  <span />
-                  <span>Agent</span>
-                  <span className="hidden sm:block text-right">Stakes</span>
-                  <span className="hidden sm:block text-right">Stakers</span>
-                  <span className="text-right">{BACKING_LABEL}</span>
-                </div>
-                {visible.map(({ agent, trust: cardTrust, measured, noScoreTip }, i) => {
-                  // The card's backing score, the same derivation (small, neutral — Etap 5b).
-                  const displayScore = measuredScore(cardTrust, measured)
-                  const stakers = agent.liveStakerCount
-                  const stakes = formatTTrust(agent.positions_aggregate?.aggregate?.sum?.shares ?? 0n)
-                  const name = getAgentNameFromAtom(agent)
-                  const listVaultRead = readSharesWei(agent.positions_aggregate) != null
-                  const attesterLine = attesterLineOf(attestationViewBySubject, agent.term_id)
-                  const rowTierChip = tierChipOf(attestationViewBySubject, agent.term_id)
-
-                  return (
-                    <motion.div
-                      key={agent.term_id}
-                      data-row="list"
-                      onPointerEnter={preloadModal}
-                      onFocus={preloadModal}
-                      data-term-id={agent.term_id}
-                      initial={enter({ opacity: 0, x: -10 })}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.015 }}
-                      onClick={() => setSelectedAgent(agent)}
-                      className={`${LIST_ROW_GRID} items-center py-3 rounded-xl cursor-pointer transition-all duration-150`}
-                      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
-                      onMouseEnter={e => {
-                        (e.currentTarget as HTMLElement).style.background = 'rgba(200,150,60,0.05)'
-                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(200,150,60,0.15)'
-                      }}
-                      onMouseLeave={e => {
-                        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'
-                        ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.05)'
-                      }}
-                    >
-                      {/* Icon — neutral: it no longer carries the score's colour (Etap 5b) */}
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.03] border border-white/[0.08]">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                          <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
-                            stroke="#7A838D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                      {/* Name + chips, attester line (+ stake line on phones) */}
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-sm font-semibold text-white leading-snug min-w-0 [overflow-wrap:anywhere]">{name}</p>
-                          {rowTierChip && <TrustTierBadge tier={rowTierChip} size="sm" />}
-                          <OriginChip origin={agent.origin} tab={originFilter} />
-                        </div>
-                        <div className="flex items-start gap-2 mt-0.5">
-                          <CardAttesterLine line={attesterLine} agentName={name} onAttest={() => openAgentAtAttested(agent)} className="min-w-0" />
-                          <SealRow attesters={sealsOf(agent.term_id)} size="sm" className="mt-[2px]" />
-                        </div>
-                        {listVaultRead && (
-                          <p className="sm:hidden text-xs text-[#B5BDC6] mt-0.5">
-                            <span className="whitespace-nowrap">Stakes: <span className="text-white font-medium">{stakes}</span></span>
-                            {' · '}
-                            <span className="whitespace-nowrap">Stakers: <span className="text-white font-medium">{stakers ?? '—'}</span></span>
-                          </p>
-                        )}
-                      </div>
-                      {/* Stakes */}
-                      <span className="hidden sm:block text-xs text-[#B5BDC6] text-right whitespace-nowrap">{listVaultRead ? stakes : '—'}</span>
-                      {/* Stakers */}
-                      <span className="hidden sm:block text-xs text-[#B5BDC6] text-right whitespace-nowrap">{listVaultRead && stakers != null ? stakers : '—'}</span>
-                      {/* Backing score — the card's number, neutral */}
-                      <div className="flex items-center justify-end">
-                        <BackingScore value={displayScore} tip={noScoreTip} variant="value" />
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-              )}
-              {sorted.length > visible.length && (
+                    </section>
+                  )}
+                </>
+              ) : renderRows(visible)}
+              {!sections && sorted.length > visible.length && (
                 <div className="mt-6 flex justify-center">
                   <button
                     type="button"
@@ -2153,7 +2208,6 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                     modal's own age line. The same component as /agents/[id] (Etap 5a). */}
                 <ProfileStatRow
                   view={statRow}
-                  backing={<BackingScore variant="line" value={modalBackingScore} tip={noScoreTooltip(modalStakeReading)} />}
                   footer={modalAge && <p data-testid="modal-age" className="text-xs text-[#7A838D] mt-1">{modalAge}</p>}
                 />
                 {/* The path to Verified: three seals, the people who vouch (Etap 6) — beside the words, not instead. */}
@@ -2592,7 +2646,12 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
               {/* === DETAILS — collapsed: the Atom ID, the ERC-8004 id and the backing score's parts
                   (Trust Score / Composite / Hybrid, the stake split, the time-weighted ratio and the
                   composite's pillars). Shared with /agents/[id]; none of it is the headline (Etap 5b). */}
-              <AgentDetails termId={selectedAgent.term_id} caipIdentity={cohortIdentity?.caipIdentity} className="mb-3">
+              <AgentDetails
+                termId={selectedAgent.term_id}
+                caipIdentity={cohortIdentity?.caipIdentity}
+                backing={<BackingScore variant="line" value={modalBackingScore} tip={noScoreTooltip(modalStakeReading)} />}
+                className="mb-3"
+              >
                 <ScoreParts view={{
                   trustScore: measuredScore(agentTrust, modalMeasured),
                   composite: compositeTrust ? compositeTrust.score : null,

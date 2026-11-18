@@ -20,7 +20,7 @@ import {
   BUILDER_COPY_MESSAGE, builderShareText, CHECK_SHARE, BADGE_HEADING, BADGE_NOTE, BADGE_MARKDOWN, BADGE_HTML, BADGE_COPY, BADGE_ALT,
 } from '@/lib/people-copy'
 import { badgePath, badgeSnippets } from '@/lib/badge'
-import { shareOnXUrl, trustLink } from './CheckShare'
+import { BUILDER_ANCHOR, shareOnXUrl, trustLink } from './CheckShare'
 
 export function BuilderDoor({ id, name, people, initialSlug }: {
   id: string
@@ -54,7 +54,8 @@ export function BuilderDoor({ id, name, people, initialSlug }: {
 
   return (
     <section
-      className="rounded-2xl border border-white/10 bg-[#111318]/85 p-4 sm:p-5"
+      id={BUILDER_ANCHOR}
+      className="scroll-mt-24 rounded-2xl border border-white/10 bg-[#111318]/85 p-4 sm:p-5"
       data-testid="builder-door"
       data-context={context?.slug ?? ''}
       aria-labelledby="builder-door-heading"

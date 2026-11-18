@@ -24,6 +24,8 @@ export const ROUTES = {
   intuforge: '/explore/intuforge',
   check: '/check',
   checkCard: (id: string) => `/check/${id}`,
+  checkBuilder: '/check?builder=1',
+  badge: (id: string) => `/badge/${id}.svg`,
 } as const
 
 /**

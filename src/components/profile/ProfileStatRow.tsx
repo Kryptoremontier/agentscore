@@ -4,11 +4,11 @@
  * The agent header's stat row and its demoted backing line — one component for the /agents modal
  * and the /agents/[id] profile (Etap 5a), rendering lib/agent-profile.ts statRowView. Primary:
  * the people who vouch (people vouching, areas, tTRUST behind vouches, reports — thesis §4).
- * Secondary, muted, never a box: backing on the atom vault, which never changes the tier (thesis §6),
- * and beside it the one backing score (Etap 5b: small, neutral — components/agents/BackingScore).
+ * Secondary, muted, never a box: backing on the atom vault, which never changes the tier (thesis §6).
+ * The backing score is under Details (Etap 9, components/profile/AgentDetails): not a second number here.
  * 2×2 on a phone, 1×4 from md. "—" = not read, never 0.
  * Etap 6: a "?" explains "vouch" and "tTRUST" at their first use (in the corner of the People and
- * tTRUST boxes) and the backing score beside it (components/shared/Explainer).
+ * tTRUST boxes) (components/shared/Explainer).
  */
 
 import type { ReactNode } from 'react'
@@ -24,10 +24,8 @@ const BOX_EXPLAINER: Record<string, ExplainerTerm> = {
   [STAT_STAKE]: 'ttrust',
 }
 
-export function ProfileStatRow({ view, backing, footer }: {
+export function ProfileStatRow({ view, footer }: {
   view: StatRowView
-  /** The backing score (<BackingScore variant="line" …>), right of the backing line. */
-  backing?: ReactNode
   footer?: ReactNode
 }) {
   return (
@@ -43,17 +41,9 @@ export function ProfileStatRow({ view, backing, footer }: {
         ))}
       </div>
       <div className="mt-2.5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <TooltipWrapper content={STAT_ROW_TOOLTIP}>
-            <p className="text-xs text-[#7A838D] cursor-help" data-testid="backers-line">{view.backersLine}</p>
-          </TooltipWrapper>
-          {backing && (
-            <span className="inline-flex items-center gap-1.5">
-              {backing}
-              <Explainer term="backing" />
-            </span>
-          )}
-        </div>
+        <TooltipWrapper content={STAT_ROW_TOOLTIP}>
+          <p className="text-xs text-[#7A838D] cursor-help" data-testid="backers-line">{view.backersLine}</p>
+        </TooltipWrapper>
         {footer}
       </div>
     </div>

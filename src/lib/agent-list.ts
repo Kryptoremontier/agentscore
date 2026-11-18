@@ -515,3 +515,16 @@ export function orderAgents<E extends SortableAgentEntry & { agent: { term_id: s
     .sort((a, b) => compareAgentEntries(a, b, sortBy))
 }
 
+
+// ─── Two sections (Etap 9) ────────────────────────────────────────────────────
+
+/**
+ * The list in two sections: the agents people trust, then the ones nobody trusts yet — each in the
+ * order it came in (orderAgents). null when who trusts any listed row was not read (`vouch` null:
+ * the read failed or is in flight): "Not trusted yet" is a claim, and an unread row supports
+ * neither heading — the list then stays one list.
+ */
+export function trustSections<E extends { vouch?: VouchCount | null }>(sorted: readonly E[]): { trusted: E[]; untrusted: E[] } | null {
+  if (sorted.some((e) => !e.vouch)) return null
+  return { trusted: sorted.filter((e) => e.vouch!.people > 0), untrusted: sorted.filter((e) => e.vouch!.people === 0) }
+}
