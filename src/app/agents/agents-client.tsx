@@ -92,6 +92,8 @@ const debugLog = (...args: unknown[]) => {
 
 /** Modal positions poll — catches other wallets' trades; paused while the tab is hidden. */
 const MODAL_POLL_MS = 15_000
+/** One object for every part that never answered: its identity must not change when the merge updater is re-run. */
+const FAILED_MODAL_PART = { status: 'failed' as const }
 
 interface GraphQLAgent {
   term_id: string
@@ -401,6 +403,13 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   // them (Etap 5a: the header never waits on skill triples, ~5.5 s cold); then every 15 s while the
   // tab is visible, one request for every part (cached by then). A part not answered yet is absent;
   // null = nothing answered yet.
+  //
+  // Everything below reads a PART (modalData?.vault, …) and depends on that part, never on the
+  // modalData object itself. React may re-run the merge updater on every render while an earlier
+  // update on this state is still pending at a lower priority (a `?open=` link during hydration):
+  // the merged object is then new each render, the parts inside it are not. Effects keyed on the
+  // whole object re-ran each time, set fresh state, and re-rendered until React stopped the page
+  // with "Maximum update depth exceeded" (Etap 9: seen on ~3% of modal opens).
   const [modalData, setModalData] = useState<Partial<AgentModalPayload> | null>(null)
   useEffect(() => {
     setModalData(null)
@@ -414,7 +423,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
       // zeros); a part answered before keeps its last answer.
       setModalData((prev) => d
         ? { ...(prev ?? {}), ...d }
-        : { ...Object.fromEntries(parts.filter((p) => !prev?.[p]).map((p) => [p, { status: 'failed' as const }])), ...(prev ?? {}) })
+        : { ...Object.fromEntries(parts.filter((p) => !prev?.[p]).map((p) => [p, FAILED_MODAL_PART])), ...(prev ?? {}) })
     }
     fetchAgentModalData(termId, MODAL_HEADER_PARTS).then(merge(MODAL_HEADER_PARTS))
     fetchAgentModalData(termId, MODAL_REST_PARTS).then(merge(MODAL_REST_PARTS))
@@ -438,10 +447,17 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
     return part.status === 'ok' ? part.value : null
   }, [modalData?.identity])
 
+  // The parts the effects below read, by name: their identity only changes when that part does.
+  const modalVault = modalData?.vault
+  const modalSignals = modalData?.signals
+  const modalReports = modalData?.reports
+  const modalSkillTriples = modalData?.skillTriples
+  const modalStakerWeights = modalData?.stakerWeights
+
   // Evaluator weight per staker wallet (the cached evaluator leaderboard's). Unread → none applied.
   const evaluatorWeights = useMemo(
-    () => new Map(modalData?.stakerWeights?.status === 'ok' ? Object.entries(modalData.stakerWeights.value) : []),
-    [modalData],
+    () => new Map(modalStakerWeights?.status === 'ok' ? Object.entries(modalStakerWeights.value) : []),
+    [modalStakerWeights],
   )
 
   // Load platform fee config from FeeProxy contract (once per session)
@@ -585,13 +601,13 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
         .catch(() => { if (!cancelled) applySignals(null) })
       return () => { cancelled = true }
     }
-    if (!modalData?.signals) {
+    if (!modalSignals) {
       setSignalsLoading(true)
       setAgentSignals([])
       return
     }
-    applySignals(modalData.signals.status === 'ok' ? modalData.signals.value : null)
-  }, [selectedAgent?.term_id, modalData, liveAgent, agentTriple.loading, agentTriple.counterTermId])
+    applySignals(modalSignals.status === 'ok' ? modalSignals.value : null)
+  }, [selectedAgent?.term_id, modalSignals, liveAgent, agentTriple.loading, agentTriple.counterTermId])
 
   // The connected wallet's own shares on the atom vault (FOR) and trust counter-vault (AGAINST),
   // and its shares on one vault (the redeem amount); the modal's backers table. One module for
@@ -634,15 +650,15 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
       return
     }
     // Otherwise (cohort rows) the modal's cached answer carries it (Etap 4c).
-    if (!modalData?.vault) {
+    if (!modalVault) {
       setAgentTriple({ termId: null, counterTermId: null, loading: true })
       return
     }
-    const vault = modalData.vault
+    const vault = modalVault
     setAgentTriple(vault.status === 'ok'
       ? { termId: vault.value.trustTriple?.termId ?? null, counterTermId: vault.value.trustTriple?.counterTermId ?? null, loading: false }
       : { termId: null, counterTermId: null, loading: false, failed: true })
-  }, [selectedAgent?.term_id, modalData])
+  }, [selectedAgent?.term_id, modalVault])
 
   // Collapse "Back this agent" whenever a different agent's modal opens — unless it was opened
   // to back (?back=1), then expanded and scrolled to.
@@ -658,10 +674,10 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   // Skill triples (skill trust breakdown + empty-state CTA) from the modal's cached answer.
   // Unread → unknown: loaded stays false so the CTA stays hidden.
   useEffect(() => {
-    const part = selectedAgent ? modalData?.skillTriples : undefined
+    const part = selectedAgent ? modalSkillTriples : undefined
     setSkillTriples(part?.status === 'ok' ? part.value : [])
     setSkillTriplesLoaded(part?.status === 'ok')
-  }, [selectedAgent?.term_id, modalData])
+  }, [selectedAgent?.term_id, modalSkillTriples])
 
   // PRIMARY: Derive userPosition from allPositions (same data that feeds Attestations — reliable)
   // This prevents race conditions with separate fetchUserPosition calls. Only when those positions
@@ -779,7 +795,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   // Positions (backers table, Backers line) + on-chain supply. Visitors: the positions the list read,
   // then each refresh of the modal's cached answer (polled every 15 s above) — no indexer request
   // from the browser. After the user's own trade on this agent: read live, polled every 15 s.
-  const modalVaultPositions = modalData?.vault?.status === 'ok' ? modalData.vault.value.positions : undefined
+  const modalVaultPositions = modalVault?.status === 'ok' ? modalVault.value.positions : undefined
   useEffect(() => {
     if (!selectedAgent) {
       setAllPositions([])
@@ -839,12 +855,12 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
 
     // Otherwise the modal's cached answer read the vaults (Etap 4c). Unread → the score stays
     // unmeasured ("—"): a failed oppose read is not "0 oppose".
-    if (modalData?.vault?.status === 'ok') {
-      const opposeWei = sumSharesByVault(modalData.vault.value.positions).get(agentTriple.counterTermId) ?? 0n
+    if (modalVault?.status === 'ok') {
+      const opposeWei = sumSharesByVault(modalVault.value.positions).get(agentTriple.counterTermId) ?? 0n
       setAgentTrust(calculateTrustScoreFromStakes(supportWei, opposeWei))
     }
     return () => { cancelled = true }
-  }, [selectedAgent?.term_id, selectedAgent?.positions_aggregate?.aggregate?.sum?.shares, agentTriple.counterTermId, agentTriple.loading, agentTriple.failed, modalData])
+  }, [selectedAgent?.term_id, selectedAgent?.positions_aggregate?.aggregate?.sum?.shares, agentTriple.counterTermId, agentTriple.loading, agentTriple.failed, modalVault])
 
   // Reset redeem input when switching signal side to avoid stale values
   useEffect(() => {
@@ -1180,9 +1196,9 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
       fetchAgentReports(selectedAgent.term_id).catch(() => null).then((r) => { if (!cancelled) apply(r) })
       return () => { cancelled = true }
     }
-    if (!modalData?.reports) return
-    apply(modalData.reports.status === 'ok' ? modalData.reports.value : null)
-  }, [selectedAgent?.term_id, modalData, liveAgent])
+    if (!modalReports) return
+    apply(modalReports.status === 'ok' ? modalReports.value : null)
+  }, [selectedAgent?.term_id, modalReports, liveAgent])
 
   // The modal's read is the newest read of the same rows the card counted: when it differs
   // (an attestation landed since the list read), the card follows it, so list and modal agree.
