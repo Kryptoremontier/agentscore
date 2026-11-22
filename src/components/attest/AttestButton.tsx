@@ -27,6 +27,7 @@ import { useAccount, useWalletClient, usePublicClient, useBalance, useSwitchChai
 import { parseEther, formatEther } from 'viem'
 import { createWriteConfig, INTUITION_TESTNET } from '@/lib/intuition'
 import { CANONICAL_DOMAINS_REGISTRY, type CanonicalDomainDef } from '@/lib/canonical-domains'
+import { DEFAULT_TRUST_WEI, DEFAULT_TRUST_AMOUNT } from '@/lib/agent-tier'
 import {
   resolveAttestPlan,
   previewAttestCost,
@@ -42,7 +43,7 @@ import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 import { useConnectModal } from '@/components/wallet/ConnectModal'
 import {
   VOUCH_CTA, vouchFor, connectToVouch, VOUCH_WRONG_NETWORK, VOUCH_AREA_LABEL, VOUCH_PICK_AREA, vouchIn,
-  firstVouchNote, VOUCH_SUCCESS, VOUCH_INDEXING, VOUCHED_FOR, VOUCHED_FOR_CONTEXT, NEED_TTRUST,
+  firstVouchNote, VOUCH_SUCCESS, VOUCH_INDEXING, VOUCHED_FOR, VOUCHED_FOR_CONTEXT, NEED_TTRUST, trustBelowDefault,
 } from '@/lib/people-copy'
 
 interface AttestButtonProps {
@@ -95,7 +96,8 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
   const balanceData = balanceQuery.data
   const [status, setStatus] = useState<Status>('pick')
   const [domain, setDomain] = useState<CanonicalDomainDef | null>(null)
-  const [amount, setAmount] = useState('0.01')
+  // The default is derived from the tier rule: 2 default trusts make an agent Established, 3 Verified.
+  const [amount, setAmount] = useState(DEFAULT_TRUST_AMOUNT)
   const [plan, setPlan] = useState<AttestPlan | null>(null)
   const [preview, setPreview] = useState<AttestCostPreview | null>(null)
   const [progressStep, setProgressStep] = useState('')
@@ -360,7 +362,13 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
                             onChange={e => setAmount(e.target.value)}
                             className="w-full px-3 py-2 rounded-lg text-sm outline-none"
                             style={{ background: '#12151A', border: '1px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.85)' }}
+                            data-testid="trust-amount"
                           />
+                          {stakeWei !== null && stakeWei < DEFAULT_TRUST_WEI && (
+                            <p className="text-[11px] mt-1.5" style={{ color: '#F59E0B' }} data-testid="trust-below-default">
+                              {trustBelowDefault(DEFAULT_TRUST_AMOUNT)}
+                            </p>
+                          )}
                         </div>
                       )}
 

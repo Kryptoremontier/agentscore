@@ -37,6 +37,8 @@ export const VOUCH_AREA_LABEL = 'Trust context'
 export const VOUCH_PICK_AREA = 'Choose a trust context'
 /** The dialog's confirm button once a trust context is chosen. */
 export const vouchIn = (areaLabel: string) => `Trust it for ${areaLabel}`
+/** Under the amount, when it is below the default (Etap 9b): the promise holds only from the default up. */
+export const trustBelowDefault = (defaultAmount: string) => `Below ${defaultAmount}, three people may not reach Verified.`
 /** The cost preview's note when this deposit creates the claim on-chain. */
 export const firstVouchNote = (areaLabel: string, txCount: number) =>
   `First to trust this agent for ${areaLabel} — includes a one-time on-chain setup (${count(txCount, 'transaction', 'transactions')}).`
@@ -264,9 +266,15 @@ export const BUILDER_CONTEXT_LABEL = 'Trust context for the link'
 export const BUILDER_PICK_CONTEXT = 'Choose a trust context'
 export const BUILDER_COPY = 'Copy trust link'
 export const BUILDER_COPIED = 'Copied'
-export const BUILDER_SEND = 'Send this to 3 people who have used it. Three people make it Verified.'
-/** The rest of the Verified rule (people AND tTRUST — the tier rule's own words), and what the link is not. */
-export const BUILDER_SEND_NOTE = `Verified takes ${TIER_RULE.verified} from them in total. Anyone can copy this link — it does not say who built the agent.`
+/**
+ * What the minimum number of default trusts makes an agent (Etap 9b). True by construction: the
+ * default amount is derived from the tier rule (lib/agent-tier.ts DEFAULT_TRUST_WEI), and a test
+ * fails if 2 or 3 default trusts ever stop reaching Established or Verified.
+ */
+export const TIER_PROMISE = 'Two people make it Established. Three make it Verified.'
+export const BUILDER_SEND = `Send this to 3 people who have used it. ${TIER_PROMISE}`
+/** What the link is not: anyone can copy it. */
+export const BUILDER_SEND_NOTE = 'Anyone can copy this link. It does not say who built the agent.'
 /** What the link opens with: the dialog's trust context, preselected; the person can still change it. */
 export const builderAsk = (contextLabel: string) => `This link asks: do you trust it for ${contextLabel}? You can pick another trust context.`
 /** The post when nobody trusts the agent yet; the link follows it (X appends the url). */
@@ -478,7 +486,7 @@ export const storyEyebrow = (s: { num: string; label: string }) => `${s.num} / $
 /** 01 — three steps, one line each. `code` is printed as code. */
 export const STORY_STEPS = [
   { num: '01', title: 'Find it', line: 'Any agent: AgentScore or the ERC-8004 registry.' },
-  { num: '02', title: 'Trust it', line: 'Choose a trust context and sign. One wallet can never do it alone.' },
+  { num: '02', title: 'Trust it', line: `Choose a trust context and sign. ${TIER_PROMISE}` },
   { num: '03', title: 'Agents ask', line: 'Before an agent pays or delegates, it asks', code: 'should_i_trust', after: 'and gets yes, no or unknown.' },
 ] as const
 

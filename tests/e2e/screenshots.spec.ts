@@ -550,7 +550,7 @@ async function builderDoorChecks(page: Page) {
   await expect(door).toContainText('Built this agent? Get its trust link')
   await expect(door).toHaveAttribute('data-context', 'social')
   await expect(door.getByTestId('builder-link')).toHaveValue(new RegExp(`/check/${AGENTS.luda}\\?for=social$`))
-  await expect(door.getByTestId('builder-send')).toHaveText('Send this to 3 people who have used it. Three people make it Verified.')
+  await expect(door.getByTestId('builder-send')).toHaveText('Send this to 3 people who have used it. Two people make it Established. Three make it Verified.')
   await expect(door.getByTestId('builder-context').locator('option')).toHaveCount(8)
   await expect(door.getByTestId('badge-markdown')).toHaveValue(/^\[!\[AgentScore\]\(https:\/\/[^)]+\/badge\/0x[0-9a-f]{64}\.svg\)\]\(https:\/\/[^)]+\/check\/0x[0-9a-f]{64}\)$/)
   await expect(door.getByTestId('badge-html')).toHaveValue(/^<a href="[^"]+"><img src="[^"]+\.svg" alt="AgentScore" height="20"><\/a>$/)

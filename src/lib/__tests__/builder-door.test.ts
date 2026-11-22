@@ -73,9 +73,10 @@ describe('the block under the card', () => {
     for (const c of TRUST_CONTEXTS) expect(html).toContain(`<option value="${c.slug}"`)
     expect(html).toMatch(/<option value="social" selected="">Social<\/option>/)
     expect(html).toContain(BUILDER_SEND)
-    expect(BUILDER_SEND).toBe('Send this to 3 people who have used it. Three people make it Verified.')
-    // The tier rule is people AND tTRUST: the line under it says the rest, in the rule's own words.
-    expect(BUILDER_SEND_NOTE).toContain(TIER_RULE.verified)
+    expect(BUILDER_SEND).toBe('Send this to 3 people who have used it. Two people make it Established. Three make it Verified.')
+    // Etap 9b: true at the default amount (default-trust.test.ts), so no small "also needs 0.1 tTRUST" line.
+    expect(BUILDER_SEND_NOTE).toBe('Anyone can copy this link. It does not say who built the agent.')
+    expect(BUILDER_SEND_NOTE).not.toContain(TIER_RULE.verified)
   })
   it('no context known → the person picks first: no link yet, never a guessed one', () => {
     const html = door(0, null)
