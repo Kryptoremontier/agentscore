@@ -74,7 +74,8 @@ Detail calls warm it; list calls read it. Automatic invalidation on new stake.
   (Hasura limitation — see `src/lib/forge/data.ts` parsing logic).
 - ALL write operations (createAtom, createTriple, deposit) route through FeeProxy,
   NOT directly to MultiVault. The FeeProxy address is `FEE_PROXY_ADDRESS` in `src/lib/intuition.ts`;
-  its fee (fixed + percentage) is read from the contract, never from config.
+  its fee (fixed + percentage) is read from the contract, never from config, and a failed read is an
+  error (no fallback fee). Changing the fee: `docs/FEE_CHANGE_RUNBOOK.md` (the owner signs it).
   Redeem (sell) goes direct to MultiVault — no fee.
 
 ## Scoring model
