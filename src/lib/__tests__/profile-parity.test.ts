@@ -127,13 +127,16 @@ describe('source guards — same components on both surfaces, no tier-sounding s
     expect(modal).toMatch(/const statRow = useMemo\(\(\) => statRowView\(\{/)
     expect(modal).toMatch(/<ProfileStatRow\s+view=\{statRow\}/)
     // Etap 7a: a cohort agent's identity link comes with its modal (part `identity`).
-    expect(modal).toMatch(/<AgentDetails termId=\{selectedAgent\.term_id\} caipIdentity=\{cohortIdentity\?\.caipIdentity\}/)
+    expect(modal).toMatch(/<AgentDetails\s+termId=\{selectedAgent\.term_id\}\s+caipIdentity=\{cohortIdentity\?\.caipIdentity\}/)
     expect(modal).not.toMatch(/<AtomIdLine /)
     const profile = code('app/agents/[id]/page.tsx')
     expect(profile).toMatch(/const statRow = statRowView\(\{/)
-    expect(profile.match(/<ProfileStatRow view=\{statRow\} backing=\{<BackingScore variant="line" /g)).toHaveLength(2) // scored + non-scored tier
+    expect(profile.match(/<ProfileStatRow view=\{statRow\} \/>/g)).toHaveLength(2) // scored + non-scored tier
+    // Etap 9: the backing score is under Details on both surfaces (and both profile layouts).
+    expect(profile.match(/<AgentDetails [^\n]*backing=\{<BackingScore variant="line" /g)).toHaveLength(2)
+    expect(modal).toMatch(/backing=\{<BackingScore variant="line" value=\{modalBackingScore\}/)
     expect(profile).toMatch(/fetchAgentModalData\(agentId, MODAL_HEADER_PARTS\)/) // the modal's own answer, its header's parts
-    expect(profile).toMatch(/<AgentDetails termId=\{agentId\} caipIdentity=\{cohortMatch\?\.caipIdentity\} \/>/)
+    expect(profile).toMatch(/<AgentDetails termId=\{agentId\} caipIdentity=\{cohortMatch\?\.caipIdentity\} backing=\{<BackingScore variant="line" value=\{null\} tip=\{NOT_SCORED_TIP\} \/>\} \/>/)
     expect(profile).toMatch(/<AgentDetails termId=\{agent\.id\}/)
     expect(profile).not.toMatch(/<AtomIdLine /)
     const header = code('components/agents/AgentHeader.tsx')
@@ -146,6 +149,6 @@ describe('source guards — same components on both surfaces, no tier-sounding s
   it('no "Moderate Trust" / "Trust Level" beside the attestation tier on the profile; its score card is Details rows now', () => {
     const profile = code('app/agents/[id]/page.tsx')
     expect(profile).not.toMatch(/Trust Level|getTrustLevel|TrustScoreBadge|AgentStats/)
-    expect(profile).toMatch(/<AgentDetails termId=\{agent\.id\}>\s*<ScoreParts view=\{scorePartsOf\(agent\)\} \/>/)
+    expect(profile).toMatch(/<AgentDetails termId=\{agent\.id\} backing=\{<BackingScore variant="line" value=\{backingScore\} tip=\{NO_STAKE_TOOLTIP\} \/>\}>\s*<ScoreParts view=\{scorePartsOf\(agent\)\} \/>/)
   })
 })

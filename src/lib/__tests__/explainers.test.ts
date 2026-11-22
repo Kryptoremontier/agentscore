@@ -62,11 +62,12 @@ describe('where the "?" sits — next to the word, on the modal, the profile and
     [...code(f).matchAll(/'(vouch|tiers|backing|ttrust)'/g)].map((m) => m[1]),
   )))
 
-  it('the stat row (modal and profile): vouch and tTRUST in their boxes, the backing score beside it', () => {
+  it('the stat row (modal and profile): vouch and tTRUST in their boxes; the backing score and its "?" under Details (Etap 9)', () => {
     const row = code('components/profile/ProfileStatRow.tsx')
     expect(row).toMatch(/\[STAT_PEOPLE\(1\)\]: 'vouch'/)
     expect(row).toMatch(/\[STAT_STAKE\]: 'ttrust'/)
-    expect(row).toMatch(/\{backing\}\s*<Explainer term="backing" \/>/)
+    expect(row).not.toMatch(/<Explainer term="backing"/)
+    expect(code('components/profile/AgentDetails.tsx')).toMatch(/\{backing\}\s*<Explainer term="backing" \/>/)
   })
 
   it('the tier names: beside the tier chip in the modal and both profile layouts', () => {
@@ -76,8 +77,8 @@ describe('where the "?" sits — next to the word, on the modal, the profile and
   })
 
   it('every surface explains all four', () => {
-    const modal = terms(['app/agents/agents-client.tsx', 'components/profile/ProfileStatRow.tsx'])
-    const profile = terms(['app/agents/[id]/page.tsx', 'components/agents/AgentHeader.tsx', 'components/profile/ProfileStatRow.tsx'])
+    const modal = terms(['app/agents/agents-client.tsx', 'components/profile/ProfileStatRow.tsx', 'components/profile/AgentDetails.tsx'])
+    const profile = terms(['app/agents/[id]/page.tsx', 'components/agents/AgentHeader.tsx', 'components/profile/ProfileStatRow.tsx', 'components/profile/AgentDetails.tsx'])
     for (const t of ['vouch', 'tiers', 'backing', 'ttrust']) {
       expect(modal.has(t), `modal: ${t}`).toBe(true)
       expect(profile.has(t), `profile: ${t}`).toBe(true)

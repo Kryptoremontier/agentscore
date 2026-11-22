@@ -5,7 +5,11 @@
 
 import { CHECK_TITLE, CHECK_EYEBROW, CHECK_SUB, CHECK_LABEL, CHECK_PLACEHOLDER, CHECK_BUTTON } from '@/lib/people-copy'
 
-export function CheckBox({ q = '' }: { q?: string }) {
+export function CheckBox({ q = '', builder = false }: {
+  q?: string
+  /** Builder mode (Etap 9, the landing's second door): kept through the search, so the answer opens on the builder block. */
+  builder?: boolean
+}) {
   return (
     <>
       <p className="eyebrow eyebrow-slash text-accent">{CHECK_EYEBROW}</p>
@@ -13,6 +17,7 @@ export function CheckBox({ q = '' }: { q?: string }) {
       <p className="text-[#B5BDC6] mt-2">{CHECK_SUB}</p>
 
       <form action="/check" method="get" className="mt-6 flex flex-col sm:flex-row gap-2" role="search" data-testid="check-form">
+        {builder && <input type="hidden" name="builder" value="1" />}
         <label htmlFor="check-q" className="sr-only">{CHECK_LABEL}</label>
         <input
           id="check-q"

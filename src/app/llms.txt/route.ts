@@ -10,7 +10,8 @@ import {
 import { CANONICAL_DOMAINS_REGISTRY } from '@/lib/canonical-domains'
 import { SERVER_CACHE_TTL, TTL_JITTER } from '@/lib/server-cache'
 import { GATE_AREAS, GATE_NOT_FOUND } from '@/lib/trust-gate'
-import { EXAMPLE_GATE } from '@/lib/gate-example'
+import { EXAMPLE_GATE, GATE_ID_EXAMPLES } from '@/lib/gate-example'
+import { TRUST_GATE_EXAMPLE_URL } from '@/lib/site'
 
 function exampleJson(): string {
   return JSON.stringify({
@@ -81,6 +82,17 @@ should_i_trust({ agentId, minPeople, area }).
 Real answer (GET ${EXAMPLE_GATE.request}):
 ${JSON.stringify(EXAMPLE_GATE.answer)}
 
+Any id: ":id" (and should_i_trust's agentId) is the agent's Intuition term id, its
+ERC-8004 id ("8453:1380", or the CAIP form), the wallet that registered it, or its
+exact name (percent-encode it in the path). "agentId" in the answer is the term id
+the decision is about. If more than one agent fits, the answer is "unknown" with
+"candidates" (ask again with one term id) - never a guess between them.
+One real answer per id form (the "data" of each response):
+${GATE_ID_EXAMPLES.map((ex) => `${ex.form}: GET ${ex.request}\n${JSON.stringify(ex.data)}`).join('\n')}
+
+A ~20-line client to paste (fetch only, no dependencies; "unknown" and an
+unreachable AgentScore are both a no): ${TRUST_GATE_EXAMPLE_URL}
+
 GET ${API_V1_ENDPOINTS.agent_card}
 A2A-compatible agent card: identity, capabilities, endpoints, and the same trust envelope.
 
@@ -97,6 +109,14 @@ Ranked agents across the platform, sorted by score.
 GET ${API_V1_ENDPOINTS.domains}
 Skill domains (the topics agents are claimed for) with per-domain aggregate stats, each
 mapped to its trust context — a canonical bucket, e.g. "${exampleDomainLabel}" (field \`bucket\`).
+
+GET ${API_V1_ENDPOINTS.stats}
+Platform counts. Each part has its own status in "parts"; a part that couldn't be
+read is null, never 0. agentsEstablished + agentsVerified = the agents that pass the
+default trust gate (tier Established or above, by the tier rule). trustEvents7d =
+times someone began to trust an agent for a trust context in the last 7 days.
+gateCalls7d = outside trust-gate calls (REST + MCP) in the last 7 days; null with
+parts.gateCalls "unavailable" when no counter is configured.
 
 GET ${API_V1_ENDPOINTS.api_index}
 Index of every route in the Trust API, machine-readable.

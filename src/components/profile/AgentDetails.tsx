@@ -4,16 +4,22 @@
  * "Details" — collapsed by default, on both agent surfaces (the /agents modal and /agents/[id]).
  * Holds what only a developer needs: the Atom ID (the agent's term id, shortened, copies the full
  * id), the ERC-8004 id (CAIP) for registry agents, and whatever the surface adds as children.
- * Etap 5b: none of this is the story a person reads first.
+ * Etap 5b: none of this is the story a person reads first. Etap 9: the backing score is here too.
  */
 
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { AtomIdLine } from '@/components/profile/AtomIdLine'
 import { DETAILS_HEADING, DETAILS_CAIP } from '@/lib/people-copy'
+import { Explainer } from '@/components/shared/Explainer'
 
-export function AgentDetails({ termId, caipIdentity, children, className }: {
+export function AgentDetails({ termId, caipIdentity, backing, children, className }: {
   termId: string
+  /**
+   * The backing score (<BackingScore variant="line" …>) — Etap 9: it lives here, not in the
+   * header beside "N people trust it" (one headline number: the people).
+   */
+  backing?: ReactNode
   /** The ERC-8004 identity (eip155:…/erc721:0x8004…/id); omitted for other agents. */
   caipIdentity?: string | null
   children?: ReactNode
@@ -28,6 +34,12 @@ export function AgentDetails({ termId, caipIdentity, children, className }: {
       </button>
       {open && (
         <div className="mt-3 space-y-3">
+          {backing && (
+            <div className="flex items-center gap-1.5" data-testid="details-backing">
+              {backing}
+              <Explainer term="backing" />
+            </div>
+          )}
           <AtomIdLine termId={termId} />
           {caipIdentity && (
             <div className="flex items-start gap-2 text-sm">

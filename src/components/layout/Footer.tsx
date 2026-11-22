@@ -1,7 +1,12 @@
 /**
  * The footer (Etap 8b): the brand and one short line, then two columns under mono headers —
  * BUILD (Docs, GitHub, llms.txt, MCP) and CONNECT (X, Discord). The contracts and the testnet note
- * stay in the bottom bar. A server component: hover states are CSS, no JavaScript.
+ * stay in the bottom bar. A server component: hover states are CSS; the only JavaScript is the
+ * "Report a bug" button's modal.
+ *
+ * Etap 9, one job: a third group, MORE FROM AGENTSCORE — every page the nav's "More" used to
+ * reach (components/layout/nav-items.ts FOOTER_MORE). The nav is three places; these stay one
+ * scroll away on every page.
  *
  * CONNECT has no "Atlas thread" link: no URL for it exists in the repo, and a link is never
  * guessed. Discord is Intuition's server (its #ecosystem channel, as /docs says), labelled so.
@@ -10,6 +15,8 @@
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
 import { FOOTER_BRAND } from '@/lib/people-copy'
+import { FOOTER_MORE, FOOTER_MORE_HEADING } from './nav-items'
+import { ReportBugLink } from './ReportBugLink'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
@@ -36,12 +43,15 @@ const LINK = 'group inline-flex items-center gap-1.5 text-sm text-[#7A838D] hove
 
 export function Footer() {
   return (
-    <footer className="relative overflow-hidden" data-testid="site-footer">
+    // z-0: its own stacking context, under the page's (PageBackground's z-10). Without it the
+    // footer's inner z-10 tied with the page's and, coming later, painted over an open agent modal
+    // whenever the footer was in view — which a short list makes likely (Etap 9).
+    <footer className="relative z-0 overflow-hidden" data-testid="site-footer">
       <div className="h-px w-full bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
       <div className="absolute inset-0 bg-[#0C0E11]" />
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="py-14 grid grid-cols-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-10">
+        <div className="py-14 grid grid-cols-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)] gap-10">
           <div className="col-span-2 md:col-span-1 flex flex-col gap-4">
             <Link href="/" className="inline-flex items-center gap-2.5 w-fit">
               <span aria-hidden className="inline-block w-3 h-3 bg-accent" />
@@ -69,6 +79,19 @@ export function Footer() {
               </ul>
             </div>
           ))}
+
+          {/* Etap 9: everything the nav's "More" held — the nav itself is three places. Two columns of links. */}
+          <nav aria-label={FOOTER_MORE_HEADING} className="col-span-2 md:col-span-1" data-testid="footer-more">
+            <h4 className="eyebrow text-[#B5BDC6]">{FOOTER_MORE_HEADING}</h4>
+            <ul className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2.5">
+              {FOOTER_MORE.map((item) => (
+                <li key={item.href}>
+                  <Link href={item.href} className={LINK}>{item.label}</Link>
+                </li>
+              ))}
+              <li><ReportBugLink className={LINK} /></li>
+            </ul>
+          </nav>
         </div>
 
         <div className="h-px w-full bg-white/5" />

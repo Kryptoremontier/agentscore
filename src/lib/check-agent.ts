@@ -20,6 +20,8 @@ import { measuredScore, noScoreTooltip } from './score-basis'
 import { effectiveLabel } from './api-data'
 import { cleanAtomName } from '@/types/claim'
 import { isAgentOwner } from '@/components/agents/agent-owner'
+import { TRUST_CONTEXTS, type TrustContext } from './trust-contexts'
+import { mapOasfToBucket } from './oasf-domain-map'
 
 // ─── The box ──────────────────────────────────────────────────────────────────
 
@@ -110,6 +112,8 @@ export function resolveCheckQuery(
   q: CheckQuery,
   view: AgentsPageView,
   identities: ReadonlyArray<{ termId: string; caipIdentity: string }> | null,
+  /** `exactName`: a name only matches a whole name (the trust gate — Etap 9: a payer's id is never "contains"). */
+  opts: { exactName?: boolean } = {},
 ): CheckResolution {
   if (q.kind === 'empty') return { status: 'empty' }
   const all = agentsOf(view)
@@ -143,7 +147,7 @@ export function resolveCheckQuery(
   const wanted = norm(q.name)
   const exact = all.filter((a) => norm(a.name) === wanted)
   if (exact.length) return pick(exact)
-  const contains = wanted.length >= CHECK_MIN_CONTAINS ? all.filter((a) => norm(a.name).includes(wanted)) : []
+  const contains = !opts.exactName && wanted.length >= CHECK_MIN_CONTAINS ? all.filter((a) => norm(a.name).includes(wanted)) : []
   return contains.length ? pick(contains) : notFound()
 }
 
@@ -199,4 +203,31 @@ export function checkCardOf(id: string, payload: AgentsPagePayload, view: Agents
     backingTip: noScoreTooltip(entry.reading),
     ...ageOf(row ? [payload.agentScore] : [payload.cohort, payload.cohortAttestations], now),
   }
+}
+
+// ─── The builder's door (Etap 9) ──────────────────────────────────────────────
+
+/**
+ * The trust context a builder's link starts with: the one most people already trust the agent
+ * for; nobody yet → the first context its own declarations map to (an ERC-8004 agent's declared
+ * domains); neither → null, and the person picks. Never a guess. Ties go to the registry's order.
+ */
+export function bestContextFor(
+  attesters: ReadonlyArray<Pick<AttesterSummary, 'domains'>> | null,
+  declaredDomains: readonly string[] | null,
+): TrustContext | null {
+  const votes = new Map<string, number>()
+  for (const a of attesters ?? []) for (const label of new Set(a.domains)) votes.set(label, (votes.get(label) ?? 0) + 1)
+  let best: TrustContext | null = null
+  for (const c of TRUST_CONTEXTS) {
+    const n = votes.get(c.label) ?? 0
+    if (n > 0 && (!best || n > (votes.get(best.label) ?? 0))) best = c
+  }
+  if (best) return best
+  for (const raw of declaredDomains ?? []) {
+    const bucket = mapOasfToBucket(raw).bucket
+    const c = TRUST_CONTEXTS.find((x) => x.label === bucket)
+    if (c) return c
+  }
+  return null
 }

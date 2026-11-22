@@ -45,7 +45,7 @@ describe('/agents status line: "272 agents, updated N min ago" (or "live" when f
     const d = agentsStatusDetails({ agentScore: AS(), cohort: CO(), freshness: AGENTS_LIVE })
     expect(d).toEqual([
       '9 AgentScore · 263 ERC-8004 · 6 hidden',
-      '6 hidden: test fixtures and duplicate registrations of the same agent — counted here, not shown in the list.',
+      '6 hidden: test fixtures, skills registered as agents and duplicate registrations of the same agent — counted here, not shown in the list.',
     ])
     expect(agentsStatusDetails({ agentScore: AS({ junk: 0 }), cohort: CO(), freshness: AGENTS_LIVE })).toEqual(['9 AgentScore · 263 ERC-8004'])
     expect(agentsStatusDetails({ agentScore: AS(), cohort: CO(), freshness: 'Updated 3 min ago' })[0]).toBe('9 AgentScore · 263 ERC-8004 · 6 hidden · Updated 3 min ago')

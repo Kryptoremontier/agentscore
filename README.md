@@ -357,6 +357,8 @@ One yes/no, under **your** policy, with the reason — who vouches, for what, an
 - REST: `GET /api/v1/agents/{id}/gate?minTier=trusted` or `?minPeople=1&area=Crypto%20%2F%20Onchain`
 - MCP: `should_i_trust({ agentId, minTier })` or `should_i_trust({ agentId, minPeople, area })`
 
+`{id}` / `agentId` is any id: the Intuition term id, an ERC-8004 id (`8453:1380` or the CAIP form), the wallet that registered the agent, or its exact name. The answer's `agentId` is the term id decided on; an id that fits more than one agent gets `unknown` with `candidates`. A ~20-line client to paste: [`examples/trust-gate.ts`](examples/trust-gate.ts). A badge for a README: `GET /badge/{id}.svg`.
+
 `decision` is `allow`, `deny` or `unknown`. **`unknown` means AgentScore couldn't read the data right now — treat it as no.** The default policy is `{ minTier: "trusted" }` (at least 2 distinct people and 0.05 tTRUST vouched). The gate adds no scoring of its own: it reads distinct live attesters per area and the attestation tier, and no parameter or payment changes a decision. A function to paste (fetch only, no dependencies): [`examples/trust-gate.ts`](./examples/trust-gate.ts).
 
 **Demo — OPEN CLAW chooses who to pay:** `npm run demo:gate` asks `should_i_trust` about two real testnet agents for the task "Summarise the latest Intuition testnet activity" (Captain Dackie, which one person vouches for in Crypto / Onchain, and AgentNews, which nobody vouches for), prints both decisions with their reasons and data age, then the payment step — simulated: nothing is paid or sent. Set `AGENTSCORE_URL` to point it at another server.
@@ -533,7 +535,7 @@ This is the same license model used by Uniswap V3, Sentry, MariaDB, and Cockroac
 | 📄 Documentation | [/docs](https://agentscore-gilt.vercel.app/docs) |
 | 🔗 FeeProxy Contract | [Blockscout](https://testnet.explorer.intuition.systems/address/0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41) |
 | 🏛️ Intuition Protocol | [intuition.systems](https://intuition.systems) |
-| 📋 Fee Model | [docs/FEE_MODEL.md](docs/FEE_MODEL.md) |
+| 📋 Fee Model (archived) | [docs/archive/FEE_MODEL.md](docs/archive/FEE_MODEL.md) |
 
 ---
 

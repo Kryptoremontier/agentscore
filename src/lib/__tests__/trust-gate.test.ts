@@ -227,3 +227,15 @@ describe('no new scoring, nothing for sale', () => {
     expect(decideTrustGate.length).toBe(3)
   })
 })
+
+describe('Etap 9 — an id that fits more than one agent', () => {
+  it('the reason names the candidates (short term ids), says how many more, and that it is not a yes', async () => {
+    const { gateAmbiguousReason } = await import('../trust-gate')
+    const c = (n: string, name: string) => ({ id: `0x${n.repeat(64)}`, name, origin: 'agentscore' as const, peopleVouching: 0 })
+    expect(gateAmbiguousReason('Luda', [c('a', 'Luda'), c('b', 'Luda')], 0)).toBe(
+      'More than one agent fits "Luda": Luda (0xaaaaaa…aaaa), Luda (0xbbbbbb…bbbb). ' +
+      'This is not a yes — do not pay or delegate; ask again with one agent’s Intuition term id (see candidates).')
+    expect(gateAmbiguousReason('x', [c('a', 'A')], 3)).toContain('A (0xaaaaaa…aaaa), and 3 more.')
+    expect(gateAmbiguousReason('y'.repeat(200), [c('a', 'A')], 0).length).toBeLessThan(260)
+  })
+})

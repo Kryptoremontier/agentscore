@@ -74,10 +74,15 @@ describe('the card and the list row', () => {
       expect(view).not.toMatch(/AGENTSCORE|NO SCORE/)
     }
   })
-  it('the people line is the grid card\'s headline (text-sm); compact cards show "Backing —" too', () => {
+  it('the people line is the grid card\'s headline (text-sm); the backing score sits in the card\'s Details row (Etap 9)', () => {
     expect(grid.match(/onAttest=\{\(\) => openAgentAtAttested\(agent\)\} size="sm"/g)).toHaveLength(2) // compact + full
     const compact = grid.slice(grid.indexOf('if (isCompactCard({ vaultRead }))'), grid.indexOf('data-card="full"'))
-    expect(compact).toMatch(/\{backing\}/)
+    // A compact (ERC-8004) card never read its vault: no Details row, no "Backing —" on every card. The modal has it.
+    expect(compact).not.toMatch(/\{backing\}/)
+    const full = grid.slice(grid.indexOf('data-card="full"'))
+    // Not in the header beside the name any more: under the headline, in the muted Details row.
+    expect(full).toMatch(/<CardAttesterLine[\s\S]*data-testid="card-details"[\s\S]*\{DETAILS_HEADING\}<\/span>\s*\{backing\}/)
+    expect(full.match(/\{backing\}/g)).toHaveLength(1)
   })
   it('"Backing level" replaces "Quality": the same buckets, after the sort, muted', () => {
     expect(PAGE).toMatch(/aria-label=\{BACKING_LEVEL\}/)
@@ -91,7 +96,9 @@ describe('the modal and the profile: one backing score, the parts under Details'
     expect(PAGE).toMatch(/const modalBackingScore = measuredScore\(agentTrust, modalMeasured\)/)
     // A modal open never rewrites a card's number (the old hybrid cache is gone).
     expect(PAGE).not.toMatch(/objectScoreByTermId/)
-    expect(PAGE).toMatch(/backing=\{<BackingScore variant="line" value=\{modalBackingScore\} tip=\{noScoreTooltip\(modalStakeReading\)\} \/>\}/)
+    // Etap 9: under Details, not beside the people boxes.
+    expect(PAGE).toMatch(/<AgentDetails\s+termId=\{selectedAgent\.term_id\}[\s\S]{0,120}backing=\{<BackingScore variant="line" value=\{modalBackingScore\} tip=\{noScoreTooltip\(modalStakeReading\)\} \/>\}/)
+    expect(PAGE).not.toMatch(/<ProfileStatRow[^>]*backing=/)
     expect(PAGE).not.toMatch(/Hybrid Score|>Agent Score<|>Trust Score<|Quality Metrics|Trust Score \(time-weighted\)/)
     expect(PAGE).not.toMatch(/<span>Critical<\/span>|<span>Moderate<\/span>|<span>Excellent<\/span>|\{level \?\? 'unrated'\}/)
   })

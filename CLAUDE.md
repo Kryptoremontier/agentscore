@@ -4,6 +4,13 @@
 > read this file first. It contains the conventions, gotchas, and architecture
 > decisions you need to be productive without breaking things.
 
+## North Star (docs/STRATEGY_REVIEW_2026-11.md §10)
+
+- **The North Star is the number of agents that pass the default gate** (Established or above):
+  `agentsEstablished + agentsVerified` in `GET /api/v1/stats`.
+- **A new surface must raise it.** An etap that does not shorten "a builder sends a link → 3 people
+  trust the agent" does not start.
+
 ## What this project is
 
 AgentScore is an on-chain reputation marketplace for AI agents on Intuition Protocol.
@@ -66,7 +73,8 @@ Detail calls warm it; list calls read it. Automatic invalidation on new stake.
 - Atom labels for JSON data are stored in `atom.data` field, NOT `atom.label`
   (Hasura limitation — see `src/lib/forge/data.ts` parsing logic).
 - ALL write operations (createAtom, createTriple, deposit) route through FeeProxy,
-  NOT directly to MultiVault. The FeeProxy address is in `src/lib/app-config.ts`.
+  NOT directly to MultiVault. The FeeProxy address is `FEE_PROXY_ADDRESS` in `src/lib/intuition.ts`;
+  its fee (fixed + percentage) is read from the contract, never from config.
   Redeem (sell) goes direct to MultiVault — no fee.
 
 ## Scoring model
@@ -150,6 +158,8 @@ Tools: `search_agents`, `get_agent_trust`, `get_domain_ranking`, `list_domains`,
 
 `should_i_trust` = the trust gate (`src/lib/trust-gate.ts`, REST `GET /api/v1/agents/:id/gate`):
 allow / deny / unknown under the caller's policy. No new scoring; fails closed (`unknown` = do not pay).
+Any id (Etap 9, `src/lib/gate-any-id.ts`): a term id, an ERC-8004 id, the registering wallet or an exact
+name, through the `/check` resolver; an id that fits several agents is `unknown` with `candidates`.
 
 ## REST API (14 endpoints at `/api/v1`)
 

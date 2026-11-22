@@ -189,7 +189,7 @@ describe('the page', () => {
     const box = readFileSync('src/components/check/CheckBox.tsx', 'utf8')
     expect(box).toMatch(/<form action="\/check" method="get"/)
     expect(box).toMatch(/name="q"/)
-    expect(page).toMatch(/<CheckBox q=\{q\} \/>/)
+    expect(page).toMatch(/<CheckBox q=\{q\} builder=\{builder\} \/>/)
     expect(readFileSync('src/app/check/[id]/page.tsx', 'utf8')).toMatch(/<CheckBox \/>/)
   })
   it('reads only through lib/check-data (the /agents answer and the cached cohort)', () => {
@@ -203,7 +203,9 @@ describe('the page', () => {
     const card = readFileSync('src/components/check/CheckResultCard.tsx', 'utf8')
     expect(card).toMatch(/<SealRow attesters=\{card\.attesters\} size="lg"/)
     expect(card).toMatch(/<AgentTierChip tier=\{card\.tier\}[\s\S]*?<Explainer term="tiers" \/>/)
-    expect(card).toMatch(/<BackingScore value=\{card\.backing\}/)
+    // Etap 9: the backing score is under a closed "Details", not in the header beside the name.
+    expect(card).toMatch(/<details[^>]*data-testid="check-details">[\s\S]*<BackingScore value=\{card\.backing\}[\s\S]*<\/details>/)
+    expect(card.slice(0, card.indexOf('<AgentTierChip'))).not.toMatch(/<BackingScore/)
     expect(card).toMatch(/updatedAgoLabel\(card\.dataAgeSeconds\)/)
     expect(card.match(/<AttestButton /g)).toHaveLength(1)
   })

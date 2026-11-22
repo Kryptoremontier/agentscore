@@ -4,11 +4,10 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAccount } from 'wagmi'
-import { User, ChevronDown, Bug, ShieldAlert, MoreHorizontal } from 'lucide-react'
+import { User, Bug, ShieldAlert } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { isAdminWallet } from '@/lib/constants'
-import { BugReportModal } from '@/components/shared/BugReportModal'
-import { PRIMARY_NAV, MORE_NAV, MORE_LABEL, ACCENT, isNavActive, isUnderMore } from './nav-items'
+import { PRIMARY_NAV, ACCENT, isNavActive } from './nav-items'
 
 function GroupLabel({ label, first = false }: { label: string; first?: boolean }) {
   return (
@@ -64,11 +63,9 @@ export function Sidebar() {
   const pathname = usePathname()
   const { address } = useAccount()
   const [mounted, setMounted] = useState(false)
-  const [bugModalOpen, setBugModalOpen] = useState(false)
-  // Etap 5b Run 2: three places up front, the rest under More — open when the page is one of More's.
-  const [moreOpen, setMoreOpen] = useState(() => isUnderMore(pathname))
+  // Etap 9, one job: the three places, nothing else. Everything "More" held is in the footer
+  // ("More from AgentScore", components/layout/Footer.tsx), Report a bug included.
   useEffect(() => { setMounted(true) }, [])
-  useEffect(() => { if (isUnderMore(pathname)) setMoreOpen(true) }, [pathname])
 
   const isAdmin = mounted && isAdminWallet(address)
 
@@ -91,47 +88,6 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Everything else */}
-        <button
-          type="button"
-          onClick={() => setMoreOpen(o => !o)}
-          aria-expanded={moreOpen}
-          data-testid="nav-more"
-          className="relative flex items-center gap-3 mx-2 mt-2 px-2 py-2.5 rounded-lg w-[calc(100%-16px)] transition-colors duration-150 group hover:bg-white/[0.04]"
-        >
-          <MoreHorizontal className="w-5 h-5 shrink-0" style={{ color: 'rgba(255,255,255,0.32)' }} />
-          <span className="flex-1 text-left text-sm font-medium whitespace-nowrap text-white/50 group-hover:text-white/80 leading-none">
-            {MORE_LABEL}
-          </span>
-          <ChevronDown className={cn('w-3.5 h-3.5 mr-1 text-white/25 transition-transform duration-200', moreOpen && 'rotate-180')} />
-        </button>
-
-        {moreOpen && (
-          <div data-testid="nav-more-items">
-            {MORE_NAV.map(group => (
-              <div key={group.label}>
-                <GroupLabel label={group.label} />
-                {group.items.map(item => (
-                  <NavLink key={item.href} {...item} active={isNavActive(item.href, pathname)} />
-                ))}
-              </div>
-            ))}
-
-            {/* Report Bug */}
-            <div className="pt-2">
-              <button
-                onClick={() => setBugModalOpen(true)}
-                className="relative flex items-center gap-3 mx-2 px-2 py-2.5 rounded-lg w-[calc(100%-16px)] transition-colors duration-150 group hover:bg-white/[0.04]"
-              >
-                <Bug className="w-5 h-5 shrink-0" style={{ color: '#EF4444' }} />
-                <span className="text-sm font-medium whitespace-nowrap text-white/50 group-hover:text-white/80 transition-colors leading-none">
-                  Report Bug
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-
         {isAdmin && (
           <>
             <GroupLabel label="Admin" />
@@ -141,8 +97,6 @@ export function Sidebar() {
         )}
 
       </div>
-
-      <BugReportModal open={bugModalOpen} onClose={() => setBugModalOpen(false)} />
 
       {/* Profile (bottom, wallet connected only) */}
       {mounted && address && (

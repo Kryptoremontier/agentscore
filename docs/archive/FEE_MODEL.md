@@ -1,3 +1,5 @@
+> Archived 2026-11: contradicts the thesis or the code; see STRATEGY_REVIEW_2026-11.
+
 # AgentScore — Fee Model (Hybrid)
 
 > **Status:** Active on Intuition Testnet (Chain ID 13579)

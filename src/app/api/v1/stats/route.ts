@@ -1,6 +1,6 @@
 import { type NextRequest } from 'next/server'
 import { apiSuccess, apiError, corsOptions, withReadLedger } from '@/lib/api-helpers'
-import { getPlatformStats } from '@/lib/api-data'
+import { getStatsWithNorthStar } from '@/lib/north-star'
 
 // Dynamic: caching lives in the data layer (lib/server-cache.ts), where only complete reads
 // are stored and every answer carries meta.dataAgeSeconds. A route-level `revalidate` here was
@@ -9,7 +9,8 @@ export const dynamic = 'force-dynamic'
 
 async function handleGET(_request: NextRequest) {
   try {
-    const stats = await getPlatformStats()
+    // The platform stats plus the North Star fields (Etap 9): agentsEstablished, agentsVerified, trustEvents7d, gateCalls7d.
+    const stats = await getStatsWithNorthStar()
     return apiSuccess(stats)
   } catch (error) {
     console.error('[API] /stats error:', error)

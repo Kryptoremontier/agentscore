@@ -1,7 +1,7 @@
 /**
  * The trust gate (Etap 7): one yes/no for an agent that is about to pay or delegate to another
  * agent — who vouches, for what, and how old the data is. REST `GET /api/v1/agents/:id/gate`
- * and MCP `should_i_trust` both answer through `decideTrustGate`.
+ * and MCP `should_i_trust` both answer through `decideTrustGate` (any id: lib/gate-any-id.ts).
  *
  * Pure, and no new scoring: the inputs are the agent's attestations as the attestation reader
  * returns them, and the only derivations are the existing ones — distinct live attesters
@@ -37,6 +37,21 @@ export interface GateDecision {
   meta: { dataAgeSeconds: number; dataReadAt: string }
 }
 
+/** One agent an ambiguous id fits (Etap 9). `peopleVouching: null` = that read failed. */
+export interface GateCandidate {
+  id: string
+  name: string
+  origin: 'agentscore' | 'erc8004'
+  peopleVouching: number | null
+}
+
+/**
+ * The gate's answer for any id (Etap 9, lib/gate-any-id.ts) — the decision plus two additive
+ * fields: `agentId`, the Intuition term id the answer is about (null when the id named no single
+ * agent, or the lookup failed), and `candidates`, only when the id fits more than one agent.
+ */
+export type GateAnswer = GateDecision & { agentId: string | null; candidates?: GateCandidate[] }
+
 /** What the readers found for the id. `attested: null` = the attestation read failed. */
 export type GateSubject =
   | { status: 'found'; attested: readonly AttestedEntry[] | null }
@@ -55,6 +70,15 @@ export const GATE_LOOKUP_UNREAD =
   'Couldn’t read this agent from the Intuition network right now, so this is not a yes — do not pay or delegate; try again shortly.'
 export const GATE_VOUCHES_UNREAD =
   'Couldn’t read who trusts this agent right now, so this is not a yes — do not pay or delegate; try again shortly.'
+
+/** The id fits more than one agent: never a guess between them — `unknown`, naming the candidates. */
+export function gateAmbiguousReason(raw: string, candidates: readonly GateCandidate[], more: number): string {
+  const short = (id: string) => `${id.slice(0, 8)}…${id.slice(-4)}`
+  const asked = raw.length > 80 ? `${raw.slice(0, 80)}…` : raw
+  const names = candidates.map((c) => `${c.name} (${short(c.id)})`).join(', ')
+  return `More than one agent fits ${JSON.stringify(asked)}: ${names}${more > 0 ? `, and ${more} more` : ''}. ` +
+    'This is not a yes — do not pay or delegate; ask again with one agent’s Intuition term id (see candidates).'
+}
 
 const TIER_RANK: Record<AgentTier, number> = { unverified: 0, trusted: 1, verified: 2 }
 

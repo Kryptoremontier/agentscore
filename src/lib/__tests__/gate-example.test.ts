@@ -5,7 +5,8 @@
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { EXAMPLE_GATE, GATE_SNIPPET } from '../gate-example'
+import { EXAMPLE_GATE, GATE_ID_EXAMPLES, GATE_SNIPPET } from '../gate-example'
+import { TRUST_GATE_EXAMPLE_URL } from '../site'
 import { decideTrustGate, parseGatePolicy } from '../trust-gate'
 import { aggregateAttestations } from '../attestation-reader'
 
@@ -27,7 +28,10 @@ describe('the captured example', () => {
       tripleId: '0xe8565630aee28d221ca6e33461ca76faaa2e20e8865b0e9be2fbd8875186f906', agentId: DACKIE, agentName: 'Captain Dackie', domainTermId: CRYPTO,
       supportPositions: [{ wallet: '0x139219107C1eBE569f543C581b3B807Cf6740006', shares: 9_900_000_000_000_000n }], opposePositions: [],
     }])
-    expect(decideTrustGate({ status: 'found', attested }, parsed.policy, EXAMPLE_GATE.answer.data.meta)).toEqual(EXAMPLE_GATE.answer.data)
+    // Etap 9: the answer also says which agent it is about (agentId) — the decision is decideTrustGate's, unchanged.
+    const { agentId, ...decision } = EXAMPLE_GATE.answer.data
+    expect(agentId).toBe(DACKIE)
+    expect(decideTrustGate({ status: 'found', attested }, parsed.policy, EXAMPLE_GATE.answer.data.meta)).toEqual(decision)
   })
 
   it('is the generated module, not a hand edit', () => {
@@ -53,7 +57,7 @@ describe('every surface shows that answer', () => {
 
   it('/docs renders it from the module (and the snippet from the example file)', () => {
     const docs = readFileSync('src/app/docs/page.tsx', 'utf8')
-    expect(docs).toContain("import { EXAMPLE_GATE, GATE_SNIPPET } from '@/lib/gate-example'")
+    expect(docs).toContain("import { EXAMPLE_GATE, GATE_ID_EXAMPLES, GATE_SNIPPET } from '@/lib/gate-example'")
     expect(docs).toContain('{JSON.stringify(EXAMPLE_GATE.answer, null, 2)}')
     expect(docs).toContain('{GATE_SNIPPET}')
   })
@@ -62,5 +66,60 @@ describe('every surface shows that answer', () => {
 describe('the snippet on /docs is examples/trust-gate.ts, byte for byte', () => {
   it('GATE_SNIPPET === examples/trust-gate.ts', () => {
     expect(GATE_SNIPPET).toBe(readFileSync('examples/trust-gate.ts', 'utf8'))
+  })
+})
+
+describe('Etap 9 — any id: one real answer per id form, on every surface', () => {
+  const byForm = Object.fromEntries(GATE_ID_EXAMPLES.map((ex) => [ex.form, ex]))
+
+  it('the five forms the gate takes, each a captured answer under ?minPeople=1', () => {
+    expect(GATE_ID_EXAMPLES.map((ex) => ex.form)).toEqual([
+      'Intuition term id', 'ERC-8004 id (chain:token)', 'ERC-8004 id (CAIP)', 'exact name', 'wallet that registered the agent',
+    ])
+    for (const ex of GATE_ID_EXAMPLES) {
+      expect(ex.request).toBe(`/api/v1/agents/${encodeURIComponent(ex.id)}/gate?minPeople=1`)
+      expect(ex.data.policy).toEqual({ minPeople: 1 })
+      expect(typeof ex.data.meta.dataAgeSeconds).toBe('number')
+    }
+  })
+
+  it('the term id, both ERC-8004 forms and the exact name are one agent, with one answer', () => {
+    const { meta: _m, ...byTerm } = byForm['Intuition term id'].data
+    expect(byTerm).toMatchObject({ decision: 'allow', agentId: DACKIE })
+    for (const form of ['ERC-8004 id (chain:token)', 'ERC-8004 id (CAIP)', 'exact name']) {
+      const { meta: _meta, ...data } = byForm[form].data
+      expect(data, form).toEqual(byTerm)
+    }
+    expect(byForm['ERC-8004 id (chain:token)'].id).toBe('8453:1380')
+    expect(byForm['exact name'].id).toBe('Captain Dackie')
+  })
+
+  it('an id that fits more than one agent is shown as it answers: unknown, with candidates', () => {
+    const wallet = byForm['wallet that registered the agent'].data as { decision: string; agentId: string | null; reason: string; candidates?: ReadonlyArray<{ id: string; name: string }> }
+    if (wallet.decision === 'unknown') {
+      expect(wallet.agentId).toBeNull()
+      expect(wallet.candidates!.length).toBeGreaterThan(1)
+      for (const c of wallet.candidates!) expect(wallet.reason).toContain(c.name)
+    } else {
+      expect(wallet.agentId).toMatch(/^0x[0-9a-f]{64}$/)
+    }
+  })
+
+  it('/llms.txt, SKILL.md and /docs carry each one; all three link examples/trust-gate.ts', async () => {
+    const { GET } = await import('@/app/llms.txt/route')
+    const llms = await (await GET()).text()
+    const skill = readFileSync('SKILL.md', 'utf8')
+    for (const ex of GATE_ID_EXAMPLES) {
+      expect(llms).toContain(`${ex.form}: GET ${ex.request}\n${JSON.stringify(ex.data)}`)
+      expect(skill).toContain(`**${ex.form}**\n\n\`\`\`bash\ncurl "https://agentscore-gilt.vercel.app${ex.request}"\n\`\`\`\n\n\`\`\`json\n${JSON.stringify(ex.data)}\n\`\`\``)
+    }
+    const docs = readFileSync('src/app/docs/page.tsx', 'utf8')
+    expect(docs).toContain('{GATE_ID_EXAMPLES.map((ex) => (')
+    expect(docs).toContain('{`GET ${ex.request}\\n${JSON.stringify(ex.data)}`}')
+    expect(TRUST_GATE_EXAMPLE_URL).toBe('https://github.com/Kryptoremontier/agentscore/blob/main/examples/trust-gate.ts')
+    expect(llms).toContain(TRUST_GATE_EXAMPLE_URL)
+    expect(skill).toContain(`[examples/trust-gate.ts](${TRUST_GATE_EXAMPLE_URL})`)
+    expect(docs).toContain('<a href={TRUST_GATE_EXAMPLE_URL}')
+    expect(readFileSync('examples/trust-gate.ts', 'utf8').length).toBeGreaterThan(0)
   })
 })

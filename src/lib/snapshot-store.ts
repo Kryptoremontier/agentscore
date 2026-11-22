@@ -21,24 +21,37 @@ export interface SnapshotStore {
 /** A snapshot call never holds a read up longer than this. */
 export const SNAPSHOT_TIMEOUT_MS = 2_000
 
-function upstashFromEnv(): SnapshotStore | null {
+/** One Redis command over Upstash's REST API. */
+export type UpstashCommand = (command: (string | number)[], timeoutMs?: number) => Promise<unknown>
+
+/**
+ * The store's command function from the environment, or null when it isn't configured (the
+ * KV_REST_API_URL / KV_REST_API_TOKEN pair, or UPSTASH_REDIS_REST_*). Read per call. The snapshot
+ * store and the gate-call counter (lib/gate-calls.ts) share it.
+ */
+export function upstashCommandFromEnv(): UpstashCommand | null {
   const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN
   if (!url || !token) return null
   const base = url.replace(/\/$/, '')
-  const call = async (command: (string | number)[]): Promise<unknown> => {
+  return async (command, timeoutMs = SNAPSHOT_TIMEOUT_MS) => {
     const res = await fetch(base, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(command),
       cache: 'no-store',
-      signal: AbortSignal.timeout(SNAPSHOT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) throw new Error(`snapshot store HTTP ${res.status}`)
     const json = (await res.json()) as { result?: unknown; error?: string }
     if (json.error) throw new Error(`snapshot store: ${json.error}`)
     return json.result
   }
+}
+
+function upstashFromEnv(): SnapshotStore | null {
+  const call = upstashCommandFromEnv()
+  if (!call) return null
   return {
     get: async (key) => {
       const r = await call(['GET', key])

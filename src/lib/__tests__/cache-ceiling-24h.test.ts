@@ -47,6 +47,8 @@ const TABLES: FakeTable[] = [
   { match: (q) => q.includes('ApiSkillCount'), field: 'atoms', rows: [], count: 12 },
   { match: (q) => q.includes('ApiClaimCount'), field: 'triples', rows: [], count: 3 },
   { match: (q) => q.includes('GetAllDomainTriples'), field: 'triples', rows: [] },
+  // Etap 9 — trustEvents7d: no canonical trust triple here, so no event (and no positions read).
+  { match: (q) => q.includes('CanonicalTrustTriples'), field: 'triples', rows: [] },
 ]
 
 const clock = { t: Date.UTC(2026, 9, 19, 6, 0) }
@@ -184,7 +186,12 @@ describe('/api/v1/stats — part by part, never a whole-route 500', () => {
     expect(data).toEqual({
       agents: null, agentsTruncated: null, skills: null, domains: null, claims: null, attesters: null,
       evaluators: null, totalStaked: null, activeStakers: null, topDomain: null, topAgent: null,
-      parts: { corpus: 'failed', skills: 'failed', attesters: 'failed', claims: 'failed', evaluators: 'failed', domains: 'failed' },
+      // Etap 9 — the North Star fields: unread is null, and the gate-call counter (no store here) is unavailable — never 0.
+      agentsEstablished: null, agentsVerified: null, trustEvents7d: null, gateCalls7d: null,
+      parts: {
+        corpus: 'failed', skills: 'failed', attesters: 'failed', claims: 'failed', evaluators: 'failed', domains: 'failed',
+        tiers: 'failed', trustEvents: 'failed', gateCalls: 'unavailable',
+      },
     })
   })
 
@@ -192,7 +199,10 @@ describe('/api/v1/stats — part by part, never a whole-route 500', () => {
     const { status, cacheControl, data } = await stats()
     expect(status).toBe(200)
     expect(cacheControl).not.toBe('no-store')
-    expect(Object.values(data.parts)).toEqual(Array(6).fill('ok'))
+    expect(data.parts).toEqual({
+      corpus: 'ok', skills: 'ok', attesters: 'ok', claims: 'ok', evaluators: 'ok', domains: 'ok',
+      tiers: 'ok', trustEvents: 'ok', gateCalls: 'unavailable', // no counter configured: not a failed read, so still cacheable
+    })
   })
 
   it('the landing treats a stats answer without the corpus as unread ("—"), as before', async () => {

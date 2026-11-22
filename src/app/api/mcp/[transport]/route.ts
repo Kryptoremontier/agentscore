@@ -11,9 +11,10 @@ import {
   getEvaluatorLeaderboard,
   getEvaluatorProfile,
   trustQuery,
-  getPlatformStats,
-  trustGate,
 } from '@/lib/api-data'
+import { trustGateFor } from '@/lib/gate-any-id'
+import { headersOfRecord, recordGateCall } from '@/lib/gate-calls'
+import { getStatsWithNorthStar } from '@/lib/north-star'
 import { GATE_AREAS, parseGatePolicy } from '@/lib/trust-gate'
 import { fetchTimelineDataCached as fetchTimelineData } from '@/lib/timeline-data'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
@@ -574,12 +575,16 @@ const handler = createMcpHandler(
           'object both AgentScore agents or skills — the /claims page), not every triple on the network. ' +
           'A count whose read failed is null, never 0; parts says which reads answered ' +
           "('failed' → that part's fields are null — agents, totalStaked, activeStakers and topAgent share the corpus). " +
+          'agentsEstablished / agentsVerified = listed agents whose tier is Established (`trusted`) / Verified, by the tier rule; ' +
+          'their sum is the number of agents that pass the default trust gate. trustEvents7d = times someone began to trust an agent ' +
+          'in the last 7 days. gateCalls7d = outside trust-gate calls in the last 7 days; null with parts.gateCalls "unavailable" ' +
+          'when no counter is configured — never 0. ' +
           'Use this for a quick overview of the ecosystem.',
         inputSchema: {},
       },
       async () => {
         try {
-          const stats = await getPlatformStats()
+          const stats = await getStatsWithNorthStar()
           return {
             content: [{
               type: 'text' as const,
@@ -693,11 +698,14 @@ const handler = createMcpHandler(
           '(at least 3 and 0.1); or minPeople N — at least N distinct people who trust it, optionally for one trust context (area). ' +
           '"unknown" means the data could not be read right now: treat it as NO — do not pay or delegate; ask again later. ' +
           '"deny" with "Not found in AgentScore or the ERC-8004 registry" means the id is not a known agent. ' +
+          '`agentId` in the answer is the term ID the decision is about; an id that fits more than one agent gets "unknown" and `candidates` (ask again with one term ID). ' +
           'Trusting an agent for a trust context = the triple <agent> — is skilled in — <context> with a deposit from a wallet; ' +
           'only distinct wallets with live shares count. Money staked on the agent itself never counts, and no parameter or ' +
           'payment can change a decision.',
         inputSchema: {
-          agentId: z.string().describe("The agent's term ID (from search_agents)"),
+          agentId: z.string().describe(
+            "The agent: its term ID (from search_agents), an ERC-8004 id ('8453:1380' or the CAIP form), " +
+            'the wallet that registered it, or its exact name. If more than one agent fits, the answer is "unknown" with `candidates`.'),
           minTier: z.enum(['trusted', 'verified']).optional()
             .describe('Minimum tier. Default "trusted" (Established on screen). Use either minTier or minPeople, not both.'),
           minPeople: z.number().int().min(1).optional()
@@ -706,10 +714,14 @@ const handler = createMcpHandler(
             .describe('`area` = the trust context: only count people who trust the agent for it (needs minPeople).'),
         },
       },
-      async ({ agentId, minTier, minPeople, area }) => {
+      async ({ agentId, minTier, minPeople, area }, extra) => {
         const parsed = parseGatePolicy({ minTier, minPeople, area })
         if (!parsed.ok) return { isError: true, content: [{ type: 'text' as const, text: parsed.error }] }
-        const decision = await trustGate(agentId, parsed.policy)
+        // Counted for stats `gateCalls7d` (lib/gate-calls.ts) unless the request says it is our own (X-AgentScore-Internal).
+        const [decision] = await Promise.all([
+          trustGateFor(agentId, parsed.policy),
+          recordGateCall(headersOfRecord(extra?.requestInfo?.headers)),
+        ])
         return { content: [{ type: 'text' as const, text: JSON.stringify(decision, null, 2) }] }
       }
     )

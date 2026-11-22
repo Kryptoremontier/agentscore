@@ -13,7 +13,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   STORY_HEADLINE, STORY_SUB, STORY_STEPS, STORY_SECTIONS, storyEyebrow, CLOSING_HEADLINE, CLOSING_REASSURE, CLOSING_PILL,
-  FOOTER_BRAND, CONTEXT_EMPTY, FIRST_TRUST_NOTE, OVER_TIME_FEW, OVER_TIME_UNREAD, GATE_UNREAD, CONTEXTS_UNREAD, contextsFeatured,
+  FOOTER_BRAND, CONTEXT_EMPTY, FIRST_TRUST_NOTE, OVER_TIME_FEW, OVER_TIME_UNREAD, GATE_UNREAD, CONTEXTS_UNREAD, contextsFeatured, contextsOpenLine,
 } from '../people-copy'
 import type { AgentsPageView } from '../agents-page-types'
 import type { AttestedEntry } from '../attestation-reader'
@@ -24,7 +24,7 @@ import { curveGeometry, isFirstTrust, shouldDrawCurve, sortEvents, trustSteps, M
 import { AGENT_TIER_DISPLAY } from '../agent-tier'
 import { TrustOverTimeCard, TrustOverTimeUnread } from '../../components/trust/TrustOverTimeCard'
 import { gateCallLine, GateExample } from '../../components/landing/GateExample'
-import { TrustContexts } from '../../components/landing/TrustContexts'
+import { TrustContexts, TrustContextsBody } from '../../components/landing/TrustContexts'
 import { TrustOverTime } from '../../components/landing/TrustOverTime'
 
 const SRC = path.join(__dirname, '..', '..')
@@ -289,16 +289,39 @@ describe('03: the gate, from a real answer', () => {
   })
 })
 
-describe('04: the contexts grid — empty contexts invite, never hide', () => {
-  it('8 tiles, each linking to its ranked list; an empty one says "Be the first."', () => {
+describe('04: the contexts grid — honest emptiness (Etap 9)', () => {
+  it('the landing: only the contexts someone trusts an agent for, then one line for the rest, linking to the full grid', () => {
     const summaries = contextSummaries(view())!
     const html = renderToStaticMarkup(createElement(TrustContexts, { contexts: { status: 'ok', value: { summaries, featured: featuredContext(summaries), dataReadAt: '2026-11-15T10:00:00.000Z' } } }))
-    expect(html.match(/data-testid="context-tile"/g)).toHaveLength(8)
-    expect(html).toContain('href="/domains?context=energy"')
-    expect(html).toMatch(/data-context="energy" data-people="0"[\s\S]*?No one trusts an agent here yet\.[\s\S]*?Be the first\./)
+    const trusted = summaries.filter((s) => s.people > 0)
+    expect(trusted.length).toBeGreaterThan(0)
+    expect(trusted.length).toBeLessThan(8)
+    expect(html.match(/data-testid="context-tile"/g)).toHaveLength(trusted.length)
+    for (const s of trusted) expect(html).toContain(`href="/domains?context=${s.context.slug}"`)
+    expect(html).not.toContain('data-people="0"') // no empty tile on the landing
+    expect(html).not.toContain('href="/domains?context=energy"')
+    const open = 8 - trusted.length
+    expect(html).toMatch(new RegExp(`data-testid="contexts-open"><a[^>]*href="/domains"[^>]*>${open} more trust contexts are open\\. <span[^>]*>Be the first\\.</span>`))
+    expect(contextsOpenLine(4, 4)).toBe('4 more trust contexts are open.')
+    expect(contextsOpenLine(1, 7)).toBe('1 more trust context is open.')
+    expect(contextsOpenLine(8, 0)).toBe('8 trust contexts are open.')
     expect(html).toContain(contextsFeatured('Knowledge / Productivity'))
     expect(html).toMatch(/>LU<[\s\S]*Luda[\s\S]*1 person trusts it/)
     expect(CONTEXT_EMPTY).toEqual({ line: 'No one trusts an agent here yet.', cta: 'Be the first.' })
+  })
+  it('/domains keeps the full grid: 8 tiles, an empty one says "Be the first." — never hidden there', () => {
+    const summaries = contextSummaries(view())!
+    const html = renderToStaticMarkup(createElement(TrustContextsBody, { contexts: { status: 'ok', value: { summaries, featured: featuredContext(summaries), dataReadAt: '2026-11-15T10:00:00.000Z' } } }))
+    expect(html.match(/data-testid="context-tile"/g)).toHaveLength(8)
+    expect(html).toContain('href="/domains?context=energy"')
+    expect(html).toMatch(/data-context="energy" data-people="0"[\s\S]*?No one trusts an agent here yet\.[\s\S]*?Be the first\./)
+    expect(html).not.toContain('data-testid="contexts-open"')
+  })
+  it('nobody trusts any agent yet → no tiles, the line counts all 8', () => {
+    const summaries = contextSummaries(view())!.map((s) => ({ ...s, people: 0, stakeWei: 0n, agents: [] }))
+    const html = renderToStaticMarkup(createElement(TrustContexts, { contexts: { status: 'ok', value: { summaries, featured: null, dataReadAt: '2026-11-15T10:00:00.000Z' } } }))
+    expect(html).not.toContain('data-testid="context-tile"')
+    expect(html).toContain('8 trust contexts are open.')
   })
   it('a failed read says so — no tiles drawn as if empty', () => {
     const html = renderToStaticMarkup(createElement(TrustContexts, { contexts: { status: 'failed' } }))

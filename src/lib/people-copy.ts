@@ -233,6 +233,10 @@ export const PEOPLE_HERE_UNREAD = 'Couldn’t read who trusts agents right now'
 export const LANDING_CTA_VOUCH = 'Trust an agent'
 /** The landing's primary action (Etap 7 Run B: the Beta shape) — the /check page. */
 export const LANDING_CTA_CHECK = 'Check an agent'
+/** The landing's second door (Etap 9): for someone who built an agent — to /check in builder mode. */
+export const LANDING_DOOR_BUILDER = 'Built an agent? Get your trust link'
+export const CHECK_BUILDER_NOTE = 'Find your agent. Its card has the trust link and a badge for your README.'
+export const CHECK_BUILDER_REGISTER = 'Not listed yet? Register it'
 
 // ── Check an agent (Etap 7 Run B, app/check) ──
 export const CHECK_TITLE = 'Check an agent'
@@ -253,6 +257,28 @@ export const CHECK_SHARE = 'Share on X'
 export const CHECK_PERMALINK = 'Link to this card'
 /** The post a person shares: "{name}: {N} people trust it on AgentScore. Who trusts your agent?" */
 export const checkShareText = (name: string, n: number) => `${name}: ${peopleVouch(n)} on AgentScore. Who trusts your agent?`
+// ── The builder's door (Etap 9, components/check/BuilderDoor.tsx) ──
+// Anyone can copy the link: none of this copy says, or implies, who built or owns the agent.
+export const BUILDER_HEADING = 'Built this agent? Get its trust link'
+export const BUILDER_CONTEXT_LABEL = 'Trust context for the link'
+export const BUILDER_PICK_CONTEXT = 'Choose a trust context'
+export const BUILDER_COPY = 'Copy trust link'
+export const BUILDER_COPIED = 'Copied'
+export const BUILDER_SEND = 'Send this to 3 people who have used it. Three people make it Verified.'
+/** The rest of the Verified rule (people AND tTRUST — the tier rule's own words), and what the link is not. */
+export const BUILDER_SEND_NOTE = `Verified takes ${TIER_RULE.verified} from them in total. Anyone can copy this link — it does not say who built the agent.`
+/** What the link opens with: the dialog's trust context, preselected; the person can still change it. */
+export const builderAsk = (contextLabel: string) => `This link asks: do you trust it for ${contextLabel}? You can pick another trust context.`
+/** The post when nobody trusts the agent yet; the link follows it (X appends the url). */
+export const builderShareLead = (name: string, contextLabel: string) => `I listed ${name} on AgentScore. Used it? Trust it for ${contextLabel}:`
+export const builderShareText = (name: string, contextLabel: string, link: string) => `${builderShareLead(name, contextLabel)} ${link}`
+export const BUILDER_COPY_MESSAGE = 'Copy message'
+export const BADGE_HEADING = 'A badge for your README'
+export const BADGE_NOTE = 'The badge shows the tier, how many people trust it and when that was read. It refreshes every 5 minutes.'
+export const BADGE_MARKDOWN = 'Markdown'
+export const BADGE_HTML = 'HTML'
+export const BADGE_COPY = 'Copy'
+export const BADGE_ALT = 'AgentScore badge for this agent'
 /** On the Open Graph image, under the card: the data's age, printed on the picture itself. */
 export const checkImageAge = (readAt: string, ageLabel: string) => `Data read ${readAt.slice(0, 16).replace('T', ' ')} UTC · ${ageLabel}`
 export const CHECK_IMAGE_ALT = 'Who trusts this agent on AgentScore'
@@ -406,7 +432,7 @@ export const agentsStatusMissing = (n: number | null, missing: string) =>
 /** The line's popover: where the numbers come from, and what is hidden. */
 export const AGENTS_STATUS_DETAILS = 'Where these agents come from'
 export const hiddenNote = (n: number) =>
-  `${n} hidden: test fixtures and duplicate registrations of the same agent — counted here, not shown in the list.`
+  `${n} hidden: test fixtures, skills registered as agents and duplicate registrations of the same agent — counted here, not shown in the list.`
 /** The timeline's pre-canonical skill claim: "Skill added: watch"; the raw predicate stays in its details. */
 export const skillAdded = (skillName: string) => `Skill added: ${skillName}`
 
@@ -427,6 +453,10 @@ export const LANDING_CHECKS = ['TESTNET tTRUST IS FREE', 'ALL TRUST IS ON-CHAIN'
 
 /** /agents (Etap 7a): the list draws its first rows, then this button adds the next ones. */
 export const showMoreAgents = (n: number) => `Show ${n} more`
+/** /agents in two sections (Etap 9): who people trust first; the rest collapsed. The header's counts stay the full totals. */
+export const agentsTrustedHeading = (n: number) => `People trust these (${n})`
+export const agentsUntrustedHeading = (n: number) => `Not trusted yet (${n})`
+export const AGENTS_TRUSTED_NONE = 'Nobody trusts an agent in this view yet. Open one below and be the first.'
 
 // ─── The landing tells the story (Etap 8b) ────────────────────────────────────
 // Numbered sections, each under a mono eyebrow "■ 0N / …". Headlines are set uppercase by CSS;
@@ -476,6 +506,12 @@ export const GATE_NONE = 'No one trusts an agent here yet, so there is no answer
 export const CONTEXTS_HEADING = 'What people trust agents for.'
 export const contextsFeatured = (context: string) => `Agents people trust for ${context}`
 export const CONTEXT_EMPTY = { line: 'No one trusts an agent here yet.', cta: 'Be the first.' } as const
+/**
+ * The landing's §04 shows only the contexts someone trusts an agent for (Etap 9); the rest are one
+ * line — "N more trust contexts are open. Be the first." — linking to the full grid on /domains.
+ */
+export const contextsOpenLine = (open: number, shown: number) =>
+  `${open}${shown > 0 ? ' more' : ''} ${open === 1 ? 'trust context is' : 'trust contexts are'} open.`
 export const CONTEXTS_UNREAD = 'Couldn’t read who trusts which agent right now. This is not an empty record.'
 export const CONTEXTS_GRID_LABEL = 'All trust contexts'
 

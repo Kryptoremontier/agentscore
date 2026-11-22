@@ -58,6 +58,11 @@ interface AttestButtonProps {
    * 'card'   = original subtle outline (default, backwards compatible).
    */
   variant?: 'hero' | 'inline' | 'bar' | 'card'
+  /**
+   * Etap 9 — a trust link (`/check/<id>?for=<slug>`): the dialog opens with this trust context
+   * already picked. Only a starting point: the picker stays, the person can choose another.
+   */
+  preselect?: CanonicalDomainDef | null
 }
 
 // Etap 6b: the one primary style (globals.css .btn-primary — paper fill, ink text, 2px corners,
@@ -73,7 +78,7 @@ type Status = 'pick' | 'preview' | 'pending' | 'success' | 'error'
 
 const fmt = (wei: bigint) => parseFloat(formatEther(wei)).toFixed(4)
 
-export function AttestButton({ agentId, agentName, className, variant = 'card' }: AttestButtonProps) {
+export function AttestButton({ agentId, agentName, className, variant = 'card', preselect = null }: AttestButtonProps) {
   const { isConnected, address, chainId } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
@@ -151,6 +156,15 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
     setProgressStep('')
   }
 
+  /** Open the dialog; from a trust link, on the context the link names. */
+  function start() {
+    if (preselect) {
+      setDomain(preselect)
+      setStatus('preview')
+    }
+    setOpen(true)
+  }
+
   function close() {
     if (status === 'pending') return
     setOpen(false)
@@ -187,10 +201,10 @@ export function AttestButton({ agentId, agentName, className, variant = 'card' }
         onClick={() => {
           if (!isConnected) {
             // Connect first, then straight into this agent's vouch flow.
-            openConnectModal({ reason: connectToVouch(agentName), onConnected: () => setOpen(true) })
+            openConnectModal({ reason: connectToVouch(agentName), onConnected: start })
             return
           }
-          setOpen(true)
+          start()
         }}
         data-testid="attest-cta"
         className={TRIGGER_STYLES[variant].className}

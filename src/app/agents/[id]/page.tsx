@@ -218,7 +218,7 @@ export default function AgentDetailPage() {
               </div>
 
               <div>
-                <ProfileStatRow view={statRow} backing={<BackingScore variant="line" value={null} tip={NOT_SCORED_TIP} />} />
+                <ProfileStatRow view={statRow} />
                 {/* The path to Verified: three seals, the people who vouch (Etap 6). */}
                 <SealRow attesters={profileLoading ? undefined : attesters} size="lg" className="mt-3" />
               </div>
@@ -234,7 +234,7 @@ export default function AgentDetailPage() {
               {cohortMatch && <BackWithTTrust agentId={agentId} />}
 
               {/* Atom ID and the ERC-8004 id — collapsed; not the story a person reads first (Etap 5b). */}
-              <AgentDetails termId={agentId} caipIdentity={cohortMatch?.caipIdentity} />
+              <AgentDetails termId={agentId} caipIdentity={cohortMatch?.caipIdentity} backing={<BackingScore variant="line" value={null} tip={NOT_SCORED_TIP} />} />
 
               <AttestersAndBackers attesters={attesters} backers={backers} loading={profileLoading} className="pt-2" />
             </motion.div>
@@ -323,7 +323,7 @@ export default function AgentDetailPage() {
             tierLoading={profileLoading}
             stats={
               <>
-                <ProfileStatRow view={statRow} backing={<BackingScore variant="line" value={backingScore} tip={NO_STAKE_TOOLTIP} />} />
+                <ProfileStatRow view={statRow} />
                 {/* The path to Verified: three seals, the people who vouch (Etap 6). */}
                 <SealRow attesters={profileLoading ? undefined : attesters} size="lg" className="mt-3" />
               </>
@@ -345,7 +345,7 @@ export default function AgentDetailPage() {
 
           {/* Details — collapsed: the Atom ID and the backing score's parts (Etap 5b). The old
               "Trust Score" card and its Stake Breakdown live here now, as the modal's do. */}
-          <AgentDetails termId={agent.id}>
+          <AgentDetails termId={agent.id} backing={<BackingScore variant="line" value={backingScore} tip={NO_STAKE_TOOLTIP} />}>
             <ScoreParts view={scorePartsOf(agent)} />
           </AgentDetails>
 

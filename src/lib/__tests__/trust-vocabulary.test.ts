@@ -139,7 +139,7 @@ describe('API contract — every REST/MCP field name and enum value unchanged (o
     expect(gate).toMatch(/minTier: z\.enum\(\['trusted', 'verified'\]\)\.optional\(\)/)
     expect(gate).toMatch(/minPeople: z\.number\(\)\.int\(\)\.min\(1\)\.optional\(\)/)
     expect(gate).toMatch(/area: z\.enum\(GATE_AREAS as \[string, \.\.\.string\[\]\]\)\.optional\(\)/)
-    expect(gate).toMatch(/async \(\{ agentId, minTier, minPeople, area \}\)/)
+    expect(gate).toMatch(/async \(\{ agentId, minTier, minPeople, area \}, extra\)/) // the four inputs; `extra` is the request (Etap 9: is the call ours?)
   })
 
   it('REST: the gate reads minTier, minPeople and area; the agent fields keep trustTier / tierBasis; stats keep attesters', () => {

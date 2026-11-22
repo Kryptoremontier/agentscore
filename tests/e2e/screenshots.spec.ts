@@ -61,9 +61,19 @@ const SHOTS: Shot[] = [
   { name: 'check', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-dackie', url: ROUTES.checkCard(AGENTS.dackie), prepare: checkCardReady, check: checkCardChecks },
   { name: 'check-luda', url: ROUTES.checkCard(AGENTS.luda), prepare: checkCardReady, check: checkCardChecks },
-  // Etap 8a: the nav in Intuition's words — the desktop sidebar; the phone's bottom nav with More open.
+  // Etap 9: the builder's door — /check in builder mode, Luda's card opened from a trust link, and the README badge.
+  { name: 'check-builder', url: ROUTES.checkBuilder, prepare: async (page) => { await page.getByTestId('check-builder-note').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
+  { name: 'check-luda-builder', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, check: builderDoorChecks },
+  { name: 'check-luda-builder-block', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, target: async (page) => page.getByTestId('builder-door') },
+  { name: 'badge-luda', url: ROUTES.check, prepare: (page) => showBadge(page, ROUTES.badge(AGENTS.luda)), target: async (page) => page.getByTestId('shot-badge'), check: (page) => badgeSays(page, ROUTES.badge(AGENTS.luda), /^AgentScore · (Unverified|Established|Verified) · \d+ (person trusts it|people trust it) · as of \d{4}-\d\d-\d\d \d\d:\d\d UTC$/, 'public, max-age=300') },
+  { name: 'badge-unknown-id', url: ROUTES.check, prepare: (page) => showBadge(page, ROUTES.badge('no-such-agent-anywhere')), target: async (page) => page.getByTestId('shot-badge'), check: (page) => badgeSays(page, ROUTES.badge('no-such-agent-anywhere'), /^AgentScore · not found$/, 'public, max-age=60') },
+  // Etap 9: the nav is three places — the desktop sidebar; the phone's bottom nav (first screen).
   { name: 'nav', url: ROUTES.landing, prepare: navReady, target: navTarget, firstScreen: true, check: navWords },
-  { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: mostVouchedFirst },
+  // Etap 9: everything that left the nav — the footer group, on every page.
+  { name: 'footer-more', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, target: footerTarget },
+  { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: async (page) => { await mostVouchedFirst(page); await twoSections(page) } },
+  // Etap 9: the second section opened — every agent is still one click away.
+  { name: 'agents-list-untrusted-open', url: ROUTES.agents, prepare: async (page) => { await agentsListReady(page); await openUntrusted(page) }, check: untrustedOpened },
   // The first screen, as a visitor sees it: at 390×844 the first card must be on it.
   { name: 'agents-list-fold', url: ROUTES.agents, prepare: agentsListReady, firstScreen: true, check: firstCardAboveFold },
   {
@@ -98,6 +108,7 @@ const SHOTS: Shot[] = [
     url: ROUTES.agents,
     prepare: async (page) => {
       await agentsListReady(page)
+      await openUntrusted(page) // OPEN CLAW: nobody trusts it yet, so its row is in the second section
       await page.getByRole('button', { name: 'List', exact: true }).click()
       await expect(page.locator('[data-card]')).toHaveCount(0, { timeout: WAIT_CAP })
     },
@@ -113,6 +124,20 @@ const SHOTS: Shot[] = [
       await modalFitsPhone(page, project)
     },
   })),
+  {
+    // Etap 9: the list is short now (the second section is collapsed), so the footer is near. A card
+    // opened with the page scrolled to its end: the modal covers the footer, never the other way round.
+    name: 'agent-modal-over-footer',
+    url: ROUTES.agents,
+    prepare: async (page) => {
+      await agentsListReady(page)
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+      await page.locator('[data-term-id]').first().click()
+      await modalReady(page)
+    },
+    firstScreen: true,
+    check: modalCoversFooter,
+  },
   {
     // Etap 5a: the modal as it opens, at normal scroll — its title clears the fixed site header
     // (the overlap in the full-height modal PNGs was a capture artifact; see unfixModal).
@@ -217,26 +242,47 @@ test('og-dackie', async ({ request }, testInfo) => {
 /** The landing settled; on a phone, the More sheet is open (the nav's second level). */
 async function navReady(page: Page) {
   await landingReady(page)
-  if ((page.viewportSize()?.width ?? 0) < 1024) {
-    await page.locator('nav.fixed.bottom-0').getByText('More', { exact: true }).click()
-    await page.getByText('Trust contexts', { exact: true }).first().waitFor({ timeout: WAIT_CAP })
-  }
 }
 
-/** Desktop: the sidebar alone. Phone: the first screen (bottom nav + the More sheet). */
+/** Desktop: the sidebar alone. Phone: the first screen (the bottom nav under the hero). */
 async function navTarget(page: Page): Promise<Locator> {
   if ((page.viewportSize()?.width ?? 0) < 1024) throw new Error('phone: first screen')
   return page.locator('aside').first()
 }
 
-/** The three primary places and More → Trust contexts, in Intuition's words; the old ones are gone. */
+/**
+ * Etap 9, one job: the nav is three places — Check an agent · Trust an agent · For developers — on
+ * the sidebar and the phone's bottom nav alike, with no "More". Everything else is a footer group,
+ * "More from AgentScore", whose links all go somewhere.
+ */
+const FOOTER_MORE_LINKS = [
+  'How it works', 'Trust contexts', 'Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge', 'Register an agent', 'Register a skill', 'Create claim',
+]
 async function navWords(page: Page, project: string) {
   const nav = project === 'mobile' ? page.locator('nav.fixed.bottom-0') : page.locator('aside').first()
-  for (const label of project === 'mobile' ? ['Check an agent', 'Trust an agent', 'More'] : ['Check an agent', 'Trust an agent', 'For developers']) {
-    await expect(nav.getByText(label, { exact: true }).first(), label).toBeVisible()
-  }
+  const links = (await nav.locator('a').allInnerTexts()).map((t) => t.trim()).filter((t) => !/^0x/.test(t))
+  expect(links, 'the nav: three places, in order').toEqual(['Check an agent', 'Trust an agent', 'For developers'])
+  for (const label of links) await expect(nav.getByText(label, { exact: true }).first(), label).toBeVisible()
+  await expect(nav.getByText('More', { exact: true }), 'no "More" in the nav').toHaveCount(0)
   await expect(nav.getByText(/^Vouch$/), 'the old "Vouch"').toHaveCount(0)
-  await expect(page.getByText(/^Domains$/), 'the old "Domains" nav label').toHaveCount(0)
+  for (const moved of ['Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge']) {
+    await expect(nav.getByText(moved, { exact: true }), `${moved} left the nav`).toHaveCount(0)
+  }
+  const more = page.getByTestId('footer-more')
+  await expect(more.locator('h4')).toHaveText('More from AgentScore')
+  const footerLinks = (await more.locator('a').allInnerTexts()).map((t) => t.trim())
+  expect(footerLinks, 'the footer group').toEqual(FOOTER_MORE_LINKS)
+  await expect(more.getByTestId('report-bug')).toHaveText('Report a bug')
+  // The group is inside the page (no sideways scroll), each link a full tap target apart from the next.
+  const box = await more.boundingBox()
+  expect(box && box.x >= 0 && box.x + box.width <= (page.viewportSize()?.width ?? 0) + 1, 'the footer group fits the viewport').toBe(true)
+}
+
+/** The footer, scrolled to: where "More from AgentScore" lives. */
+async function footerTarget(page: Page): Promise<Locator> {
+  const footer = page.getByTestId('site-footer')
+  await footer.scrollIntoViewIfNeeded()
+  return footer
 }
 
 /**
@@ -334,8 +380,21 @@ async function landingChecks(page: Page) {
     await expect(gate.locator('pre')).toContainText('should_i_trust({ agentId:')
   }
   if ((await page.getByTestId('trust-contexts').getAttribute('data-state')) === 'ok') {
-    await expect(page.getByTestId('context-tile'), 'all 8 trust contexts, empty ones included').toHaveCount(8)
+    // Etap 9, honest emptiness: only the contexts someone trusts an agent for, then one line for the rest.
+    const grid = page.getByTestId('context-grid')
+    const shown = Number(await grid.getAttribute('data-shown'))
+    const open = Number(await grid.getAttribute('data-open'))
+    expect(shown + open, 'shown + open = all 8 trust contexts').toBe(8)
+    await expect(page.getByTestId('context-tile'), 'one tile per context someone trusts an agent for').toHaveCount(shown)
+    await expect(page.locator('[data-testid="context-tile"][data-people="0"]'), 'no empty tile on the landing').toHaveCount(0)
+    if (open > 0) {
+      await expect(page.getByTestId('contexts-open')).toHaveText(new RegExp(`^${open}( more)? trust contexts? (is|are) open\\. Be the first\\.$`))
+      await expect(page.getByTestId('contexts-open').locator('a')).toHaveAttribute('href', '/domains')
+    }
   }
+  // Etap 9: the second door, under the hero's buttons.
+  await expect(page.getByTestId('story-builder-door')).toHaveText('Built an agent? Get your trust link')
+  await expect(page.getByTestId('story-builder-door')).toHaveAttribute('href', '/check?builder=1')
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow, 'no sideways scroll').toBeLessThanOrEqual(0)
 }
@@ -473,7 +532,130 @@ async function pageFitsViewport(page: Page) {
 async function checkCardChecks(page: Page) {
   await oneAttestCta(page)
   await expect(page.getByTestId('share-x'), 'Share on X').toBeVisible()
+  // Etap 9: Backing is under a closed "Details" — one headline number on the card.
+  await expect(page.getByTestId('check-details')).not.toHaveAttribute('open', /.*/)
+  await expect(page.getByTestId('check-result').getByTestId('backing-score')).toBeHidden()
+  await expect(page.getByTestId('builder-door')).toBeVisible()
   await pageFitsViewport(page)
+}
+
+/**
+ * Etap 9, the builder's door: opened from a trust link (`?for=social`) the card says what the link
+ * asks; the block hands out that link for the same context, the line about three people, and the
+ * README badge — drawn, with both snippets.
+ */
+async function builderDoorChecks(page: Page) {
+  await expect(page.getByTestId('trust-ask')).toHaveAttribute('data-context', 'social')
+  const door = page.getByTestId('builder-door')
+  await expect(door).toContainText('Built this agent? Get its trust link')
+  await expect(door).toHaveAttribute('data-context', 'social')
+  await expect(door.getByTestId('builder-link')).toHaveValue(new RegExp(`/check/${AGENTS.luda}\\?for=social$`))
+  await expect(door.getByTestId('builder-send')).toHaveText('Send this to 3 people who have used it. Three people make it Verified.')
+  await expect(door.getByTestId('builder-context').locator('option')).toHaveCount(8)
+  await expect(door.getByTestId('badge-markdown')).toHaveValue(/^\[!\[AgentScore\]\(https:\/\/[^)]+\/badge\/0x[0-9a-f]{64}\.svg\)\]\(https:\/\/[^)]+\/check\/0x[0-9a-f]{64}\)$/)
+  await expect(door.getByTestId('badge-html')).toHaveValue(/^<a href="[^"]+"><img src="[^"]+\.svg" alt="AgentScore" height="20"><\/a>$/)
+  const drawn = await door.getByTestId('badge-preview').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)
+  expect(drawn, 'the badge image loaded').toBe(true)
+  // Picking another context changes the link; nothing else on the page claims who built the agent.
+  await door.getByTestId('builder-context').selectOption('crypto-onchain')
+  await expect(door.getByTestId('builder-link')).toHaveValue(/\?for=crypto-onchain$/)
+  await expect(page.getByText(/owner verified|verified owner/i)).toHaveCount(0)
+  await pageFitsViewport(page)
+}
+
+/**
+ * The badge as a README shows it: an <img>, drawn large on a plain ground (test-side only — the
+ * harness shoots pages, and the badge is an image).
+ */
+async function showBadge(page: Page, src: string) {
+  await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP })
+  await page.evaluate((src) => {
+    const box = document.createElement('div')
+    box.setAttribute('data-testid', 'shot-badge')
+    box.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;padding:24px;background:#0d1117;'
+    const img = document.createElement('img')
+    img.src = src
+    img.alt = ''
+    img.style.cssText = 'display:block;height:40px;max-width:calc(100vw - 48px);'
+    box.appendChild(img)
+    document.body.appendChild(box)
+  }, src)
+  await expect.poll(() => page.locator('[data-testid="shot-badge"] img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), { timeout: WAIT_CAP }).toBe(true)
+}
+
+/** The badge route answers an SVG image whose words are its accessible name, with the cache it promises. */
+async function badgeSays(page: Page, src: string, words: RegExp, cacheControl: string) {
+  const res = await page.request.get(src)
+  expect(res.status()).toBe(200)
+  expect(res.headers()['content-type']).toBe('image/svg+xml; charset=utf-8')
+  expect(res.headers()['cache-control']).toBe(cacheControl)
+  const label = (await res.text()).match(/aria-label="([^"]*)"/)?.[1] ?? ''
+  expect(label, 'the badge\'s words').toMatch(words)
+}
+
+/** No footer link or button is the top element anywhere on screen while the agent modal is open. */
+async function modalCoversFooter(page: Page) {
+  const onTop = await page.evaluate(() => {
+    const footer = document.querySelector('[data-testid="site-footer"]')
+    if (!footer) return ['no footer']
+    return [...footer.querySelectorAll('a, button')].filter((el) => {
+      const b = el.getBoundingClientRect()
+      if (b.width === 0 || b.bottom <= 0 || b.top >= window.innerHeight) return false
+      const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)
+      return top === el || el.contains(top)
+    }).map((el) => (el.textContent ?? '').trim())
+  })
+  expect(onTop, 'footer links painted over the open modal').toEqual([])
+}
+
+/** Etap 9: open "Not trusted yet" if the list is in two sections and it is closed. */
+async function openUntrusted(page: Page) {
+  const toggle = page.getByTestId('agents-untrusted-toggle')
+  if ((await toggle.count()) === 0) return
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: WAIT_CAP })
+}
+
+/**
+ * Etap 9: /agents in two sections — "People trust these (N)" with N cards, every one of them
+ * trusted, then "Not trusted yet (M)" collapsed. The header's counts stay the full totals:
+ * N + M = the results line's count.
+ */
+async function twoSections(page: Page) {
+  const trusted = page.getByTestId('agents-trusted')
+  if ((await trusted.count()) === 0) return // who trusts some row wasn't read: one list, no claim
+  const n = Number(await trusted.getAttribute('data-count'))
+  await expect(trusted.locator('h2')).toHaveText(`People trust these (${n})`)
+  await expect(trusted.locator('[data-term-id]')).toHaveCount(n)
+  const lines = await trusted.locator('[data-testid="card-attester-line"]').allInnerTexts()
+  for (const l of lines) expect(l, 'a trusted card says who trusts it').toMatch(/trusts? it/)
+  const untrusted = page.getByTestId('agents-untrusted')
+  const m = (await untrusted.count()) ? Number(await untrusted.getAttribute('data-count')) : 0
+  if (m > 0) {
+    await expect(page.getByTestId('agents-untrusted-toggle')).toHaveText(`Not trusted yet (${m})`)
+    await expect(page.getByTestId('agents-untrusted-toggle')).toHaveAttribute('aria-expanded', 'false')
+    await expect(untrusted.locator('[data-term-id]'), 'collapsed').toHaveCount(0)
+  }
+  const shown = Number((await page.getByTestId('results-line').innerText()).match(/^(\d+)/)?.[1])
+  expect(n + m, 'the two sections are the whole list').toBe(shown)
+  const total = Number(await page.getByTestId('agents-status').getAttribute('data-total'))
+  expect(shown, 'the header keeps the full total').toBe(total)
+  // The card's headline is the people: Backing sits in its Details row, not beside the name.
+  const stray = await page.locator('[data-card="full"]').evaluateAll((cards) => cards.filter((c) => {
+    const b = c.querySelector('[data-testid="backing-score"]')
+    return !!b && !b.closest('[data-testid="card-details"]')
+  }).length)
+  expect(stray, 'a backing score outside a card\'s Details row').toBe(0)
+}
+
+/** The second section, opened: its rows are there, none of them trusted. */
+async function untrustedOpened(page: Page) {
+  const untrusted = page.getByTestId('agents-untrusted')
+  if ((await untrusted.count()) === 0) return
+  const m = Number(await untrusted.getAttribute('data-count'))
+  await expect(untrusted.locator('[data-term-id]')).toHaveCount(Math.min(m, 48))
+  const lines = await untrusted.locator('[data-testid="card-attester-line"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.state))
+  expect(lines.every((s) => s === 'none'), 'every row there: nobody trusts it yet').toBe(true)
 }
 
 async function oneAttestCta(page: Page) {

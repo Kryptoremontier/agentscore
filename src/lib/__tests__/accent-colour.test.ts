@@ -66,7 +66,7 @@ describe('where the accent is', () => {
     }
   })
 
-  it('the active nav item — sidebar, phone tabs, More — is the accent whatever the item\'s colour', () => {
+  it('the active nav item — sidebar, phone tabs — is the accent whatever the item\'s colour', () => {
     expect(read('components/layout/nav-items.ts')).toMatch(/export const ACCENT = 'rgb\(var\(--accent\)\)'/)
     const side = read('components/layout/Sidebar.tsx')
     expect(side).toMatch(/rounded-r-full bg-accent/)
@@ -74,7 +74,7 @@ describe('where the accent is', () => {
     expect(side).toMatch(/isNavActive\('\/profile', pathname\) \? ACCENT :/)
     const mobile = read('components/layout/MobileNav.tsx')
     expect(mobile).toMatch(/color: active \? ACCENT :/)
-    expect(mobile).toMatch(/color: menuOpen \? ACCENT :/)
+    expect(mobile).not.toMatch(/menuOpen/) // Etap 9: no More tab — the three places only
     expect(mobile).not.toMatch(/active \? tab\.color/)
   })
 
