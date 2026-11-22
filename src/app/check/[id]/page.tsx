@@ -5,6 +5,7 @@ import { CheckBox } from '@/components/check/CheckBox'
 import { CheckResultCard } from '@/components/check/CheckResultCard'
 import { CheckShare } from '@/components/check/CheckShare'
 import { BuilderDoor } from '@/components/check/BuilderDoor'
+import { CheckYourTrust } from '@/components/check/CheckYourTrust'
 import { checkCard, builderContext } from '@/lib/check-data'
 import { contextBySlug } from '@/lib/trust-contexts'
 import { encodeForCache } from '@/lib/json-codec'
@@ -64,6 +65,8 @@ export default async function CheckCardPage({ params, searchParams }: { params: 
               <p className="text-[#B5BDC6]">{CHECK_UNREAD}</p>
             </div>
           )}
+          {/* Your trust (Etap 9c): the connected wallet's trust in this agent, and taking it back. */}
+          {typeof card !== 'string' && <CheckYourTrust agentId={card.id} />}
           {typeof card !== 'string' && (
             <BuilderDoor
               id={card.id}
