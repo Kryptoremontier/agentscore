@@ -4,8 +4,11 @@
  * An EIP-1193 provider injected into the page: it answers its account and Intuition Testnet's chain
  * id, and refuses every signature or transaction (user rejected, code 4001). No key exists anywhere.
  * The app's own reads go to the real testnet RPC (the fee is read live from the FeeProxy). The
- * harness changes only two answers, inside the app's Multicall3 batches too: this account's balance
- * (1 tTRUST), and, when asked, the fee read (it fails).
+ * harness changes only these answers, inside the app's Multicall3 batches too: the harness account's
+ * balance (1 tTRUST), and, when asked, the fee read or any other read by selector (it fails).
+ *
+ * Etap 9c: `account` presents a real public address instead (read-only — what that wallet holds on
+ * chain is read as it is; its balance is not changed). The wallet still signs nothing: no key exists.
  */
 import type { Page, Route } from '@playwright/test'
 import { parseAbi, decodeFunctionData, decodeFunctionResult, encodeFunctionResult, encodeAbiParameters } from 'viem'
@@ -16,9 +19,17 @@ const CHAIN_HEX = '0x350b' // 13579
 const RPC = 'https://testnet.rpc.intuition.systems/http'
 /** depositFixedFee() / depositPercentageFee() on the FeeProxy. */
 const FEE_SELECTORS = ['0x02ef36c7', '0x63173be7']
-const FEE_PROXY = '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41'
 
-export async function installMockWallet(page: Page, opts: { feeReadFails?: boolean } = {}) {
+export interface MockWalletOptions {
+  feeReadFails?: boolean
+  /** A public address to present (read-only). Default: the harness account. */
+  account?: string
+  /** 4-byte selectors whose eth_call reads fail (e.g. previewRedeem). */
+  failSelectors?: string[]
+}
+
+export async function installMockWallet(page: Page, opts: MockWalletOptions = {}) {
+  const account = (opts.account ?? MOCK_ACCOUNT).toLowerCase()
   await page.addInitScript(({ account, chainHex }) => {
     const listeners: Record<string, Array<(v: unknown) => void>> = {}
     const provider = {
@@ -40,7 +51,7 @@ export async function installMockWallet(page: Page, opts: { feeReadFails?: boole
       removeListener: (e: string, f: (v: unknown) => void) => { listeners[e] = (listeners[e] ?? []).filter((g) => g !== f) },
     }
     Object.defineProperty(window, 'ethereum', { value: provider, configurable: true })
-  }, { account: MOCK_ACCOUNT, chainHex: CHAIN_HEX })
+  }, { account, chainHex: CHAIN_HEX })
 
   await page.route(RPC, async (route: Route) => {
     const body = route.request().postDataJSON() as RpcCall | RpcCall[]
@@ -62,21 +73,24 @@ const AGGREGATE3 = parseAbi(['function aggregate3((address target, bool allowFai
 const GET_ETH_BALANCE = '0x4d2301cc' // Multicall3 getEthBalance(address)
 const ONE_TTRUST = 10n ** 18n
 
-/** Does this request read our account's balance, or (when it should fail) the fee? */
-function needsPatch(body: RpcCall | RpcCall[], opts: { feeReadFails?: boolean }): boolean {
+/** The selectors whose reads fail under these options. */
+const failing = (opts: MockWalletOptions) => [...(opts.feeReadFails ? FEE_SELECTORS : []), ...(opts.failSelectors ?? [])].map((s) => s.toLowerCase())
+
+/** Does this request read the harness account's balance, or something that should fail? */
+function needsPatch(body: RpcCall | RpcCall[], opts: MockWalletOptions): boolean {
   const text = JSON.stringify(body).toLowerCase()
-  return text.includes(MOCK_ACCOUNT.slice(2)) || (!!opts.feeReadFails && FEE_SELECTORS.some((s) => text.includes(s.slice(2))))
+  return text.includes(MOCK_ACCOUNT.slice(2)) || failing(opts).some((s) => text.includes(s.slice(2)))
 }
 
-function patch(call: RpcCall, answer: RpcAnswer | undefined, opts: { feeReadFails?: boolean }): RpcAnswer {
+function patch(call: RpcCall, answer: RpcAnswer | undefined, opts: MockWalletOptions): RpcAnswer {
   if (!answer) return { jsonrpc: '2.0', id: call.id, error: { code: -32603, message: 'harness: no answer' } }
   const p0 = (call.params?.[0] ?? {}) as { to?: string; data?: `0x${string}` }
   if (call.method === 'eth_getBalance' && String(call.params?.[0]).toLowerCase() === MOCK_ACCOUNT) {
     return { ...answer, result: '0x' + ONE_TTRUST.toString(16) }
   }
   if (call.method !== 'eth_call' || !p0.data || answer.result === undefined) return answer
-  const isFee = (data: string) => FEE_SELECTORS.some((s) => data.toLowerCase().startsWith(s))
-  if (opts.feeReadFails && isFee(p0.data)) return { jsonrpc: '2.0', id: call.id, error: { code: -32603, message: 'harness: the fee read fails' } }
+  const fails = (data: string) => failing(opts).some((s) => data.toLowerCase().startsWith(s))
+  if (fails(p0.data)) return { jsonrpc: '2.0', id: call.id, error: { code: -32603, message: 'harness: this read fails' } }
   if (!p0.data.startsWith('0x82ad56cb')) return answer
   // A Multicall3 batch: change only our entries.
   const { args } = decodeFunctionData({ abi: AGGREGATE3, data: p0.data })
@@ -85,7 +99,7 @@ function patch(call: RpcCall, answer: RpcAnswer | undefined, opts: { feeReadFail
     const data = c.callData.toLowerCase()
     if (data.startsWith(GET_ETH_BALANCE) && data.endsWith(MOCK_ACCOUNT.slice(2))) {
       results[i] = { success: true, returnData: encodeAbiParameters([{ type: 'uint256' }], [ONE_TTRUST]) }
-    } else if (opts.feeReadFails && c.target.toLowerCase() === FEE_PROXY && isFee(data)) {
+    } else if (fails(data)) {
       results[i] = { success: false, returnData: '0x' }
     }
   })

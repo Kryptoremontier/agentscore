@@ -26,6 +26,7 @@ export const ROUTES = {
   checkCard: (id: string) => `/check/${id}`,
   checkBuilder: '/check?builder=1',
   badge: (id: string) => `/badge/${id}.svg`,
+  adminFees: '/admin/fees',
 } as const
 
 /**
@@ -46,4 +47,6 @@ export const WARMUP_PATHS: string[] = [
   ROUTES.check,
   ROUTES.checkCard(AGENTS.dackie),
   ROUTES.checkCard(AGENTS.luda),
+  ROUTES.agentProfile(AGENTS.luda),
+  ROUTES.adminFees,
 ]
