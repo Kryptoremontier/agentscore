@@ -21,8 +21,6 @@ export function MobileBottomNav() {
   const [mounted, setMounted] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   useEffect(() => { setMounted(true) }, [])
-  // A link in the sheet was followed: close it.
-  useEffect(() => { setSheetOpen(false) }, [pathname])
 
   const isAdmin = mounted && isAdminWallet(address)
   const moreActive = sheetOpen || isUnderMore(pathname)
