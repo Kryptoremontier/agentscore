@@ -48,7 +48,7 @@ import { txFailureNotice } from '@/lib/user-notice'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
-import { fetchAgentReports, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
+import { fetchAgentReports, fetchAgentAttestations, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
 import { showMoreAgents, DETAILS_HEADING, agentsTrustedHeading, agentsUntrustedHeading, AGENTS_TRUSTED_NONE, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND, ORIGIN_LABEL, CLAIM_PICK } from '@/lib/people-copy'
@@ -161,6 +161,8 @@ const BackThisAgentSection = dynamic(() => import('@/components/profile/BackThis
   ssr: false,
   loading: () => <div className="mb-3 h-14 rounded-xl bg-white/[0.03] animate-pulse" aria-hidden />,
 })
+// Your trust (Etap 9c): wallet-only, hidden until this wallet's trust is read — no placeholder.
+const YourTrust = dynamic(() => import('@/components/trust/YourTrust').then((m) => m.YourTrust), { ssr: false })
 
 /**
  * What the server read for the first HTML (Etap 7a, app/agents/page.tsx): the cached list answer,
@@ -437,6 +439,20 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   const [liveUntil, setLiveUntil] = useState<Record<string, number>>({})
   const liveAgent = !!selectedAgent && isLiveAfterOwnTx(liveUntil, selectedAgent.term_id)
   const markLiveAfterOwnTx = (termId: string) => setLiveUntil((prev) => ({ ...prev, [termId]: Date.now() + OWN_TX_LIVE_MS }))
+  // This wallet took its trust back (YourTrust, Etap 9c): read live for a while, and read who trusts
+  // it again — the card's line and the modal's both follow the new read.
+  const onOwnTrustChanged = (termId: string) => {
+    markLiveAfterOwnTx(termId)
+    fetchAgentAttestations(termId).then((fresh) => {
+      setAttestedBySubject((prev) => {
+        if (!(prev instanceof Map)) return prev
+        const next = new Map(prev)
+        next.set(termId, fresh)
+        return next
+      })
+      if (selectedAgentIdRef.current === termId) setProfileVector((p) => ({ ...p, attested: fresh }))
+    }).catch(() => { /* the block shows its own new read; the page keeps its last one */ })
+  }
 
   // A cohort agent's identity link and declarations come with its modal (Etap 7a: the list carries only
   // its card). undefined while the part is on its way (nothing drawn yet); null when it failed (the
@@ -2243,6 +2259,8 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
                   className="mb-3"
                 />
               </div>
+              {/* Your trust (Etap 9c): this wallet's trust in it, per trust context, and taking it back. */}
+              <YourTrust agentId={selectedAgent.term_id} onChanged={() => onOwnTrustChanged(selectedAgent.term_id)} className="mb-3" />
               {/* Trust over time (Etap 8b Run B): who trusted it, for what, when — the landing's card. */}
               <div className="mb-3">
                 <AgentTrustOverTime

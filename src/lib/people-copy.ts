@@ -56,6 +56,35 @@ export const VOUCHED_FOR_CONTEXT = 'for'
 /** The dialog's no-tTRUST step. */
 export const NEED_TTRUST = 'You need a little testnet tTRUST to trust an agent — it’s free.'
 
+// ─── Taking trust back (Etap 9c) ─────────────────────────────────────────────
+// The "Your trust" block: the connected wallet's trust in this agent, one row per trust context, each
+// with "Withdraw". Trust words only — no market words in this block (a test reads it).
+
+export const YOUR_TRUST_HEADING = 'Your trust'
+export const YOUR_TRUST_NOTE = 'Changed your mind? You can take your trust back at any time.'
+export const YOUR_TRUST_UNREAD = 'Can’t read your trust right now. Try again in a minute.'
+export const WITHDRAW = 'Withdraw'
+export const WITHDRAW_KEEP = 'Keep it'
+/** The amount on a row: what this wallet put behind it, in tTRUST. */
+export const yourTrustAmount = (amount: string) => `${amount} behind it`
+/** The live preview, read from the contract before signing. */
+export const withdrawPreview = (amount: string) => `You get back ${amount}, plus gas.`
+export const WITHDRAW_PREVIEW_READING = 'Reading what comes back…'
+export const WITHDRAW_PREVIEW_FAILED = 'Can’t read what comes back right now. Try again in a minute.'
+export const WITHDRAW_RETRY = 'Try again'
+export const withdrawSign = (contextLabel: string) => `Withdraw my trust for ${contextLabel}`
+export const WITHDRAW_PENDING = 'Confirm in your wallet. Do not close this window.'
+export const WITHDRAW_CANCELLED = 'You cancelled in your wallet. Nothing changed.'
+export const WITHDRAW_FAILED = 'The withdrawal didn’t go through. Nothing changed.'
+export const withdrawDone = (contextLabel: string) => `Done. You no longer trust it for ${contextLabel}.`
+export const WITHDRAW_COUNTING = 'Reading who trusts it now…'
+export const WITHDRAW_COUNT_UNREAD = 'Couldn’t read who trusts it now. The page will catch up.'
+export const WITHDRAW_INDEXING = 'The count may take a minute to catch up (indexing).'
+/** "just now" / "12 s ago" / "3 min ago" — how old a read is. */
+export const readAgo = (seconds: number) => seconds < 5 ? 'just now' : seconds < 60 ? `${Math.floor(seconds)} s ago` : `${Math.floor(seconds / 60)} min ago`
+/** After a withdrawal, from a new read: "Now: 1 person trusts it · Unverified · read 4 s ago". */
+export const trustNowLine = (n: number, tierLabel: string, age: string) => `Now: ${peopleVouch(n)} · ${tierLabel} · read ${age}`
+
 // ─── Who trusts it: the count and the trust contexts ─────────────────────────
 
 /** "1 person trusts it" / "2 people trust it" (0: "0 people trust it"; most surfaces say NOBODY_VOUCHES). */

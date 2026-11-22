@@ -35,6 +35,7 @@ import { fetchAgentModalData } from '@/lib/agents-page-client'
 import { MODAL_HEADER_PARTS, type AgentModalPayload } from '@/lib/agents-page-types'
 import { AttestStickyBar } from '@/components/attest/AttestStickyBar'
 import { AttestedDomains } from '@/components/profile/AttestedDomains'
+import { YourTrust } from '@/components/trust/YourTrust'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersAndBackers } from '@/components/profile/AttestersAndBackers'
@@ -154,6 +155,16 @@ export default function AgentDetailPage() {
     return () => { cancelled = true }
   }, [agentId])
 
+  // After this wallet takes its trust back (YourTrust), who trusts it is read again.
+  const [vectorNonce, setVectorNonce] = useState(0)
+  useEffect(() => {
+    if (vectorNonce === 0) return
+    let cancelled = false
+    fetchAgentProfileVector(agentId).then((v) => { if (!cancelled) setVector(v) })
+    return () => { cancelled = true }
+  }, [vectorNonce, agentId])
+  const onTrustChanged = () => setVectorNonce((n) => n + 1)
+
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href)
   }
@@ -225,6 +236,7 @@ export default function AgentDetailPage() {
 
               {/* ATTESTED > DECLARED > REPORTS (thesis §5 hierarchy) */}
               <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agentId} agentName={name} />
+              <YourTrust agentId={agentId} onChanged={onTrustChanged} />
               {/* Trust over time (Etap 8b Run B): the landing's card, for this agent. */}
               <AgentTrustOverTime agentId={agentId} agentName={name} people={attesters?.length ?? null} tier={agentTier} compact />
               <DeclaredDomains declaredDomains={cohortFailed ? null : cohortMatch?.declaredDomains} />
@@ -334,6 +346,7 @@ export default function AgentDetailPage() {
               DECLARED (cohort only) > REPORTS (collapsed) > score context below.
               Zero attestations renders AttestEmptyState (thesis §6). */}
           <AttestedDomains entries={vector.attested} loading={profileLoading} agentId={agent.id} agentName={agent.name} />
+          <YourTrust agentId={agent.id} onChanged={onTrustChanged} />
           {/* Trust over time (Etap 8b Run B): the landing's card, for this agent — same reader, same <3-events rule. */}
           <AgentTrustOverTime agentId={agent.id} agentName={agent.name} people={attesters?.length ?? null} tier={agentTier} />
           <DeclaredDomains declaredDomains={cohortMatch?.declaredDomains} />

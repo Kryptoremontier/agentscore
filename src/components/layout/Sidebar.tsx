@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAccount } from 'wagmi'
-import { User, Bug, ShieldAlert } from 'lucide-react'
+import { User, MoreHorizontal, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { isAdminWallet } from '@/lib/constants'
-import { PRIMARY_NAV, ACCENT, isNavActive } from './nav-items'
+import {
+  PRIMARY_NAV, MORE_NAV, ADMIN_NAV, START_LABEL, MORE_LABEL, ADMIN_LABEL, ACCENT,
+  isNavActive, isUnderMore, readMoreOpen, writeMoreOpen, viewerStorage,
+} from './nav-items'
 
 function GroupLabel({ label, first = false }: { label: string; first?: boolean }) {
   return (
@@ -63,9 +66,18 @@ export function Sidebar() {
   const pathname = usePathname()
   const { address } = useAccount()
   const [mounted, setMounted] = useState(false)
-  // Etap 9, one job: the three places, nothing else. Everything "More" held is in the footer
-  // ("More from AgentScore", components/layout/Footer.tsx), Report a bug included.
-  useEffect(() => { setMounted(true) }, [])
+  // Etap 9c: "More" is closed until the viewer opens it, and stays the way they left it (this
+  // browser). On one of More's pages it opens, so the page's item is visible (not remembered).
+  const [moreOpen, setMoreOpen] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+    if (readMoreOpen(viewerStorage())) setMoreOpen(true)
+  }, [])
+  useEffect(() => { if (isUnderMore(pathname)) setMoreOpen(true) }, [pathname])
+  const toggleMore = () => setMoreOpen((open) => {
+    writeMoreOpen(viewerStorage(), !open)
+    return !open
+  })
 
   const isAdmin = mounted && isAdminWallet(address)
 
@@ -81,19 +93,44 @@ export function Sidebar() {
     >
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 scrollbar-hide">
 
-        {/* The three places */}
-        <nav aria-label="Primary" className="space-y-0.5 pt-1">
+        {/* Start: the three jobs */}
+        <nav aria-label="Primary" className="space-y-0.5">
+          <GroupLabel label={START_LABEL} first />
           {PRIMARY_NAV.map(item => (
             <NavLink key={item.href} {...item} active={isNavActive(item.href, pathname)} />
           ))}
         </nav>
 
+        {/* More: every other page — collapsible, remembered per viewer */}
+        <button
+          type="button"
+          onClick={toggleMore}
+          aria-expanded={moreOpen}
+          aria-controls="nav-more-items"
+          data-testid="nav-more"
+          className="relative flex items-center gap-3 mx-2 mt-3 px-2 py-2.5 rounded-lg w-[calc(100%-16px)] transition-colors duration-150 group hover:bg-white/[0.04]"
+        >
+          <MoreHorizontal className="w-5 h-5 shrink-0" style={{ color: 'rgba(255,255,255,0.32)' }} />
+          <span className="flex-1 text-left text-sm font-medium whitespace-nowrap text-white/50 group-hover:text-white/80 leading-none">
+            {MORE_LABEL}
+          </span>
+          <ChevronDown className={cn('w-3.5 h-3.5 mr-1 text-white/25 transition-transform duration-200', moreOpen && 'rotate-180')} />
+        </button>
+        {moreOpen && (
+          <nav aria-label={MORE_LABEL} id="nav-more-items" data-testid="nav-more-items" className="space-y-0.5">
+            {MORE_NAV.map(item => (
+              <NavLink key={item.href} {...item} active={isNavActive(item.href, pathname)} />
+            ))}
+          </nav>
+        )}
+
         {isAdmin && (
-          <>
-            <GroupLabel label="Admin" />
-            <NavLink href="/admin/predicates" label="Predicates" icon={ShieldAlert} color="#C8963C" active={isNavActive('/admin/predicates', pathname)} />
-            <NavLink href="/admin/feedback" label="Bug Reports" icon={Bug} color="#EF4444" active={isNavActive('/admin/feedback', pathname)} />
-          </>
+          <nav aria-label={ADMIN_LABEL} data-testid="nav-admin" className="space-y-0.5">
+            <GroupLabel label={ADMIN_LABEL} />
+            {ADMIN_NAV.map(item => (
+              <NavLink key={item.href} {...item} active={isNavActive(item.href, pathname)} />
+            ))}
+          </nav>
         )}
 
       </div>

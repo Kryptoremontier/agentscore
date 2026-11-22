@@ -1241,12 +1241,14 @@ export async function depositToVault(
  * @param vaultId - Vault ID (Atom ID or Triple ID)
  * @param shares - Number of shares to redeem
  * @param recipient - Optional recipient address (defaults to sender)
+ * @param curveId - The vault's curve (defaults to 1, the default curve every AgentScore deposit uses)
  */
 export async function redeemFromVault(
   config: WriteConfig,
   vaultId: `0x${string}`,
   shares: bigint,
-  recipient?: `0x${string}`
+  recipient?: `0x${string}`,
+  curveId: bigint = 1n,
 ) {
   const recipientAddress = recipient || config.walletClient.account?.address
   if (!recipientAddress) {
@@ -1261,7 +1263,7 @@ export async function redeemFromVault(
     args: [
       recipientAddress,
       vaultId,
-      1n, // curveId = 1 (default curve)
+      curveId,
       shares,
       0n, // minAssets = 0 (accept any amount)
     ],

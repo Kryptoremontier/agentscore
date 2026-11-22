@@ -20,7 +20,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 import path from 'node:path'
 import { AGENTS, ROUTES } from './shots-routes'
-import { installMockWallet } from './mock-wallet'
+import { installMockWallet, type MockWalletOptions } from './mock-wallet'
 
 const REPO_ROOT = path.resolve(__dirname, '../..')
 // Cap for each individual wait. Routes are pre-compiled by warmup.ts, so the
@@ -67,14 +67,26 @@ const SHOTS: Shot[] = [
   { name: 'trust-dialog-default', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social`, prepare: (page) => openTrustDialog(page), target: trustDialog, check: trustDialogDefault },
   { name: 'trust-dialog-below-default', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social`, prepare: async (page) => { await openTrustDialog(page); await belowDefault(page) }, target: trustDialog, check: trustDialogBelowDefault },
   { name: 'trust-dialog-fee-unread', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social`, prepare: (page) => openTrustDialog(page, { feeReadFails: true }), target: trustDialog, check: trustDialogFeeUnread },
+  // Etap 9c: "Your trust" — the harness wallet presents the owner's test wallet (read-only: it signs
+  // nothing), which trusts Luda for Social. The block, the withdraw step with the contract's preview,
+  // the preview read failed, and the block on Luda's profile.
+  { name: 'your-trust-check-luda', url: ROUTES.checkCard(AGENTS.luda), prepare: (page) => showYourTrust(page, checkCardReady), target: yourTrustBlock, check: yourTrustRows },
+  { name: 'your-trust-withdraw-preview', url: ROUTES.checkCard(AGENTS.luda), prepare: async (page) => { await showYourTrust(page, checkCardReady); await openWithdraw(page, 'ok') }, target: yourTrustBlock, check: withdrawPreviewRead },
+  { name: 'your-trust-preview-failed', url: ROUTES.checkCard(AGENTS.luda), prepare: async (page) => { await showYourTrust(page, checkCardReady, { failSelectors: [PREVIEW_REDEEM] }); await openWithdraw(page, 'failed') }, target: yourTrustBlock, check: withdrawPreviewFailed },
+  { name: 'your-trust-profile-luda', url: ROUTES.agentProfile(AGENTS.luda), prepare: (page) => showYourTrust(page, async (p) => { await p.getByRole('heading', { level: 1 }).first().waitFor({ timeout: WAIT_CAP }) }), target: yourTrustBlock, check: yourTrustRows },
+  // Etap 9c: /admin/fees, with the harness wallet presenting the admin wallet (read-only: it signs nothing).
+  { name: 'admin-fees', url: ROUTES.adminFees, prepare: (page) => showAdminFees(page), check: adminFeesChecks },
+  { name: 'admin-fees-unread', url: ROUTES.adminFees, prepare: (page) => showAdminFees(page, { feeReadFails: true }), check: adminFeesUnread },
   // Etap 9: the builder's door — /check in builder mode, Luda's card opened from a trust link, and the README badge.
   { name: 'check-builder', url: ROUTES.checkBuilder, prepare: async (page) => { await page.getByTestId('check-builder-note').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-luda-builder', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, check: builderDoorChecks },
   { name: 'check-luda-builder-block', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, target: async (page) => page.getByTestId('builder-door') },
   { name: 'badge-luda', url: ROUTES.check, prepare: (page) => showBadge(page, ROUTES.badge(AGENTS.luda)), target: async (page) => page.getByTestId('shot-badge'), check: (page) => badgeSays(page, ROUTES.badge(AGENTS.luda), /^AgentScore · (Unverified|Established|Verified) · \d+ (person trusts it|people trust it) · as of \d{4}-\d\d-\d\d \d\d:\d\d UTC$/, 'public, max-age=300') },
   { name: 'badge-unknown-id', url: ROUTES.check, prepare: (page) => showBadge(page, ROUTES.badge('no-such-agent-anywhere')), target: async (page) => page.getByTestId('shot-badge'), check: (page) => badgeSays(page, ROUTES.badge('no-such-agent-anywhere'), /^AgentScore · not found$/, 'public, max-age=60') },
-  // Etap 9: the nav is three places — the desktop sidebar; the phone's bottom nav (first screen).
+  // Etap 9c: the nav — Start (the three jobs) and a closed "More"; the phone's bottom nav (first screen).
   { name: 'nav', url: ROUTES.landing, prepare: navReady, target: navTarget, firstScreen: true, check: navWords },
+  // Etap 9c: "More" opened — the sidebar's list (remembered across a reload), the phone's sheet.
+  { name: 'nav-more-open', url: ROUTES.landing, prepare: async (page) => { await navReady(page); await openMore(page) }, target: navMoreTarget, firstScreen: true, check: navMoreOpen },
   // Etap 9: everything that left the nav — the footer group, on every page.
   { name: 'footer-more', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, target: footerTarget },
   { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: async (page) => { await mostVouchedFirst(page); await twoSections(page) } },
@@ -88,7 +100,7 @@ const SHOTS: Shot[] = [
     prepare: async (page) => {
       await agentsListReady(page)
       const erc = page.getByRole('tab', { name: /^ERC-8004/ })
-      await erc.click()
+      await clickUntil(erc, () => expect(erc).toHaveAttribute('aria-selected', 'true', { timeout: 2_000 }))
       // The "All" results line already matches agentsListReady — wait for the filter itself:
       // the tab is selected, the URL carries it, and no AgentScore-origin card is left.
       await expect(erc).toHaveAttribute('aria-selected', 'true', { timeout: WAIT_CAP })
@@ -115,8 +127,7 @@ const SHOTS: Shot[] = [
     prepare: async (page) => {
       await agentsListReady(page)
       await openUntrusted(page) // OPEN CLAW: nobody trusts it yet, so its row is in the second section
-      await page.getByRole('button', { name: 'List', exact: true }).click()
-      await expect(page.locator('[data-card]')).toHaveCount(0, { timeout: WAIT_CAP })
+      await clickUntil(page.getByRole('button', { name: 'List', exact: true }), () => expect(page.locator('[data-card]')).toHaveCount(0, { timeout: 2_000 }))
     },
     check: gridListParity,
   },
@@ -138,7 +149,7 @@ const SHOTS: Shot[] = [
     prepare: async (page) => {
       await agentsListReady(page)
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
-      await page.locator('[data-term-id]').first().click()
+      await clickUntil(page.locator('[data-term-id]').first(), () => expect(modalLocator(page)).toBeVisible({ timeout: 3_000 }))
       await modalReady(page)
     },
     firstScreen: true,
@@ -257,23 +268,25 @@ async function navTarget(page: Page): Promise<Locator> {
 }
 
 /**
- * Etap 9, one job: the nav is three places — Check an agent · Trust an agent · For developers — on
- * the sidebar and the phone's bottom nav alike, with no "More". Everything else is a footer group,
- * "More from AgentScore", whose links all go somewhere.
+ * Etap 9c: the nav — "Start": Check an agent · Trust an agent · For developers, then a closed
+ * "More" (the sidebar) or a "More" tab (the phone). The footer group "More from AgentScore" stays,
+ * and its links all go somewhere.
  */
 const FOOTER_MORE_LINKS = [
   'How it works', 'Trust contexts', 'Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge', 'Register an agent', 'Register a skill', 'Create claim',
 ]
+const MORE_LINKS = ['Trust contexts', 'Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge', 'Register an agent', 'Register a skill', 'Create claim']
 async function navWords(page: Page, project: string) {
   const nav = project === 'mobile' ? page.locator('nav.fixed.bottom-0') : page.locator('aside').first()
   const links = (await nav.locator('a').allInnerTexts()).map((t) => t.trim()).filter((t) => !/^0x/.test(t))
   expect(links, 'the nav: three places, in order').toEqual(['Check an agent', 'Trust an agent', 'For developers'])
   for (const label of links) await expect(nav.getByText(label, { exact: true }).first(), label).toBeVisible()
-  await expect(nav.getByText('More', { exact: true }), 'no "More" in the nav').toHaveCount(0)
+  const moreButton = project === 'mobile' ? page.getByTestId('bottom-nav-more') : page.getByTestId('nav-more')
+  await expect(moreButton, 'the "More" control').toBeVisible()
+  await expect(moreButton).toHaveText('More')
+  await expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+  if (project !== 'mobile') await expect(nav.getByText('Start', { exact: true }), 'the "Start" group').toBeVisible()
   await expect(nav.getByText(/^Vouch$/), 'the old "Vouch"').toHaveCount(0)
-  for (const moved of ['Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge']) {
-    await expect(nav.getByText(moved, { exact: true }), `${moved} left the nav`).toHaveCount(0)
-  }
   const more = page.getByTestId('footer-more')
   await expect(more.locator('h4')).toHaveText('More from AgentScore')
   const footerLinks = (await more.locator('a').allInnerTexts()).map((t) => t.trim())
@@ -282,6 +295,31 @@ async function navWords(page: Page, project: string) {
   // The group is inside the page (no sideways scroll), each link a full tap target apart from the next.
   const box = await more.boundingBox()
   expect(box && box.x >= 0 && box.x + box.width <= (page.viewportSize()?.width ?? 0) + 1, 'the footer group fits the viewport').toBe(true)
+}
+
+async function openMore(page: Page) {
+  const phone = (page.viewportSize()?.width ?? 0) < 768
+  await clickUntil(page.getByTestId(phone ? 'bottom-nav-more' : 'nav-more'), () => expect(page.getByTestId(phone ? 'more-sheet' : 'nav-more-items')).toBeVisible({ timeout: 2_000 }))
+  await page.waitForTimeout(ANIMATION_GRACE_MS) // the sheet slides up
+}
+async function navMoreTarget(page: Page): Promise<Locator> {
+  if ((page.viewportSize()?.width ?? 0) < 1024) throw new Error('phone: first screen')
+  return page.locator('aside').first()
+}
+/** "More" opened: the same list on both; the sidebar remembers it across a reload (this browser). */
+async function navMoreOpen(page: Page, project: string) {
+  if (project === 'mobile') {
+    const sheet = page.getByTestId('more-sheet')
+    expect((await sheet.locator('a').allInnerTexts()).map((t) => t.trim()), 'the sheet').toEqual(MORE_LINKS)
+    const box = await sheet.boundingBox()
+    expect(box && box.x >= 0 && box.x + box.width <= (page.viewportSize()?.width ?? 0) + 1, 'the sheet fits the viewport').toBe(true)
+    return
+  }
+  const items = page.getByTestId('nav-more-items')
+  expect((await items.locator('a').allInnerTexts()).map((t) => t.trim()), 'More, in order').toEqual(MORE_LINKS)
+  await expect(page.getByTestId('nav-more')).toHaveAttribute('aria-expanded', 'true')
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await expect(page.getByTestId('nav-more-items'), 'remembered after a reload').toBeVisible({ timeout: WAIT_CAP })
 }
 
 /** The footer, scrolled to: where "More from AgentScore" lives. */
@@ -577,9 +615,8 @@ async function openTrustDialog(page: Page, opts: { feeReadFails?: boolean } = {}
   await installMockWallet(page, opts)
   await page.reload({ waitUntil: 'domcontentloaded' })
   await checkCardReady(page)
-  await page.getByTestId('attest-cta').first().click()
   const modal = page.getByTestId('connect-wallet-modal')
-  await modal.waitFor({ timeout: WAIT_CAP })
+  await clickUntil(page.getByTestId('attest-cta').first(), () => expect(modal).toBeVisible({ timeout: 2_000 }))
   await modal.getByRole('button', { name: /Browser Wallet/ }).first().click()
   await (await trustDialog(page)).waitFor({ timeout: WAIT_CAP })
   await expect(page.getByTestId('trust-cost').or(page.getByTestId('fee-unread')).first()).toBeVisible({ timeout: 20_000 })
@@ -614,6 +651,114 @@ async function trustDialogFeeUnread(page: Page) {
   await expect(page.getByTestId('fee-unread')).toContainText('Can’t read the fee right now. Try again in a minute.')
   await expect(page.getByTestId('trust-cost')).toHaveCount(0) // no guessed fee on screen
   await expect(signButton(page)).toBeDisabled()
+}
+
+/**
+ * Click until the page answers. `next dev` can take a while to hydrate in a slow container, and a
+ * click before hydration does nothing (seen on main too, Etap 9c): click again until `answered`
+ * holds, never more than WAIT_CAP. Only for clicks that are idempotent once answered.
+ */
+async function clickUntil(target: Locator, answered: () => Promise<void>) {
+  await expect(async () => {
+    await target.click({ timeout: 3_000 })
+    await answered()
+  }).toPass({ timeout: WAIT_CAP * 2 })
+}
+
+/** The owner's own test wallet (Etap 9c brief): it trusts Luda for Social. Public; no key here. */
+const OWNER_TEST_WALLET = '0xCCA0592b0bf23C10aFc58f65d28eE8C0E78aA21C'
+/** The FeeProxy admin wallet (lib/constants ADMIN_WALLET). Public; no key here. */
+const ADMIN_WALLET = '0x139219107C1eBE569f543C581b3B807Cf6740006'
+/** MultiVault previewRedeem(bytes32,uint256,uint256). */
+const PREVIEW_REDEEM = '0x2db27075'
+
+/** Connect the harness wallet from the top bar's "Connect Wallet". */
+async function connectFromTopBar(page: Page) {
+  const modal = page.getByTestId('connect-wallet-modal')
+  const connected = page.getByTestId('wallet-button').first()
+  // The whole step again if the wallet didn't take (a click in a modal still mounting is lost).
+  await expect(async () => {
+    if (await connected.isVisible()) return
+    if (!(await modal.isVisible())) {
+      await page.getByRole('button', { name: /Connect Wallet/ }).first().click({ timeout: 3_000 })
+      await expect(modal).toBeVisible({ timeout: 3_000 })
+    }
+    await modal.getByRole('button', { name: /Browser Wallet/ }).first().click({ timeout: 3_000 })
+    await expect(connected).toBeVisible({ timeout: 5_000 })
+  }).toPass({ timeout: WAIT_CAP * 3 })
+}
+async function showYourTrust(page: Page, ready: (page: Page) => Promise<void>, opts: Omit<MockWalletOptions, 'account'> = {}) {
+  await installMockWallet(page, { account: OWNER_TEST_WALLET, ...opts })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await ready(page)
+  await connectFromTopBar(page)
+  await page.getByTestId('your-trust-row').first().waitFor({ timeout: 20_000 })
+  await page.getByTestId('your-trust').scrollIntoViewIfNeeded()
+}
+async function yourTrustBlock(page: Page): Promise<Locator> {
+  const block = page.getByTestId('your-trust').first()
+  await block.waitFor({ timeout: WAIT_CAP }) // a miss: the page is shot instead, and the check says why
+  return block
+}
+async function openWithdraw(page: Page, state: 'ok' | 'failed') {
+  await page.getByTestId('your-trust-row').filter({ hasText: 'Social' }).getByTestId('withdraw-open').click()
+  await expect(page.getByTestId('withdraw-preview')).toHaveAttribute('data-state', state, { timeout: 20_000 })
+}
+async function yourTrustRows(page: Page) {
+  const block = page.getByTestId('your-trust')
+  await expect(block.locator('p.eyebrow')).toHaveText('Your trust')
+  await expect(page.getByTestId('your-trust-note')).toHaveText('Changed your mind? You can take your trust back at any time.')
+  const social = page.getByTestId('your-trust-row').filter({ hasText: 'Social' })
+  await expect(social).toHaveCount(1)
+  await expect(social.getByTestId('your-trust-amount')).toHaveText(/^\d+\.\d+ tTRUST behind it$/)
+  await expect(social.getByTestId('withdraw-open')).toHaveText('Withdraw')
+  const text = await block.innerText()
+  expect(text, 'no market words in the block').not.toMatch(/\bstake|\bsell|bonding curve/i)
+  console.log(`your trust (${OWNER_TEST_WALLET} on Luda): ${(await social.innerText()).replace(/\s+/g, ' ')}`)
+  await pageFitsViewport(page)
+}
+async function withdrawPreviewRead(page: Page) {
+  await expect(page.getByTestId('withdraw-preview')).toHaveText(/^You get back \d+\.\d+ tTRUST, plus gas\.$/)
+  await expect(page.getByTestId('withdraw-sign')).toBeEnabled()
+  await expect(page.getByTestId('withdraw-sign')).toHaveText('Withdraw my trust for Social')
+  console.log(`withdraw preview: ${await page.getByTestId('withdraw-preview').innerText()}`)
+}
+async function withdrawPreviewFailed(page: Page) {
+  await expect(page.getByTestId('withdraw-preview')).toContainText('Can’t read what comes back right now.')
+  await expect(page.getByTestId('withdraw-confirm')).not.toContainText('You get back')
+  await expect(page.getByTestId('withdraw-sign')).toBeDisabled()
+}
+
+async function showAdminFees(page: Page, opts: Omit<MockWalletOptions, 'account'> = {}) {
+  await installMockWallet(page, { account: ADMIN_WALLET, ...opts })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await connectFromTopBar(page)
+  if (opts.feeReadFails) {
+    await page.getByTestId('fees-unread').waitFor({ timeout: 20_000 })
+    return
+  }
+  await page.getByTestId('fee-fixed').waitFor({ timeout: 20_000 })
+  await page.getByTestId('fees-admin').first().waitFor({ timeout: 20_000 })
+  await page.getByTestId('fee-input').fill('0')
+  await expect(page.getByTestId('fee-sign')).toBeEnabled({ timeout: 20_000 }) // the on-chain admin check
+}
+async function adminFeesChecks(page: Page) {
+  const fixed = await page.getByTestId('fee-fixed').innerText()
+  expect(fixed, 'the fixed fee, read live').toMatch(/^\d+(\.\d+)? tTRUST$/)
+  await expect(page.getByTestId('fee-percent')).toHaveText(/^\d+(\.\d+)?%$/)
+  await expect(page.getByTestId('fees-admin')).toHaveCount(2)
+  await expect(page.getByTestId('fees-admins')).toContainText(ADMIN_WALLET)
+  await expect(page.getByTestId('fee-new')).toHaveText('0 tTRUST')
+  await expect(page.getByTestId('fee-undo')).toContainText(`Undo: set it back to ${fixed}`)
+  await expect(page.getByTestId('fee-calldata')).toContainText('data 0xf48371c0' + '0'.repeat(64))
+  await expect(page.getByTestId('fee-sign')).toBeEnabled()
+  console.log(`admin fees: fixed ${fixed}, ${await page.getByTestId('fee-percent').innerText()}; admins ${(await page.getByTestId('fees-admin').allInnerTexts()).join(' | ')}`)
+  await pageFitsViewport(page)
+}
+async function adminFeesUnread(page: Page) {
+  await expect(page.getByTestId('fees-unread')).toContainText('Can’t read the fee right now.')
+  await expect(page.getByTestId('fee-fixed')).toHaveCount(0)
+  await expect(page.getByTestId('fee-sign')).toBeDisabled()
 }
 
 /**
@@ -665,8 +810,9 @@ async function modalCoversFooter(page: Page) {
 async function openUntrusted(page: Page) {
   const toggle = page.getByTestId('agents-untrusted-toggle')
   if ((await toggle.count()) === 0) return
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: WAIT_CAP })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await clickUntil(toggle, () => expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 2_000 }))
+  }
 }
 
 /**
