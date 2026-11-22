@@ -73,8 +73,10 @@ const SHOTS: Shot[] = [
   { name: 'check-luda-builder-block', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, target: async (page) => page.getByTestId('builder-door') },
   { name: 'badge-luda', url: ROUTES.check, prepare: (page) => showBadge(page, ROUTES.badge(AGENTS.luda)), target: async (page) => page.getByTestId('shot-badge'), check: (page) => badgeSays(page, ROUTES.badge(AGENTS.luda), /^AgentScore · (Unverified|Established|Verified) · \d+ (person trusts it|people trust it) · as of \d{4}-\d\d-\d\d \d\d:\d\d UTC$/, 'public, max-age=300') },
   { name: 'badge-unknown-id', url: ROUTES.check, prepare: (page) => showBadge(page, ROUTES.badge('no-such-agent-anywhere')), target: async (page) => page.getByTestId('shot-badge'), check: (page) => badgeSays(page, ROUTES.badge('no-such-agent-anywhere'), /^AgentScore · not found$/, 'public, max-age=60') },
-  // Etap 9: the nav is three places — the desktop sidebar; the phone's bottom nav (first screen).
+  // Etap 9c: the nav — Start (the three jobs) and a closed "More"; the phone's bottom nav (first screen).
   { name: 'nav', url: ROUTES.landing, prepare: navReady, target: navTarget, firstScreen: true, check: navWords },
+  // Etap 9c: "More" opened — the sidebar's list (remembered across a reload), the phone's sheet.
+  { name: 'nav-more-open', url: ROUTES.landing, prepare: async (page) => { await navReady(page); await openMore(page) }, target: navMoreTarget, firstScreen: true, check: navMoreOpen },
   // Etap 9: everything that left the nav — the footer group, on every page.
   { name: 'footer-more', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, target: footerTarget },
   { name: 'agents-list', url: ROUTES.agents, prepare: agentsListReady, check: async (page) => { await mostVouchedFirst(page); await twoSections(page) } },
@@ -257,23 +259,25 @@ async function navTarget(page: Page): Promise<Locator> {
 }
 
 /**
- * Etap 9, one job: the nav is three places — Check an agent · Trust an agent · For developers — on
- * the sidebar and the phone's bottom nav alike, with no "More". Everything else is a footer group,
- * "More from AgentScore", whose links all go somewhere.
+ * Etap 9c: the nav — "Start": Check an agent · Trust an agent · For developers, then a closed
+ * "More" (the sidebar) or a "More" tab (the phone). The footer group "More from AgentScore" stays,
+ * and its links all go somewhere.
  */
 const FOOTER_MORE_LINKS = [
   'How it works', 'Trust contexts', 'Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge', 'Register an agent', 'Register a skill', 'Create claim',
 ]
+const MORE_LINKS = ['Trust contexts', 'Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge', 'Register an agent', 'Register a skill', 'Create claim']
 async function navWords(page: Page, project: string) {
   const nav = project === 'mobile' ? page.locator('nav.fixed.bottom-0') : page.locator('aside').first()
   const links = (await nav.locator('a').allInnerTexts()).map((t) => t.trim()).filter((t) => !/^0x/.test(t))
   expect(links, 'the nav: three places, in order').toEqual(['Check an agent', 'Trust an agent', 'For developers'])
   for (const label of links) await expect(nav.getByText(label, { exact: true }).first(), label).toBeVisible()
-  await expect(nav.getByText('More', { exact: true }), 'no "More" in the nav').toHaveCount(0)
+  const moreButton = project === 'mobile' ? page.getByTestId('bottom-nav-more') : page.getByTestId('nav-more')
+  await expect(moreButton, 'the "More" control').toBeVisible()
+  await expect(moreButton).toHaveText('More')
+  await expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+  if (project !== 'mobile') await expect(nav.getByText('Start', { exact: true }), 'the "Start" group').toBeVisible()
   await expect(nav.getByText(/^Vouch$/), 'the old "Vouch"').toHaveCount(0)
-  for (const moved of ['Skills', 'Claims', 'Evaluators', 'Leaderboard', 'IntuForge']) {
-    await expect(nav.getByText(moved, { exact: true }), `${moved} left the nav`).toHaveCount(0)
-  }
   const more = page.getByTestId('footer-more')
   await expect(more.locator('h4')).toHaveText('More from AgentScore')
   const footerLinks = (await more.locator('a').allInnerTexts()).map((t) => t.trim())
@@ -282,6 +286,32 @@ async function navWords(page: Page, project: string) {
   // The group is inside the page (no sideways scroll), each link a full tap target apart from the next.
   const box = await more.boundingBox()
   expect(box && box.x >= 0 && box.x + box.width <= (page.viewportSize()?.width ?? 0) + 1, 'the footer group fits the viewport').toBe(true)
+}
+
+async function openMore(page: Page) {
+  const phone = (page.viewportSize()?.width ?? 0) < 768
+  await page.getByTestId(phone ? 'bottom-nav-more' : 'nav-more').click()
+  await page.getByTestId(phone ? 'more-sheet' : 'nav-more-items').waitFor({ timeout: WAIT_CAP })
+  await page.waitForTimeout(ANIMATION_GRACE_MS) // the sheet slides up
+}
+async function navMoreTarget(page: Page): Promise<Locator> {
+  if ((page.viewportSize()?.width ?? 0) < 1024) throw new Error('phone: first screen')
+  return page.locator('aside').first()
+}
+/** "More" opened: the same list on both; the sidebar remembers it across a reload (this browser). */
+async function navMoreOpen(page: Page, project: string) {
+  if (project === 'mobile') {
+    const sheet = page.getByTestId('more-sheet')
+    expect((await sheet.locator('a').allInnerTexts()).map((t) => t.trim()), 'the sheet').toEqual(MORE_LINKS)
+    const box = await sheet.boundingBox()
+    expect(box && box.x >= 0 && box.x + box.width <= (page.viewportSize()?.width ?? 0) + 1, 'the sheet fits the viewport').toBe(true)
+    return
+  }
+  const items = page.getByTestId('nav-more-items')
+  expect((await items.locator('a').allInnerTexts()).map((t) => t.trim()), 'More, in order').toEqual(MORE_LINKS)
+  await expect(page.getByTestId('nav-more')).toHaveAttribute('aria-expanded', 'true')
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await expect(page.getByTestId('nav-more-items'), 'remembered after a reload').toBeVisible({ timeout: WAIT_CAP })
 }
 
 /** The footer, scrolled to: where "More from AgentScore" lives. */

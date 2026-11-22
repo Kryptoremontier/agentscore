@@ -1,12 +1,17 @@
 /**
- * The app's navigation, in one place. Etap 9, one job: the nav is three places — Check an agent,
- * Trust an agent (the agent list, where trusting happens), For developers — on the desktop sidebar
- * and the phone's bottom nav alike (REPO_MAP §7 rule 4). Everything else is not nav any more: it
- * lives in the footer, under "More from AgentScore" (FOOTER_MORE; components/layout/Footer.tsx),
- * on every page. No route is removed; the admin links stay gated where they are rendered.
+ * The app's navigation, in one place (REPO_MAP §7 rule 4). Etap 9c: the left menu is back, with the
+ * three jobs on top —
+ *   "Start": Check an agent · Trust an agent · For developers (PRIMARY_NAV);
+ *   "More" (collapsible, remembered per viewer): every other page (MORE_NAV);
+ *   "Admin" for the admin wallet (ADMIN_NAV), gated where it is rendered.
+ * The phone: the same three as bottom tabs, plus a "More" sheet with the same list. The footer group
+ * "More from AgentScore" (FOOTER_MORE; components/layout/Footer.tsx) stays on every page.
  */
 
-import { SearchCheck, HandHeart, Code2, type LucideIcon } from 'lucide-react'
+import {
+  SearchCheck, HandHeart, Code2, Trophy, Zap, MessageSquare, Target, Crown, Hammer, PenSquare, Plus,
+  ShieldAlert, Bug, type LucideIcon,
+} from 'lucide-react'
 import { CHECK_TITLE, DOMAINS_TITLE, LANDING_CTA_VOUCH } from '@/lib/people-copy'
 
 export interface NavItem {
@@ -27,6 +32,56 @@ export const PRIMARY_NAV: readonly NavItem[] = [
   { href: '/agents', label: LANDING_CTA_VOUCH, icon: HandHeart, color: '#2ECC71' },
   { href: '/docs', label: 'For developers', icon: Code2, color: '#38B6FF' },
 ]
+
+export const START_LABEL = 'Start'
+export const MORE_LABEL = 'More'
+export const ADMIN_LABEL = 'Admin'
+
+/** Under "More", in this order (Etap 9c). */
+export const MORE_NAV: readonly NavItem[] = [
+  { href: '/domains', label: DOMAINS_TITLE, icon: Trophy, color: '#8B5CF6' },
+  { href: '/skills', label: 'Skills', icon: Zap, color: '#2EE6D6' },
+  { href: '/claims', label: 'Claims', icon: MessageSquare, color: '#38B6FF' },
+  { href: '/evaluators', label: 'Evaluators', icon: Target, color: '#F59E0B' },
+  { href: '/leaderboard', label: 'Leaderboard', icon: Crown, color: '#C8963C' },
+  { href: '/explore/intuforge', label: 'IntuForge', icon: Hammer, color: '#C8963C' },
+  { href: '/register', label: 'Register an agent', icon: PenSquare, color: '#C8963C' },
+  { href: '/register?tab=skill', label: 'Register a skill', icon: Zap, color: '#2EE6D6' },
+  { href: '/claims?create=true', label: 'Create claim', icon: Plus, color: '#B5BDC6' },
+]
+
+/** The admin wallet's pages (rendered only for it; the pages themselves sit behind AdminGuard). */
+export const ADMIN_NAV: readonly NavItem[] = [
+  { href: '/admin/predicates', label: 'Predicates', icon: ShieldAlert, color: '#C8963C' },
+  { href: '/admin/feedback', label: 'Bug Reports', icon: Bug, color: '#EF4444' },
+]
+
+/** Is the current page one of More's? Then the sidebar opens More, so the page's item is visible. */
+export function isUnderMore(pathname: string, search = ''): boolean {
+  return MORE_NAV.some((i) => isNavActive(i.href, pathname, search))
+}
+
+/** Where a viewer's "More" open/closed choice is kept (this browser only). */
+export const MORE_OPEN_KEY = 'agentscore.nav.more-open'
+
+/** The viewer's remembered choice; null when none (or storage is unavailable). */
+export function readMoreOpen(storage: Pick<Storage, 'getItem'> | null | undefined): boolean | null {
+  try {
+    const v = storage?.getItem(MORE_OPEN_KEY)
+    return v === '1' ? true : v === '0' ? false : null
+  } catch {
+    return null
+  }
+}
+
+export function writeMoreOpen(storage: Pick<Storage, 'setItem'> | null | undefined, open: boolean): void {
+  try { storage?.setItem(MORE_OPEN_KEY, open ? '1' : '0') } catch { /* private mode: not remembered */ }
+}
+
+/** Browser storage, or null where there is none (server, blocked storage). */
+export function viewerStorage(): Storage | null {
+  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
+}
 
 export const FOOTER_MORE_HEADING = 'More from AgentScore'
 
