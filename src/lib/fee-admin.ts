@@ -11,7 +11,7 @@
 import { encodeFunctionData, toFunctionSelector } from 'viem'
 
 export const FEE_PROXY = '0x2f76eF07Df7b3904c1350e24Ad192e507fd4ec41' as const
-export const FEE_CHAIN_ID = 13579
+export const FEE_CHAIN_ID = 13579 as const
 /** The two whitelisted admins (AdminWhitelistUpdated events in the deployment transaction). */
 export const FEE_ADMINS = {
   adminWallet: '0x139219107C1eBE569f543C581b3B807Cf6740006',

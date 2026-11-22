@@ -10,7 +10,7 @@
 
 import {
   SearchCheck, HandHeart, Code2, Trophy, Zap, MessageSquare, Target, Crown, Hammer, PenSquare, Plus,
-  ShieldAlert, Bug, type LucideIcon,
+  ShieldAlert, Bug, Coins, type LucideIcon,
 } from 'lucide-react'
 import { CHECK_TITLE, DOMAINS_TITLE, LANDING_CTA_VOUCH } from '@/lib/people-copy'
 
@@ -54,6 +54,7 @@ export const MORE_NAV: readonly NavItem[] = [
 export const ADMIN_NAV: readonly NavItem[] = [
   { href: '/admin/predicates', label: 'Predicates', icon: ShieldAlert, color: '#C8963C' },
   { href: '/admin/feedback', label: 'Bug Reports', icon: Bug, color: '#EF4444' },
+  { href: '/admin/fees', label: 'Fees', icon: Coins, color: '#C8963C' },
 ]
 
 /** Is the current page one of More's? Then the sidebar opens More, so the page's item is visible. */

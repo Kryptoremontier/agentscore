@@ -36,9 +36,9 @@ describe('the nav model', () => {
     expect(MORE_NAV.filter((i) => PRIMARY_NAV.some((p) => p.href === i.href))).toEqual([])
   })
 
-  it('"Admin": predicates and bug reports', () => {
+  it('"Admin": predicates, bug reports and fees', () => {
     expect(ADMIN_NAV.map((i) => [i.label, i.href])).toEqual([
-      ['Predicates', '/admin/predicates'], ['Bug Reports', '/admin/feedback'],
+      ['Predicates', '/admin/predicates'], ['Bug Reports', '/admin/feedback'], ['Fees', '/admin/fees'],
     ])
     const pageOf = (h: string) => path.join(SRC, 'app', h, 'page.tsx')
     expect(ADMIN_NAV.filter((i) => !existsSync(pageOf(i.href)))).toEqual([])
