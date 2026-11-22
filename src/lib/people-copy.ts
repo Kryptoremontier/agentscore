@@ -38,6 +38,11 @@ export const VOUCH_PICK_AREA = 'Choose a trust context'
 /** The dialog's confirm button once a trust context is chosen. */
 export const vouchIn = (areaLabel: string) => `Trust it for ${areaLabel}`
 /** Under the amount, when it is below the default (Etap 9b): the promise holds only from the default up. */
+/** The FeeProxy fee couldn't be read: the dialog stops; nothing is guessed (Etap 9b). */
+export const FEE_UNREAD = 'Can’t read the fee right now. Try again in a minute.'
+export const FEE_RETRY = 'Try again'
+/** Before the first wallet window: the whole cost, the fee read live from the contract. */
+export const trustCostLine = (stake: string, fee: string, total: string) => `${stake} tTRUST behind it · fee ${fee} tTRUST · total ${total} tTRUST, plus gas`
 export const trustBelowDefault = (defaultAmount: string) => `Below ${defaultAmount}, three people may not reach Verified.`
 /** The cost preview's note when this deposit creates the claim on-chain. */
 export const firstVouchNote = (areaLabel: string, txCount: number) =>

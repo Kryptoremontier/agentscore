@@ -101,29 +101,47 @@ export async function ensureFeeProxyApproved(
   cacheFeeProxyApproved(address)
 }
 
-// Fee config is read from the FeeProxy contract on-chain and cached per session.
-// Fallback values are used only if the contract read fails.
-const FALLBACK_FIXED_FEE = parseEther('0.1')
-const FALLBACK_PERCENTAGE_BPS = 250n
-
-let _feeConfigCache: { fixedFee: bigint; bps: bigint } | null = null
+/**
+ * The FeeProxy's fee could not be read. There is no fallback (Etap 9b, REPO_MAP §7 rule 5): a
+ * deposit is never computed from a guessed fee, and a screen never shows one.
+ */
+export class FeeReadError extends Error {
+  constructor(public readonly reason: unknown) {
+    super('Could not read the FeeProxy fee from the contract.')
+    this.name = 'FeeReadError'
+  }
+}
 
 /**
- * Read fee configuration from the FeeProxy contract (cached per session).
- * Returns { fixedFee, bps } where bps is base-10000 (250 = 2.5%).
+ * A complete read is kept for a minute, so the fee the dialog shows is the fee the write sends,
+ * and a change the fee admin makes on-chain shows within a minute — no code change. A failed read
+ * is never kept.
+ */
+export const FEE_CONFIG_TTL_MS = 60_000
+let _feeConfigCache: { value: { fixedFee: bigint; bps: bigint }; readAt: number } | null = null
+
+/** Tests only: forget the last read. */
+export function resetFeeConfigCacheForTests(): void {
+  _feeConfigCache = null
+}
+
+/**
+ * Read the fee from the FeeProxy contract: { fixedFee (wei), bps } where bps is base 10000
+ * (250 = 2.5%). Throws FeeReadError when the contract can't be read — never a guessed value.
  */
 export async function getFeeConfig(publicClient: PublicClient): Promise<{ fixedFee: bigint; bps: bigint }> {
-  if (_feeConfigCache) return _feeConfigCache
+  if (_feeConfigCache && Date.now() - _feeConfigCache.readAt < FEE_CONFIG_TTL_MS) return _feeConfigCache.value
   try {
     const [fixedFee, bps] = await Promise.all([
       publicClient.readContract({ address: FEE_PROXY_ADDRESS, abi: FeeProxyAbi, functionName: 'depositFixedFee' }) as Promise<bigint>,
       publicClient.readContract({ address: FEE_PROXY_ADDRESS, abi: FeeProxyAbi, functionName: 'depositPercentageFee' }) as Promise<bigint>,
     ])
-    _feeConfigCache = { fixedFee, bps }
-    return _feeConfigCache
+    if (typeof fixedFee !== 'bigint' || typeof bps !== 'bigint') throw new Error('unexpected fee values')
+    _feeConfigCache = { value: { fixedFee, bps }, readAt: Date.now() }
+    return _feeConfigCache.value
   } catch (err) {
-    console.warn('[getFeeConfig] Failed to read from contract, using fallback:', err)
-    return { fixedFee: FALLBACK_FIXED_FEE, bps: FALLBACK_PERCENTAGE_BPS }
+    console.warn('[getFeeConfig] the fee could not be read:', err)
+    throw new FeeReadError(err)
   }
 }
 
@@ -1174,12 +1192,13 @@ export async function depositToVault(
     throw new Error('No account address available')
   }
 
-  // Ensure user has approved FeeProxy for DEPOSIT on MultiVault (one-time)
-  await ensureFeeProxyApproved(config)
-
-  // Read fee config and calculate total value (deposit + fee)
+  // The fee first: a fee that can't be read stops here, before any wallet window (the approval
+  // included). Never a deposit computed from a guessed fee.
   const fees = await getFeeConfig(config.publicClient)
   const totalValue = calcFeeProxyValue(amount, fees)
+
+  // Ensure user has approved FeeProxy for DEPOSIT on MultiVault (one-time)
+  await ensureFeeProxyApproved(config)
 
   // Slippage protection: on-chain preview → 2% tolerance
   let minShares = 0n
