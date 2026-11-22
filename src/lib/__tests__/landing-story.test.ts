@@ -120,7 +120,7 @@ describe('the copy (from the spec)', () => {
   it('01: find it, trust it, agents ask — should_i_trust printed as code', () => {
     expect(STORY_STEPS.map((s) => `${s.num} ${s.title}`)).toEqual(['01 Find it', '02 Trust it', '03 Agents ask'])
     expect(STORY_STEPS[0].line).toBe('Any agent: AgentScore or the ERC-8004 registry.')
-    expect(STORY_STEPS[1].line).toBe('Choose a trust context and sign. One wallet can never do it alone.')
+    expect(STORY_STEPS[1].line).toBe('Choose a trust context and sign. Two people make it Established. Three make it Verified.')
     expect(`${STORY_STEPS[2].line} ${STORY_STEPS[2].code} ${STORY_STEPS[2].after}`).toBe('Before an agent pays or delegates, it asks should_i_trust and gets yes, no or unknown.')
   })
   it('closing block and footer', () => {

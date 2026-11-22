@@ -32,6 +32,38 @@ export const AGENT_TIER_LADDER = {
   trusted: { minAttesters: 2, minAttestedWei: WEI / 20n },   // 0.05 tTRUST
 } as const
 
+// ─── The default trust (Etap 9b) ──────────────────────────────────────────────
+
+/**
+ * What the vault keeps as shares of a deposit. The tier counts shares, and the MultiVault takes an
+ * entry fee on the way in: measured on testnet, a 0.01 tTRUST trust became 0.0099 in shares (1%).
+ */
+export const VAULT_ENTRY_FEE_BPS = 100n
+/** The default trust is a round number of tTRUST: a multiple of 0.01. */
+const TRUST_STEP_WEI = WEI / 100n
+
+const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b
+/** What each of a rung's minimum people must deposit so their shares, together, reach its minimum stake. */
+const perPersonDeposit = (rung: { minAttesters: number; minAttestedWei: bigint }) =>
+  ceilDiv(ceilDiv(rung.minAttestedWei, BigInt(rung.minAttesters)) * 10_000n, 10_000n - VAULT_ENTRY_FEE_BPS)
+
+/**
+ * The trust dialog's default amount, derived from the ladder above (never a second number): the
+ * smallest round amount with which the minimum number of people reach each rung — 2 default trusts
+ * are Established, 3 are Verified — after the vault's entry fee. Today: 0.04 tTRUST.
+ */
+export const DEFAULT_TRUST_WEI = ((): bigint => {
+  const need = [AGENT_TIER_LADDER.trusted, AGENT_TIER_LADDER.verified].map(perPersonDeposit).reduce((a, b) => (a > b ? a : b))
+  return ceilDiv(need, TRUST_STEP_WEI) * TRUST_STEP_WEI
+})()
+
+/** The same amount as the dialog's input shows it ("0.04"). */
+export const DEFAULT_TRUST_AMOUNT = (() => {
+  const whole = DEFAULT_TRUST_WEI / WEI
+  const frac = (DEFAULT_TRUST_WEI % WEI).toString().padStart(18, '0').replace(/0+$/, '')
+  return frac ? `${whole}.${frac}` : `${whole}`
+})()
+
 /** Badge visuals — same palette as the other tier chips (trust-tiers.ts); label and rule text from people-copy (Etap 8a: `trusted` reads "Established"). */
 export interface AgentTierDisplay {
   tier: AgentTier

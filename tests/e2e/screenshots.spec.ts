@@ -20,6 +20,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 import path from 'node:path'
 import { AGENTS, ROUTES } from './shots-routes'
+import { installMockWallet } from './mock-wallet'
 
 const REPO_ROOT = path.resolve(__dirname, '../..')
 // Cap for each individual wait. Routes are pre-compiled by warmup.ts, so the
@@ -61,6 +62,11 @@ const SHOTS: Shot[] = [
   { name: 'check', url: ROUTES.check, prepare: async (page) => { await page.getByTestId('check-form').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-dackie', url: ROUTES.checkCard(AGENTS.dackie), prepare: checkCardReady, check: checkCardChecks },
   { name: 'check-luda', url: ROUTES.checkCard(AGENTS.luda), prepare: checkCardReady, check: checkCardChecks },
+  // Etap 9b: the trust dialog with a harness wallet (tests/e2e/mock-wallet.ts — no key, signs nothing):
+  // the default amount with the live fee, below the default with its warning, and the fee read failed.
+  { name: 'trust-dialog-default', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social`, prepare: (page) => openTrustDialog(page), target: trustDialog, check: trustDialogDefault },
+  { name: 'trust-dialog-below-default', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social`, prepare: async (page) => { await openTrustDialog(page); await belowDefault(page) }, target: trustDialog, check: trustDialogBelowDefault },
+  { name: 'trust-dialog-fee-unread', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social`, prepare: (page) => openTrustDialog(page, { feeReadFails: true }), target: trustDialog, check: trustDialogFeeUnread },
   // Etap 9: the builder's door — /check in builder mode, Luda's card opened from a trust link, and the README badge.
   { name: 'check-builder', url: ROUTES.checkBuilder, prepare: async (page) => { await page.getByTestId('check-builder-note').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-luda-builder', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, check: builderDoorChecks },
@@ -550,7 +556,7 @@ async function builderDoorChecks(page: Page) {
   await expect(door).toContainText('Built this agent? Get its trust link')
   await expect(door).toHaveAttribute('data-context', 'social')
   await expect(door.getByTestId('builder-link')).toHaveValue(new RegExp(`/check/${AGENTS.luda}\\?for=social$`))
-  await expect(door.getByTestId('builder-send')).toHaveText('Send this to 3 people who have used it. Three people make it Verified.')
+  await expect(door.getByTestId('builder-send')).toHaveText('Send this to 3 people who have used it. Two people make it Established. Three make it Verified.')
   await expect(door.getByTestId('builder-context').locator('option')).toHaveCount(8)
   await expect(door.getByTestId('badge-markdown')).toHaveValue(/^\[!\[AgentScore\]\(https:\/\/[^)]+\/badge\/0x[0-9a-f]{64}\.svg\)\]\(https:\/\/[^)]+\/check\/0x[0-9a-f]{64}\)$/)
   await expect(door.getByTestId('badge-html')).toHaveValue(/^<a href="[^"]+"><img src="[^"]+\.svg" alt="AgentScore" height="20"><\/a>$/)
@@ -561,6 +567,53 @@ async function builderDoorChecks(page: Page) {
   await expect(door.getByTestId('builder-link')).toHaveValue(/\?for=crypto-onchain$/)
   await expect(page.getByText(/owner verified|verified owner/i)).toHaveCount(0)
   await pageFitsViewport(page)
+}
+
+/**
+ * Etap 9b: open the trust dialog on Luda's card from a trust link (?for=social), with the harness
+ * wallet. The routes must be installed before the page loads: the test reloads after installing.
+ */
+async function openTrustDialog(page: Page, opts: { feeReadFails?: boolean } = {}) {
+  await installMockWallet(page, opts)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await checkCardReady(page)
+  await page.getByTestId('attest-cta').first().click()
+  const modal = page.getByTestId('connect-wallet-modal')
+  await modal.waitFor({ timeout: WAIT_CAP })
+  await modal.getByRole('button', { name: /Browser Wallet/ }).first().click()
+  await (await trustDialog(page)).waitFor({ timeout: WAIT_CAP })
+  await expect(page.getByTestId('trust-cost').or(page.getByTestId('fee-unread')).first()).toBeVisible({ timeout: 20_000 })
+}
+async function trustDialog(page: Page): Promise<Locator> {
+  return page.locator('.glass-card').filter({ hasText: 'Trust Luda' }).first()
+}
+async function belowDefault(page: Page) {
+  const before = await page.getByTestId('trust-cost-line').innerText()
+  await page.getByTestId('trust-amount').fill('0.02')
+  await expect(page.getByTestId('trust-cost-line')).not.toHaveText(before, { timeout: 20_000 })
+}
+/** The confirm button: "Trust it for <context>" (the dialog's only btn-primary). */
+const signButton = (page: Page) => page.locator('.glass-card').filter({ hasText: 'Trust Luda' }).first().locator('button.btn-primary')
+
+async function trustDialogDefault(page: Page) {
+  await expect(page.getByTestId('trust-amount')).toHaveValue('0.04')
+  // The fee is read live from the FeeProxy: whatever it is, the line is whole.
+  const line = await page.getByTestId('trust-cost-line').innerText()
+  expect(line, 'the cost line').toMatch(/^0\.04 tTRUST behind it · fee [\d.]+ tTRUST · total [\d.]+ tTRUST, plus gas$/)
+  console.log(`trust dialog, default trust: ${line}`)
+  await expect(page.getByTestId('trust-below-default')).toHaveCount(0)
+  await expect(signButton(page)).toBeEnabled()
+  await expect(signButton(page)).toHaveText(/Trust it for Social/)
+}
+async function trustDialogBelowDefault(page: Page) {
+  await expect(page.getByTestId('trust-below-default')).toHaveText('Below 0.04, three people may not reach Verified.')
+  await expect(page.getByTestId('trust-cost-line')).toHaveText(/^0\.02 tTRUST behind it · fee [\d.]+ tTRUST · total [\d.]+ tTRUST, plus gas$/)
+  await expect(signButton(page)).toBeEnabled() // the person may still choose less
+}
+async function trustDialogFeeUnread(page: Page) {
+  await expect(page.getByTestId('fee-unread')).toContainText('Can’t read the fee right now. Try again in a minute.')
+  await expect(page.getByTestId('trust-cost')).toHaveCount(0) // no guessed fee on screen
+  await expect(signButton(page)).toBeDisabled()
 }
 
 /**

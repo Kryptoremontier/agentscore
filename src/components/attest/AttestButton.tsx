@@ -27,6 +27,7 @@ import { useAccount, useWalletClient, usePublicClient, useBalance, useSwitchChai
 import { parseEther, formatEther } from 'viem'
 import { createWriteConfig, INTUITION_TESTNET } from '@/lib/intuition'
 import { CANONICAL_DOMAINS_REGISTRY, type CanonicalDomainDef } from '@/lib/canonical-domains'
+import { DEFAULT_TRUST_WEI, DEFAULT_TRUST_AMOUNT } from '@/lib/agent-tier'
 import {
   resolveAttestPlan,
   previewAttestCost,
@@ -38,11 +39,12 @@ import {
   type AttestResult,
 } from '@/lib/attest-service'
 import { attestStep, balanceReadOf, type AttestStep } from '@/lib/attest-gate'
+import { AttestCostLine, FeeUnread } from './AttestCost'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
 import { useConnectModal } from '@/components/wallet/ConnectModal'
 import {
   VOUCH_CTA, vouchFor, connectToVouch, VOUCH_WRONG_NETWORK, VOUCH_AREA_LABEL, VOUCH_PICK_AREA, vouchIn,
-  firstVouchNote, VOUCH_SUCCESS, VOUCH_INDEXING, VOUCHED_FOR, VOUCHED_FOR_CONTEXT, NEED_TTRUST,
+  firstVouchNote, VOUCH_SUCCESS, VOUCH_INDEXING, VOUCHED_FOR, VOUCHED_FOR_CONTEXT, NEED_TTRUST, trustBelowDefault,
 } from '@/lib/people-copy'
 
 interface AttestButtonProps {
@@ -95,11 +97,15 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
   const balanceData = balanceQuery.data
   const [status, setStatus] = useState<Status>('pick')
   const [domain, setDomain] = useState<CanonicalDomainDef | null>(null)
-  const [amount, setAmount] = useState('0.01')
+  // The default is derived from the tier rule: 2 default trusts make an agent Established, 3 Verified.
+  const [amount, setAmount] = useState(DEFAULT_TRUST_AMOUNT)
   const [plan, setPlan] = useState<AttestPlan | null>(null)
   const [preview, setPreview] = useState<AttestCostPreview | null>(null)
   const [progressStep, setProgressStep] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  // FEE_UNREAD: the FeeProxy fee couldn't be read — no preview, so nothing can be signed (Etap 9b).
+  const [errorCode, setErrorCode] = useState<string | null>(null)
+  const [feeRetry, setFeeRetry] = useState(0)
   const [result, setResult] = useState<(AttestResult & { domain: CanonicalDomainDef; stake: string }) | null>(null)
 
   const step: AttestStep = attestStep({ connected: isConnected, chainId, balance: balanceReadOf(balanceQuery) })
@@ -137,15 +143,17 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
       setPreview(null)
       return
     }
+    setErrorCode(null)
     previewAttestCost(publicClient, plan, stakeWei, address)
-      .then(c => { if (!cancelled) setPreview(c) })
+      .then(c => { if (!cancelled) { setPreview(c); setErrorMsg('') } })
       .catch(err => {
         if (cancelled) return
         setPreview(null)
+        setErrorCode(err instanceof AttestError ? err.code : null)
         setErrorMsg(err instanceof AttestError ? err.message : 'Failed to compute cost preview.')
       })
     return () => { cancelled = true }
-  }, [open, plan, publicClient, stakeWei, wrongNetwork, address])
+  }, [open, plan, publicClient, stakeWei, wrongNetwork, address, feeRetry])
 
   function reset() {
     setStatus('pick')
@@ -153,6 +161,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
     setPlan(null)
     setPreview(null)
     setErrorMsg('')
+    setErrorCode(null)
     setProgressStep('')
   }
 
@@ -187,6 +196,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
       setResult({ ...res, domain, stake: amount })
       setStatus('success')
     } catch (err) {
+      setErrorCode(err instanceof AttestError ? err.code : null)
       setErrorMsg(err instanceof AttestError ? err.message : 'Transaction failed.')
       setStatus('error')
     }
@@ -360,13 +370,20 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
                             onChange={e => setAmount(e.target.value)}
                             className="w-full px-3 py-2 rounded-lg text-sm outline-none"
                             style={{ background: '#12151A', border: '1px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.85)' }}
+                            data-testid="trust-amount"
                           />
+                          {stakeWei !== null && stakeWei < DEFAULT_TRUST_WEI && (
+                            <p className="text-[11px] mt-1.5" style={{ color: '#F59E0B' }} data-testid="trust-below-default">
+                              {trustBelowDefault(DEFAULT_TRUST_AMOUNT)}
+                            </p>
+                          )}
                         </div>
                       )}
 
                       {/* Honest cost preview — displayed BEFORE signing = charged */}
                       {domain && preview && (
-                        <div className="rounded-lg px-3 py-2.5 space-y-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="rounded-lg px-3 py-2.5 space-y-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }} data-testid="trust-cost">
+                          <AttestCostLine preview={preview} />
                           {isFirstInDomain && (
                             <p className="text-[10px] pb-1" style={{ color: '#F59E0B' }}>{firstVouchNote(domain.label, preview.txCount)}</p>
                           )}
@@ -389,14 +406,17 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
                           )}
                         </div>
                       )}
-                      {domain && !preview && !errorMsg && (
+                      {domain && !preview && !errorMsg && !errorCode && (
                         <p className="text-[10px] flex items-center gap-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
                           <Loader2 className="w-3 h-3 animate-spin" /> Reading on-chain state…
                         </p>
                       )}
 
+                      {/* The fee couldn't be read: say so, offer a retry — the sign button stays disabled (no preview). */}
+                      {errorCode === 'FEE_UNREAD' && <FeeUnread onRetry={() => { setErrorMsg(''); setErrorCode(null); setFeeRetry(n => n + 1) }} />}
+
                       {/* Error */}
-                      {errorMsg && (
+                      {errorMsg && errorCode !== 'FEE_UNREAD' && (
                         <p className="text-xs leading-snug flex items-start gap-1.5" style={{ color: '#EF4444' }}>
                           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                           {errorMsg}

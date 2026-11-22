@@ -38,6 +38,7 @@ import {
   depositToVault,
   getFeeConfig,
   getFeeBreakdown,
+  FeeReadError,
   getMultiVaultAddress,
   isFeeProxyApproved,
   FEE_PROXY_ADDRESS,
@@ -45,7 +46,7 @@ import {
   type WriteConfig,
 } from './intuition'
 import { IS_SKILLED_IN, type CanonicalDomainDef } from './canonical-domains'
-import { trustingFor, TRUST_TESTNET_ONLY } from './people-copy'
+import { trustingFor, TRUST_TESTNET_ONLY, FEE_UNREAD } from './people-copy'
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ export type AttestErrorCode =
   | 'USER_REJECTED'
   | 'INSUFFICIENT_FUNDS'
   | 'TX_FAILED'
+  | 'FEE_UNREAD'           // the FeeProxy fee couldn't be read: nothing is signed, nothing is guessed
 
 /** Which write in the plan a TX_FAILED error came from. */
 export type AttestStep = 'create_atom' | 'create_triple' | 'deposit'
@@ -93,6 +95,7 @@ async function assertTxSucceeded(
 /** Map raw wallet/RPC errors to a clean, user-facing AttestError. */
 export function mapWriteError(err: unknown): AttestError {
   if (err instanceof AttestError) return err
+  if (err instanceof FeeReadError) return new AttestError('FEE_UNREAD', FEE_UNREAD)
   const msg = err instanceof Error ? err.message : String(err)
   const lower = msg.toLowerCase()
   if (lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')) {
@@ -238,7 +241,8 @@ export async function previewAttestCost(
   userAddress?: `0x${string}`,
 ): Promise<AttestCostPreview> {
   assertTestnet(publicClient.chain?.id, 'RPC client')
-  const fees = await getFeeConfig(publicClient)
+  // The live fee, or no preview at all: the dialog then says so and can't sign.
+  const fees = await getFeeConfig(publicClient).catch(() => { throw new AttestError('FEE_UNREAD', FEE_UNREAD) })
 
   let creationCostWei = 0n
   let fixedFeeWei = 0n
@@ -322,6 +326,8 @@ export async function attestAgentSkill(
   const plan = await resolveAttestPlan(config.publicClient, agentTermId, domain)
 
   try {
+    // The fee before any wallet window: unreadable → FEE_UNREAD, and nothing is signed.
+    await getFeeConfig(config.publicClient)
     if (plan.path === 'deposit') {
       // Triple exists — stake into its vault (FeeProxy, slippage-guarded).
       onProgress?.(`Staking on ${domain.label}…`)
