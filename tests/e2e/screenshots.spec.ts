@@ -100,7 +100,7 @@ const SHOTS: Shot[] = [
     prepare: async (page) => {
       await agentsListReady(page)
       const erc = page.getByRole('tab', { name: /^ERC-8004/ })
-      await erc.click()
+      await clickUntil(erc, () => expect(erc).toHaveAttribute('aria-selected', 'true', { timeout: 2_000 }))
       // The "All" results line already matches agentsListReady — wait for the filter itself:
       // the tab is selected, the URL carries it, and no AgentScore-origin card is left.
       await expect(erc).toHaveAttribute('aria-selected', 'true', { timeout: WAIT_CAP })
@@ -127,8 +127,7 @@ const SHOTS: Shot[] = [
     prepare: async (page) => {
       await agentsListReady(page)
       await openUntrusted(page) // OPEN CLAW: nobody trusts it yet, so its row is in the second section
-      await page.getByRole('button', { name: 'List', exact: true }).click()
-      await expect(page.locator('[data-card]')).toHaveCount(0, { timeout: WAIT_CAP })
+      await clickUntil(page.getByRole('button', { name: 'List', exact: true }), () => expect(page.locator('[data-card]')).toHaveCount(0, { timeout: 2_000 }))
     },
     check: gridListParity,
   },
@@ -150,7 +149,7 @@ const SHOTS: Shot[] = [
     prepare: async (page) => {
       await agentsListReady(page)
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
-      await page.locator('[data-term-id]').first().click()
+      await clickUntil(page.locator('[data-term-id]').first(), () => expect(modalLocator(page)).toBeVisible({ timeout: 3_000 }))
       await modalReady(page)
     },
     firstScreen: true,
@@ -300,11 +299,7 @@ async function navWords(page: Page, project: string) {
 
 async function openMore(page: Page) {
   const phone = (page.viewportSize()?.width ?? 0) < 768
-  // Tapped before hydration, a button does nothing: tap again until the list shows.
-  await expect(async () => {
-    await page.getByTestId(phone ? 'bottom-nav-more' : 'nav-more').click()
-    await expect(page.getByTestId(phone ? 'more-sheet' : 'nav-more-items')).toBeVisible({ timeout: 2_000 })
-  }).toPass({ timeout: WAIT_CAP })
+  await clickUntil(page.getByTestId(phone ? 'bottom-nav-more' : 'nav-more'), () => expect(page.getByTestId(phone ? 'more-sheet' : 'nav-more-items')).toBeVisible({ timeout: 2_000 }))
   await page.waitForTimeout(ANIMATION_GRACE_MS) // the sheet slides up
 }
 async function navMoreTarget(page: Page): Promise<Locator> {
@@ -620,9 +615,8 @@ async function openTrustDialog(page: Page, opts: { feeReadFails?: boolean } = {}
   await installMockWallet(page, opts)
   await page.reload({ waitUntil: 'domcontentloaded' })
   await checkCardReady(page)
-  await page.getByTestId('attest-cta').first().click()
   const modal = page.getByTestId('connect-wallet-modal')
-  await modal.waitFor({ timeout: WAIT_CAP })
+  await clickUntil(page.getByTestId('attest-cta').first(), () => expect(modal).toBeVisible({ timeout: 2_000 }))
   await modal.getByRole('button', { name: /Browser Wallet/ }).first().click()
   await (await trustDialog(page)).waitFor({ timeout: WAIT_CAP })
   await expect(page.getByTestId('trust-cost').or(page.getByTestId('fee-unread')).first()).toBeVisible({ timeout: 20_000 })
@@ -659,6 +653,18 @@ async function trustDialogFeeUnread(page: Page) {
   await expect(signButton(page)).toBeDisabled()
 }
 
+/**
+ * Click until the page answers. `next dev` can take a while to hydrate in a slow container, and a
+ * click before hydration does nothing (seen on main too, Etap 9c): click again until `answered`
+ * holds, never more than WAIT_CAP. Only for clicks that are idempotent once answered.
+ */
+async function clickUntil(target: Locator, answered: () => Promise<void>) {
+  await expect(async () => {
+    await target.click({ timeout: 3_000 })
+    await answered()
+  }).toPass({ timeout: WAIT_CAP * 2 })
+}
+
 /** The owner's own test wallet (Etap 9c brief): it trusts Luda for Social. Public; no key here. */
 const OWNER_TEST_WALLET = '0xCCA0592b0bf23C10aFc58f65d28eE8C0E78aA21C'
 /** The FeeProxy admin wallet (lib/constants ADMIN_WALLET). Public; no key here. */
@@ -668,11 +674,18 @@ const PREVIEW_REDEEM = '0x2db27075'
 
 /** Connect the harness wallet from the top bar's "Connect Wallet". */
 async function connectFromTopBar(page: Page) {
-  await page.getByRole('button', { name: /Connect Wallet/ }).first().click()
   const modal = page.getByTestId('connect-wallet-modal')
-  await modal.waitFor({ timeout: WAIT_CAP })
-  await modal.getByRole('button', { name: /Browser Wallet/ }).first().click()
-  await page.getByTestId('wallet-button').first().waitFor({ timeout: WAIT_CAP })
+  const connected = page.getByTestId('wallet-button').first()
+  // The whole step again if the wallet didn't take (a click in a modal still mounting is lost).
+  await expect(async () => {
+    if (await connected.isVisible()) return
+    if (!(await modal.isVisible())) {
+      await page.getByRole('button', { name: /Connect Wallet/ }).first().click({ timeout: 3_000 })
+      await expect(modal).toBeVisible({ timeout: 3_000 })
+    }
+    await modal.getByRole('button', { name: /Browser Wallet/ }).first().click({ timeout: 3_000 })
+    await expect(connected).toBeVisible({ timeout: 5_000 })
+  }).toPass({ timeout: WAIT_CAP * 3 })
 }
 async function showYourTrust(page: Page, ready: (page: Page) => Promise<void>, opts: Omit<MockWalletOptions, 'account'> = {}) {
   await installMockWallet(page, { account: OWNER_TEST_WALLET, ...opts })
@@ -683,7 +696,9 @@ async function showYourTrust(page: Page, ready: (page: Page) => Promise<void>, o
   await page.getByTestId('your-trust').scrollIntoViewIfNeeded()
 }
 async function yourTrustBlock(page: Page): Promise<Locator> {
-  return page.getByTestId('your-trust').first()
+  const block = page.getByTestId('your-trust').first()
+  await block.waitFor({ timeout: WAIT_CAP }) // a miss: the page is shot instead, and the check says why
+  return block
 }
 async function openWithdraw(page: Page, state: 'ok' | 'failed') {
   await page.getByTestId('your-trust-row').filter({ hasText: 'Social' }).getByTestId('withdraw-open').click()
@@ -795,8 +810,9 @@ async function modalCoversFooter(page: Page) {
 async function openUntrusted(page: Page) {
   const toggle = page.getByTestId('agents-untrusted-toggle')
   if ((await toggle.count()) === 0) return
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: WAIT_CAP })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await clickUntil(toggle, () => expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 2_000 }))
+  }
 }
 
 /**
