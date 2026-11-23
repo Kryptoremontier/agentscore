@@ -1,7 +1,8 @@
 /**
  * Test double for `unstable_cache` (next 14.2 unstable-cache.js): a miss runs the callback and
  * stores its result only if it resolves; a fresh hit returns the stored JSON; a stale hit returns
- * the stored JSON and revalidates in the background (a rejection stores nothing).
+ * the stored JSON and revalidates in the background (a rejection stores nothing). `force` (a
+ * `force-no-store` scope in Next) skips the stored entry: the callback runs and its result is stored.
  * Not a test file (no `.test.ts`), so vitest doesn't collect it.
  */
 import type { CacheImpl } from '../server-cache'
@@ -9,9 +10,9 @@ import type { CacheImpl } from '../server-cache'
 export function fakeNextCache(clock: { t: number }) {
   const store = new Map<string, { body: string; storedAt: number }>()
   const background: Promise<unknown>[] = []
-  const impl: CacheImpl = (cb, keyParts, { revalidate }) => async (...args) => {
+  const impl: CacheImpl = (cb, keyParts, { revalidate, force }) => async (...args) => {
     const key = `${keyParts.join(',')}-${JSON.stringify(args)}`
-    const hit = store.get(key)
+    const hit = force ? undefined : store.get(key) // force: skip the entry, run, store on success (a throw stores nothing)
     if (hit) {
       if (clock.t - hit.storedAt > revalidate * 1000) {
         background.push(cb(...args).then((r) => store.set(key, { body: JSON.stringify(r), storedAt: clock.t }), () => {}))
