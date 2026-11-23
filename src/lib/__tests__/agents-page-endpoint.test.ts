@@ -372,7 +372,7 @@ describe('/agents in each indexer state — what a visitor sees (Etap 4c)', () =
     expect(src).toMatch(/await fetchAgentsPage\(\)/)
     expect(src).not.toMatch(/fetchAgentListCorpus|fetchAttestationsForSubjects\(|fetchCohortAgents|useAgentStakerWeights/)
     // The error box: only when nothing is readable, human copy, no "Error:".
-    expect(src).toMatch(/\{!loading && pageView\?\.unreachable && \(/)
+    expect(src).toMatch(/\{!loading && pageView\?\.unreachable && openLookup !== 'unread' && \(/) // a linked agent says "couldn't read" itself (Etap 9d)
     expect(src).toMatch(/<p className="text-red-400">\{FEED_UNREACHABLE\}<\/p>/)
     expect(src).not.toMatch(/Error: \{error\}/)
     // After the user's own trade: that agent live, its row patched — not the whole list re-read.

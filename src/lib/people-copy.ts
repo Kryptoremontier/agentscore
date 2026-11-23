@@ -289,6 +289,16 @@ export const CHECK_WALLET_NOT_FOUND = 'No agent on AgentScore was registered by 
 export const CHECK_WALLET_PROFILE = 'See what this wallet trusts'
 export const CHECK_BROWSE = 'Browse all agents'
 export const CHECK_UNREAD = 'Couldn’t read the agent list right now — this is not a “not found”. Try again in a minute.'
+/**
+ * One agent couldn't be read (Etap 9d): the agent modal, /agents/[id] and /check/[id]. A failed read
+ * is never shown as a missing agent (REPO_MAP §7 rule 5).
+ */
+export const AGENT_UNREAD = 'We couldn’t read this agent from Intuition right now. This is our read failing, not the agent missing.'
+export const AGENT_UNREAD_RETRY = 'Try again'
+/** "Tried at 20:20:20 UTC" — when the failed read was attempted. */
+export const agentUnreadTriedAt = (iso: string) => `Tried at ${iso.slice(11, 19)} UTC`
+/** The modal, opened from a link (`/agents?open=<id>`) to an id neither list holds, both read to the end. */
+export const AGENT_NOT_FOUND = 'No agent with this id on AgentScore or in the ERC-8004 registry.'
 export const CHECK_SHARE = 'Share on X'
 export const CHECK_PERMALINK = 'Link to this card'
 /** The post a person shares: "{name}: {N} people trust it on AgentScore. Who trusts your agent?" */

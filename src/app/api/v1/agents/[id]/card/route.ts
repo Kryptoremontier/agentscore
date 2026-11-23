@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { apiError, cacheControlFor, freshnessMeta, withReadLedger } from '@/lib/api-helpers'
+import { apiError, cacheControlFor, freshnessMeta, withReadLedger, readFailedResponse } from '@/lib/api-helpers'
 import { getAgentDetail, getAgentTrustBreakdown } from '@/lib/api-data'
 import { parseAgentCard, calculateProfileCompleteness } from '@/lib/agent-card'
 
@@ -103,7 +103,7 @@ async function handleGET(
     })
   } catch (error) {
     console.error('[API] /agents/:id/card error:', error)
-    return apiError('Internal server error', 500)
+    return readFailedResponse() // a failed read: 503 read_failed, never 404 (Etap 9d)
   }
 }
 

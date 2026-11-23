@@ -13,6 +13,7 @@ import {
   trustQuery,
 } from '@/lib/api-data'
 import { trustGateFor } from '@/lib/gate-any-id'
+import { mcpReadFailed } from '@/lib/api-helpers'
 import { headersOfRecord, recordGateCall } from '@/lib/gate-calls'
 import { getStatsWithNorthStar } from '@/lib/north-star'
 import { GATE_AREAS, parseGatePolicy } from '@/lib/trust-gate'
@@ -172,7 +173,7 @@ const handler = createMcpHandler(
             }],
           }
         } catch (error) {
-          return { content: [{ type: 'text' as const, text: `Error: ${error}` }] }
+          return mcpReadFailed(error) // a failed read: read_failed, never "not found" (Etap 9d)
         }
       }
     )
@@ -461,7 +462,7 @@ const handler = createMcpHandler(
             }],
           }
         } catch (error) {
-          return { content: [{ type: 'text' as const, text: `Error: ${error}` }] }
+          return mcpReadFailed(error) // a failed read: read_failed, never "not found" (Etap 9d)
         }
       }
     )
@@ -677,7 +678,7 @@ const handler = createMcpHandler(
             }],
           }
         } catch (error) {
-          return { content: [{ type: 'text' as const, text: `Error: ${error}` }] }
+          return mcpReadFailed(error) // a failed read: read_failed, never "not found" (Etap 9d)
         }
       }
     )

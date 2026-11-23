@@ -48,10 +48,12 @@ import { txFailureNotice } from '@/lib/user-notice'
 import { DeclaredDomains } from '@/components/profile/DeclaredDomains'
 import { ReportsSection } from '@/components/profile/ReportsSection'
 import { AttestersList } from '@/components/profile/AttestersAndBackers'
+import { lookupInList } from '@/lib/agent-lookup'
+import { CouldNotRead } from '@/components/shared/CouldNotRead'
 import { fetchAgentReports, fetchAgentAttestations, summarizeAttesters, statRowView, backersFromPositions, type AgentProfileVector, type AttesterSummary } from '@/lib/agent-profile'
 import { ProfileStatRow } from '@/components/profile/ProfileStatRow'
 import { AgentDetails } from '@/components/profile/AgentDetails'
-import { showMoreAgents, DETAILS_HEADING, agentsTrustedHeading, agentsUntrustedHeading, AGENTS_TRUSTED_NONE, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND, ORIGIN_LABEL, CLAIM_PICK } from '@/lib/people-copy'
+import { showMoreAgents, DETAILS_HEADING, agentsTrustedHeading, agentsUntrustedHeading, AGENTS_TRUSTED_NONE, AGENTS_PAGE_TITLE, AGENTS_PAGE_SUB, AGENTS_LIVE, LEGACY_CLAIMS_NOTE, BACKERS_HEADING, BACKERS_NOTE, BACKERS_EMPTY, PEOPLE_TAB, BACKING_LABEL, BACKING_LEVEL, BACKING_TREND, ORIGIN_LABEL, CLAIM_PICK, AGENT_NOT_FOUND } from '@/lib/people-copy'
 import { ScoreParts } from '@/components/profile/ScoreParts'
 import { BackingScore } from '@/components/agents/BackingScore'
 import { fetchVaultBackers, sortPositions, sumSharesByVault, type VaultPositionWithMeta } from '@/lib/vault-positions'
@@ -507,6 +509,8 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
   // now comes from /api/v1/agents/page (lib/agents-page-data.ts): every part served with its age,
   // the last complete read when the indexer is down, "failed" only when nothing can be shown.
   const [pageView, setPageView] = useState<AgentsPageView | null>(initialView)
+  // When the list now on screen was read (the "Tried at" of a `?open=` id that couldn't be read).
+  const [pageReadAt, setPageReadAt] = useState(() => new Date().toISOString())
   const loadPage = async (isCancelled: () => boolean = () => false) => {
     setLoading(true)
     setCohortLoading(true)
@@ -517,6 +521,7 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
     const view = agentsPageView(payload)
     const next = listStateOf(view)
     setPageView(view)
+    setPageReadAt(new Date().toISOString())
     setAgents(next.agents)
     setAgentJunkFilteredCount(next.junk)
     setAgentCorpusMeta(next.corpusMeta)
@@ -580,6 +585,11 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
       }
     }
   }, [agents, cohortAgents, searchParams])
+
+  // A `?open=` id neither list holds (Etap 9d): "not found" only when both lists were read to the
+  // end; a failed or capped read is "couldn't read", never "not found" (lib/agent-lookup.ts).
+  const openId = searchParams.get('open')
+  const openLookup = useMemo(() => (openId ? lookupInList(pageView, openId) : null), [openId, pageView])
 
   // Search no longer re-queries the server: it filters both corpora client-side
   // (grid below), so the header's corpus totals can't move while typing.
@@ -1768,12 +1778,22 @@ function AgentsPageContent({ initial }: { initial: AgentsInitialList | null }) {
 
           {/* Nothing could be read and nothing is cached: say so, for humans. One corpus failing is
               said in the header ("… feed unavailable") while the other renders. */}
-          {!loading && pageView?.unreachable && (
+          {!loading && pageView?.unreachable && openLookup !== 'unread' && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg mb-6" data-testid="feed-unreachable">
               <p className="text-red-400">{FEED_UNREACHABLE}</p>
               <button onClick={() => loadPage()} className="mt-2 text-sm text-accent-cyan hover:underline">
                 Try again →
               </button>
+            </div>
+          )}
+
+          {/* A linked agent (`?open=<id>`) the list doesn't hold: couldn't read, or not found (Etap 9d). */}
+          {!loading && openLookup === 'unread' && (
+            <CouldNotRead attemptedAt={pageReadAt} onRetry={() => loadPage()} retrying={loading} className="mb-6" />
+          )}
+          {!loading && openLookup === 'not-found' && (
+            <div className="p-4 rounded-lg mb-6 border border-white/10 bg-white/[0.03]" data-testid="agent-notfound">
+              <p className="text-[#B5BDC6]">{AGENT_NOT_FOUND}</p>
             </div>
           )}
 

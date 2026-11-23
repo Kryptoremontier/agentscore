@@ -70,6 +70,25 @@ export function apiError(message: string, status = 400) {
   )
 }
 
+/**
+ * A read that failed or timed out (Etap 9d, REPO_MAP §7 rule 5): 503 `read_failed`, never a 404 and
+ * never cached. A 404 means the read succeeded and there is no such thing.
+ */
+export const READ_FAILED_MESSAGE = 'Couldn’t read this from Intuition right now. This is our read failing, not the agent missing. Try again shortly.'
+
+export function readFailedResponse() {
+  return NextResponse.json(
+    { success: false, error: 'read_failed', message: READ_FAILED_MESSAGE },
+    { status: 503, headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', 'Retry-After': '10' } },
+  )
+}
+
+/** The same for an MCP tool: an error result whose text is `{ "error": "read_failed", … }`. */
+export function mcpReadFailed(error: unknown) {
+  console.error('[MCP] read failed:', error)
+  return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify({ error: 'read_failed', message: READ_FAILED_MESSAGE }) }] }
+}
+
 export function corsOptions() {
   return new NextResponse(null, {
     headers: {

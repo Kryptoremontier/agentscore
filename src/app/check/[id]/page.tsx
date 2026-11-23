@@ -6,10 +6,11 @@ import { CheckResultCard } from '@/components/check/CheckResultCard'
 import { CheckShare } from '@/components/check/CheckShare'
 import { BuilderDoor } from '@/components/check/BuilderDoor'
 import { CheckYourTrust } from '@/components/check/CheckYourTrust'
+import { CheckUnread } from '@/components/check/CheckUnread'
 import { checkCard, builderContext } from '@/lib/check-data'
 import { contextBySlug } from '@/lib/trust-contexts'
 import { encodeForCache } from '@/lib/json-codec'
-import { CHECK_TITLE, CHECK_NOT_FOUND, CHECK_BROWSE, CHECK_UNREAD, CHECK_IMAGE_ALT, TIER_UNREAD, OVER_TIME_NOBODY, STORY_SECTIONS } from '@/lib/people-copy'
+import { CHECK_TITLE, CHECK_NOT_FOUND, CHECK_BROWSE, CHECK_IMAGE_ALT, TIER_UNREAD, OVER_TIME_NOBODY, STORY_SECTIONS } from '@/lib/people-copy'
 import { getTrustStory } from '@/lib/trust-story-data'
 import { TrustOverTimeCard, TrustOverTimeUnread } from '@/components/trust/TrustOverTimeCard'
 
@@ -61,9 +62,8 @@ export default async function CheckCardPage({ params, searchParams }: { params: 
               <Link href="/agents" className="mt-3 inline-block text-sm text-[#C8963C] hover:underline">{CHECK_BROWSE}</Link>
             </div>
           ) : (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5" data-testid="check-unread">
-              <p className="text-[#B5BDC6]">{CHECK_UNREAD}</p>
-            </div>
+            // Couldn't read (Etap 9d): our read failed, not the agent missing; when, and try again.
+            <div data-testid="check-unread"><CheckUnread attemptedAt={now} /></div>
           )}
           {/* Your trust (Etap 9c): the connected wallet's trust in this agent, and taking it back. */}
           {typeof card !== 'string' && <CheckYourTrust agentId={card.id} />}
