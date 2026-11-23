@@ -29,7 +29,8 @@ const modal = (page: Page) => page.locator('div.fixed.inset-0.overflow-y-auto').
  * Etap 9d — a failed read is not "not found". On a fresh server (nothing cached, no snapshot store)
  * with the indexer dead from the start, every agent surface says "couldn't read" with the time and
  * "Try again", and REST answers 503 read_failed — never "not found" / 404. Runs first: it needs the
- * cold cache the warm test below fills.
+ * cold cache the warm test below fills. `next build` leaves Data Cache entries (prerendered pages read
+ * the indexer), so start from `rm -rf .next/cache/fetch-cache` before `next start`.
  */
 test('dead indexer, cold cache: an agent that can\'t be read says so, never "not found"', async ({ browser, request }) => {
   test.skip(!FLAG, 'needs DEAD_INDEXER_FLAG and a server started with tests/e2e/dead-indexer.cjs')
