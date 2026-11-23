@@ -70,7 +70,8 @@ export function FeesAdminClient() {
     return () => clearInterval(t)
   }, [])
 
-  const form = fixedFeeForm({ fee, admin: adminCheck, input, chainId, pending })
+  // Undo = the value before the last change signed here (Etap 9d), not the value read after it.
+  const form = fixedFeeForm({ fee, admin: adminCheck, input, chainId, pending, previousWei: done?.previous ?? null })
 
   async function sign() {
     if (!form.enabled || !form.tx || form.newWei === null || fee.status !== 'ok' || !publicClient) return

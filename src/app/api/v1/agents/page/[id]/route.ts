@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server'
-import { apiError, apiSuccess, corsOptions, withReadLedger } from '@/lib/api-helpers'
+import { apiError, apiSuccess, corsOptions, withReadLedger, readFailedResponse } from '@/lib/api-helpers'
 import { getAgentModalParts, isListedAgent } from '@/lib/agents-page-data'
 import { MODAL_NAMED_PARTS, MODAL_PARTS, type ModalPart } from '@/lib/agents-page-types'
 import { encodeForCache } from '@/lib/json-codec'
@@ -31,7 +31,7 @@ async function handleGET(
     return apiSuccess(encodeForCache(await getAgentModalParts(id, parts as ModalPart[])))
   } catch (error) {
     console.error('[API] /agents/page/:id error:', error)
-    return apiError('Internal server error', 500)
+    return readFailedResponse() // a failed read: 503 read_failed, never 404 (Etap 9d)
   }
 }
 

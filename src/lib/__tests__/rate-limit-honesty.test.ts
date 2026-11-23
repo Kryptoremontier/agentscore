@@ -30,7 +30,7 @@ describe('HTTP 429 is a failure, not an empty result', () => {
     await assertion
   })
 
-  it('GET /api/v1/agents/:id answers 500, not 404, when the indexer rate-limits', async () => {
+  it('GET /api/v1/agents/:id answers 503 read_failed (Etap 9d; was 500), not 404, when the indexer rate-limits', async () => {
     installFakeHasura({ tables: [], fail: () => 'rate-limit' })
     vi.useFakeTimers()
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -38,6 +38,7 @@ describe('HTTP 429 is a failure, not an empty result', () => {
     const p = GET(new NextRequest(`http://localhost/api/v1/agents/${LUDA}`), { params: Promise.resolve({ id: LUDA }) })
     await vi.runAllTimersAsync()
     const res = await p
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(503)
+    expect((await res.json()).error).toBe('read_failed')
   })
 })

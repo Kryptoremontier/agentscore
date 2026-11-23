@@ -41,6 +41,7 @@ import {
 import { attestStep, balanceReadOf, type AttestStep } from '@/lib/attest-gate'
 import { AttestCostLine, FeeUnread } from './AttestCost'
 import { INTUITION_HUB_URL } from '@/lib/intuition-links'
+import { requestRefresh } from '@/lib/refresh-client'
 import { useConnectModal } from '@/components/wallet/ConnectModal'
 import {
   VOUCH_CTA, vouchFor, connectToVouch, VOUCH_WRONG_NETWORK, VOUCH_AREA_LABEL, VOUCH_PICK_AREA, vouchIn,
@@ -195,6 +196,7 @@ export function AttestButton({ agentId, agentName, className, variant = 'card', 
       )
       setResult({ ...res, domain, stake: amount })
       setStatus('success')
+      requestRefresh(agentId) // the receipt is confirmed: refill what this trust changed (Etap 9d)
     } catch (err) {
       setErrorCode(err instanceof AttestError ? err.code : null)
       setErrorMsg(err instanceof AttestError ? err.message : 'Transaction failed.')

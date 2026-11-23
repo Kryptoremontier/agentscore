@@ -77,6 +77,8 @@ const SHOTS: Shot[] = [
   // Etap 9c: /admin/fees, with the harness wallet presenting the admin wallet (read-only: it signs nothing).
   { name: 'admin-fees', url: ROUTES.adminFees, prepare: (page) => showAdminFees(page), check: adminFeesChecks },
   { name: 'admin-fees-unread', url: ROUTES.adminFees, prepare: (page) => showAdminFees(page, { feeReadFails: true }), check: adminFeesUnread },
+  // Etap 9d: after a change 0.02 → 0 (simulated in this browser: nothing signed, nothing sent), undo says 0.02.
+  { name: 'admin-fees-after-change', url: ROUTES.adminFees, prepare: changeFeeToZero, target: async (page) => page.getByTestId('fees-form'), check: undoAfterChange },
   // Etap 9: the builder's door — /check in builder mode, Luda's card opened from a trust link, and the README badge.
   { name: 'check-builder', url: ROUTES.checkBuilder, prepare: async (page) => { await page.getByTestId('check-builder-note').waitFor({ timeout: WAIT_CAP }) }, check: pageFitsViewport },
   { name: 'check-luda-builder', url: `${ROUTES.checkCard(AGENTS.luda)}?for=social#builder`, prepare: checkCardReady, check: builderDoorChecks },
@@ -665,10 +667,14 @@ async function clickUntil(target: Locator, answered: () => Promise<void>) {
   }).toPass({ timeout: WAIT_CAP * 2 })
 }
 
-/** The owner's own test wallet (Etap 9c brief): it trusts Luda for Social. Public; no key here. */
-const OWNER_TEST_WALLET = '0xCCA0592b0bf23C10aFc58f65d28eE8C0E78aA21C'
 /** The FeeProxy admin wallet (lib/constants ADMIN_WALLET). Public; no key here. */
 const ADMIN_WALLET = '0x139219107C1eBE569f543C581b3B807Cf6740006'
+/**
+ * A wallet that trusts Luda, presented read-only for "Your trust". Etap 9c used the owner's test wallet
+ * (0xCCA0…A21C, Luda for Social); the owner withdrew that trust on 2026-11-23, so it holds nothing now.
+ * The admin wallet trusts Luda for Knowledge / Productivity and AI / Coding.
+ */
+const TRUSTING_WALLET = ADMIN_WALLET
 /** MultiVault previewRedeem(bytes32,uint256,uint256). */
 const PREVIEW_REDEEM = '0x2db27075'
 
@@ -688,7 +694,7 @@ async function connectFromTopBar(page: Page) {
   }).toPass({ timeout: WAIT_CAP * 3 })
 }
 async function showYourTrust(page: Page, ready: (page: Page) => Promise<void>, opts: Omit<MockWalletOptions, 'account'> = {}) {
-  await installMockWallet(page, { account: OWNER_TEST_WALLET, ...opts })
+  await installMockWallet(page, { account: TRUSTING_WALLET, ...opts })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await ready(page)
   await connectFromTopBar(page)
@@ -701,26 +707,27 @@ async function yourTrustBlock(page: Page): Promise<Locator> {
   return block
 }
 async function openWithdraw(page: Page, state: 'ok' | 'failed') {
-  await page.getByTestId('your-trust-row').filter({ hasText: 'Social' }).getByTestId('withdraw-open').click()
+  await page.getByTestId('your-trust-row').first().getByTestId('withdraw-open').click()
   await expect(page.getByTestId('withdraw-preview')).toHaveAttribute('data-state', state, { timeout: 20_000 })
 }
 async function yourTrustRows(page: Page) {
   const block = page.getByTestId('your-trust')
   await expect(block.locator('p.eyebrow')).toHaveText('Your trust')
   await expect(page.getByTestId('your-trust-note')).toHaveText('Changed your mind? You can take your trust back at any time.')
-  const social = page.getByTestId('your-trust-row').filter({ hasText: 'Social' })
-  await expect(social).toHaveCount(1)
+  const rows = page.getByTestId('your-trust-row')
+  expect(await rows.count(), 'one row per trust context').toBeGreaterThan(0)
+  const social = rows.first()
   await expect(social.getByTestId('your-trust-amount')).toHaveText(/^\d+\.\d+ tTRUST behind it$/)
   await expect(social.getByTestId('withdraw-open')).toHaveText('Withdraw')
   const text = await block.innerText()
   expect(text, 'no market words in the block').not.toMatch(/\bstake|\bsell|bonding curve/i)
-  console.log(`your trust (${OWNER_TEST_WALLET} on Luda): ${(await social.innerText()).replace(/\s+/g, ' ')}`)
+  console.log(`your trust (${TRUSTING_WALLET} on Luda): ${(await rows.allInnerTexts()).map((t) => t.replace(/\s+/g, ' ')).join(' | ')}`)
   await pageFitsViewport(page)
 }
 async function withdrawPreviewRead(page: Page) {
   await expect(page.getByTestId('withdraw-preview')).toHaveText(/^You get back \d+\.\d+ tTRUST, plus gas\.$/)
   await expect(page.getByTestId('withdraw-sign')).toBeEnabled()
-  await expect(page.getByTestId('withdraw-sign')).toHaveText('Withdraw my trust for Social')
+  await expect(page.getByTestId('withdraw-sign')).toHaveText(/^Withdraw my trust for .+$/)
   console.log(`withdraw preview: ${await page.getByTestId('withdraw-preview').innerText()}`)
 }
 async function withdrawPreviewFailed(page: Page) {
@@ -739,7 +746,9 @@ async function showAdminFees(page: Page, opts: Omit<MockWalletOptions, 'account'
   }
   await page.getByTestId('fee-fixed').waitFor({ timeout: 20_000 })
   await page.getByTestId('fees-admin').first().waitFor({ timeout: 20_000 })
-  await page.getByTestId('fee-input').fill('0')
+  // A value other than the fee now (the live fixed fee is 0 since the owner's change of 2026-11-23).
+  const now = (await page.getByTestId('fee-fixed').innerText()).trim()
+  await page.getByTestId('fee-input').fill(now === '0.02 tTRUST' ? '0' : '0.02')
   await expect(page.getByTestId('fee-sign')).toBeEnabled({ timeout: 20_000 }) // the on-chain admin check
 }
 async function adminFeesChecks(page: Page) {
@@ -748,13 +757,33 @@ async function adminFeesChecks(page: Page) {
   await expect(page.getByTestId('fee-percent')).toHaveText(/^\d+(\.\d+)?%$/)
   await expect(page.getByTestId('fees-admin')).toHaveCount(2)
   await expect(page.getByTestId('fees-admins')).toContainText(ADMIN_WALLET)
-  await expect(page.getByTestId('fee-new')).toHaveText('0 tTRUST')
+  await expect(page.getByTestId('fee-new')).toHaveText(/^(0|0\.02) tTRUST$/)
+  await expect(page.getByTestId('fee-new')).not.toHaveText(fixed)
   await expect(page.getByTestId('fee-undo')).toContainText(`Undo: set it back to ${fixed}`)
-  await expect(page.getByTestId('fee-calldata')).toContainText('data 0xf48371c0' + '0'.repeat(64))
+  await expect(page.getByTestId('fee-calldata')).toContainText(/data 0xf48371c0[0-9a-f]{64}$/)
   await expect(page.getByTestId('fee-sign')).toBeEnabled()
   console.log(`admin fees: fixed ${fixed}, ${await page.getByTestId('fee-percent').innerText()}; admins ${(await page.getByTestId('fees-admin').allInnerTexts()).join(' | ')}`)
   await pageFitsViewport(page)
 }
+/** The fixed fee "changed" to 0 (mock-wallet simulateFixedFeeChange) and read again. */
+async function changeFeeToZero(page: Page) {
+  await showAdminFees(page, { simulateFixedFeeChange: { before: 20_000_000_000_000_000n, after: 0n } })
+  await page.getByTestId('fee-sign').click()
+  await page.getByTestId('fee-done').waitFor({ timeout: 30_000 })
+  await expect(page.getByTestId('fee-fixed')).toHaveText('0 tTRUST', { timeout: 30_000 })
+}
+async function undoAfterChange(page: Page) {
+  await expect(page.getByTestId('fee-done')).toContainText('0.02 tTRUST → 0 tTRUST')
+  // The form's hint: the value before the change, not the one read after it (the bug: "set it back to 0").
+  await expect(page.getByTestId('fee-undo')).toContainText('Undo: set it back to 0.02 tTRUST — setDepositFixedFee(20000000000000000).')
+  await expect(page.getByTestId('fee-done')).toContainText('Undo: set it back to 0.02 tTRUST.')
+  // Typing the value now (0): no hint, nothing to sign.
+  await page.getByTestId('fee-input').fill('0')
+  await expect(page.getByTestId('fee-undo')).toHaveCount(0)
+  await expect(page.getByTestId('fee-sign')).toBeDisabled()
+  await page.getByTestId('fee-input').fill('')
+}
+
 async function adminFeesUnread(page: Page) {
   await expect(page.getByTestId('fees-unread')).toContainText('Can’t read the fee right now.')
   await expect(page.getByTestId('fee-fixed')).toHaveCount(0)

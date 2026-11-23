@@ -39,6 +39,8 @@
 import { unstable_cache } from 'next/cache'
 // The store Next keeps per request and waits on after the response (its own background refills).
 import { staticGenerationAsyncStorage } from 'next/dist/client/components/static-generation-async-storage.external'
+// Vercel's "keep this function alive until the promise settles" (Etap 9d). A no-op outside Vercel.
+import { waitUntil as vercelWaitUntil } from '@vercel/functions'
 import { encodeForCache, decodeFromCache } from './json-codec'
 import { snapshotStore } from './snapshot-store'
 
@@ -186,17 +188,31 @@ export function jitteredTtl(seconds: number, random: () => number = Math.random)
 export type CacheImpl = <A extends unknown[]>(
   cb: (...args: A) => Promise<Stamped>,
   keyParts: string[],
-  options: { revalidate: number; tags: string[] },
+  options: {
+    revalidate: number
+    tags: string[]
+    /**
+     * Refill now (Etap 9d, POST /api/v1/refresh): skip the stored entry, run `cb`, store what it
+     * returns. When `cb` throws (an incomplete read) nothing is stored: the old entry stays.
+     */
+    force?: boolean
+  },
 ) => (...args: A) => Promise<Stamped>
 
 /**
  * `unstable_cache`, or — outside a Next server (scripts, unit tests), where it has no
  * incremental cache and throws before running the read — the read itself, uncached.
+ *
+ * `force`: inside a `fetchCache: 'force-no-store'` scope, `unstable_cache` (next 14.2
+ * unstable-cache.js) skips its read, runs the callback and stores the result with the call's own
+ * `revalidate`, the path Next takes for a nested cached call. A callback that throws stores nothing.
  */
 const nextCache: CacheImpl = (cb, keyParts, options) => {
-  const cached = unstable_cache(cb, keyParts, options)
+  const cached = unstable_cache(cb, keyParts, { revalidate: options.revalidate, tags: options.tags })
   return async (...args) => {
     try {
+      const store = options.force ? staticGenerationAsyncStorage.getStore() : undefined
+      if (store) return await staticGenerationAsyncStorage.run({ ...store, fetchCache: 'force-no-store' }, () => cached(...args))
       return await cached(...args)
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('Invariant: incrementalCache missing')) return cb(...args)
@@ -270,13 +286,53 @@ const callerStore = lazyAsyncStore<CallerWait>()
 
 const backgroundOutsideNext = new Set<Promise<void>>()
 
+// ─── After the response (Etap 9d) ─────────────────────────────────────────────
+
 /**
- * Run `task` after the response: in a Next request it joins the store's `pendingRevalidates`,
- * which Next waits on (Vercel's waitUntil) — the same path its own background refills take.
- * Outside Next (tests, scripts) it just runs; `settleBackgroundForTests` waits for it.
+ * The platform's hook that keeps a serverless function alive until a promise settles. On Vercel it
+ * is `waitUntil` (@vercel/functions): a promise left running after the response is otherwise not
+ * guaranteed to finish, since the instance can be frozen as soon as the response is sent.
  */
-function afterResponse(id: string, task: () => Promise<unknown>): void {
+export type PlatformWaitUntil = (task: Promise<unknown>) => void
+
+const vercelHook: PlatformWaitUntil = (task) => {
+  try { vercelWaitUntil(task) } catch { /* no request context (a script): nothing to extend */ }
+}
+let platformWaitUntil: PlatformWaitUntil = vercelHook
+
+/** Tests only: watch (or replace) what is handed to the platform hook. */
+export function setPlatformWaitUntilForTests(hook: PlatformWaitUntil | null): void {
+  platformWaitUntil = hook ?? vercelHook
+}
+
+const keptAlive = new WeakSet<Promise<unknown>>()
+
+/** Hand `task` to the platform hook (once per promise): the function lives until it settles. */
+export function keepAlive(task: Promise<unknown>): void {
+  if (keptAlive.has(task)) return
+  keptAlive.add(task)
+  platformWaitUntil(task.then(() => undefined, () => undefined))
+}
+
+/**
+ * Next's own refills of stale entries (`unstable_cache` puts them in the store's
+ * `pendingRevalidates`, with their Data Cache writes), handed to the platform hook as well. Next
+ * 14.2 passes them to a built-in waitUntil only when the platform wires one into its request
+ * context; this does not depend on that.
+ */
+function keepNextRefillsAlive(): void {
+  const pending = staticGenerationAsyncStorage.getStore()?.pendingRevalidates
+  for (const p of Object.values(pending ?? {})) keepAlive(p as Promise<unknown>)
+}
+
+/**
+ * Run `task` after the response: kept alive by the platform hook and, in a Next request, also in
+ * the store's `pendingRevalidates` (the path Next's own refills take). Outside Next (tests,
+ * scripts) it just runs; `settleBackgroundForTests` waits for it.
+ */
+export function afterResponse(id: string, task: () => Promise<unknown>): void {
   const p = task().then(() => undefined, (err) => console.warn(`[server-cache] ${id}:`, err instanceof Error ? err.message : err))
+  keepAlive(p)
   const store = staticGenerationAsyncStorage.getStore()
   if (store) {
     store.pendingRevalidates ??= {}
@@ -285,6 +341,18 @@ function afterResponse(id: string, task: () => Promise<unknown>): void {
     backgroundOutsideNext.add(p)
     void p.finally(() => backgroundOutsideNext.delete(p))
   }
+}
+
+/**
+ * Run `task` in the background without holding the response (Etap 9d, POST /api/v1/refresh): kept
+ * alive only by the platform hook (Vercel's waitUntil). Not in `pendingRevalidates`: outside Vercel,
+ * Next holds the response open until those settle (10 s for a refresh, measured on `next start`).
+ */
+export function inBackground(id: string, task: () => Promise<unknown>): void {
+  const p = task().then(() => undefined, (err) => console.warn(`[server-cache] ${id}:`, err instanceof Error ? err.message : err))
+  keepAlive(p)
+  backgroundOutsideNext.add(p)
+  void p.finally(() => backgroundOutsideNext.delete(p))
 }
 
 /** Tests only: wait for work started outside a Next request (snapshot refills). */
@@ -321,11 +389,16 @@ export const HARD_CEILING_SECONDS = 3600
 /** Entries whose TTL one completeReadCache remembers (per argument list) before forgetting the oldest. */
 const TTL_MEMORY = 1000
 
+/** A cached read: call it to read; `refresh(...args)` refills its entry now (Etap 9d). */
+export type CachedRead<A extends unknown[], T> = ((...args: A) => Promise<T>) & {
+  refresh: (...args: A) => Promise<RefreshOutcome>
+}
+
 export function completeReadCache<A extends unknown[], T>(
   key: string,
   read: (...args: A) => Promise<CompleteRead<T>>,
   options: CompleteReadCacheOptions<A>,
-): (...args: A) => Promise<T> {
+): CachedRead<A, T> {
   // Late-bound: a clock captured at module load would outlive a swapped Date (fake timers).
   const now = options.now ?? (() => Date.now())
   const random = options.random ?? Math.random
@@ -408,31 +481,49 @@ export function completeReadCache<A extends unknown[], T>(
     }
   }
 
-  return async (...args: A): Promise<T> => {
+  // The cached call for these arguments. `force`: refill now (refresh below). Every run of the
+  // callback (a miss, a stale entry's background refill, a forced refill) is kept alive until it
+  // has finished, stored included (Etap 9d): a refill left running after the response is not
+  // guaranteed to finish on a serverless platform.
+  const makeCached = (args: A, force: boolean) => {
     const k = JSON.stringify(args)
-    const cached = (options.cache ?? defaultCache)(
-      async (...a: A) => {
-        const wait = version != null && snapshotStore() ? callerStore.getStore() : undefined
-        if (wait) {
-          // Called on a miss (the caller waits on this callback) or as the background refill of a
-          // stale entry (started while the cached value is being returned)? One macrotask later only
-          // the refill's caller has its value. On a miss a snapshot answers at once (thrown, so
-          // nothing is stored: the caller serves it and starts the one refill after the response).
-          await new Promise((r) => setTimeout(r, 0))
-          if (!wait.settled) {
-            const snap = await readSnapshot(a)
-            if (snap) throw new SnapshotServe(snap)
-          }
-        }
-        const { stamped, complete } = await readOnce(...a)
-        if (!complete) throw new IncompleteRead(stamped, key)
-        rememberTtl(JSON.stringify(a), stamped.ttl) // about to be stored: this is the entry's TTL now
-        await writeSnapshot(a, stamped) // only a complete read is ever kept (rule 1)
-        return stamped
+    return (options.cache ?? defaultCache)(
+      (...a: A) => {
+        const run = refill(force, ...a)
+        keepAlive(run)
+        return run
       },
       [`agentscore:${key}`],
-      { revalidate: ttlSeen.get(k) ?? options.revalidate, tags: [key, ...options.tags(...args)] },
+      { revalidate: ttlSeen.get(k) ?? options.revalidate, tags: [key, ...options.tags(...args)], ...(force ? { force: true } : {}) },
     )
+  }
+
+  const refill = async (force: boolean, ...a: A): Promise<Stamped> => {
+    const wait = !force && version != null && snapshotStore() ? callerStore.getStore() : undefined
+    if (wait) {
+      // Called on a miss (the caller waits on this callback) or as the background refill of a
+      // stale entry (started while the cached value is being returned)? One macrotask later only
+      // the refill's caller has its value. On a miss a snapshot answers at once (thrown, so
+      // nothing is stored: the caller serves it and starts the one refill after the response).
+      await new Promise((r) => setTimeout(r, 0))
+      if (!wait.settled) {
+        const snap = await readSnapshot(a)
+        if (snap) throw new SnapshotServe(snap)
+      }
+    }
+    // A forced refill reads after anything already in flight (which may predate the change it
+    // was asked for), never shares it.
+    if (force) await inflight.get(JSON.stringify(a))?.catch(() => undefined)
+    const { stamped, complete } = await readOnce(...a)
+    if (!complete) throw new IncompleteRead(stamped, key)
+    rememberTtl(JSON.stringify(a), stamped.ttl) // about to be stored: this is the entry's TTL now
+    await writeSnapshot(a, stamped) // only a complete read is ever kept (rule 1)
+    return stamped
+  }
+
+  const getter = async (...args: A): Promise<T> => {
+    const k = JSON.stringify(args)
+    const cached = makeCached(args, false)
     let stamped: Stamped
     try {
       const wait: CallerWait = { settled: false }
@@ -440,6 +531,7 @@ export function completeReadCache<A extends unknown[], T>(
         stamped = await callerStore.run(wait, () => cached(...args))
       } finally {
         wait.settled = true // before any macrotask: a stale entry's refill sees it (the callback above)
+        keepNextRefillsAlive() // a stale entry: Next's refill (and its Data Cache write) runs on after the response
       }
       rememberTtl(k, stamped.ttl)
     } catch (e) {
@@ -478,6 +570,55 @@ export function completeReadCache<A extends unknown[], T>(
     record({ key, readAt: stamped.readAt, cached: t - stamped.readAt >= 1000, complete: true })
     return decodeFromCache<T>(stamped.v)
   }
+
+  // Refill now (Etap 9d): a fresh read stored over the entry if it is complete; the old entry stays
+  // otherwise. At most one per key and arguments per REFRESH_MIN_INTERVAL_MS on this instance.
+  const lastRefresh = new Map<string, number>()
+  const refresh = async (...args: A): Promise<RefreshOutcome> => {
+    const k = JSON.stringify(args)
+    const last = lastRefresh.get(k)
+    if (last != null && now() - last < REFRESH_MIN_INTERVAL_MS) return 'skipped'
+    lastRefresh.set(k, now())
+    try {
+      // Its own ledger and no caller wait: it shapes later answers, not this request's.
+      const stamped = await ledgerStore.run({ reads: [], parent: null }, () => callerStore.run(undefined, () => makeCached(args, true)(...args)))
+      rememberTtl(k, stamped.ttl)
+      // The store's write runs after the call returns (next 14.2 cacheNewResult is not awaited on
+      // this path): stay alive long enough for it to land.
+      await new Promise((r) => setTimeout(r, REFRESH_WRITE_GRACE_MS))
+      return 'refreshed'
+    } catch (e) {
+      if (!isIncomplete(e)) console.warn(`[server-cache] ${key}: refresh failed, the entry is kept:`, e instanceof Error ? e.message : e)
+      return 'kept'
+    }
+  }
+
+  const exposed = Object.assign(getter, { refresh })
+  refreshers.set(key, refresh as (...args: unknown[]) => Promise<RefreshOutcome>)
+  return exposed
+}
+
+/** What a refresh did: stored a fresh complete read, kept the old entry (incomplete or failed read), or skipped (one ran just now). */
+export type RefreshOutcome = 'refreshed' | 'kept' | 'skipped'
+
+/** A key is refreshed at most this often per instance: a burst of writes costs one read per key per minute (docs/OPS.md, the budget). */
+export const REFRESH_MIN_INTERVAL_MS = 60_000
+
+/** How long a refresh stays alive after its read, for the Data Cache write to land. */
+export let REFRESH_WRITE_GRACE_MS = 1_500
+
+/** Tests only. */
+export function setRefreshWriteGraceForTests(ms: number): void {
+  REFRESH_WRITE_GRACE_MS = ms
+}
+
+/** Every completeReadCache's refresh, by key (POST /api/v1/refresh names keys, never functions). */
+const refreshers = new Map<string, (...args: unknown[]) => Promise<RefreshOutcome>>()
+
+/** Refill one cached read now. A key no module registered yet answers 'kept' (nothing to refill). */
+export function refreshCachedRead(key: string, args: readonly unknown[] = []): Promise<RefreshOutcome> {
+  const r = refreshers.get(key)
+  return r ? r(...args) : Promise.resolve('kept')
 }
 
 /** The TTLs (seconds) — one place, quoted by REPO_MAP §3 and llms.txt. */

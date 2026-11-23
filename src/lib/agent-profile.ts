@@ -429,7 +429,12 @@ export interface ProfileAtom {
  * instead of a 404 — and never fires a request it knows will 404 (the
  * console-noise item from 2c). One indexer round-trip.
  */
-export async function resolveProfileAtom(termId: string): Promise<{ inScope: boolean; atom: ProfileAtom | null }> {
+export type ProfileAtomResolution =
+  | { status: 'ok'; inScope: boolean; atom: ProfileAtom | null }
+  /** The read failed or timed out: we can't say whether the atom exists (Etap 9d). */
+  | { status: 'failed' }
+
+export async function resolveProfileAtom(termId: string): Promise<ProfileAtomResolution> {
   try {
     const data = await gql<{
       scoped: Array<{ term_id: string }>
@@ -442,13 +447,16 @@ export async function resolveProfileAtom(termId: string): Promise<{ inScope: boo
       { id: termId },
     )
     const row = data?.any?.[0]
+    if (!data) return { status: 'failed' } // no indexer configured: nothing was read
     return {
-      inScope: (data?.scoped?.length ?? 0) > 0,
+      status: 'ok',
+      inScope: (data.scoped?.length ?? 0) > 0,
       atom: row ? { termId: row.term_id, label: row.label ?? 'Unknown', data: row.data, createdAt: row.created_at } : null,
     }
   } catch (err) {
+    // A failed read is not a missing atom (Etap 9d): before, it fell through to the scored API, whose
+    // 404 for a non-scored agent (Luda) was shown as "Agent Not Found".
     console.warn('[resolveProfileAtom] error:', err)
-    // Unknown → let the caller fall through to the scored API (old behavior).
-    return { inScope: true, atom: null }
+    return { status: 'failed' }
   }
 }

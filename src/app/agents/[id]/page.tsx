@@ -55,6 +55,8 @@ import {
 } from '@/lib/agent-profile'
 import type { CohortAgent } from '@/lib/cohort-reader'
 import { calculateAgentTier } from '@/lib/agent-tier'
+import { lookupFromStatus } from '@/lib/agent-lookup'
+import { CouldNotRead } from '@/components/shared/CouldNotRead'
 import { AgentTierChip } from '@/components/agents/AgentTierChip'
 import type { Agent } from '@/types/agent'
 import type { AgentDetailApiItem } from '@/lib/api-data'
@@ -72,6 +74,9 @@ export default function AgentDetailPage() {
   // The ERC-8004 identity read failed: unknown — never shown as "not a cohort agent".
   const [cohortFailed, setCohortFailed] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Etap 9d: the read failed or timed out (never "not found"), and when it was attempted. retry → read again.
+  const [readFailedAt, setReadFailedAt] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
   // ETAP 3 canonical profile vector — shared by every tier.
   const [vector, setVector] = useState<AgentProfileVector>(EMPTY_VECTOR)
   const [backers, setBackers] = useState<Backer[] | null>([])
@@ -95,6 +100,7 @@ export default function AgentDetailPage() {
       setLoading(true)
       setProfileLoading(true)
       setError(null)
+      setReadFailedAt(null)
       setAgent(null)
       setMinimalAtom(null)
       setCohortMatch(null)
@@ -107,12 +113,17 @@ export default function AgentDetailPage() {
       const backersPromise = fetchAgentBackers(agentId)
 
       try {
-        const { inScope, atom } = await resolveProfileAtom(agentId)
+        const resolved = await resolveProfileAtom(agentId)
         if (cancelled) return
+        if (resolved.status === 'failed') throw new ReadFailed()
+        const { inScope, atom } = resolved
 
         if (inScope) {
-          const response = await fetch(`/api/v1/agents/${agentId}`)
-          if (!response.ok) throw new Error(response.status === 404 ? 'Agent not found' : 'Failed to load agent')
+          const response = await fetch(`/api/v1/agents/${agentId}`).catch(() => null)
+          if (!response) throw new ReadFailed()
+          // 404: the read succeeded and there is no such agent. Any other failure (503 read_failed, a
+          // timeout) is our read failing, never "not found".
+          if (!response.ok) throw lookupFromStatus(response.status) === 'not-found' ? new Error('Agent not found') : new ReadFailed()
           const data = await response.json()
           if (cancelled) return
           if (!(data.success && data.data)) throw new Error('Invalid response format')
@@ -138,7 +149,8 @@ export default function AgentDetailPage() {
       } catch (err) {
         if (cancelled) return
         console.error('Error fetching agent:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load agent')
+        if (err instanceof ReadFailed) setReadFailedAt(new Date().toISOString())
+        else setError(err instanceof Error ? err.message : 'Failed to load agent')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -153,7 +165,7 @@ export default function AgentDetailPage() {
 
     load()
     return () => { cancelled = true }
-  }, [agentId])
+  }, [agentId, retry])
 
   // After this wallet takes its trust back (YourTrust), who trusts it is read again.
   const [vectorNonce, setVectorNonce] = useState(0)
@@ -253,6 +265,22 @@ export default function AgentDetailPage() {
           </div>
         </div>
         <AttestStickyBar agentId={agentId} agentName={name} />
+      </PageBackground>
+    )
+  }
+
+  // Couldn't read (Etap 9d): our read failed — said as such, with when and a way to try again.
+  if (readFailedAt) {
+    return (
+      <PageBackground image="hero" opacity={0.35}>
+        <div className="pt-24 pb-16">
+          <div className="container max-w-md">
+            <CouldNotRead attemptedAt={readFailedAt} onRetry={() => setRetry((n) => n + 1)} />
+            <Link href="/agents" className="mt-4 inline-flex items-center text-sm text-text-secondary hover:text-text-primary">
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Explorer
+            </Link>
+          </div>
+        </div>
       </PageBackground>
     )
   }
@@ -411,4 +439,9 @@ function scorePartsOf(agent: Agent): ScorePartsView {
     opposeWei: agent.negativeStake,
     supportPct: m && total > 0n ? Number((agent.positiveStake * 1000n) / total) / 10 : null,
   }
+}
+
+/** The agent's read failed or timed out (Etap 9d): shown as "couldn't read", never "not found". */
+class ReadFailed extends Error {
+  constructor() { super('read failed') }
 }

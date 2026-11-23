@@ -9,6 +9,10 @@
  *
  * Etap 9c: `account` presents a real public address instead (read-only — what that wallet holds on
  * chain is read as it is; its balance is not changed). The wallet still signs nothing: no key exists.
+ *
+ * Etap 9d: `simulateFixedFeeChange` stands in for a fee change, in this browser only: the wallet
+ * answers `eth_sendTransaction` with a made-up hash (nothing is signed or sent), the receipt for that
+ * hash reads as successful, and the FeeProxy's fixed fee reads as `before` until then, `after` from then on.
  */
 import type { Page, Route } from '@playwright/test'
 import { parseAbi, decodeFunctionData, decodeFunctionResult, encodeFunctionResult, encodeAbiParameters } from 'viem'
@@ -26,15 +30,23 @@ export interface MockWalletOptions {
   account?: string
   /** 4-byte selectors whose eth_call reads fail (e.g. previewRedeem). */
   failSelectors?: string[]
+  /** Etap 9d: pretend a setDepositFixedFee went through (see above). */
+  simulateFixedFeeChange?: { before: bigint; after: bigint }
 }
+
+/** The made-up hash a simulated send answers with — no transaction has it. */
+export const SIMULATED_TX_HASH = `0x${'5e'.repeat(32)}`
+const FIXED_FEE_SELECTOR = '0x02ef36c7'
 
 export async function installMockWallet(page: Page, opts: MockWalletOptions = {}) {
   const account = (opts.account ?? MOCK_ACCOUNT).toLowerCase()
-  await page.addInitScript(({ account, chainHex }) => {
+  const state = { sent: false }
+  await page.addInitScript(({ account, chainHex, simulate, hash }) => {
     const listeners: Record<string, Array<(v: unknown) => void>> = {}
     const provider = {
       isMetaMask: false,
       request: async ({ method }: { method: string }) => {
+        if (simulate && method === 'eth_sendTransaction') return hash // nothing signed, nothing sent
         switch (method) {
           case 'eth_requestAccounts':
           case 'eth_accounts': return [account]
@@ -51,17 +63,27 @@ export async function installMockWallet(page: Page, opts: MockWalletOptions = {}
       removeListener: (e: string, f: (v: unknown) => void) => { listeners[e] = (listeners[e] ?? []).filter((g) => g !== f) },
     }
     Object.defineProperty(window, 'ethereum', { value: provider, configurable: true })
-  }, { account, chainHex: CHAIN_HEX })
+  }, { account, chainHex: CHAIN_HEX, simulate: opts.simulateFixedFeeChange !== undefined, hash: SIMULATED_TX_HASH })
 
   await page.route(RPC, async (route: Route) => {
     const body = route.request().postDataJSON() as RpcCall | RpcCall[]
-    if (!needsPatch(body, opts)) return route.continue()
+    if (opts.simulateFixedFeeChange !== undefined) {
+      const calls = Array.isArray(body) ? body : [body]
+      if (calls.some((c) => c.method === 'eth_getTransactionReceipt' && String(c.params?.[0]).toLowerCase() === SIMULATED_TX_HASH)) {
+        state.sent = true
+        const answers = calls.map((c) => ({ jsonrpc: '2.0', id: c.id, result: simulatedReceipt(account) }))
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify(Array.isArray(body) ? answers : answers[0]) })
+      }
+    }
+    const sim = opts.simulateFixedFeeChange
+    const patchOpts = { ...opts, fixedFeeNow: sim ? (state.sent ? sim.after : sim.before) : undefined }
+    if (!needsPatch(body, patchOpts)) return route.continue()
     // The real answer first (the batch's other reads stay real), then only our entries changed.
     const real = await route.fetch()
     const answer = (await real.json()) as RpcAnswer | RpcAnswer[]
     const patched = Array.isArray(body)
-      ? body.map((c) => patch(c, (answer as RpcAnswer[]).find((x) => x.id === c.id), opts))
-      : patch(body, answer as RpcAnswer, opts)
+      ? body.map((c) => patch(c, (answer as RpcAnswer[]).find((x) => x.id === c.id), patchOpts))
+      : patch(body, answer as RpcAnswer, patchOpts)
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(patched) })
   })
 }
@@ -73,16 +95,28 @@ const AGGREGATE3 = parseAbi(['function aggregate3((address target, bool allowFai
 const GET_ETH_BALANCE = '0x4d2301cc' // Multicall3 getEthBalance(address)
 const ONE_TTRUST = 10n ** 18n
 
+type PatchOptions = MockWalletOptions & { fixedFeeNow?: bigint }
+
+/** A successful receipt for the simulated send (viem formats it like a real one). */
+function simulatedReceipt(from: string) {
+  return {
+    transactionHash: SIMULATED_TX_HASH, transactionIndex: '0x0', blockHash: `0x${'11'.repeat(32)}`, blockNumber: '0x1',
+    from, to: '0x2f76ef07df7b3904c1350e24ad192e507fd4ec41', cumulativeGasUsed: '0x7a12', gasUsed: '0x7a12', effectiveGasPrice: '0x1',
+    contractAddress: null, logs: [], logsBloom: `0x${'00'.repeat(256)}`, status: '0x1', type: '0x2',
+  }
+}
+
 /** The selectors whose reads fail under these options. */
 const failing = (opts: MockWalletOptions) => [...(opts.feeReadFails ? FEE_SELECTORS : []), ...(opts.failSelectors ?? [])].map((s) => s.toLowerCase())
 
 /** Does this request read the harness account's balance, or something that should fail? */
-function needsPatch(body: RpcCall | RpcCall[], opts: MockWalletOptions): boolean {
+function needsPatch(body: RpcCall | RpcCall[], opts: PatchOptions): boolean {
   const text = JSON.stringify(body).toLowerCase()
   return text.includes(MOCK_ACCOUNT.slice(2)) || failing(opts).some((s) => text.includes(s.slice(2)))
+    || (opts.fixedFeeNow !== undefined && text.includes(FIXED_FEE_SELECTOR.slice(2)))
 }
 
-function patch(call: RpcCall, answer: RpcAnswer | undefined, opts: MockWalletOptions): RpcAnswer {
+function patch(call: RpcCall, answer: RpcAnswer | undefined, opts: PatchOptions): RpcAnswer {
   if (!answer) return { jsonrpc: '2.0', id: call.id, error: { code: -32603, message: 'harness: no answer' } }
   const p0 = (call.params?.[0] ?? {}) as { to?: string; data?: `0x${string}` }
   if (call.method === 'eth_getBalance' && String(call.params?.[0]).toLowerCase() === MOCK_ACCOUNT) {
@@ -91,6 +125,8 @@ function patch(call: RpcCall, answer: RpcAnswer | undefined, opts: MockWalletOpt
   if (call.method !== 'eth_call' || !p0.data || answer.result === undefined) return answer
   const fails = (data: string) => failing(opts).some((s) => data.toLowerCase().startsWith(s))
   if (fails(p0.data)) return { jsonrpc: '2.0', id: call.id, error: { code: -32603, message: 'harness: this read fails' } }
+  const feeNow = opts.fixedFeeNow
+  if (feeNow !== undefined && p0.data.toLowerCase().startsWith(FIXED_FEE_SELECTOR)) return { ...answer, result: encodeAbiParameters([{ type: 'uint256' }], [feeNow]) }
   if (!p0.data.startsWith('0x82ad56cb')) return answer
   // A Multicall3 batch: change only our entries.
   const { args } = decodeFunctionData({ abi: AGGREGATE3, data: p0.data })
@@ -101,6 +137,8 @@ function patch(call: RpcCall, answer: RpcAnswer | undefined, opts: MockWalletOpt
       results[i] = { success: true, returnData: encodeAbiParameters([{ type: 'uint256' }], [ONE_TTRUST]) }
     } else if (fails(data)) {
       results[i] = { success: false, returnData: '0x' }
+    } else if (feeNow !== undefined && data.startsWith(FIXED_FEE_SELECTOR)) {
+      results[i] = { success: true, returnData: encodeAbiParameters([{ type: 'uint256' }], [feeNow]) }
     }
   })
   return { ...answer, result: encodeFunctionResult({ abi: AGGREGATE3, functionName: 'aggregate3', result: results }) }

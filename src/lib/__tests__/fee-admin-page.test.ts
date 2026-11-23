@@ -69,6 +69,32 @@ describe('the form: who may sign, and when', () => {
   })
 })
 
+describe('undo means the value before the change (Etap 9d)', () => {
+  const ZERO: FeeRead = { status: 'ok', value: { fixedFee: 0n, bps: 250n }, readAt: 1 }
+  it('0.02 → 0 signed in this visit: the fee now reads 0, the hint still says 0.02', () => {
+    // What the owner saw: "Undo: set it back to 0 tTRUST: setDepositFixedFee(0)" — the new value.
+    const after = fixedFeeForm({ ...base, fee: ZERO, input: '', previousWei: 20_000_000_000_000_000n })
+    expect(after.undo?.wei).toBe(20_000_000_000_000_000n)
+    expect(after.undo?.tx.data).toBe(setFixedFeeTx(20_000_000_000_000_000n).data)
+    expect(fixedFeeForm({ ...base, fee: ZERO, input: '0.01', previousWei: 20_000_000_000_000_000n }).undo?.wei).toBe(20_000_000_000_000_000n)
+  })
+  it('a fresh page load (no change this visit): the hint says the value now', () => {
+    expect(fixedFeeForm({ ...base, fee: ZERO, input: '0.01' }).undo?.wei).toBe(0n)
+    expect(fixedFeeForm({ ...base, input: '' }).undo?.wei).toBe(20_000_000_000_000_000n)
+  })
+  it('the input equals the value now: no hint, and signing stays disabled', () => {
+    const same = fixedFeeForm({ ...base, fee: ZERO, input: '0', previousWei: 20_000_000_000_000_000n })
+    expect(same.undo).toBeNull()
+    expect(same.enabled).toBe(false)
+    expect(same.reason).toBe(FEE_FORM.same)
+  })
+  it('the page keeps the value read before its last signed change and passes it', () => {
+    const client = readFileSync(path.join(SRC, 'components/admin/FeesAdminClient.tsx'), 'utf8')
+    expect(client).toMatch(/fixedFeeForm\(\{[^}]*previousWei: done\?\.previous \?\? null \}\)/)
+    expect(client).toMatch(/const previous = fee\.value\.fixedFee[\s\S]*setDone\(\{ hash, previous, next \}\)/)
+  })
+})
+
 describe('the transaction: the runbook script\'s calldata, to the FeeProxy, explicit gas', () => {
   it('calldata matches scripts/fee-calldata.ts (the Beta change, the undo, any value)', () => {
     expect(fixedFeeForm(base).tx?.data).toBe(scriptData('fixed', '0'))

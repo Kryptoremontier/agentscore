@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server'
-import { apiSuccess, apiError, corsOptions, withReadLedger } from '@/lib/api-helpers'
+import { apiSuccess, apiError, corsOptions, withReadLedger, readFailedResponse } from '@/lib/api-helpers'
 import { getAgentDetail } from '@/lib/api-data'
 import { fetchTimelineDataCached as fetchTimelineData } from '@/lib/timeline-data'
 import { buildAgentTimeline } from '@/lib/trust-timeline'
@@ -18,7 +18,7 @@ async function handleGET(
       getAgentDetail(id),
     ])
 
-    // null = no such atom. A failed read threw above → 500, never a "not found".
+    // null = no such atom. A failed read threw above → 503 read_failed, never a "not found".
     if (!rawData) return apiError('Agent not found', 404)
 
     // The measured AGENTSCORE or null — never the 50 prior or a fallback constant
@@ -59,7 +59,7 @@ async function handleGET(
     )
   } catch (error) {
     console.error('[API] /agents/:id/timeline error:', error)
-    return apiError('Internal server error', 500)
+    return readFailedResponse() // a failed read: 503 read_failed, never 404 (Etap 9d)
   }
 }
 

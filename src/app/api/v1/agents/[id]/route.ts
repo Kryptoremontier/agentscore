@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server'
-import { apiSuccess, apiError, corsOptions, withReadLedger } from '@/lib/api-helpers'
+import { apiSuccess, apiError, corsOptions, withReadLedger, readFailedResponse } from '@/lib/api-helpers'
 import { getAgentDetail, getCohortAgentDetail } from '@/lib/api-data'
 
 async function handleGET(
@@ -11,7 +11,7 @@ async function handleGET(
     if (!id) return apiError('Agent ID is required', 400)
 
     // The scored AgentScore corpus first, then the ERC-8004 cohort (e.g. Captain Dackie): an
-    // attested agent is never a 404. A genuinely unknown id is; a failed read throws → 500.
+    // attested agent is never a 404. A genuinely unknown id is; a failed read throws → 503 read_failed.
     const data = await getAgentDetail(id)
     if (data) return apiSuccess(data)
     const cohort = await getCohortAgentDetail(id)
@@ -19,7 +19,7 @@ async function handleGET(
     return apiSuccess(cohort)
   } catch (error) {
     console.error('[API] /agents/:id error:', error)
-    return apiError('Internal server error', 500)
+    return readFailedResponse()
   }
 }
 

@@ -103,10 +103,11 @@ describe('GET /api/v1/agents/:id resolves ERC-8004 agents', () => {
     fake()
     expect((await get('0xnobody')).status).toBe(404)
   })
-  it('a failed identity read → 500, never 404', async () => {
+  it('a failed identity read → 503 read_failed, never 404 (Etap 9d; was 500)', async () => {
     fake({ identityFail: true })
     const { status, body } = await get(DACKIE)
-    expect(status).toBe(500)
+    expect(status).toBe(503)
+    expect(body.error).toBe('read_failed')
     expect(body.error).not.toMatch(/not found/i)
   })
 })
