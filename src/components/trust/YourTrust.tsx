@@ -28,6 +28,7 @@ import {
   WITHDRAW_PENDING, WITHDRAW_CANCELLED, WITHDRAW_FAILED, withdrawDone, WITHDRAW_COUNTING,
   WITHDRAW_COUNT_UNREAD, WITHDRAW_INDEXING, readAgo, trustNowLine, VOUCH_WRONG_NETWORK, TIER_LABEL,
 } from '@/lib/people-copy'
+import { requestRefresh } from '@/lib/refresh-client'
 import { ContextIcon } from './ContextIcon'
 
 export type PreviewState = { status: 'reading' } | { status: 'ok'; wei: bigint } | { status: 'failed' }
@@ -250,6 +251,7 @@ export function YourTrust({ agentId, onChanged, className }: { agentId: string; 
       return
     }
     setPending(false)
+    requestRefresh(agentId) // the receipt is confirmed: refill what this withdrawal changed (Etap 9d)
     setOpenKey(null)
     setPreview(null)
     setResult({ status: 'counting', contextLabel: row.context.label })
