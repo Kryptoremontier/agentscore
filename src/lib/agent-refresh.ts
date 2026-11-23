@@ -6,7 +6,7 @@
  * incomplete read keeps the old entry — lib/server-cache.ts refresh).
  */
 
-import { refreshCachedRead, afterResponse, type RefreshOutcome } from './server-cache'
+import { refreshCachedRead, inBackground, type RefreshOutcome } from './server-cache'
 // Imported for their cached reads: each registers its refresh by key when the module loads.
 import { loadErc8004Cohort } from './api-data'
 import './agents-page-data'
@@ -62,18 +62,21 @@ export async function runAgentRefresh(agentId: string, deps: RefreshDeps = { ref
   const shared = plan.filter((s) => !own.includes(s))
   const done: Array<RefreshStep & { outcome: RefreshOutcome }> = []
   const settle = async (s: RefreshStep) => {
+    const t = Date.now()
     const outcome = await deps.refresh(s.key, s.args).catch((): RefreshOutcome => 'kept')
     done.push({ ...s, outcome })
+    if (process.env.AGENTSCORE_REFRESH_DEBUG) console.warn(`[refresh] ${agentId} ${s.key}=${outcome} (${Date.now() - t} ms)`)
   }
   await Promise.all(own.map(settle))
   for (const s of shared) await settle(s)
   return done
 }
 
-/** Start the refresh after the response (kept alive by the platform hook). */
+/** Start the refresh in the background: the 202 goes out at once; Vercel's waitUntil keeps the function alive until it ends. */
 export function startAgentRefresh(agentId: string): void {
-  afterResponse(`agentscore:refresh:${agentId}`, async () => {
+  inBackground(`agentscore:refresh:${agentId}`, async () => {
+    const started = Date.now()
     const done = await runAgentRefresh(agentId)
-    console.info(`[refresh] ${agentId}: ${done.map((d) => `${d.key}=${d.outcome}`).join(' ')}`)
+    console.warn(`[refresh] ${agentId} in ${Date.now() - started} ms: ${done.map((d) => `${d.key}=${d.outcome}`).join(' ')}`)
   })
 }

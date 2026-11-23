@@ -11,8 +11,11 @@ import {
   setPlatformWaitUntilForTests,
   setRefreshWriteGraceForTests,
   afterResponse,
+  inBackground,
 } from '../server-cache'
 import { fakeNextCache } from './fake-next-cache'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 
 const clock = { t: 9_000_000 }
 const now = () => clock.t
@@ -85,6 +88,17 @@ describe('fix(cache): refills finish on Vercel', () => {
     expect(handed).toHaveLength(1)
     await handed[0]
     expect(done).toBe(true)
+  })
+
+  it('inBackground (the refresh route) is kept alive by the hook alone and never holds the response', async () => {
+    let done = false
+    inBackground('t', async () => { await new Promise((r) => setTimeout(r, 5)); done = true })
+    expect(handed).toHaveLength(1)
+    await handed[0]
+    expect(done).toBe(true)
+    const src = readFileSync(path.join(__dirname, '..', 'server-cache.ts'), 'utf8')
+    const body = src.slice(src.indexOf('export function inBackground'), src.indexOf('/** Tests only: wait for work started outside'))
+    expect(body).not.toMatch(/pendingRevalidates/)
   })
 
   it('the hook is Vercel\'s waitUntil (@vercel/functions), a no-op outside a request', async () => {

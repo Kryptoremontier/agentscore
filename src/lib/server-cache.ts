@@ -343,6 +343,18 @@ export function afterResponse(id: string, task: () => Promise<unknown>): void {
   }
 }
 
+/**
+ * Run `task` in the background without holding the response (Etap 9d, POST /api/v1/refresh): kept
+ * alive only by the platform hook (Vercel's waitUntil). Not in `pendingRevalidates`: outside Vercel,
+ * Next holds the response open until those settle (10 s for a refresh, measured on `next start`).
+ */
+export function inBackground(id: string, task: () => Promise<unknown>): void {
+  const p = task().then(() => undefined, (err) => console.warn(`[server-cache] ${id}:`, err instanceof Error ? err.message : err))
+  keepAlive(p)
+  backgroundOutsideNext.add(p)
+  void p.finally(() => backgroundOutsideNext.delete(p))
+}
+
 /** Tests only: wait for work started outside a Next request (snapshot refills). */
 export async function settleBackgroundForTests(): Promise<void> {
   while (backgroundOutsideNext.size) await Promise.all([...backgroundOutsideNext])

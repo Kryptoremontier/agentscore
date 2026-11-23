@@ -63,6 +63,10 @@ write. The two GET URLs above are enough.
   attestations (the tier counts); the `/stats` counts (attesters) and the 7-day trust events.
 - Each refill stores a fresh read only if it is complete. A failed or incomplete read keeps the old
   entry. A key is refreshed at most **once per minute** per server instance.
+- The 202 goes out at once (57 ms on `next start`); the refills run after it, kept alive by Vercel's
+  `waitUntil`. All eight took 10.4 s against the live indexer (2026-11-23). Each refresh logs one line,
+  `[refresh] <agentId> in <ms> ms: <key>=refreshed|kept|skipped …`; set `AGENTSCORE_REFRESH_DEBUG=1` for
+  one line per key with its time.
 - **429** (with `Retry-After`) over **6 requests per minute per IP**. **400** for anything that
   isn't a term id. Both limits are in memory, so they apply per server instance.
 
