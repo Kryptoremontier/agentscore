@@ -109,7 +109,10 @@ export interface FixedFeeForm {
   newWei: bigint | null
   /** The transaction to sign (when there is a valid new value). */
   tx: ReturnType<typeof setFixedFeeTx> | null
-  /** How to go back: the value now and its transaction (when the fee was read). */
+  /**
+   * How to go back (Etap 9d): the value before the last change signed in this visit, else the value
+   * now; with its transaction. null when the fee wasn't read, or the input is the value now.
+   */
   undo: { wei: bigint; tx: ReturnType<typeof setFixedFeeTx> } | null
 }
 
@@ -118,10 +121,20 @@ export interface FixedFeeForm {
  * admin on-chain, it is on Intuition Testnet, nothing is pending, and the new value is valid and
  * different from the fee now.
  */
-export function fixedFeeForm(i: { fee: FeeRead; admin: AdminCheck; input: string; chainId: number | undefined; pending: boolean }): FixedFeeForm {
+export function fixedFeeForm(i: {
+  fee: FeeRead
+  admin: AdminCheck
+  input: string
+  chainId: number | undefined
+  pending: boolean
+  /** The fixed fee read just before the last change signed in this visit (kept after its receipt); null before any. */
+  previousWei?: bigint | null
+}): FixedFeeForm {
   const current = i.fee.status === 'ok' ? i.fee.value.fixedFee : null
   const newWei = parseFeeInput(i.input)
-  const undo = current !== null ? { wei: current, tx: setFixedFeeTx(current) } : null
+  // After 0.02 → 0 the fee read now is 0: "undo" means the value before the change, 0.02, never the new one.
+  const undoWei = i.previousWei ?? current
+  const undo = current !== null && undoWei !== null && newWei !== current ? { wei: undoWei, tx: setFixedFeeTx(undoWei) } : null
   const tx = newWei !== null ? setFixedFeeTx(newWei) : null
   const reason =
     i.fee.status === 'failed' ? FEE_FORM.feeUnread
