@@ -1,7 +1,7 @@
 /**
  * A per-key sliding-window limit (Etap 9d: POST /api/v1/refresh, per IP). In memory, per server
  * instance: on Vercel each instance counts on its own, so the limit is per instance. It bounds what
- * one caller can make one instance read; the refresh's own once-per-key-per-20 s rule
+ * one caller can make one instance read; the refresh's own once-per-key-per-minute rule
  * (lib/server-cache.ts REFRESH_MIN_INTERVAL_MS) bounds the indexer load whoever calls.
  */
 

@@ -589,8 +589,8 @@ export function completeReadCache<A extends unknown[], T>(
 /** What a refresh did: stored a fresh complete read, kept the old entry (incomplete or failed read), or skipped (one ran just now). */
 export type RefreshOutcome = 'refreshed' | 'kept' | 'skipped'
 
-/** A key is refreshed at most this often per instance (a burst of writes to one agent costs one read). */
-export const REFRESH_MIN_INTERVAL_MS = 20_000
+/** A key is refreshed at most this often per instance: a burst of writes costs one read per key per minute (docs/OPS.md, the budget). */
+export const REFRESH_MIN_INTERVAL_MS = 60_000
 
 /** How long a refresh stays alive after its read, for the Data Cache write to land. */
 export let REFRESH_WRITE_GRACE_MS = 1_500
